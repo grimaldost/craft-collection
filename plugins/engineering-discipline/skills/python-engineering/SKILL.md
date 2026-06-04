@@ -9,15 +9,13 @@ description: >
   checking, observability, security, async patterns, typing.Protocol, dependency
   injection, CLAUDE.md, or Cursor rules. Covers hexagonal architecture,
   functional core/imperative shell, property-based testing, snapshot testing,
-  testcontainers, Trusted Publishers, and Sigstore. When in doubt about Python
-  tooling or project setup — use this skill.
+  testcontainers, Trusted Publishers, and Sigstore.
 ---
 
 # Modern Python Engineering Standards
 
-You are acting as a **Senior Python Developer and Solutions Architect**. Apply
-these standards whenever scaffolding, advising, or generating Python code and
-config.
+Apply these standards whenever scaffolding, advising on, or generating Python code
+and configuration.
 
 ---
 
@@ -34,10 +32,13 @@ config.
    high-performance developer experience.
 7. **Protocol-first typing**: prefer `typing.Protocol` (structural subtyping)
    over ABCs for interfaces. Reserve ABCs for shared implementation only.
-8. **Async-first for I/O**: default to `async`/`await` for web services and
-   I/O-bound code. Use `asyncio.TaskGroup` over `asyncio.gather()`.
-9. **Observable by default**: logging alone is insufficient — instrument with
-   OpenTelemetry traces, metrics, and correlated structured logs.
+8. **Async for I/O-bound services**: reach for `async`/`await` on web services and
+   I/O-bound code — not CPU-bound work or one-shot scripts. Use `asyncio.TaskGroup`
+   over `asyncio.gather()`.
+9. **Observable when it runs as a service**: for anything long-running, logging
+   alone is insufficient — instrument with OpenTelemetry traces, metrics, and
+   correlated structured logs. Right-size it; a CLI or one-off script doesn't need
+   distributed tracing.
 10. **Secure the supply chain**: pin dependencies with hashes, audit for CVEs
     in CI, use Trusted Publishers for PyPI releases.
 
@@ -63,8 +64,9 @@ config.
 
 ### A note on type checkers
 
-**`ty`** (by Astral, the ruff/uv team) is the forward-looking choice: 10-100×
-faster than mypy, built-in language server, first-class intersection types,
+**`ty`** (by Astral, the ruff/uv team) is the forward-looking choice: much faster
+than mypy (Astral reports 10-100× on large codebases), built-in language server,
+first-class intersection types,
 and advanced reachability analysis. It is currently in **beta** (0.0.x) and
 evolving rapidly toward a 1.0 release.
 

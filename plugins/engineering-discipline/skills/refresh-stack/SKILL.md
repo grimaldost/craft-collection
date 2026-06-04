@@ -3,7 +3,7 @@ name: refresh-stack
 description: Review and update the python-engineering toolchain pins. Run /refresh-stack to detect which pinned tools are behind the latest PyPI release, read the relevant changelogs, and produce a reviewable changeset (stack.toml version bumps plus any guidance edits) for approval. Mechanical bumps are applied on approval; guidance edits are never auto-applied. Manual-only.
 disable-model-invocation: true
 user-invocable: true
-allowed-tools: Bash Read Edit Grep WebFetch
+allowed-tools: Bash, Read, Edit, Grep, WebFetch
 ---
 
 # Refresh Stack
@@ -13,14 +13,15 @@ The LLM-assisted update leg of the freshness loop. Detection is mechanical
 and deciding what, if anything, the guidance should say differently. Never
 auto-apply guidance edits; propose, then let the user approve.
 
-The `stack.toml` and skill live in the sibling `python-engineering` skill of
-this plugin (`../python-engineering/`).
+The `stack.toml` and scripts live in the sibling `python-engineering` skill of
+this plugin — resolve it as `${CLAUDE_PLUGIN_ROOT}/skills/python-engineering/`
+(fall back to the path relative to this file if the variable isn't set).
 
 ## Workflow
 
 1. **Detect.** Run the version check and capture JSON:
    ```bash
-   python ../python-engineering/scripts/check_versions.py --json
+   python "${CLAUDE_PLUGIN_ROOT}/skills/python-engineering/scripts/check_versions.py" --json
    ```
    The `behind` flag marks any tool whose pinned floor is behind a newer
    major/minor. If `behind_count` is 0, report "stack current" and stop.

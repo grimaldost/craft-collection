@@ -157,25 +157,18 @@ references.
 
 ## Make the discipline visible in your output
 
-Applying the discipline silently is not enough — your output must let a reviewer
-*see* it, and making it explicit is also what separates a disciplined answer from
-a merely plausible one. Whatever the scenario, before and as you do the work:
+Apply the discipline *visibly* — silent correctness is indistinguishable from a
+plausible guess, and a reviewer can only trust what they can see. As you work:
 
-1. **Pin the contract/baseline first.** Open by stating what you are protecting or
-   declaring — schema, dtypes, grain, row/group cardinality, null behavior, and
-   any known quirks — and say plainly that changes to it are **breaking by
-   default** for the named consumers. Do this before proposing or writing code.
-2. **Name the non-negotiable you are invoking** as you apply it — "the output is
-   the contract", "verify the observable source", "real data over fixtures",
-   "all change is intentional and traceable" — so the reader can audit which
-   principle each step serves.
-3. **Insist on reading the observable source** — the code end-to-end, the
-   materialized data, library signatures, registries — *even when you were handed
-   a diff, a summary, or a description.* Say so explicitly; never diagnose or
-   migrate from the diff/summary text alone.
-4. **Propose the verification gates** (parity diff, schema-diff, contract checks
-   on real data) that must pass before "done"; and for any fix, **repair the
-   producer and replay** rather than patching the data forward.
+1. **Pin the contract first** — state the schema / dtypes / grain / cardinality /
+   null behavior and known quirks you're protecting, and that changes to them are
+   breaking by default for the named consumers — before writing code.
+2. **Name the non-negotiable you're invoking** as you apply it, so a reader can
+   audit which principle each step serves.
+3. **Insist on reading the observable source** even when handed a diff, summary, or
+   description; never diagnose or migrate from the diff text alone.
+4. **Propose the verification gates** that must pass before "done"; for any fix,
+   **repair the producer and replay** rather than patching the data forward.
 
 ## LLM failure modes — quick warning
 
@@ -205,6 +198,11 @@ non-trivial LLM-assisted data work.
 Run this checklist before declaring any data-engineering work done.
 None of these items are optional. If you find yourself wanting to skip
 one, that's the one you most need to run.
+
+**Scale to the change.** A breaking or semantic change runs the whole list. A
+purely additive change (e.g. a new nullable column nothing depends on yet) runs
+the contract and real-data checks and may skip the parity/replay items. When you
+can't tell whether a change is additive or breaking, treat it as breaking.
 
 **Contract checks.**
 

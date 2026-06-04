@@ -75,8 +75,8 @@ Then run this loop internally, before presenting anything:
 3. **Self-check (silent)** against the three coverage axes in
    **`references/coverage-check.md`**: source, downstream-use, measurability.
 4. **If gaps:** run pass N+1 adding *only* the missing entries. Repeat until the
-   coverage signals are clean, or a **3-pass cap** is reached. Pass 1 reliably
-   under-captures 30–50%; this loop is the mitigation, not optional.
+   coverage signals are clean, or a **3-pass cap** is reached. Pass 1 routinely
+   under-captures, often by a lot; this loop is the mitigation, not optional.
 5. **Present once:** the file, the entry count, and the layer breakdown ("ran K
    passes; coverage clean").
 6. **One surviving offer:** only if a downstream use was *declared* and remains
@@ -129,6 +129,12 @@ Write entries in the structured envelope defined in
 **`references/output-format.md`** — the envelope, the full field set (including
 visibility and language), entry types, the ANTI_PATTERN template, area/domains,
 refs, confidence, multi-user privacy, and the VALIDATED marker.
+
+**No long-term memory store downstream?** The metadata envelope exists to be
+machine-ingested and clustered. If these entries are only for your own re-reading
+— no vector store or ingestion pipeline — emit each entry's CONTENT prose and skip
+the envelope. Keep the discipline that carries the value (one idea per entry,
+reasoning inline, anti-patterns hunted); drop only the ceremony.
 
 ## Writing quality
 
