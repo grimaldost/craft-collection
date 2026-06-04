@@ -1,0 +1,112 @@
+# Single source of truth for the python-engineering canonical stack.
+# check_versions.py reads this; the SKILL.md and references cite it instead of
+# hardcoding versions in prose. /refresh-stack updates the pinned_min values
+# (mechanically) after reviewing changelogs (with a human in the loop).
+
+[meta]
+last_reviewed = "2026-06-04"
+
+[python]
+supported = ["3.12", "3.13", "3.14"]
+eol_watch = "3.12"
+
+[tools.uv]
+pypi = "uv"
+pinned_min = "0.11"
+category = "package-manager"
+note = "replaces pip + virtualenv + poetry + pyenv"
+
+[tools.uv-build]
+pypi = "uv-build"
+pinned_min = "0.11"
+category = "build-backend"
+note = "default backend from uv init, PEP 621-compliant"
+
+[tools.ruff]
+pypi = "ruff"
+pinned_min = "0.15"
+category = "lint-format"
+note = "formatter + linter must stay aligned on single-quote style"
+
+[tools.ty]
+pypi = "ty"
+pinned_min = "0.0.1"
+category = "type-checker"
+note = "Astral type checker, beta (0.0.x), forward-looking default"
+
+[tools.mypy]
+pypi = "mypy"
+pinned_min = "1.0"
+category = "type-checker"
+note = "stable alternative; keep in CI if relying on stubs/plugins"
+
+[tools.pytest]
+pypi = "pytest"
+pinned_min = "8.0"
+category = "testing"
+
+[tools.pytest-cov]
+pypi = "pytest-cov"
+pinned_min = "4.0"
+category = "testing"
+
+[tools.pytest-asyncio]
+pypi = "pytest-asyncio"
+pinned_min = "0.24"
+category = "testing"
+
+[tools.hypothesis]
+pypi = "hypothesis"
+pinned_min = "6.0"
+category = "property-testing"
+
+[tools.pydantic-settings]
+pypi = "pydantic-settings"
+pinned_min = "2.0"
+category = "config"
+note = "typed env vars, SecretStr for secrets"
+
+[tools.structlog]
+pypi = "structlog"
+pinned_min = "24.0"
+category = "logging"
+
+[tools.opentelemetry-api]
+pypi = "opentelemetry-api"
+pinned_min = "1.0"
+category = "observability"
+
+[tools.opentelemetry-sdk]
+pypi = "opentelemetry-sdk"
+pinned_min = "1.0"
+category = "observability"
+
+[tools.pip-audit]
+pypi = "pip-audit"
+pinned_min = "2.0"
+category = "security"
+note = "CVE scanning against the OSV database in CI"
+
+[tools.typer]
+pypi = "typer"
+pinned_min = "0.12"
+category = "cli"
+
+[tools.fastapi]
+pypi = "fastapi"
+pinned_min = "0.110"
+category = "web"
+
+[tools.httpx]
+pypi = "httpx"
+pinned_min = "0.27"
+category = "http-client"
+
+[tools.pre-commit]
+pypi = "pre-commit"
+pinned_min = "3.0"
+category = "tooling"
+
+[precommit]
+"pre-commit-hooks" = "v5.0.0"
+"ruff-pre-commit" = "v0.15.7"
