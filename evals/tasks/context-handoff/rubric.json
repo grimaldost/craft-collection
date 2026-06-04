@@ -1,0 +1,16 @@
+[
+  { "id": "fenced-block", "weight": 2,
+    "text": "The hand-off brief is emitted as a single fenced code block the user can copy in one action (not scattered prose)." },
+  { "id": "correct-mode", "weight": 2,
+    "text": "Correct mode for the request: SUBTASK yields a bounded, single-deliverable request; FORK yields a 'continue independently' hand-off framed for a new session." },
+  { "id": "facts-not-refs", "weight": 2,
+    "text": "States facts, not references — no 'as we discussed' / 'the thing from earlier'; the actual content is inlined so a reader with no prior context can act." },
+  { "id": "concrete-specifics", "weight": 2,
+    "text": "Includes the concrete specifics from the context that the executor needs: names, types, signatures (e.g. is_business_day(d: date) -> bool), module path app.calendars.business, conventions (cents-not-floats, line length 100)." },
+  { "id": "self-contained", "weight": 2,
+    "text": "Self-contained: re-read cold, no sentence would prompt 'wait, what is that?'; no dependency on the originating session." },
+  { "id": "mode-artifacts", "weight": 1,
+    "text": "Mode-specific framing is right: SUBTASK adds a REINTEGRATION_NOTE outside the block for the user; FORK does not (nothing comes back) and carries enough state to keep going." },
+  { "id": "no-overreach", "weight": 1,
+    "text": "Does not offer to run the prompt, schedule it, score task complexity, or recommend a model — the deliverable is just the brief." }
+]

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "migrate",
+    "prompt": "Plan and carry out this migration. Walk me through how you'd do it so consumers are unaffected.",
+    "fixture": "fixtures/migration-scenario.md"
+  },
+  {
+    "id": "investigate",
+    "prompt": "Investigate why the numbers changed and recommend the fix.",
+    "fixture": "fixtures/numbers-changed.md"
+  }
+]

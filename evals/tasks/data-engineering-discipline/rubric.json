@@ -1,0 +1,14 @@
+[
+  { "id": "pin-baseline", "weight": 2,
+    "text": "Pins/declares the baseline contract being protected before changing anything — schema, dtypes, grain/row-and-group cardinality, null behavior, and known semantic quirks (e.g. refunds attributed to the original order date)." },
+  { "id": "output-is-contract", "weight": 2,
+    "text": "Treats the output as a contract: explicitly flags that changes to schema, cardinality, or semantics are breaking-by-default for the named consumers (finance dashboard, forecasting model)." },
+  { "id": "source-of-truth", "weight": 2,
+    "text": "Insists on verifying against the observable source — read the actual code/SQL, inspect materialized data, check signatures/registries — rather than reasoning from assumptions or the summary." },
+  { "id": "real-data-parity", "weight": 2,
+    "text": "Proposes real-data validation / a parity check (row count, group cardinality, null rate, aggregate-sum diff within tolerance) before declaring done — not synthetic fixtures alone." },
+  { "id": "traceable-change", "weight": 2,
+    "text": "Keeps change intentional and traceable: no silent semantic change; for the investigation, correctly identifies the INNER JOIN + completed-filter as dropping order-date rows and proposes fixing the producer and replaying rather than patching the data forward." },
+  { "id": "names-discipline", "weight": 1,
+    "text": "Explicitly invokes the relevant discipline (contract preservation, source-of-truth, parity/replay, idempotency) instead of just performing the task naively." }
+]

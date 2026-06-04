@@ -1,0 +1,17 @@
+[
+  {
+    "id": "journal-explicit",
+    "prompt": "The working session above just ended. Journal it.",
+    "fixture": "fixtures/decision-session.md"
+  },
+  {
+    "id": "journal-implicit",
+    "prompt": "That's everything for today. Before I move on, make sure we don't lose what we worked out here.",
+    "fixture": "fixtures/decision-session.md"
+  },
+  {
+    "id": "journal-reference",
+    "prompt": "We just read the reference above end to end. Create registries for everything in it.",
+    "fixture": "fixtures/reference-reading.md"
+  }
+]

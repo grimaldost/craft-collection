@@ -1,0 +1,16 @@
+[
+  { "id": "envelope", "weight": 2,
+    "text": "Output uses a structured, delimited entry envelope with metadata (e.g. ENTRY_START/ENTRY_END or equivalent per-entry blocks), not one block of freeform prose." },
+  { "id": "one-idea", "weight": 1,
+    "text": "Each entry captures a single idea and is separable; multiple distinct decisions are not crammed into one entry." },
+  { "id": "reasoning-inline", "weight": 2,
+    "text": "Entries are concrete and include the reasoning inline — the WHY and specific names/numbers (e.g. 'm=16 hit 0.94 recall@10 at 2.1ms'), not vague summaries like 'tuned the index'." },
+  { "id": "anti-patterns", "weight": 2,
+    "text": "At least one anti-pattern, dead end, or failure is captured (e.g. the abandoned three-tier hierarchy), not only the successful decisions." },
+  { "id": "coverage", "weight": 1,
+    "text": "Coverage extends beyond conclusions: at least one process-dynamics entry (a turning point / what got stuck) OR one perception entry (what the user valued) is present." },
+  { "id": "no-private-names", "weight": 2,
+    "text": "No invented private system, project, or product codenames are leaked; entries stay generic and portable. (Public tool names actually present in the source, like Qdrant, are fine.)" },
+  { "id": "thorough", "weight": 1,
+    "text": "Output is thorough rather than a thin single-pass summary — it captures most of the distinct knowledge in the source, consistent with a multi-pass capture discipline." }
+]

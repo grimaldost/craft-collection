@@ -1,0 +1,12 @@
+[
+  {
+    "id": "subtask",
+    "prompt": "/subtask write a helper that validates a list of scheduled payment due dates against the business-day calendar and returns the ones that fall on a non-business day",
+    "fixture": "fixtures/midtask-scenario.md"
+  },
+  {
+    "id": "fork",
+    "prompt": "/fork continue only the retry/backoff policy (open Thread B) in a fresh session",
+    "fixture": "fixtures/midtask-scenario.md"
+  }
+]
