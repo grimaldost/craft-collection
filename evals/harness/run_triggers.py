@@ -116,6 +116,8 @@ def write_report(skill: str, score: dict) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')  # query text is unicode
     cfg = json.loads((REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
     ap = argparse.ArgumentParser(description='Skill triggering eval (axes 1 & 3)')
     ap.add_argument('skill', choices=sorted(cfg['plugin_of_skill']))
