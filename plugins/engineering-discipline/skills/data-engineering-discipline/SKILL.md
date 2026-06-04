@@ -1,19 +1,21 @@
 ---
 name: data-engineering-discipline
 description: >
-  Stack-agnostic discipline guardrails for any data-engineering work where
-  downstream consumers exist. Activate whenever doing a pipeline migration,
-  schema evolution, refactor, backfill, parity check, incremental/streaming
-  design, new dataset creation, data-quality investigation, or any task that
-  could change the columns, dtypes, row cardinality, semantics, or freshness
-  of a dataset that something or someone else reads. Also activate when
-  writing tests for data pipelines, designing data contracts, investigating
-  downstream regressions, or generating data code with an LLM where silent
-  semantic drift is the dominant risk. Covers contract preservation, source-
-  of-truth discipline, real-data validation, idempotency, schema evolution,
-  process discipline, lineage, and LLM-specific failure modes. Do NOT
-  activate for pure exploratory analysis with no downstream consumer,
-  throwaway notebooks, or non-data software work.
+  Discipline guardrails for data-engineering work with downstream consumers —
+  activate at the START of the task, before writing code, because silent
+  semantic drift is the dominant risk. Activate on: migrating or porting a
+  pipeline (e.g. "migrate this Spark pipeline to the new warehouse"),
+  refactoring a transform, backfilling or replaying history, evolving a schema
+  (add / rename / retype / drop a column), creating a new dataset that has
+  consumers, designing or reviewing a data contract, writing tests for a
+  pipeline, generating pipeline code with an LLM, and investigating "the
+  numbers changed / look different" regressions. The test for activation:
+  could this change the columns, dtypes, row or group cardinality, null
+  behavior, semantics, or freshness of a dataset that something or someone
+  else reads? If so, this skill applies — pin the contract, verify the
+  observable source, and check parity on real data. Do NOT activate for pure
+  exploratory analysis with no downstream consumer, throwaway notebooks, or
+  non-data software work.
 ---
 
 # Data Engineering Discipline
