@@ -1,0 +1,143 @@
+---
+name: journaling-sessions
+description: Capture knowledge from a work or reference-reading session into structured, separable, retrieval-ready entries. Use when the user says "journal", "log this", "wrap up", "session summary", "capture what we learned", or "create registries for everything", and proactively when a substantive session is ending after 3+ decisions, findings, or ingested reference items. Covers implementation/decision sessions and end-to-end reference ingestion. For mantis / cognitive-memory output, also load references/cogmem-adapter.md. Not for quick Q&A or sessions with no novel knowledge; not for consolidating prior journals (that is meditation).
+---
+
+# Journaling Sessions
+
+Capture what a session produced as **structured, separable, retrieval-ready
+entries** — prose with metadata, one idea each — that a future session can find
+and reason about in isolation. The quality bar is not "does this summarize the
+session" but "will a future session, retrieving this cold months from now, be
+measurably better for having it."
+
+This skill produces raw capture. It runs an **automatic multi-pass loop** so you
+get thorough output from a single invocation — you do not need to ask for
+"multiple passes."
+
+## What a session produces
+
+Three kinds of knowledge; capture all three, not only the most obvious:
+
+- **Conclusions** — decisions made, facts discovered, tradeoffs analyzed,
+  hypotheses formed. What a meeting summary would contain.
+- **Process dynamics** — the shape of the reasoning: where breakthroughs
+  happened, where we got stuck, what surprised us, what assumptions proved wrong.
+- **Perceptions** — what the user cared about, what engaged them or felt like
+  overhead, what they pushed back on and why.
+
+The three-part framing is a coverage checklist, not a prediction of how entries
+cluster. Underjournaling conclusions is fine; underjournaling perceptions is a
+systematic blind spot.
+
+## When to produce
+
+- The session was substantive (not quick Q&A).
+- Something was decided, discovered, or perceived worth remembering.
+- An authoritative source was read/ingested end-to-end.
+- The user asks ("journal", "log this", "wrap up"), or the session is clearly
+  ending.
+
+## Pick the mode
+
+Most sessions are one of two shapes; the capture questions differ. Pick first.
+
+- **Implementation / decision mode** — the session did work: made a choice,
+  diagnosed a bug, designed a component, ran an experiment, built something. Use
+  the Conclusions / Process / Perceptions framework below.
+- **Reference-ingestion mode** — the session converted an authoritative source
+  (standard, textbook, regulation, paper, framework docs, teaching material) into
+  entries. The reliable signal: most entries would have `origin: reading`. Use
+  the eight-category taxonomy in **`references/reference-ingestion.md`**, and
+  detect any declared downstream use (implementation / teaching / cross-project /
+  positioning) before capturing — that file explains how.
+
+A session can be both (implementation-targeted reference-ingestion is canonical);
+run both frameworks.
+
+## The workflow — automatic multi-pass
+
+When the user says "journal" (or any trigger), produce all entries in a single
+file. Do not pause for approval between entries. If a journal file already exists
+for this session, read it first and only add what is not yet captured. If the
+session contains ready-made entry drafts (e.g. from a questioning/critique pass),
+include them verbatim — they are already shaped — then add the rest.
+
+Then run this loop internally, before presenting anything:
+
+1. **Identify the mode** (+ downstream use if reference-ingestion).
+2. **Pass 1** — produce all entries for the chosen framework.
+3. **Self-check (silent)** against the three coverage axes in
+   **`references/coverage-check.md`**: source, downstream-use, measurability.
+4. **If gaps:** run pass N+1 adding *only* the missing entries. Repeat until the
+   coverage signals are clean, or a **3-pass cap** is reached. Pass 1 reliably
+   under-captures 30–50%; this loop is the mitigation, not optional.
+5. **Present once:** the file, the entry count, and the layer breakdown ("ran K
+   passes; coverage clean").
+6. **One surviving offer:** only if a downstream use was *declared* and remains
+   thin after the cap, offer a single targeted pass naming the specific axis.
+   Otherwise stop — do not offer a generic "second pass."
+
+For long runs (40+ entries), save after each arc to avoid quality drift; the user
+can say "continue journaling" to resume.
+
+## How to produce — implementation mode
+
+Work through these in order. Skip any with no answer. Each becomes one or more
+entries. Aim for at least one process or perception entry per session.
+
+**Conclusions.**
+- *What was decided?* What was chosen, what was rejected, what evidence drove it.
+  Include the WHY — the reasoning matters more than the outcome.
+- *What was discovered?* Bugs diagnosed, research findings, empirical
+  observations, undocumented patterns. Include the source.
+- *What tradeoffs were analyzed?* Approaches compared, dimensions used, winner,
+  conditions where the loser would win.
+- *What hypotheses changed?* Created, confirmed, refuted, with the evidence.
+- *What contradicted existing knowledge?* Both sides and how to resolve.
+- *What connects across domains?* Structural similarities, shared principles.
+
+**Process dynamics.**
+- *Where did breakthroughs or turning points happen?* The reframing question, the
+  observation that changed direction — high-value reusable reasoning patterns.
+- *Where did we get stuck or go wrong?* Dead ends, wrong assumptions, wasted
+  effort, what Claude got wrong and how it was corrected. A system that only
+  remembers successes has survivorship bias.
+- *What assumptions did Claude bring that were challenged?* Default
+  recommendations pushed back on, consensus that didn't apply.
+
+**Perceptions.**
+- *What did the user care about most* — not the topic, but what within it
+  mattered (depth vs speed, correctness vs progress, elegance vs pragmatism).
+- *What was the user's energy like* — what engaged them vs felt like a chore.
+- *What would help a future instance work better with this user on this topic?*
+
+## How to produce — reference-ingestion mode
+
+Work through the eight categories in **`references/reference-ingestion.md`** in
+order, checking each against the source before deciding it does not apply.
+Aim for at least one OBSERVATION entry on the source-reading dynamics.
+
+## Output
+
+Write entries in the structured envelope defined in
+**`references/output-format.md`** (the envelope, fields, entry types, the
+ANTI_PATTERN template, area/domains, refs, confidence). For mantis /
+cognitive-memory ingestion, also apply **`references/cogmem-adapter.md`** (extra
+fields, multi-user privacy, promotion semantics, the VALIDATED marker).
+
+## Writing quality
+
+Five rules carry most of the value; the full craft is in
+**`references/writing-for-retrieval.md`**:
+
+1. **Be concrete and include the reasoning inline.** "Haiku passes gates at
+   Sonnet's rate for 5-15x less cost" beats "Haiku is cheaper."
+2. **One idea per entry.** If it wants to exceed ~300 words, it's two entries.
+3. **Anti-patterns are the most valuable entries** — actively hunt for what was
+   tried and failed, not only what worked.
+4. **Apply the reconstruction test at drafting time:** would a future instance
+   benefit from this *specifically*, vs. reconstructing it from generic training?
+   If training already covers it, don't draft it.
+5. **Front-load the distinctive concept** and use specific names — the first
+   sentence does the heaviest retrieval work.
