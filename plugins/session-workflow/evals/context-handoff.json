@@ -1,0 +1,27 @@
+[
+  {
+    "skills": ["context-handoff"],
+    "query": "/subtask write a helper that validates payment dates against a business calendar",
+    "expected_behavior": ["Activates the context-handoff skill in SUBTASK mode"]
+  },
+  {
+    "skills": ["context-handoff"],
+    "query": "Fork this chat to continue just the API-design thread in a new session.",
+    "expected_behavior": ["Activates the context-handoff skill in FORK mode"]
+  },
+  {
+    "skills": ["context-handoff"],
+    "query": "Spin this off into a separate session so it doesn't clutter this one.",
+    "expected_behavior": ["Activates the context-handoff skill"]
+  },
+  {
+    "skills": ["context-handoff"],
+    "query": "Run these two independent refactors in parallel right now.",
+    "expected_behavior": ["Does NOT activate context-handoff (use the Task tool / subagents for in-session parallel work)"]
+  },
+  {
+    "skills": ["context-handoff"],
+    "query": "What does this regular expression match?",
+    "expected_behavior": ["Does NOT activate the context-handoff skill"]
+  }
+]

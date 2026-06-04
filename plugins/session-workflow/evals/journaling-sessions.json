@@ -1,0 +1,32 @@
+[
+  {
+    "skills": ["journaling-sessions"],
+    "query": "Okay, journal this session.",
+    "expected_behavior": ["Activates the journaling-sessions skill"]
+  },
+  {
+    "skills": ["journaling-sessions"],
+    "query": "Let's wrap up — capture what we learned and decided today.",
+    "expected_behavior": ["Activates the journaling-sessions skill"]
+  },
+  {
+    "skills": ["journaling-sessions"],
+    "query": "We read the standard end to end; create registries for everything.",
+    "expected_behavior": ["Activates the journaling-sessions skill", "Uses reference-ingestion mode"]
+  },
+  {
+    "skills": ["journaling-sessions"],
+    "query": "What is the capital of France?",
+    "expected_behavior": ["Does NOT activate the journaling-sessions skill"]
+  },
+  {
+    "skills": ["journaling-sessions"],
+    "query": "Fix the typo on line 12 of the README.",
+    "expected_behavior": ["Does NOT activate the journaling-sessions skill"]
+  },
+  {
+    "skills": ["journaling-sessions"],
+    "query": "Consolidate my existing journal entries into higher-level patterns.",
+    "expected_behavior": ["Does NOT activate journaling-sessions (that is a downstream consolidation pass, not raw capture)"]
+  }
+]

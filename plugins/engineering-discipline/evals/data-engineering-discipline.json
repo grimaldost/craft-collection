@@ -1,0 +1,32 @@
+[
+  {
+    "skills": ["data-engineering-discipline"],
+    "query": "Migrate this Spark pipeline to the new warehouse without changing the output.",
+    "expected_behavior": ["Activates the data-engineering-discipline skill"]
+  },
+  {
+    "skills": ["data-engineering-discipline"],
+    "query": "I'm refactoring the transform that builds the orders fact table.",
+    "expected_behavior": ["Activates the data-engineering-discipline skill"]
+  },
+  {
+    "skills": ["data-engineering-discipline"],
+    "query": "The revenue numbers in the dashboard changed after my last change — what happened?",
+    "expected_behavior": ["Activates the data-engineering-discipline skill"]
+  },
+  {
+    "skills": ["data-engineering-discipline"],
+    "query": "Design a data contract for the customer_events dataset before consumers integrate.",
+    "expected_behavior": ["Activates the data-engineering-discipline skill"]
+  },
+  {
+    "skills": ["data-engineering-discipline"],
+    "query": "Just exploring this CSV in a throwaway notebook for my own curiosity.",
+    "expected_behavior": ["Does NOT activate (no downstream consumer)"]
+  },
+  {
+    "skills": ["data-engineering-discipline"],
+    "query": "Write a Typer CLI for parsing command-line arguments.",
+    "expected_behavior": ["Does NOT activate the data-engineering-discipline skill"]
+  }
+]
