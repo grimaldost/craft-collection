@@ -2,18 +2,24 @@
 
 `parse_stream` + `AgentRun` are the pure, unit-tested core; `build_command` is a
 pure command assembler (unit-tested); `run_agent` is the subprocess wrapper that
-spawns `claude -p` (validated by the smoke checks). Stdlib only.
+spawns `claude -p`. Isolation is via a copied-credentials temp CLAUDE_CONFIG_DIR
+(authenticated but skill-free) — `--bare` is NOT used because it strips the
+config-bound subscription login. Stdlib only.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
+import shutil
 import subprocess
+import tempfile
 import time
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 
 # stderr signatures that justify a retry (transient server/network failures).
 _TRANSIENT = re.compile(
@@ -42,6 +48,32 @@ class AgentRun:
         return any(target in s for s in self.activated_skills)
 
 
+def make_isolated_config(real_config: str | None = None) -> str:
+    """Create a temp CLAUDE_CONFIG_DIR with the real config's top-level files
+    (auth + settings) copied in, but NO plugins/ dir — an authenticated yet
+    skill-free baseline. Caller cleans up with `cleanup_dir`.
+    """
+    real = Path(real_config or (Path.home() / '.claude'))
+    dest = Path(tempfile.mkdtemp(prefix='eval_cfg_'))
+    for entry in real.iterdir():
+        if entry.is_file():
+            try:
+                shutil.copy2(entry, dest / entry.name)
+            except OSError:
+                pass  # skip unreadable/locked files; auth file is what matters
+    return str(dest)
+
+
+def cleanup_dir(path: str, attempts: int = 4) -> None:
+    """Best-effort recursive delete; tolerates Windows file locks from claude."""
+    for _ in range(attempts):
+        try:
+            shutil.rmtree(path)
+            return
+        except OSError:
+            time.sleep(0.5)
+
+
 def _walk_tool_uses(obj: object) -> Iterator[dict]:
     """Yield every `tool_use` dict nested anywhere inside a message object."""
     if isinstance(obj, dict):
@@ -55,10 +87,7 @@ def _walk_tool_uses(obj: object) -> Iterator[dict]:
 
 
 def parse_stream(lines: Iterable[str]) -> AgentRun:
-    """Parse `--output-format stream-json` NDJSON lines, defensively.
-
-    Tolerates non-JSON lines and event-shape variation across CLI versions.
-    """
+    """Parse `--output-format stream-json` NDJSON lines, defensively."""
     run = AgentRun()
     for raw_line in lines:
         line = raw_line.strip()
@@ -93,12 +122,12 @@ def parse_stream(lines: Iterable[str]) -> AgentRun:
 
 def build_command(*, plugin_dir: str | None, allowed_tools: str, model: str,
                   max_turns: int, max_budget_usd: float, stream: bool) -> list[str]:
-    """Assemble the `claude -p` argv. Pure — no I/O. Both A/B arms use --bare."""
+    """Assemble the `claude -p` argv. Pure — no I/O. No --bare (it strips login);
+    isolation comes from a clean CLAUDE_CONFIG_DIR passed to run_agent."""
     cmd = [
         'claude', '-p',
         '--permission-mode', 'bypassPermissions',
         '--no-session-persistence',
-        '--bare',
         '--model', model,
         '--max-turns', str(max_turns),
         '--allowed-tools', allowed_tools,
@@ -129,18 +158,24 @@ def _parse_proc(stdout: str, stream: bool) -> AgentRun:
 
 def run_agent(prompt: str, *, plugin_dir: str | None = None, allowed_tools: str = '',
               model: str = 'claude-sonnet-4-6', max_turns: int = 8,
-              max_budget_usd: float = 0.5, timeout: int = 300,
-              stream: bool = True, max_attempts: int = 3) -> AgentRun:
-    """Run one headless `claude -p`, feeding the prompt on stdin. Retries transient
-    failures with backoff; never retries timeouts. Returns an AgentRun."""
+              max_budget_usd: float = 0.5, timeout: int = 300, stream: bool = True,
+              max_attempts: int = 3, config_dir: str | None = None,
+              cwd: str | None = None) -> AgentRun:
+    """Run one headless `claude -p`, feeding the prompt on stdin. `config_dir`
+    sets CLAUDE_CONFIG_DIR (the isolated, authed-but-skill-free config); `cwd`
+    sets a neutral working directory. Retries transient failures; never timeouts.
+    """
     cmd = build_command(plugin_dir=plugin_dir, allowed_tools=allowed_tools, model=model,
                         max_turns=max_turns, max_budget_usd=max_budget_usd, stream=stream)
+    env = os.environ.copy()
+    if config_dir:
+        env['CLAUDE_CONFIG_DIR'] = config_dir
     last: subprocess.CompletedProcess | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
                 cmd, input=prompt, capture_output=True, text=True,
-                encoding='utf-8', timeout=timeout,
+                encoding='utf-8', timeout=timeout, env=env, cwd=cwd,
             )
         except subprocess.TimeoutExpired:
             return AgentRun(is_error=True, result_text=f'TIMEOUT after {timeout}s')
