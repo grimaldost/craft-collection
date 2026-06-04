@@ -43,6 +43,31 @@ systematic blind spot.
 - The user asks ("journal", "log this", "wrap up"), or the session is clearly
   ending.
 
+## Were you asked, or did you notice? — write, or offer first
+
+How this skill activated decides whether you write the journal now or only offer
+it. The journal is real work — often several thousand tokens — and every entry
+you write lands in the user's long-term store; producing one unbidden, or on a
+session that wasn't worth it, is the cost to avoid.
+
+- **The user asked — write now.** "journal", "log this", "wrap up", `/journal`,
+  or any request to preserve what was worked out ("don't lose this", "before I
+  forget", "so next time we don't relitigate"). Run the loop below and write the
+  file. No confirmation step.
+- **You activated on your own — offer first.** The session is winding down and
+  you judged it substantive (3+ decisions/findings), but the user voiced no wish
+  to capture — e.g. a bare "that's everything, thanks." Do **not** write the
+  journal. Emit a **single one-line offer** naming what is capturable, then stop:
+  *"This session worked out 4 decisions and a dead end worth journaling — want me
+  to capture them? (`/journal`)"* Write the entries only after the user accepts.
+  - **One offer, not a nag.** If the user declines, ignores it, or says stop, do
+    not offer again this session.
+  - **Match a shown cadence.** If the user already journaled once this session,
+    you may offer again when the next arc of work finishes — they've shown they
+    want this session captured.
+
+When you can't tell which path you're on, offer — don't auto-write.
+
 ## Pick the mode
 
 Most sessions are one of two shapes; the capture questions differ. Pick first.
@@ -62,8 +87,9 @@ run both frameworks.
 
 ## The workflow — automatic multi-pass
 
-When the user says "journal" (or any trigger), produce all entries in a single
-file. Do not pause for approval between entries. If a journal file already exists
+Once you are writing — the user asked, or accepted your offer (see "Were you
+asked, or did you notice?" above) — produce all entries in a single file. Do not
+pause for approval between entries. If a journal file already exists
 for this session, read it first and only add what is not yet captured. If the
 session contains ready-made entry drafts (e.g. from a questioning/critique pass),
 include them verbatim — they are already shaped — then add the rest.
