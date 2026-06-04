@@ -155,6 +155,28 @@ that enforce this — parity diffs, schema-diff in CI, contract
 enforcement, `MIGRATION_NOTES.md` artifacts — are detailed in the
 references.
 
+## Make the discipline visible in your output
+
+Applying the discipline silently is not enough — your output must let a reviewer
+*see* it, and making it explicit is also what separates a disciplined answer from
+a merely plausible one. Whatever the scenario, before and as you do the work:
+
+1. **Pin the contract/baseline first.** Open by stating what you are protecting or
+   declaring — schema, dtypes, grain, row/group cardinality, null behavior, and
+   any known quirks — and say plainly that changes to it are **breaking by
+   default** for the named consumers. Do this before proposing or writing code.
+2. **Name the non-negotiable you are invoking** as you apply it — "the output is
+   the contract", "verify the observable source", "real data over fixtures",
+   "all change is intentional and traceable" — so the reader can audit which
+   principle each step serves.
+3. **Insist on reading the observable source** — the code end-to-end, the
+   materialized data, library signatures, registries — *even when you were handed
+   a diff, a summary, or a description.* Say so explicitly; never diagnose or
+   migrate from the diff/summary text alone.
+4. **Propose the verification gates** (parity diff, schema-diff, contract checks
+   on real data) that must pass before "done"; and for any fix, **repair the
+   producer and replay** rather than patching the data forward.
+
 ## LLM failure modes — quick warning
 
 This skill is consumed by an LLM workflow. LLMs introduce specific

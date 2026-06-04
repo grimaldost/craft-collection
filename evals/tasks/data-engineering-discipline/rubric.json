@@ -8,7 +8,7 @@
   { "id": "real-data-parity", "weight": 2,
     "text": "Proposes real-data validation / a parity check (row count, group cardinality, null rate, aggregate-sum diff within tolerance) before declaring done — not synthetic fixtures alone." },
   { "id": "traceable-change", "weight": 2,
-    "text": "Keeps change intentional and traceable: no silent semantic change; for the investigation, correctly identifies the INNER JOIN + completed-filter as dropping order-date rows and proposes fixing the producer and replaying rather than patching the data forward." },
+    "text": "Keeps change intentional and traceable: no silent semantic change, divergences documented, and any fix repairs the producer and replays rather than patching data forward. (For an investigation this includes tracing the regression to its mechanism — e.g. the INNER JOIN + completed-filter dropping refund-free order rows.)" },
   { "id": "names-discipline", "weight": 1,
     "text": "Explicitly invokes the relevant discipline (contract preservation, source-of-truth, parity/replay, idempotency) instead of just performing the task naively." }
 ]
