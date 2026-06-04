@@ -1,0 +1,22 @@
+# Runtime cruft from other tools (not part of the plugin)
+.remember/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Env / secrets
+.env
+*.local
+
+# Plugin build artifacts
+*.skill
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
