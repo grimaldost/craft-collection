@@ -157,6 +157,11 @@ SELECT * FROM counts;
 -- Compare n_rows and n_groups across the two sources.
 ```
 
+> **Dialect note.** `COUNT(DISTINCT (a, b, c))` over a tuple is **not portable** —
+> BigQuery and PostgreSQL reject it. On those engines, hash the keys first, e.g.
+> `COUNT(DISTINCT a || '|' || b || '|' || c)` using a separator that cannot appear
+> in the values (or `COUNT(DISTINCT FARM_FINGERPRINT(...))` on BigQuery).
+
 ---
 
 ## Recipe 3 — Per-column null rate
@@ -294,9 +299,13 @@ def exhaustive_row_diff(
         baseline_sorted,
         check_exact=False,
         rel_tol=rel_tol,
-        check_dtype=True,
-        check_column_order=False,  # but check_dtype catches col-level dtype shifts
+        check_dtypes=True,  # renamed from check_dtype in Polars 0.20.31
+        check_column_order=False,
     )
+    # Polars has renamed these kwargs across versions: rtol -> rel_tol (1.32.3) and
+    # check_dtype -> check_dtypes (0.20.31). This IS Principle 8 in action — verify
+    # the real signature against your installed Polars with
+    # inspect.signature(pl.testing.assert_frame_equal); don't trust a remembered name.
 ```
 
 For SQL warehouses:

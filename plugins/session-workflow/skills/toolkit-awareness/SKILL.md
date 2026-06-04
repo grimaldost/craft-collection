@@ -19,8 +19,10 @@ python scripts/scan_toolkit.py          # grouped table
 python scripts/scan_toolkit.py --json   # machine-readable
 ```
 
-For plugin-provided components (which live in the plugin cache rather than
-`.claude/`), use `claude plugin list` and `claude plugin details <name>`.
+The scan also lists **plugin-provided** components (it shells out to
+`claude plugin list`), since those live in the plugin cache rather than `.claude/`
+— the case a directory-only scan misses. For deeper detail on one plugin, use
+`claude plugin details <name>`.
 
 Prefer the scan over recalling from memory: installed capabilities change, and a
 remembered list is wrong the moment one does.
