@@ -84,15 +84,19 @@ def run_skill(skill: str, queries: list[dict], *, plugin_dir: str, cfg: dict,
     results = map_concurrent(jobs, worker, concurrency=concurrency)
     counts = [0] * len(queries)
     cost = 0.0
-    errors = 0
+    errors = errors_no_act = 0
     for i, fired, c, err in results:
         counts[i] += 1 if fired else 0
         cost += c
-        errors += 1 if err else 0
+        if err:
+            errors += 1
+            if not fired:  # the only kind that can distort the score
+                errors_no_act += 1
     by_str = {queries[i]['query']: counts[i] for i in range(len(queries))}
     score = score_skill(queries, repeats, lambda s, _r: by_str[s])
     score['cost_usd'] = round(cost, 4)
-    score['error_runs'] = errors
+    score['error_runs'] = errors  # mostly benign: positives truncate at max_turns
+    score['error_runs_no_activation'] = errors_no_act  # the diagnostic that matters
     score['total_runs'] = len(jobs)
     return score
 
@@ -154,7 +158,8 @@ def main(argv: list[str] | None = None) -> int:
           f'gate>={g["trigger_recall"]}  {rec_ok}')
     print(f'specificity = {score["specificity"]:.2f}  CI[{slo:.2f},{shi:.2f}]  '
           f'gate>={g["trigger_specificity"]}  {spec_ok}')
-    print(f'cost=${score["cost_usd"]}  error_runs={score["error_runs"]}/{score["total_runs"]}')
+    print(f'cost=${score["cost_usd"]}  error_runs={score["error_runs"]}/{score["total_runs"]} '
+          f'(no-activation errors={score["error_runs_no_activation"]})')
     for pq in score['per_query']:  # surface misses for description tuning
         miss = ((pq['should_trigger'] and pq['rate'] < 1.0)
                 or (not pq['should_trigger'] and pq['rate'] > 0.0))
