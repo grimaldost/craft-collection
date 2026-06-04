@@ -1,0 +1,51 @@
+name: currency
+
+# Detection leg of the freshness loop: monthly, compares stack.toml pins to the
+# latest on PyPI and opens (or updates) a drift issue. The update leg is the
+# /refresh-stack command, run by a human.
+on:
+  schedule:
+    - cron: '0 9 1 * *'   # 09:00 UTC on the 1st of each month
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check stack drift
+        id: check
+        run: |
+          python plugins/engineering-discipline/skills/python-engineering/scripts/check_versions.py --json > drift.json || true
+          behind=$(python -c "import json; print(json.load(open('drift.json'))['behind_count'])")
+          echo "behind=$behind" >> "$GITHUB_OUTPUT"
+      - name: Open or update drift issue
+        if: steps.check.outputs.behind != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY' > body.md
+          import json
+          d = json.load(open('drift.json'))
+          behind = [t for t in d['tools'] if t['behind']]
+          print('The python-engineering stack has tools behind a newer minor/major:')
+          print()
+          for t in behind:
+              print(f"- **{t['package']}**: pinned >= {t['pinned_min']}, latest {t['latest']} (released {t['upload_date']})")
+          print()
+          print('Run `/refresh-stack` to review changelogs and update stack.toml.')
+          PY
+          gh label create stack-drift --color FBCA04 --description "Toolchain pins behind latest" --force || true
+          num=$(gh issue list --label stack-drift --state open --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body-file body.md
+          else
+            gh issue create --title "Toolchain drift: python-engineering stack" --label stack-drift --body-file body.md
+          fi
