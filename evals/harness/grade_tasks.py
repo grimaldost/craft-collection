@@ -93,12 +93,17 @@ def _run_arm_real(prompt: str, *, plugin_dir: str | None, cfg: dict, config_dir:
 
 
 def grade_skill(skill: str, tasks: list[dict], rubric: list[dict], cfg: dict, *,
-                plugin_dir: str | None, config_dir: str | None,
-                pairwise_criterion: str, concurrency: int = 4,
-                run_arm=_run_arm_real, judge_point=judge_pointwise,
-                judge_pair=judge_pairwise) -> dict:
+                plugin_dir: str | None, config_with: str | None,
+                config_without: str | None, pairwise_criterion: str,
+                concurrency: int = 4, run_arm=_run_arm_real,
+                judge_point=judge_pointwise, judge_pair=judge_pairwise) -> dict:
     """Run every (task x repeat) unit concurrently; each unit does WITH + WITHOUT
-    arms then pointwise + pairwise judging. Returns the per-skill grading blob."""
+    arms then pointwise + pairwise judging. Returns the per-skill grading blob.
+
+    The two arms MUST use SEPARATE config dirs: a `--plugin-dir` run caches the
+    plugin into its CLAUDE_CONFIG_DIR, so a WITHOUT arm sharing that dir would
+    silently inherit the skill (contaminating the baseline). `config_without` is
+    never touched by `--plugin-dir`, so it stays genuinely skill-free."""
     repeats = cfg['agent_repeats']
     units = [(t, r) for t in tasks for r in range(repeats)]
 
@@ -106,9 +111,9 @@ def grade_skill(skill: str, tasks: list[dict], rubric: list[dict], cfg: dict, *,
         task, r = unit
         prompt = build_task_prompt(skill, task)
         with_run, with_out = run_arm(prompt, plugin_dir=plugin_dir, cfg=cfg,
-                                     config_dir=config_dir)
+                                     config_dir=config_with)
         without_run, without_out = run_arm(prompt, plugin_dir=None, cfg=cfg,
-                                            config_dir=config_dir)
+                                            config_dir=config_without)
         pw = judge_point(prompt, with_out, rubric, model=cfg['judge_model'],
                          repeats=cfg['judge_repeats'])
         pair = judge_pair(prompt, with_out, without_out, pairwise_criterion,
@@ -217,14 +222,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     plugin_dir = str(REPO / 'plugins' / plugin)
-    config_dir = make_isolated_config()
+    config_with = make_isolated_config()       # --plugin-dir runs cache the plugin here
+    config_without = make_isolated_config()    # never sees --plugin-dir -> stays skill-free
     try:
         blob = grade_skill(skill, tasks, rubric, cfg, plugin_dir=plugin_dir,
-                           config_dir=config_dir,
+                           config_with=config_with, config_without=config_without,
                            pairwise_criterion=PAIRWISE_CRITERION[skill],
                            concurrency=args.concurrency)
     finally:
-        cleanup_dir(config_dir)
+        cleanup_dir(config_with)
+        cleanup_dir(config_without)
 
     write_report(skill, blob)
     s = blob['summary']

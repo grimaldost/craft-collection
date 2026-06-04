@@ -32,7 +32,8 @@ def test_grade_skill_shape_over_repeats():
     tasks = [{'id': 't1', 'prompt': 'do x', 'fixture': None}]
     rubric = [{'id': 'r1', 'weight': 1, 'text': '...'}]
     blob = grade_skill('journaling-sessions', tasks, rubric, CFG, plugin_dir='p',
-                       config_dir=None, pairwise_criterion='better?', concurrency=1,
+                       config_with=None, config_without=None,
+                       pairwise_criterion='better?', concurrency=1,
                        run_arm=fake_arm, judge_point=fake_point, judge_pair=fake_pair)
     task = blob['tasks'][0]
     assert task['n'] == 3                       # one record per agent-repeat
@@ -56,7 +57,8 @@ def test_grade_skill_counts_without_wins_and_ties():
     mixed_pair.calls = 0
 
     blob = grade_skill('context-handoff', tasks, rubric, CFG, plugin_dir='p',
-                       config_dir=None, pairwise_criterion='c', concurrency=1,
+                       config_with=None, config_without=None,
+                       pairwise_criterion='c', concurrency=1,
                        run_arm=fake_arm, judge_point=fake_point, judge_pair=mixed_pair)
     pw = blob['tasks'][0]['pairwise']
     assert pw['with_wins'] + pw['without_wins'] + pw['ties'] == 3
