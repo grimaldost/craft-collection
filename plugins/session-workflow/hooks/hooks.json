@@ -1,0 +1,19 @@
+{
+  "description": "Optional live toolkit inventory at session start. Ships wired but INERT — the script exits silently unless the environment variable TOOLKIT_AWARENESS_INJECT=1 is set. See the plugin README to enable.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/skills/toolkit-awareness/scripts/scan_toolkit.py",
+              "--session-start"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
