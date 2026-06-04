@@ -55,6 +55,11 @@ PAIRWISE_CRITERION = {
         'the installed slash commands and the owning convention/schema skills by '
         'name instead of restating them, names the quality gates, and invents no '
         'capabilities that were not listed as installed',
+    'review-panel':
+        'which response better convenes a genuinely independent fresh-eyes review '
+        'to break the author\'s anchoring — a neutral brief that strips the leaning, '
+        'diverse adversarial lenses, structured comparable output, and asking before '
+        'firing — rather than just offering one more opinion from the same context',
 }
 
 

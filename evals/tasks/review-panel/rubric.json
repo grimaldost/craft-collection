@@ -1,0 +1,14 @@
+[
+  { "id": "neutral-brief", "weight": 2,
+    "text": "Curates a NEUTRAL artifact brief for the reviewers — gives them the design, constraints, and dropped alternatives but strips the author's stated leaning/conclusion, so the panel is not anchored on the Redis token-bucket choice." },
+  { "id": "right-lenses", "weight": 2,
+    "text": "Picks several appropriate adversarial lenses for an architecture decision (e.g. architect, skeptic/simplest-thing, ops/failure, performance/scale) rather than a single generic 'reviewer'." },
+  { "id": "blind-adversarial", "weight": 1,
+    "text": "Sets the reviewers up blind to one another and framed to refute / find what's missing, not to politely 'review'." },
+  { "id": "structured-output", "weight": 1,
+    "text": "Specifies a fixed, comparable per-reviewer output so the results can be synthesized side by side." },
+  { "id": "plan-and-consent", "weight": 2,
+    "text": "Shows the plan (how many agents, which lenses, rough cost) and asks before firing — does not silently spawn a panel or assume consent." },
+  { "id": "not-solo", "weight": 2,
+    "text": "Convenes independent fresh reviewers rather than just delivering its own single critique — the independence/anti-anchoring is the point, not one more opinion from the same context." }
+]

@@ -1,0 +1,19 @@
+[
+  { "query": "I've been going round and round on this design for days — give me fresh eyes on it.", "should_trigger": true, "note": "anchored after many rounds" },
+  { "query": "Can I get a second opinion on this architecture before I commit to it?", "should_trigger": true, "note": "second opinion, high-stakes commit" },
+  { "query": "Red team this plan — I'm too close to it to see the holes.", "should_trigger": true, "note": "explicit red-team / anchoring" },
+  { "query": "Am I anchored on this approach? Poke holes in it from a few angles.", "should_trigger": true, "note": "anti-anchoring, multiple angles" },
+  { "query": "/review-panel the caching-layer design", "should_trigger": true, "note": "explicit command (note: slash commands are weak headless)" },
+  { "query": "We've iterated this spec six times and I can't tell if it's good anymore. Sanity-check it independently.", "should_trigger": true, "note": "over-iteration + independence" },
+  { "query": "Before we ship this irreversible migration plan, I want a hard independent review from several perspectives.", "should_trigger": true, "note": "high-stakes irreversible + multi-perspective" },
+  { "query": "Convene a panel to critique this proposal from different perspectives.", "should_trigger": true, "note": "explicit panel request" },
+
+  { "query": "What is 2 + 2?", "should_trigger": false, "note": "trivial fact" },
+  { "query": "Quickly check this function for off-by-one errors.", "should_trigger": false, "note": "near-miss: single quick check, not an anchored/high-stakes panel" },
+  { "query": "Give me your opinion on this sentence's wording.", "should_trigger": false, "note": "near-miss: one-pass feedback, not a panel" },
+  { "query": "Review this small PR before I merge.", "should_trigger": false, "note": "near-miss: routine single review, not anchored/irreversible" },
+  { "query": "Fix the failing test in test_auth.py.", "should_trigger": false, "note": "task, not a review" },
+  { "query": "What does this error message mean?", "should_trigger": false, "note": "single factual answer" },
+  { "query": "Is it better to use a list or a set here?", "should_trigger": false, "note": "single obvious technical answer" },
+  { "query": "Summarize the key points of this document.", "should_trigger": false, "note": "summarization, not a review" }
+]

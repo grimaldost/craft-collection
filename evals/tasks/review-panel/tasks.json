@@ -1,0 +1,7 @@
+[
+  {
+    "id": "plan-panel",
+    "prompt": "I've been at this rate-limiter design for five sessions and I genuinely can't tell if it's right anymore. Get me fresh eyes on it.",
+    "fixture": "fixtures/over-iterated-design.md"
+  }
+]
