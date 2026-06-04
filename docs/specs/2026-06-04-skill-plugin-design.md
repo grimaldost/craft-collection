@@ -95,11 +95,10 @@ updates; never set `version` in both manifest and marketplace entry).
 `marketplace.json` categories: `engineering-discipline` → `development`;
 `session-workflow` → `productivity`.
 
-**Open item — naming:** the marketplace `name` and the repo owner/slug used in
-the install one-liner (`/plugin marketplace add <owner>/<repo>`) are not yet
-chosen. Default proposal: marketplace `name: grimaldo-skills`, repo
-`grimaldo-stanzani/skill-collection`. To be confirmed before §6.3 docs are
-written.
+**Naming (resolved):** marketplace `name: skill-collection`; repo
+`grimaldo-stanzani/skill-collection`. Install one-liner:
+`/plugin marketplace add grimaldo-stanzani/skill-collection` then
+`/plugin install <plugin>@skill-collection`.
 
 ---
 
