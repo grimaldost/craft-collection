@@ -1,0 +1,3 @@
+# Generated eval outputs are not committed
+report/
+__pycache__/

@@ -1,0 +1,17 @@
+{
+  "agent_model": "claude-sonnet-4-6",
+  "judge_model": "claude-sonnet-4-6",
+  "agent_repeats": 3,
+  "judge_repeats": 1,
+  "max_turns": 8,
+  "max_budget_usd": 0.50,
+  "timeout_seconds": 300,
+  "allowed_tools_trigger": "Skill,Read,Glob,Grep",
+  "allowed_tools_task": "Skill,Read,Glob,Grep,Write,Edit,Bash",
+  "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
+  "plugin_of_skill": {
+    "journaling-sessions": "session-workflow",
+    "context-handoff": "session-workflow",
+    "data-engineering-discipline": "engineering-discipline"
+  }
+}
