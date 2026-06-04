@@ -63,7 +63,7 @@ def build_task_prompt(skill: str, task: dict) -> str:
     return '\n\n-----\n\n'.join(parts)
 
 
-def _read_created_files(cwd: str, cap: int = 8000) -> str:
+def _read_created_files(cwd: str, cap: int = 20000) -> str:
     """Concatenate text files the agent wrote in its temp cwd (journaling writes
     its entries to a file rather than the final message). Capped, best-effort."""
     chunks = []
@@ -126,6 +126,7 @@ def grade_skill(skill: str, tasks: list[dict], rubric: list[dict], cfg: dict, *,
             'with_activated': with_run.activated(skill),
             'with_cost': with_run.cost_usd or 0.0, 'without_cost': without_run.cost_usd or 0.0,
             'with_error': with_run.is_error, 'without_error': without_run.is_error,
+            'criteria': (pw.get('verdicts') or [{}])[0].get('criteria'),  # per-criterion met+evidence
         }
 
     records = map_concurrent(units, do_unit, concurrency=concurrency)
