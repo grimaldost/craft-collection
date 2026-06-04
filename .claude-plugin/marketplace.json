@@ -1,0 +1,21 @@
+{
+  "name": "skill-collection",
+  "owner": { "name": "Grimaldo Stanzani", "email": "grimaldosj93@gmail.com" },
+  "metadata": { "pluginRoot": "./plugins" },
+  "plugins": [
+    {
+      "name": "engineering-discipline",
+      "source": "engineering-discipline",
+      "category": "development",
+      "description": "Modern Python engineering standards and stack-agnostic data-engineering discipline, with ruff/uv enforcement hooks and a self-refreshing toolchain.",
+      "keywords": ["python", "uv", "ruff", "ty", "data-engineering", "data-contract", "pipeline"]
+    },
+    {
+      "name": "session-workflow",
+      "source": "session-workflow",
+      "category": "productivity",
+      "description": "Capture session knowledge into structured entries, author paste-ready hand-off briefs, and keep live awareness of the installed toolkit.",
+      "keywords": ["journal", "handoff", "session", "knowledge-capture", "toolkit"]
+    }
+  ]
+}
