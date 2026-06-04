@@ -7,6 +7,15 @@ skill. Every agent run and every judge call goes through the `claude` CLI on the
 subscription — **no Anthropic API key, no Node, no promptfoo.** Pure-Python,
 stdlib only.
 
+## Coverage
+
+Five of the six skills are evaluated: `journaling-sessions`, `context-handoff`,
+`data-engineering-discipline`, `python-engineering`, `toolkit-awareness`.
+`refresh-stack` is intentionally **excluded** — it sets
+`disable-model-invocation: true` (it is the manual-only `/refresh-stack` command),
+so auto-activation is not-applicable by design rather than a failure, and its real
+behavior needs live PyPI/changelog access a headless run can't supply.
+
 ## Prerequisites
 
 - `python` 3.13+ (stdlib only — nothing to `pip install`).
@@ -63,7 +72,7 @@ python evals/harness/grade_tasks.py  journaling-sessions --dry-run
 python evals/harness/run_triggers.py journaling-sessions --limit 4 --concurrency 6
 python evals/harness/grade_tasks.py  context-handoff      --limit 1 --concurrency 4
 
-# the whole focused run (all 3 skills, triggers + grading + scorecard)
+# the whole focused run (all covered skills, triggers + grading + scorecard)
 python evals/harness/run_all.py --concurrency 6
 ```
 
