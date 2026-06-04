@@ -90,8 +90,26 @@ def _read_created_files(cwd: str, cap: int = 20000) -> str:
     return '\n\n'.join(chunks)[:cap]
 
 
+def _assemble_output(run, files: str, cap: int = 24000) -> str:
+    """Everything the agent produced, wherever it landed — all assistant text (mid-
+    stream + final), content it Wrote to files, and on-disk files. A skill that
+    writes its deliverable to a file or an intermediate message (not result_text)
+    is then judged on its real output, not a 'done, 10 entries' confirmation. This
+    closes the capture gap that floored file-writing skills like journaling."""
+    parts: list[str] = []
+    body = run.assistant_text.strip() or (run.result_text or '').strip()
+    if body:
+        parts.append(body)
+    if run.written_text.strip():
+        parts.append(f'[CONTENT WRITTEN TO FILES]\n{run.written_text.strip()}')
+    if files:
+        parts.append(f'[FILES ON DISK]\n{files}')
+    return '\n\n'.join(parts)[:cap]
+
+
 def _run_arm_real(prompt: str, *, plugin_dir: str | None, cfg: dict, config_dir: str):
-    """One agent arm in a fresh cwd; output = final message + any files it wrote."""
+    """One agent arm in a fresh cwd; output = everything it produced (message text,
+    file writes, on-disk files)."""
     cwd = tempfile.mkdtemp(prefix='eval_task_')
     try:
         run = run_agent(prompt, plugin_dir=plugin_dir,
@@ -102,8 +120,7 @@ def _run_arm_real(prompt: str, *, plugin_dir: str | None, cfg: dict, config_dir:
         files = _read_created_files(cwd)
     finally:
         cleanup_dir(cwd)
-    output = run.result_text + (f'\n\n[FILES WRITTEN]\n{files}' if files else '')
-    return run, output
+    return run, _assemble_output(run, files)
 
 
 def grade_skill(skill: str, tasks: list[dict], rubric: list[dict], cfg: dict, *,

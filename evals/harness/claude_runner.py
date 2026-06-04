@@ -40,6 +40,8 @@ class AgentRun:
     plugins_loaded: list[str] = field(default_factory=list)
     plugin_errors: list = field(default_factory=list)
     usage: dict = field(default_factory=dict)
+    assistant_text: str = ''   # all assistant message text blocks (mid-stream + final)
+    written_text: str = ''     # contents written via Write/Edit tool calls
     raw: list = field(default_factory=list)
 
     def plugin_loaded(self, name: str) -> bool:
@@ -104,9 +106,40 @@ def _walk_tool_uses(obj: object) -> Iterator[dict]:
             yield from _walk_tool_uses(v)
 
 
+# Tools whose input carries authored content (a skill that writes its output to a
+# file rather than the chat puts the real deliverable here, not in result_text).
+_WRITE_TOOLS = frozenset({'Write', 'Edit', 'MultiEdit', 'NotebookEdit'})
+
+
+def _iter_blocks(obj: object) -> Iterator[dict]:
+    """Yield every content block dict (`type` of 'text' or 'tool_use') nested
+    anywhere inside a stream event — generalizes `_walk_tool_uses` to text too."""
+    if isinstance(obj, dict):
+        if obj.get('type') in ('text', 'tool_use'):
+            yield obj
+        for v in obj.values():
+            yield from _iter_blocks(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _iter_blocks(v)
+
+
+def _write_contents(inp: dict) -> Iterator[str]:
+    """Pull authored text out of a Write/Edit/MultiEdit/NotebookEdit tool input."""
+    for key in ('content', 'file_text', 'new_string', 'new_source'):
+        val = inp.get(key)
+        if isinstance(val, str) and val:
+            yield val
+    for edit in inp.get('edits') or []:  # MultiEdit carries a list of edits
+        if isinstance(edit, dict) and isinstance(edit.get('new_string'), str):
+            yield edit['new_string']
+
+
 def parse_stream(lines: Iterable[str]) -> AgentRun:
     """Parse `--output-format stream-json` NDJSON lines, defensively."""
     run = AgentRun()
+    texts: list[str] = []
+    writes: list[str] = []
     for raw_line in lines:
         line = raw_line.strip()
         if not line:
@@ -130,13 +163,23 @@ def parse_stream(lines: Iterable[str]) -> AgentRun:
             run.is_error = bool(obj.get('is_error', run.is_error))
             if isinstance(obj.get('usage'), dict):
                 run.usage = obj['usage']
-        for tool_use in _walk_tool_uses(obj):
-            if tool_use.get('name') == 'Skill':
-                inp = tool_use.get('input') or {}
+        for block in _iter_blocks(obj):
+            if block.get('type') == 'text':
+                txt = block.get('text')
+                if isinstance(txt, str):
+                    texts.append(txt)
+                continue
+            name = block.get('name')                      # tool_use block
+            inp = block.get('input') or {}
+            if name == 'Skill':
                 value = (inp.get('name') or inp.get('skill') or inp.get('command') or ''
                          if isinstance(inp, dict) else str(inp))
                 if value:
                     run.activated_skills.add(value)
+            elif name in _WRITE_TOOLS and isinstance(inp, dict):
+                writes.extend(_write_contents(inp))
+    run.assistant_text = '\n'.join(texts)
+    run.written_text = '\n\n'.join(writes)
     return run
 
 
