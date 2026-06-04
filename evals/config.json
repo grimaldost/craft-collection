@@ -9,6 +9,7 @@
   "allowed_tools_trigger": "Skill,Read,Glob,Grep",
   "allowed_tools_task": "Skill,Read,Glob,Grep,Write,Edit,Bash",
   "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
+  "command_first_skills": ["review-panel"],
   "plugin_of_skill": {
     "journaling-sessions": "session-workflow",
     "context-handoff": "session-workflow",

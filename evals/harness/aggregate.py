@@ -23,17 +23,25 @@ def _gate(value, threshold) -> str:
     return 'PASS' if value >= threshold else 'FAIL'
 
 
-def build_scorecard(triggers: dict, grading: dict, gates: dict) -> list[dict]:
-    """Merge the two report blobs into one row per skill, with gate flags. Pure."""
+def build_scorecard(triggers: dict, grading: dict, gates: dict,
+                    command_first=()) -> list[dict]:
+    """Merge the two report blobs into one row per skill, with gate flags. Pure.
+
+    `command_first` skills (invoked mainly via their slash command, like a panel
+    you deliberately convene) report recall for information but are not gated on
+    it — auto-firing is a bonus, not the contract."""
+    command_first = set(command_first)
     rows = []
     for skill in sorted(set(triggers) | set(grading)):
         t = triggers.get(skill) or {}
         g = (grading.get(skill) or {}).get('summary') or {}
+        recall_gate = ('info' if skill in command_first
+                       else _gate(t.get('recall'), gates['trigger_recall']))
         rows.append({
             'skill': skill,
             'recall': t.get('recall'),
             'recall_ci': t.get('recall_ci'),
-            'recall_gate': _gate(t.get('recall'), gates['trigger_recall']),
+            'recall_gate': recall_gate,
             'specificity': t.get('specificity'),
             'specificity_ci': t.get('specificity_ci'),
             'specificity_gate': _gate(t.get('specificity'), gates['trigger_specificity']),
@@ -63,7 +71,10 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
             'parentheses. Trigger axis = does the right skill auto-fire (recall) and '
             'stay quiet on near-misses (specificity). Usage axis = does the WITH-skill '
             'output satisfy the skill\'s discipline rubric. With/without = swap-order '
-            'pairwise win-rate of the skill vs no-skill.', '']
+            'pairwise win-rate of the skill vs no-skill. A recall verdict of (info) '
+            'marks a command-first skill (e.g. review-panel) whose auto-fire rate is '
+            'reported but not gated — it is invoked deliberately via its slash command.',
+            '']
 
     # main table
     out += ['## Per-skill summary', '',
@@ -124,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         print('no report/triggers.json or report/grading.json found — run the eval first')
         return 1
 
-    rows = build_scorecard(triggers, grading, cfg['gates'])
+    rows = build_scorecard(triggers, grading, cfg['gates'], cfg.get('command_first_skills', []))
     md = render_scorecard(rows, triggers, grading)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = REPORT_DIR / 'scorecard.md'

@@ -36,6 +36,13 @@ def test_build_scorecard_handles_missing_grading():
     assert rows[0]['correct_usage_gate'] == 'n/a'
 
 
+def test_command_first_skill_recall_is_informational():
+    # A command-first skill below the recall gate is reported, not failed.
+    rows = build_scorecard(TRIG, GRAD, GATES, command_first=['journaling-sessions'])
+    assert rows[0]['recall'] == 0.75            # still reported
+    assert rows[0]['recall_gate'] == 'info'     # not 'FAIL', though 0.75 < 0.8
+
+
 def test_render_includes_misses_and_tables():
     md = render_scorecard(build_scorecard(TRIG, GRAD, GATES), TRIG, GRAD)
     assert 'Skill eval scorecard' in md
@@ -46,5 +53,6 @@ def test_render_includes_misses_and_tables():
 if __name__ == '__main__':
     test_build_scorecard_rows()
     test_build_scorecard_handles_missing_grading()
+    test_command_first_skill_recall_is_informational()
     test_render_includes_misses_and_tables()
     print('ok: all aggregate tests passed')
