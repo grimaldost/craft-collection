@@ -39,6 +39,7 @@ class AgentRun:
     is_error: bool = False
     plugins_loaded: list[str] = field(default_factory=list)
     plugin_errors: list = field(default_factory=list)
+    usage: dict = field(default_factory=dict)
     raw: list = field(default_factory=list)
 
     def plugin_loaded(self, name: str) -> bool:
@@ -127,6 +128,8 @@ def parse_stream(lines: Iterable[str]) -> AgentRun:
             run.cost_usd = obj.get('total_cost_usd') or run.cost_usd
             run.num_turns = obj.get('num_turns') or run.num_turns
             run.is_error = bool(obj.get('is_error', run.is_error))
+            if isinstance(obj.get('usage'), dict):
+                run.usage = obj['usage']
         for tool_use in _walk_tool_uses(obj):
             if tool_use.get('name') == 'Skill':
                 inp = tool_use.get('input') or {}
