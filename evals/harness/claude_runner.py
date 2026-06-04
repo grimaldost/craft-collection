@@ -74,6 +74,23 @@ def cleanup_dir(path: str, attempts: int = 4) -> None:
             time.sleep(0.5)
 
 
+def map_concurrent(items: Iterable, fn, concurrency: int = 4) -> list:
+    """Apply `fn` to each item with a bounded thread pool, preserving input order.
+
+    Each `claude -p` spawn is subprocess-bound and releases the GIL while it waits,
+    so threads parallelize the agent runs and cut the focused run's wall time
+    several-fold. `concurrency <= 1` runs sequentially (used by tests/debugging).
+    Transient failures are already absorbed inside `run_agent`, so `fn` should not
+    raise; if it does, the exception surfaces when the result list is built.
+    """
+    items = list(items)
+    if concurrency <= 1 or len(items) <= 1:
+        return [fn(x) for x in items]
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=concurrency) as ex:
+        return list(ex.map(fn, items))
+
+
 def _walk_tool_uses(obj: object) -> Iterator[dict]:
     """Yield every `tool_use` dict nested anywhere inside a message object."""
     if isinstance(obj, dict):

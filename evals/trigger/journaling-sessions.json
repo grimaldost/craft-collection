@@ -1,0 +1,19 @@
+[
+  { "query": "Okay, journal this session.", "should_trigger": true, "note": "explicit canonical trigger word" },
+  { "query": "Let's wrap up — capture what we learned and decided today.", "should_trigger": true, "note": "casual wrap-up phrasing, no literal 'journal'" },
+  { "query": "We just read the ISO 8601 date-and-time standard end to end. Create registries for everything in it.", "should_trigger": true, "note": "reference-ingestion mode; 'create registries for everything'" },
+  { "query": "Before we close out, record the decisions and the dead ends from this debugging session so a future session benefits from them.", "should_trigger": true, "note": "implicit-but-clear closure cue, names conclusions + process dynamics" },
+  { "query": "That was a productive session — three design calls and a nasty race-condition bug we finally pinned down. Make sure none of it gets lost before I move on.", "should_trigger": true, "note": "implicit: substantive session ending with 3+ items, never says 'journal'" },
+  { "query": "Log what we worked out about the retry backoff and why we rejected the fixed-interval approach, before I forget.", "should_trigger": true, "note": "casual 'log', includes reasoning + rejected option" },
+  { "query": "We finished comparing Qdrant and LanceDB and settled on Qdrant for in-traversal filtering. Note the reasoning and the option we passed on so next time we don't relitigate it.", "should_trigger": true, "note": "implicit capture of a decision + rejected alternative" },
+  { "query": "Give me a session summary — but the kind I can retrieve and reason about cold months from now, not a meeting recap.", "should_trigger": true, "note": "explicit, states the retrieval-quality bar that distinguishes this skill" },
+
+  { "query": "What is the capital of France?", "should_trigger": false, "note": "trivial Q&A, no session knowledge" },
+  { "query": "Fix the typo on line 12 of the README.", "should_trigger": false, "note": "trivial one-step task, nothing to capture" },
+  { "query": "Consolidate my existing journal entries into higher-level patterns.", "should_trigger": false, "note": "downstream consolidation pass, explicitly NOT raw capture" },
+  { "query": "Summarize this article I'm about to paste so I can skim it.", "should_trigger": false, "note": "document summarization, not session memory capture" },
+  { "query": "Write a commit message for the changes I just staged.", "should_trigger": false, "note": "adjacent: summarizing work, but for VCS not retrieval memory" },
+  { "query": "Keep a running changelog of this config file as we edit it.", "should_trigger": false, "note": "near-miss: change logging, not session-knowledge journaling" },
+  { "query": "Transcribe what I dictate in this meeting verbatim.", "should_trigger": false, "note": "near-miss: live transcription, not structured retrieval-ready capture" },
+  { "query": "Update the project README with a short note about today's progress.", "should_trigger": false, "note": "adjacent: documentation edit, not memory journaling" }
+]

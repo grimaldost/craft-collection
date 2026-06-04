@@ -1,0 +1,19 @@
+[
+  { "query": "Migrate this Spark pipeline to the new warehouse without changing the output.", "should_trigger": true, "note": "migration with output-preservation => contract risk" },
+  { "query": "I'm refactoring the transform that builds the orders fact table that finance dashboards read from.", "should_trigger": true, "note": "refactor of a transform with named downstream consumers" },
+  { "query": "The revenue numbers in the executive dashboard changed after my last merge — what happened?", "should_trigger": true, "note": "downstream-regression investigation" },
+  { "query": "Design a data contract for the customer_events dataset before other teams start integrating against it.", "should_trigger": true, "note": "explicit data-contract design" },
+  { "query": "Add a churn_risk column to the users dimension table; three dashboards and a model already read from it.", "should_trigger": true, "note": "schema evolution on a consumed dataset" },
+  { "query": "Backfill six months of history into the sessions table and make sure a replay matches a full recompute.", "should_trigger": true, "note": "backfill + replay determinism" },
+  { "query": "Write tests for the billing aggregation pipeline so a bad change can't ship silently.", "should_trigger": true, "note": "tests for a data pipeline" },
+  { "query": "Generate a PySpark job that rolls daily events up to monthly revenue for the finance dashboard.", "should_trigger": true, "note": "LLM-generated data code feeding a real consumer; semantic-drift risk" },
+
+  { "query": "Just exploring this CSV in a throwaway notebook out of my own curiosity.", "should_trigger": false, "note": "no downstream consumer => explicitly excluded" },
+  { "query": "Plot a histogram of this dataframe so I can eyeball the distribution.", "should_trigger": false, "note": "near-miss: data-flavored but exploratory viz, no consumer" },
+  { "query": "Parse this one-off JSON file into a dict for a quick sanity check.", "should_trigger": false, "note": "near-miss: throwaway data handling, nothing depends on it" },
+  { "query": "Rename a local variable in this Python data-loading script for readability.", "should_trigger": false, "note": "near-miss: trivial edit, no contract/semantic change" },
+  { "query": "Explain the difference between a LEFT JOIN and an INNER JOIN.", "should_trigger": false, "note": "conceptual Q&A, no pipeline work" },
+  { "query": "Write a Typer CLI for parsing command-line arguments.", "should_trigger": false, "note": "non-data software work" },
+  { "query": "Set up pytest and ruff for my new Python repo.", "should_trigger": false, "note": "tooling/scaffolding, not data discipline" },
+  { "query": "Help me design the REST API routes for the user service.", "should_trigger": false, "note": "software API design, not a data pipeline/contract" }
+]
