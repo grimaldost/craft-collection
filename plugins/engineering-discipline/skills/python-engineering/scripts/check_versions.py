@@ -45,21 +45,29 @@ def load_precommit(path: Path = DEFAULT_STACK) -> dict[str, str]:
     return dict(load_stack(path).get('precommit', {}))
 
 
-def _ver2(s: str) -> tuple[int, int]:
-    """Parse a version string into a (major, minor) tuple; non-numeric parts -> 0."""
+def _ver(s: str) -> tuple[int, int, int]:
+    """Parse a version string into a (major, minor, patch) tuple; non-numeric
+    parts -> 0 (so '1.2rc1' -> (1, 2, 0))."""
     parts = (s or '').split('.')
-    major = int(parts[0]) if parts and parts[0].isdigit() else 0
-    minor = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
-    return (major, minor)
+
+    def _int(i: int) -> int:
+        return int(parts[i]) if len(parts) > i and parts[i].isdigit() else 0
+
+    return (_int(0), _int(1), _int(2))
 
 
 def is_behind(pinned_min: str, latest: str) -> bool:
-    """True when `latest` is a newer major/minor than the pinned floor.
+    """True when `latest` is a newer release than the pinned floor.
 
-    Patch-only bumps (same major.minor) do not count as behind — the skill pins
-    a floor, not an exact version, so only a new minor/major warrants review.
+    The skill pins a floor, not an exact version, so for a stable tool a patch
+    bump (same major.minor) is NOT 'behind' — only a new minor/major warrants
+    review. But for a true 0ver tool (major and minor both 0, e.g. ty 0.0.x) the
+    patch axis is where every release lands, so 0.0.1 -> 0.0.43 DOES count.
+    Comparing only (major, minor) made every 0.0.x release invisible to drift.
     """
-    return _ver2(latest) > _ver2(pinned_min)
+    pin, late = _ver(pinned_min), _ver(latest)
+    depth = 3 if pin[0] == 0 and pin[1] == 0 else 2  # 0.0.x -> compare patch too
+    return late[:depth] > pin[:depth]
 
 
 def fetch_pypi_version(package: str, pinned_min: str) -> dict:

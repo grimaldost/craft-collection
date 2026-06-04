@@ -29,8 +29,16 @@ def _blank(v: object) -> bool:
 def _typed_ok(v: object, dtype: str) -> bool:
     if dtype == 'str':
         return True
+    if dtype == 'int':
+        # Accept integer-VALUED numerics ('1.0', 2.0, '2') — the normal CSV/warehouse
+        # rendering of an int column — while rejecting non-integers ('1.5') and
+        # non-numbers. (int('1.0') raises, so the naive int(v) cried wolf on valid data.)
+        try:
+            return float(v).is_integer()  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return False
     try:
-        (int if dtype == 'int' else float)(v)  # type: ignore[arg-type]
+        float(v)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return False
     return True

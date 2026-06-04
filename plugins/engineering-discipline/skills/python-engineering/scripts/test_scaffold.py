@@ -5,7 +5,7 @@ Runnable with pytest OR directly: `python test_scaffold.py`.
 
 from __future__ import annotations
 
-from scaffold import render_pyproject, resolve_names
+from scaffold import name_error, render_pyproject, resolve_names
 
 
 def test_resolve_names():
@@ -29,8 +29,16 @@ def test_render_pyproject_substitutions():
     assert 'quote-style = "single"' in out
 
 
+def test_name_error_rejects_unimportable_package():
+    assert name_error(resolve_names('my-cool-tool')) is None
+    # digit-leading -> package '3d_tool' is not importable; must be rejected
+    assert not resolve_names('3d-tool')['package'].isidentifier()
+    assert name_error(resolve_names('3d-tool')) is not None
+
+
 if __name__ == '__main__':
     test_resolve_names()
     test_resolve_names_messy_input()
     test_render_pyproject_substitutions()
+    test_name_error_rejects_unimportable_package()
     print('ok: all scaffold tests passed')

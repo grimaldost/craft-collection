@@ -9,7 +9,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from scan_toolkit import scan
+from scan_toolkit import _plugins_from_json, scan
 
 
 def _make_tree(root: Path) -> None:
@@ -40,10 +40,25 @@ def test_scan_enumerates_components():
 def test_missing_dirs_do_not_raise():
     with tempfile.TemporaryDirectory() as d:
         out = scan([Path(d)])  # no .claude at all
-        assert out == {'skills': [], 'commands': [], 'agents': [], 'hooks': []}
+        for kind in ('skills', 'commands', 'agents', 'hooks'):
+            assert out[kind] == []
+        assert 'plugins' in out  # CLI-sourced, environment-dependent — just present
+
+
+def test_plugins_from_json_uses_id_and_hides_enabled():
+    # `claude plugin list --json` returns id-keyed objects with no name; derive the
+    # name from id and never leak the raw `enabled` bool into the label.
+    rows = _plugins_from_json([
+        {'id': 'engineering-discipline@skill-collection', 'version': '0.1.0', 'enabled': True},
+        {'id': 'pr-pilot@pr-pilot-marketplace', 'version': '0.3.0', 'enabled': False},
+    ])
+    assert rows[0]['name'] == 'engineering-discipline (0.1.0)'   # not '? (0.1.0, True)'
+    assert rows[1]['name'] == 'pr-pilot (0.3.0, disabled)'
+    assert all('?' not in r['name'] and 'True' not in r['name'] for r in rows)
 
 
 if __name__ == '__main__':
     test_scan_enumerates_components()
     test_missing_dirs_do_not_raise()
+    test_plugins_from_json_uses_id_and_hides_enabled()
     print('ok: all scan_toolkit tests passed')

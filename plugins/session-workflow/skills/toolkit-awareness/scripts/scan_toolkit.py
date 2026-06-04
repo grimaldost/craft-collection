@@ -121,21 +121,24 @@ def _scan_hooks(hooks_dir: Path, claude_dir: Path) -> list[dict]:
     return out
 
 
-def _scan_plugins() -> list[dict]:
-    """Plugin-provided components live in the plugin cache, not under .claude/ —
-    ask the CLI. Tolerates the CLI being absent or changing its JSON shape; on any
-    failure returns [] (the caller still reports the .claude inventory)."""
+def _plugin_description(install_path) -> str:
+    """Best-effort plugin description from its manifest — `claude plugin list`
+    omits it, so read .claude-plugin/plugin.json under the install path."""
+    if not install_path:
+        return ''
     try:
-        proc = subprocess.run(['claude', 'plugin', 'list', '--json'],
-                              capture_output=True, text=True, timeout=20)
-    except (FileNotFoundError, OSError, subprocess.SubprocessError):
-        return []
-    if proc.returncode != 0 or not (proc.stdout or '').strip():
-        return []
-    try:
-        data = json.loads(proc.stdout)
-    except (json.JSONDecodeError, ValueError):
-        return []
+        manifest = Path(install_path) / '.claude-plugin' / 'plugin.json'
+        data = json.loads(manifest.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return ''
+    return _preview(str(data.get('description', ''))) if isinstance(data, dict) else ''
+
+
+def _plugins_from_json(data: object) -> list[dict]:
+    """Pure parser for `claude plugin list --json`. The CLI returns a list of
+    objects keyed by `id` (plugin@marketplace), with version/scope/enabled/
+    installPath and NO name or description — so derive a readable name from `id`
+    and pull the description from the manifest. Tolerates shape drift."""
     plugins = data.get('plugins') if isinstance(data, dict) else data
     if not isinstance(plugins, list):
         return []
@@ -144,11 +147,32 @@ def _scan_plugins() -> list[dict]:
         if isinstance(p, str):
             out.append({'name': p, 'description': ''})
         elif isinstance(p, dict):
-            tags = [str(p[k]) for k in ('version', 'enabled') if k in p]
+            ident = str(p.get('name') or p.get('id') or '?')
+            label = ident.split('@', 1)[0]  # plugin@marketplace -> plugin
+            ver = str(p.get('version', '')).strip()
+            tags = [t for t in (ver, 'disabled' if p.get('enabled') is False else '') if t]
             suffix = f' ({", ".join(tags)})' if tags else ''
-            out.append({'name': str(p.get('name', '?')) + suffix,
-                        'description': _preview(str(p.get('description', '')))})
+            desc = (_preview(str(p['description'])) if p.get('description')
+                    else _plugin_description(p.get('installPath')))
+            out.append({'name': label + suffix, 'description': desc})
     return out
+
+
+def _scan_plugins() -> list[dict]:
+    """Plugin-provided components live in the plugin cache, not under .claude/ —
+    ask the CLI. Tolerates the CLI being absent or failing; on any failure returns
+    [] (the caller still reports the .claude inventory)."""
+    try:
+        proc = subprocess.run(['claude', 'plugin', 'list', '--json'],
+                              capture_output=True, text=True, timeout=20)
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return []
+    if proc.returncode != 0 or not (proc.stdout or '').strip():
+        return []
+    try:
+        return _plugins_from_json(json.loads(proc.stdout))
+    except (json.JSONDecodeError, ValueError):
+        return []
 
 
 def scan(roots: list[Path]) -> dict[str, list[dict]]:

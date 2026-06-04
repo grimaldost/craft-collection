@@ -30,6 +30,19 @@ def resolve_names(project: str) -> dict[str, str]:
     }
 
 
+def name_error(names: dict[str, str]) -> str | None:
+    """Return an error message if the resolved names are unusable, else None.
+
+    A digit-leading project ('3d-tool' -> package '3d_tool') or an empty name does
+    not yield a valid Python identifier, so the scaffolded package would be
+    unimportable — catch it before `uv init` rather than emit a broken project."""
+    if not names['package'].isidentifier():
+        return (f"resolves to package {names['package']!r}, which is not a valid "
+                'Python identifier (it likely starts with a digit or is empty) — '
+                'choose a name whose first character is a letter')
+    return None
+
+
 PYPROJECT_TEMPLATE = '''\
 [project]
 name = "{pypi}"
@@ -105,6 +118,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     names = resolve_names(args.project)
+    err = name_error(names)
+    if err:
+        print(f'error: {args.project!r} {err}', file=sys.stderr)
+        return 1
     parent = Path(args.path)
     target = parent / names['pypi']
     if target.exists():

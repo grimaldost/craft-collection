@@ -5,6 +5,11 @@ Compares row count, group cardinality (distinct key combos), per-column null
 rate, and numeric aggregate sums within a tolerance. Pure core
 `compare(rows_a, rows_b, keys, tol)` works on list[dict]; the CLI reads two CSVs.
 
+AGGREGATE-LEVEL ONLY — and not sufficient on its own. A value swap or duplicate
+substitution that preserves sums and counts passes here, and float() coercion can
+miss sub-cent Decimal drift. Treat PARITY OK as necessary-not-sufficient: confirm
+with a row-level diff (parity-recipes.md, Recipe 6) before declaring true parity.
+
 Usage:
     python parity_check.py baseline.csv candidate.csv --keys id,as_of --tol 1e-6
 
@@ -93,8 +98,15 @@ def main(argv: list[str] | None = None) -> int:
     for c, s in rep['sum_delta'].items():
         if abs(s['delta']) > args.tol:
             print(f"  sum {c}: delta {s['delta']}")
-    print('PARITY OK' if rep['ok'] else 'PARITY FAILED')
-    return 0 if rep['ok'] else 1
+    for c, d in rep['null_rate_delta'].items():
+        if abs(d) > args.tol:
+            print(f"  null-rate {c}: delta {d:+.4f}")
+    ok = rep['ok']
+    print('PARITY OK' if ok else 'PARITY FAILED')
+    if ok:
+        print('  (aggregate-level only: a sum/count-preserving value swap also passes '
+              '- confirm with a row-level diff, parity-recipes.md Recipe 6)')
+    return 0 if ok else 1
 
 
 if __name__ == '__main__':

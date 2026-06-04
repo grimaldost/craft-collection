@@ -51,7 +51,12 @@ def test_is_behind():
     assert is_behind('0.15', '0.15') is False
     assert is_behind('0.15', '0.14') is False
     assert is_behind('1.0', '2.0') is True
-    assert is_behind('0.15', '0.15.7') is False  # patch only -> not behind
+    assert is_behind('0.15', '0.15.7') is False  # 0.x patch -> churn, not behind
+    assert is_behind('1.0', '1.0.5') is False    # stable patch -> not behind
+    # 0.0.x (true 0ver, e.g. ty): the patch IS the release axis -> must be visible
+    assert is_behind('0.0.1', '0.0.43') is True
+    assert is_behind('0.0.1', '0.0.1') is False
+    assert is_behind('0.0.1', '0.1.0') is True
 
 
 if __name__ == '__main__':
