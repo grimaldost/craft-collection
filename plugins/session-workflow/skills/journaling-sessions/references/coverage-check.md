@@ -140,7 +140,7 @@ perception entry — underjournaling perceptions is the systematic blind spot.
 ## 8. The single surviving offer
 
 When all signals are clean after the internal loop, **do not offer a second
-pass.** State the entry count and layer breakdown and stop. The only surviving
+pass.** State the entry count and its breakdown by entry type and stop. The only surviving
 user-facing offer: if a downstream use was *declared* AND it remains thin after
 the 3-pass cap, surface one targeted offer naming the specific axis and
 categories a further pass would target. Keep it answerable in one word.

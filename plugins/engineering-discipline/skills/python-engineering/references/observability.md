@@ -47,6 +47,11 @@ def configure_logging(*, log_level: str = 'INFO') -> None:
     )
 
     formatter = structlog.stdlib.ProcessorFormatter(
+        # Run the shared processors on records coming from the stdlib logging bridge
+        # (uvicorn, sqlalchemy, httpx, ...) so third-party logs get the same
+        # timestamp/level/logger-name fields as structlog's own — without it the
+        # bridge is silently half-wired and foreign logs render unformatted.
+        foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             renderer,

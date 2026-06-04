@@ -103,7 +103,7 @@ Every number the source hard-codes as a decision boundary, default, or reference
 parameter deserves its own FINDING entry. Code branches on these; training
 generally does not preserve them. *Examples:* 30 days past due for SICR; 90 days
 for default; Basel IV output floor at 72.5%; Qdrant HNSW defaults (m=16,
-ef_construct=128); cluster size cap of 15; Zone 2 at 60–70% HRmax.
+ef_construct=100); cluster size cap of 15; Zone 2 at 60–70% HRmax.
 
 ### 3. Implementation mechanics the LLM would otherwise hallucinate
 

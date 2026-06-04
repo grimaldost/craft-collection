@@ -50,8 +50,8 @@ it. The journal is real work — often several thousand tokens — and every ent
 you write lands in the user's long-term store; producing one unbidden, or on a
 session that wasn't worth it, is the cost to avoid.
 
-- **The user asked — write now.** "journal", "log this", "wrap up", `/journal`,
-  or any request to preserve what was worked out ("don't lose this", "before I
+- **The user asked — write now.** "journal", "log this", "wrap up", or any
+  request to preserve what was worked out ("don't lose this", "before I
   forget", "so next time we don't relitigate"). Run the loop below and write the
   file. No confirmation step.
 - **You activated on your own — offer first.** The session is winding down and
@@ -59,7 +59,7 @@ session that wasn't worth it, is the cost to avoid.
   to capture — e.g. a bare "that's everything, thanks." Do **not** write the
   journal. Emit a **single one-line offer** naming what is capturable, then stop:
   *"This session worked out 4 decisions and a dead end worth journaling — want me
-  to capture them? (`/journal`)"* Write the entries only after the user accepts.
+  to capture them?"* Write the entries only after the user accepts.
   - **One offer, not a nag.** If the user declines, ignores it, or says stop, do
     not offer again this session.
   - **Match a shown cadence.** If the user already journaled once this session,
@@ -103,8 +103,8 @@ Then run this loop internally, before presenting anything:
 4. **If gaps:** run pass N+1 adding *only* the missing entries. Repeat until the
    coverage signals are clean, or a **3-pass cap** is reached. Pass 1 routinely
    under-captures, often by a lot; this loop is the mitigation, not optional.
-5. **Present once:** the file, the entry count, and the layer breakdown ("ran K
-   passes; coverage clean").
+5. **Present once:** the file, the entry count and its breakdown by entry type
+   ("ran K passes; coverage clean").
 6. **One surviving offer:** only if a downstream use was *declared* and remains
    thin after the cap, offer a single targeted pass naming the specific axis.
    Otherwise stop — do not offer a generic "second pass."

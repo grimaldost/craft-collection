@@ -79,19 +79,30 @@ The session owns this judgment — only it knows what matters right now. Apply:
   conventions, naming patterns, forbidden libraries, style preferences.
 - **Omit narrative.** The executor doesn't need to know how the conversation
   arrived here, only what the current state is.
-- **When unsure, include.** A slightly over-scoped prompt is fine; an
-  under-scoped one produces the wrong artifact.
+- **Include a fact only if its absence would change the artifact.** This is the
+  test for the hard call — what to include. Err toward load-bearing, not toward
+  volume: over-scoping dilutes the executor's attention as surely as under-scoping
+  derails it (that attention drift is the failure this skill exists to prevent).
+  When a fact lives in a file the executor can open, point to it by path rather
+  than transcribing it.
+- **Strip secrets before emitting.** Remove credentials, tokens, API keys, PII,
+  and internal-only names — especially when the destination is a teammate, an
+  issue/ticket, or any other external surface.
 
 Length target: as long as needed, as short as possible.
 
 ## Output format
+
+Both templates below address a fresh or continuing Claude. **If the recipient is
+a human teammate or an issue ticket, drop the "You are a … Claude" opening line
+and lead with a one-sentence title** — the rest of the structure still applies.
 
 ### Subtask mode
 
 Emit exactly this structure inside a fenced code block:
 
 ```
-You are a fresh Claude instance. You have no prior context beyond what's in this message.
+You are a fresh Claude instance. You have no prior context from the originating session beyond what's in this message.
 
 ## Context
 <curated slice of facts the executor needs>
@@ -144,7 +155,7 @@ under-specified. Fix and re-read.
 **Invocation:** `/subtask write a helper that validates scheduled payment dates against a business-day calendar, returning any that fall on a non-business day`
 
 ```
-You are a fresh Claude instance. You have no prior context beyond what's in this message.
+You are a fresh Claude instance. You have no prior context from the originating session beyond what's in this message.
 
 ## Context
 The project is a payments service in Python 3.12. It already has a calendar

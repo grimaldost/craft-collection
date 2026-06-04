@@ -18,13 +18,15 @@ Organized into four sections:
 
 ### dbt model contracts (v1.5+)
 
-Setting `contract: enforced: true` on a dbt model causes dbt to validate the
-model's returned columns, dtypes, and declared constraints (`not_null`,
-`unique`, `primary_key`, `foreign_key`, `check`) **before materialization**.
-If the model's output diverges from the declared shape, the build fails and
-the new shape never lands. Most warehouse adapters natively enforce only
-`not_null`; other constraints are "definable but not enforced" depending on
-the backend, though dbt validates them in the build step regardless.
+Setting `contract: enforced: true` on a dbt model makes dbt validate the
+model's returned **column names and data types** against the declared shape
+**before materialization** — if they diverge, the build fails and the new shape
+never lands. The declared `constraints` (`not_null`, `unique`, `primary_key`,
+`foreign_key`, `check`) are a separate matter: dbt does NOT validate them at
+build — it emits them into the DDL and delegates enforcement to the warehouse.
+Most adapters enforce only `not_null`; `check`/`unique`/`primary_key` are
+"definable but not enforced" on Snowflake/BigQuery/Databricks, so pair the
+contract with `not_null`/`unique` data tests to actually guarantee them.
 
 Use contracts on every model consumed across team or project boundaries
 ("public" models, dbt Mesh exposure). Pair with `state:modified` selection

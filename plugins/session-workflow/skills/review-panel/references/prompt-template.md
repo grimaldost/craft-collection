@@ -23,8 +23,9 @@ the direction you favor, or the rounds of iteration you have been through.>
 to work? what is the strongest objection?>
 
 ## Output — return EXACTLY this, so panels can be compared:
-- Verdict: <pick a fixed scale, e.g. SHIP / REVISE / RETHINK, or KEEP / REVISE / CUT>
-- Scores: <1–2 named axes, each X/10>
+- Verdict: <one fixed scale, chosen ONCE for the whole panel and pasted identically
+  into every reviewer — e.g. SHIP / REVISE / RETHINK, or KEEP / REVISE / CUT>
+- Scores: <the SAME 1–2 named axes for every reviewer, each X/10>
 - Strongest reason for: <1–2 sentences, cite specifics>
 - Strongest reason against: <1–2 sentences, cite specifics>
 - What the author is most likely missing: <1–2 sentences>

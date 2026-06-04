@@ -166,9 +166,12 @@ sources:
   the declared columns and dtypes.
 - `meta:` — non-functional metadata (owner, SLA, PII flag, contract version).
   Surfaces in dbt-docs and downstream catalog tools.
-- `constraints:` — `not_null`, `primary_key`, `unique`, `check`. Most
-  warehouses natively enforce only `not_null`; dbt validates the
-  others in the build step regardless.
+- `constraints:` — `not_null`, `primary_key`, `unique`, `check`. dbt's contract
+  validates only column names and data types at build; the constraints are pushed
+  into the DDL and enforcement is delegated to the warehouse — and most warehouses
+  enforce only `not_null` (`check` is warned-and-skipped, `primary_key`/`unique`
+  are emitted but not enforced). dbt does NOT validate them at build, so pair the
+  contract with a `not_null`/`unique` data test to actually guarantee them.
 - `tests:` — runtime data tests run after materialization.
 - `versions:` — coexisting model versions during deprecation cycles.
 - `dbt_expectations` package — adds regex matching and many other
@@ -179,7 +182,7 @@ sources:
 ## Template 2 — ODCS YAML (v3.1.0)
 
 ```yaml
-apiVersion: v3.0.1
+apiVersion: v3.1.0
 kind: DataContract
 id: ddb78a82-c8a4-4d49-9c5a-9b76ea0aaca0
 name: dim_customer

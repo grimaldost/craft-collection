@@ -43,14 +43,21 @@ this plugin — resolve it as `${CLAUDE_PLUGIN_ROOT}/skills/python-engineering/`
      should replace `mypy` as the default). Action: flag it; do not decide.
 
 4. **Present a reviewable changeset**, grouped:
-   - a `stack.toml` diff (the mechanical `pinned_min` / precommit-rev bumps),
+   - a `stack.toml` diff of the mechanical `pinned_min` bumps. (Pre-commit hook
+     revs in `[precommit]` are passed through *un-checked* — `check_versions.py`
+     emits no "behind" signal for them — so bump a hook rev only after manually
+     checking its repo's latest tag, or leave it.)
    - the proposed guidance edits, each with its cited rationale,
    - the needs-human list.
 
 5. **On approval:** apply **only** the mechanical `stack.toml` bumps (and any
-   guidance edits the user explicitly approved — never silently). Update
-   `[meta] last_reviewed` to today. Leave the plugin `version` bump and commit
-   to the user.
+   guidance edits the user explicitly approved — never silently). Stamp the review
+   date from the check's `checked_at` field (not the model's sense of "today"), in
+   **both** places it appears: `[meta] last_reviewed` in `stack.toml`, and the
+   human-visible "last reviewed" line in the `python-engineering` and
+   `data-engineering-discipline` SKILL.md files — the machine stamp and the
+   reader-facing stamp must not drift apart. Leave the plugin `version` bump and
+   commit to the user.
 
 ## Guardrails
 
