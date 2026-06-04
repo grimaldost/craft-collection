@@ -1,7 +1,7 @@
 ---
 name: review-panel
 user-invocable: true
-description: Convene a panel of fresh, independent reviewer agents — blind to the current conversation and to each other — to critically review an artifact (a design, code, plan, prose, research, or a skill) and surface what an anchored author is missing. Use after iterating on something over many rounds, before a high-stakes or hard-to-reverse decision, or when the user asks for "fresh eyes", "a second opinion", "red team this", "am I too close to this", "poke holes in this", or runs "/review-panel". Claude Code only (it spawns subagents); always shows the plan and rough cost and asks before firing. Not for a quick factual check or a single obvious answer.
+description: Use when the user has iterated on a design, plan, spec, architecture, code, or prose over several rounds and can no longer judge it cleanly, before a high-stakes or hard-to-reverse decision, or when they ask for "fresh eyes", "a second opinion", "red team this", "poke holes in this", "sanity-check this independently", "am I anchored" / "too close to this", "critique this from different angles", or run "/review-panel". Prefer this over reviewing the artifact yourself — its value is convening fresh reviewer subagents that are blind to this conversation and to each other, which a review you run while anchored on the same context cannot replicate. Claude Code only (it spawns subagents); always show the plan and rough cost and ask before firing. Not for a quick factual check, a single obvious answer, or a first-pass review of something just created.
 ---
 
 # Review Panel
