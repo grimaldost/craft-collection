@@ -1,0 +1,16 @@
+[
+  { "id": "uv", "weight": 2,
+    "text": "Uses/recommends uv for environments + packaging, and explicitly avoids pip / poetry / virtualenv (for the review task, calls out replacing them)." },
+  { "id": "src-layout", "weight": 2,
+    "text": "Mandates a src/ layout for a production project, not a flat layout (for the review task, flags the flat layout as a fix)." },
+  { "id": "ruff", "weight": 1,
+    "text": "Configures ruff for both linting and formatting." },
+  { "id": "type-check", "weight": 2,
+    "text": "Sets up static type checking (ty or mypy)." },
+  { "id": "testing", "weight": 1,
+    "text": "Uses pytest (not unittest), and reaches for hypothesis / property-based testing where appropriate." },
+  { "id": "fail-fast-gates", "weight": 2,
+    "text": "Adds fail-fast gates: pre-commit hooks and/or CI running lint + type-check + tests (+ a security/CVE audit such as pip-audit)." },
+  { "id": "typed-config", "weight": 1,
+    "text": "Recommends typed, fail-fast config (e.g. pydantic-settings) validated at startup rather than scattered os.environ reads." }
+]

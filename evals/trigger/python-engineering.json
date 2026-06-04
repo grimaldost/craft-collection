@@ -1,0 +1,19 @@
+[
+  { "query": "Scaffold a new Python service project the right way — structure, tooling, the works.", "should_trigger": true, "note": "canonical scaffold trigger" },
+  { "query": "Set up pyproject.toml with uv and ruff for this repo.", "should_trigger": true, "note": "tooling/config setup" },
+  { "query": "What's the right way to structure a production Python service — layout, typing, testing?", "should_trigger": true, "note": "architecture/best-practices question" },
+  { "query": "Add type checking and pre-commit hooks to my Python project.", "should_trigger": true, "note": "type-check + pre-commit" },
+  { "query": "How should I configure pytest and hypothesis for this data-processing module?", "should_trigger": true, "note": "testing config incl property testing" },
+  { "query": "I'm starting a new FastAPI service — set the project up properly.", "should_trigger": true, "note": "web service scaffold" },
+  { "query": "Wire up structured logging and OpenTelemetry for my Python app.", "should_trigger": true, "note": "observability setup" },
+  { "query": "Review my pyproject.toml and CI config against Python best practices.", "should_trigger": true, "note": "review against standards" },
+
+  { "query": "Write a quick throwaway Python script to rename files in a folder — no project, just the script.", "should_trigger": false, "note": "near-miss: Python but no project/tooling setup" },
+  { "query": "Debug why this Python function returns None instead of the list.", "should_trigger": false, "note": "near-miss: Python debugging, not project/tooling" },
+  { "query": "Migrate this Spark pipeline to the new warehouse without changing the output.", "should_trigger": false, "note": "adjacent domain: data-engineering, not python tooling" },
+  { "query": "Fix this TypeScript type error in my React component.", "should_trigger": false, "note": "not Python" },
+  { "query": "Explain what a Python decorator does.", "should_trigger": false, "note": "concept Q&A, no project work" },
+  { "query": "Write a bash one-liner to count lines in a file.", "should_trigger": false, "note": "not Python project work" },
+  { "query": "Design the database schema for a multi-tenant SaaS app.", "should_trigger": false, "note": "data modeling, not python tooling" },
+  { "query": "What is the capital of France?", "should_trigger": false, "note": "trivial" }
+]

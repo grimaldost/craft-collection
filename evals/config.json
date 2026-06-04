@@ -12,6 +12,8 @@
   "plugin_of_skill": {
     "journaling-sessions": "session-workflow",
     "context-handoff": "session-workflow",
-    "data-engineering-discipline": "engineering-discipline"
+    "data-engineering-discipline": "engineering-discipline",
+    "python-engineering": "engineering-discipline",
+    "toolkit-awareness": "session-workflow"
   }
 }

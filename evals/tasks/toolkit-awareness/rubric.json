@@ -1,0 +1,12 @@
+[
+  { "id": "reference-commands", "weight": 2,
+    "text": "The definition-of-done references the installed slash commands by name (e.g. /code-review returns APPROVE, /gate reports no blocking failures, /security-review) as completion criteria." },
+  { "id": "no-restate-conventions", "weight": 2,
+    "text": "Points the executor at the owning skill (project-conventions / api-schema) by reference instead of copying those rules/schemas into the prompt." },
+  { "id": "no-agent-naming", "weight": 1,
+    "text": "Does not instruct the prompt to 'use agent X' / spawn a specific subagent — Claude Code delegates to subagents automatically, so naming one would be noise." },
+  { "id": "names-gates", "weight": 2,
+    "text": "Names the quality gates (review, gate, security) as the bar to pass rather than pasting their internal configuration or re-deriving the checks." },
+  { "id": "grounded", "weight": 1,
+    "text": "References only capabilities actually listed as installed; does not invent commands/skills that were not in the inventory." }
+]

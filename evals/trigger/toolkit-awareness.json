@@ -1,0 +1,19 @@
+[
+  { "query": "What skills, agents, and slash commands do I have installed in Claude Code?", "should_trigger": true, "note": "canonical 'what tools do I have' inventory" },
+  { "query": "What's in my Claude Code toolkit right now?", "should_trigger": true, "note": "casual inventory phrasing" },
+  { "query": "I'm writing a PR prompt for Claude Code — which quality gates and commands should the definition of done reference?", "should_trigger": true, "note": "authoring a spec/DoD that references installed commands" },
+  { "query": "Plan this work to run in a Claude Code session; what installed capabilities should it lean on?", "should_trigger": true, "note": "planning CC work around installed tools" },
+  { "query": "Write a task spec whose definition-of-done references my review and gate slash commands.", "should_trigger": true, "note": "spec referencing slash commands" },
+  { "query": "Which of my skills owns the scoring rubric versus the project conventions?", "should_trigger": true, "note": "skill-ownership question" },
+  { "query": "List the hooks configured in this Claude Code environment.", "should_trigger": true, "note": "hooks inventory" },
+  { "query": "Before I hand this off to a Claude Code session, what tools can it actually use?", "should_trigger": true, "note": "capability check before handoff" },
+
+  { "query": "What Python libraries should I install for data science?", "should_trigger": false, "note": "near-miss: 'install' + 'tools' but PyPI libs, not the CC toolkit" },
+  { "query": "What VS Code extensions do you recommend for Python?", "should_trigger": false, "note": "near-miss: IDE tooling, not Claude Code skills/agents" },
+  { "query": "Which Claude models are available and what are they good at?", "should_trigger": false, "note": "near-miss: Claude models, not the installed toolkit" },
+  { "query": "Scaffold a new Python project with the standard tooling.", "should_trigger": false, "note": "adjacent skill: python-engineering, not toolkit inventory" },
+  { "query": "List the files in this directory.", "should_trigger": false, "note": "filesystem listing, not toolkit" },
+  { "query": "Explain how git rebase works.", "should_trigger": false, "note": "concept Q&A" },
+  { "query": "Write a Python function to parse a CSV file.", "should_trigger": false, "note": "plain coding task" },
+  { "query": "What is the capital of France?", "should_trigger": false, "note": "trivial" }
+]

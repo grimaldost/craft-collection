@@ -46,6 +46,15 @@ PAIRWISE_CRITERION = {
         'contract/baseline, verifies the observable source over assumptions, '
         'proposes real-data parity checks, and keeps changes intentional and '
         'traceable rather than silently altering semantics',
+    'python-engineering':
+        'which response better follows modern Python engineering standards — uv '
+        '(not pip/poetry/virtualenv), src layout, ruff lint+format, static type '
+        'checking, pytest, fail-fast pre-commit/CI gates, and typed startup config',
+    'toolkit-awareness':
+        'which response is the better Claude Code definition-of-done — references '
+        'the installed slash commands and the owning convention/schema skills by '
+        'name instead of restating them, names the quality gates, and invents no '
+        'capabilities that were not listed as installed',
 }
 
 

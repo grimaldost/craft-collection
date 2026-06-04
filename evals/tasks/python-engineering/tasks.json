@@ -1,0 +1,12 @@
+[
+  {
+    "id": "scaffold",
+    "prompt": "Scaffold a new Python service project the right way. Walk me through the directory structure and the key pyproject.toml / tooling choices you'd make and why.",
+    "fixture": null
+  },
+  {
+    "id": "review",
+    "prompt": "Review the existing project setup above and tell me exactly what to change to bring it up to modern standards, and why each change matters.",
+    "fixture": "fixtures/legacy-setup.md"
+  }
+]

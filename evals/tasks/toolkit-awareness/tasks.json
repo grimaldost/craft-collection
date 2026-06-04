@@ -1,0 +1,7 @@
+[
+  {
+    "id": "spec-dod",
+    "prompt": "Write the definition-of-done for the work described above, intended for a Claude Code session in this repo. Lean on what's installed — reference the commands and skills above rather than restating their contents.",
+    "fixture": "fixtures/cc-environment.md"
+  }
+]
