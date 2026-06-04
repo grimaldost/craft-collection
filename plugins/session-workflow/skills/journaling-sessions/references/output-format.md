@@ -1,21 +1,22 @@
 # Output Format — structured journal entries
 
-How to write a well-formed journal entry. This format is generic: it produces
-separable, retrieval-ready entries usable by any downstream store. For
-mantis / cognitive-memory ingestion, also read `cogmem-adapter.md`, which adds
-the extra fields and the system-specific semantics.
+How to write a well-formed journal entry. This is the full, default format —
+every journaling session uses it. It produces separable, retrieval-ready entries
+for a long-term memory store: raw captures that a downstream process will cluster
+into generalizations and, with reinforcement, promote into durable guidance.
 
 ## Contents
 
 1. The entry envelope
 2. Why explicit markers (not running prose)
-3. Field reference (the lean set)
-4. Entry types
-5. Writing ANTI_PATTERN entries
-6. Area and domains — how they work together
-7. refs and supersession
-8. Confidence calibration
-9. Optional markers
+3. Field reference
+4. Authorship and multi-user privacy
+5. Entry types
+6. Writing ANTI_PATTERN entries
+7. Area and domains — how they work together
+8. refs and supersession
+9. Confidence calibration
+10. The VALIDATED marker
 
 ---
 
@@ -27,8 +28,10 @@ type: DECISION | FINDING | OBSERVATION | TRADEOFF | HYPOTHESIS | CONTRADICTION |
 author: <stable user ID — e.g., user:grimaldo-br-stone>
 timestamp: <ISO 8601 — when journaled>
 occurred_at: <optional ISO 8601 — when the event happened, if different>
-area: <single value — the life area or activity, e.g., cognitive_memory_engineering>
+area: <single value — the life area or activity, e.g., platform_engineering>
+language: <ISO 639-1 code — en, pt, etc. Default from author preference.>
 origin: chat | code | meeting | reading
+visibility: private | team:<n> | public
 session: <kebab-case-session-name>
 domains: <2-5 tags, free-form — at least one broad, one narrow>
 entities: <optional comma-separated people, products, systems referenced>
@@ -39,9 +42,6 @@ summary: <optional — single sentence compact version for progressive disclosur
 <prose — one idea, concrete, with reasoning>
 --- ENTRY_END ---
 ```
-
-This is the lean, generic field set. Mantis adds `visibility`, `language`, the
-full `origin` taxonomy, and marker conventions — see `cogmem-adapter.md`.
 
 ## 2. Why explicit markers (not running prose)
 
@@ -56,7 +56,7 @@ compress multiple entries into one envelope.
 ## 3. Field reference
 
 `author` is the identity of whose memory this entry belongs to, not who is
-discussed in the content. An entry by Grimaldo about Claire still has
+discussed in the content. An entry by Grimaldo about a colleague still has
 `author: user:grimaldo-br-stone`. **Format:** `user:<identifier>` where the
 identifier is stable, lowercase, and uniquely identifies the human whose memory
 this is.
@@ -68,27 +68,46 @@ journal on Thursday a decision made Monday, `timestamp` is Thursday and
 
 `area` names the life domain or activity this entry belongs to. Single-valued on
 purpose: forcing one choice keeps the vocabulary clean. Examples:
-`cognitive_memory_engineering`, `treasuryutils_development`, `history_teaching`,
+`platform_engineering`, `payments_development`, `history_teaching`,
 `cardio_training`, `family_life`.
 
+`language` is the ISO 639-1 code of the entry's prose, defaulting to the
+author's preference. It lets retrieval scope to one language when the store holds
+several.
+
 `origin` records where the knowledge came from. `chat` = a conversation session.
-`code` = extracted from a code review, implementation log, or commit. `meeting`
-= a conversation with other humans. `reading` = research notes from a paper,
+`code` = extracted from a code review, implementation log, or commit. `meeting` =
+a conversation with other humans. `reading` = research notes from a paper,
 standard, or article.
 
+`visibility` controls how broadly an entry can be retrieved in a multi-user
+store. `private` (the default) means only the author retrieves it. `team:<n>`
+means a named team can. `public` means anyone can. Most entries should be
+private; elevate only when the knowledge is genuinely general.
+
 `entities` anchors the embedder on specific named references. Use the most
-specific form available: "Claire Palmeira (Stone treasury)" rather than just
-"Claire". Free-form for now.
+specific form available: "Alex Rivera (backend team)" rather than just "Alex".
+Free-form for now.
 
 `session` is a kebab-case name for the arc this entry belongs to. Long sessions
 that span multiple arcs use arc-specific names (`qdrant-selection`,
-`memorystore-protocol-design`) rather than one broad name.
+`protocol-design`) rather than one broad name.
 
 `summary` is optional but recommended for entries longer than 200 words: a
 single sentence capturing the essence, used for progressive disclosure when a
 cluster is large.
 
-## 4. Entry types
+## 4. Authorship and multi-user privacy
+
+A store may hold many authors' memories; retrieval filters by `author` so one
+person's sessions do not pollute another's queries and privacy boundaries hold.
+A missing `author:` is a bug, not an optional omission. The author is *whose
+memory this is*, not *who is discussed*. When the content names people or
+entities that could collide with other names in the store, disambiguate inline
+("Alex — the backend team, not the client contact") rather than relying on the
+embedder.
+
+## 5. Entry types
 
 - **DECISION** — a choice was made. What, why, what was rejected.
 - **FINDING** — something was discovered through investigation or data.
@@ -105,7 +124,7 @@ cluster is large.
 - **ANTI_PATTERN** — an approach that looked reasonable was tried or strongly
   considered, failed for a specific reason, and the failure generalizes.
 
-## 5. Writing ANTI_PATTERN entries
+## 6. Writing ANTI_PATTERN entries
 
 Anti-patterns are the most valuable entries in the journal. Most knowledge
 capture records what worked; expertise lives in what didn't. A good ANTI_PATTERN
@@ -132,8 +151,10 @@ Example:
 type: ANTI_PATTERN
 author: user:grimaldo-br-stone
 timestamp: 2026-04-14T16:30:00Z
-area: cognitive_memory_engineering
+area: platform_engineering
+language: en
 origin: chat
+visibility: private
 session: persistence-layer-architecture-qdrant
 domains: api_design, abstraction_design, anti_pattern
 entities: MemoryStore, VectorMemoryStore, HybridMemoryStore, Qdrant
@@ -154,7 +175,7 @@ which backend they're using anyway.
 --- ENTRY_END ---
 ```
 
-## 6. Area and domains — how they work together
+## 7. Area and domains — how they work together
 
 Two fields jointly describe what an entry is about; they answer different query
 patterns.
@@ -163,32 +184,32 @@ patterns.
 belongs — the primary scoping filter. `domains` (multi-valued, free-form) names
 subject-matter concepts; it can be narrower than an area or cut across several.
 
-The two together let you write precise queries: "area is
-cognitive_memory_engineering AND domains contains working_style" returns exactly
-what you want. Use 2-5 domain tags per entry; fewer than two usually misses a
-broad tag, more than five usually means multiple entries.
+The two together let you write precise queries: "area is platform_engineering
+AND domains contains working_style" returns exactly what you want. Use 2-5 domain
+tags per entry; fewer than two usually misses a broad tag, more than five usually
+means multiple entries.
 
 | area | domains | what the entry is about |
 |------|---------|-----|
-| `cognitive_memory_engineering` | `working_style, comprehensive_capture` | a perception about how Grimaldo prefers to capture knowledge |
-| `cognitive_memory_engineering` | `persistence, embedding_theory, anti_pattern` | a technical insight about why header-field markers fail with embedders |
+| `platform_engineering` | `working_style, comprehensive_capture` | a perception about how Grimaldo prefers to capture knowledge |
+| `platform_engineering` | `persistence, embedding_theory, anti_pattern` | a technical insight about why header-field markers fail with embedders |
 | `history_teaching` | `working_style, lesson_planning` | a perception about how Grimaldo plans history lessons |
 | `cardio_training` | `working_style, zone_2, habit_formation` | a perception about how Grimaldo approaches cardio training |
 
 `working_style` appears in three rows but `area` separates them — a query for
-"working_style in cognitive_memory_engineering" finds the first two and
-correctly excludes history and cardio.
+"working_style in platform_engineering" finds the first two and correctly
+excludes history and cardio.
 
-**Context anchoring rule.** When a broad domain tag is used, the entry prose
-must name the specific scope even though area encodes it structurally. "In
-cognitive-memory engineering work, Grimaldo prefers comprehensive capture" beats
+**Context anchoring rule.** When a broad domain tag is used, the entry prose must
+name the specific scope even though area encodes it structurally. "In
+platform-engineering work, Grimaldo prefers comprehensive capture" beats
 "Grimaldo prefers comprehensive capture" — the embedder reads only the content
 field, so scope must appear in prose to influence clustering.
 
 **Tag format:** short, lowercase, underscore-separated. Reuse tags from prior
 entries when the subject matches; introduce new ones only when genuinely novel.
 
-## 7. refs and supersession
+## 8. refs and supersession
 
 `refs:` links entries across sessions, turning isolated entries into a traceable
 graph. Populate it for: **continuation** (`refs: session:qdrant-selection, H-035`),
@@ -207,12 +228,16 @@ what changed and why the prior conclusion no longer holds].
 The refs entry makes it queryable; the CONTENT marker makes the signal visible
 to the embedder so supersession patterns cluster across sessions. **Do not
 silently contradict** a prior entry — that pollutes the store with two
-equally-valid-looking claims.
+equally-valid-looking claims, which a downstream synthesis pass will cluster as
+equally valid, producing confused generalizations.
 
-## 8. Confidence calibration
+## 9. Confidence calibration
 
 Confidence is not "how sure it feels." It's "how much the evidence justifies."
-Anchor to evidence type, not to feeling:
+Downstream filters, promotion rules, and synthesis weighting depend on it being
+consistent across writers and sessions — a miscalibrated score doesn't just
+mislead a reader, it changes whether an entry is ever promoted into durable
+guidance. Anchor to evidence type, not to feeling:
 
 | Range | Meaning | Typical evidence |
 |-------|---------|------------------|
@@ -229,24 +254,43 @@ Anchor to evidence type, not to feeling:
 - **Most DECISION entries land in 0.70–0.84.** Anything higher needs explicit
   evidence beyond "we thought about it and decided."
 - **HYPOTHESIS entries cap at 0.69 by default.** If they're provable, they're
-  FINDINGs.
+  FINDINGs — and promotion treats the two differently.
 - **Perception entries rarely exceed 0.75.** Most signals about user priorities
   or working style are inferred from limited cues.
+- **Survived-stress-testing bonus is +0.1.** A DECISION that passed genuine
+  challenge earns a one-tier bump AND carries a VALIDATED marker (§10).
 - **Confidence does not encode importance.** A 0.95 entry about a naming
-  convention is less useful than a 0.65 entry about a controversial
-  architecture choice. Importance belongs in the content.
+  convention is less useful than a 0.65 entry about a controversial architecture
+  choice. Importance belongs in the content.
 
-Before writing a score, ask: what would need to change for me to revise this
-down by 0.2? If the answer is "nothing concrete — I'd just feel differently,"
-the number is too high.
+Before writing a score, ask: what would need to change for me to revise this down
+by 0.2? If the answer is "nothing concrete — I'd just feel differently," the
+number is too high.
 
-## 9. Optional markers
+## 10. The VALIDATED marker
 
-Two marker sentences may appear at the end of a CONTENT field. They live in
-CONTENT (not the header) because an embedder reads only CONTENT, so the signal
-clusters across sessions only if it appears in the prose.
+When a DECISION survived explicit stress-testing, encode that in the CONTENT
+field itself — not only in the confidence number — because a downstream synthesis
+pass clusters on CONTENT, and the stress-test signal only clusters with similar
+signals if it appears in the prose. Required sentence at the end of CONTENT:
 
-- **SUPERSEDES** — see §7.
-- **VALIDATED** — a DECISION that survived explicit stress-testing. This marker
-  and its confidence bonus are tied to the mantis promotion model; see
-  `cogmem-adapter.md` for when and how to apply it.
+```
+VALIDATED: survived questioning on [brief topic] — key challenges considered:
+[1-2 sentence summary of what was challenged and how it held up].
+```
+
+Example closing: *"VALIDATED: survived questioning on whether local mode matches
+production semantics — the HNSW-vs-brute-force gap was raised and dismissed
+because dev tests use >50K vectors, which triggers HNSW in both modes."*
+
+**When to apply it:**
+- When a DECISION was stress-tested during the session — whether by a formal
+  questioning pass or by substantive in-turn pressure-testing (specific
+  alternatives considered, specific concerns raised, specific resolutions given).
+- If a ready-made entry draft already carries the marker, preserve it verbatim.
+- **Never invent VALIDATED** for decisions merely discussed, even at length. The
+  test: can you name the specific challenge(s) considered? If yes, VALIDATED. If
+  "we thought it through carefully," not VALIDATED.
+
+This distinguishes a 0.85 DECISION that survived scrutiny from a 0.85 DECISION
+that merely felt confident — but only if the marker is actually present.

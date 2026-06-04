@@ -1,6 +1,6 @@
 ---
 name: journaling-sessions
-description: Capture knowledge from a work or reference-reading session into structured, separable, retrieval-ready entries. Use when the user says "journal", "log this", "wrap up", "session summary", "capture what we learned", or "create registries for everything", and proactively when a substantive session is ending after 3+ decisions, findings, or ingested reference items. Covers implementation/decision sessions and end-to-end reference ingestion. For mantis / cognitive-memory output, also load references/cogmem-adapter.md. Not for quick Q&A or sessions with no novel knowledge; not for consolidating prior journals (that is meditation).
+description: Capture knowledge from a work or reference-reading session into structured, separable, retrieval-ready entries for a long-term memory store. Use when the user says "journal", "log this", "wrap up", "session summary", "capture what we learned", or "create registries for everything", and proactively when a substantive session is ending after 3+ decisions, findings, or ingested reference items. Covers implementation/decision sessions and end-to-end reference ingestion. Not for quick Q&A or sessions with no novel knowledge; not for consolidating prior journals into higher-level patterns (that is a separate downstream pass).
 ---
 
 # Journaling Sessions
@@ -10,6 +10,11 @@ entries** — prose with metadata, one idea each — that a future session can f
 and reason about in isolation. The quality bar is not "does this summarize the
 session" but "will a future session, retrieving this cold months from now, be
 measurably better for having it."
+
+These entries are raw material: a downstream process clusters many of them into
+generalizations, and repeated reinforcement promotes the durable ones into
+long-lived guidance. Write each entry so that clustering works — that is what
+every rule here optimizes for.
 
 This skill produces raw capture. It runs an **automatic multi-pass loop** so you
 get thorough output from a single invocation — you do not need to ask for
@@ -121,10 +126,9 @@ Aim for at least one OBSERVATION entry on the source-reading dynamics.
 ## Output
 
 Write entries in the structured envelope defined in
-**`references/output-format.md`** (the envelope, fields, entry types, the
-ANTI_PATTERN template, area/domains, refs, confidence). For mantis /
-cognitive-memory ingestion, also apply **`references/cogmem-adapter.md`** (extra
-fields, multi-user privacy, promotion semantics, the VALIDATED marker).
+**`references/output-format.md`** — the envelope, the full field set (including
+visibility and language), entry types, the ANTI_PATTERN template, area/domains,
+refs, confidence, multi-user privacy, and the VALIDATED marker.
 
 ## Writing quality
 

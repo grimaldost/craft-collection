@@ -145,9 +145,9 @@ normalized embedding ‖v‖ = 1 for cosine similarity; F1 = 2PR/(P+R);
 How pieces combine — the value of the composition a generic LLM would miss by
 composing naively. CONNECTION entries. Universal across domains. *Examples:* XVA
 composition (CVA + DVA + FVA + KVA + MVA with wrong-way risk); BM25 + dense + RRF
-fusion as a single search primitive; the experience → hypothesis → wisdom
-promotion chain; how `uv` + `ruff` + `ty` + `pytest` compose as a quality
-pipeline.
+fusion as a single search primitive; a raw-capture → synthesized-pattern →
+reinforced-rule promotion chain in a memory store; how `uv` + `ruff` + `ty` +
+`pytest` compose as a quality pipeline.
 
 ### 8. Named results, canonical references, and lookup anchors
 
