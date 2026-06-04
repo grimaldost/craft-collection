@@ -1,0 +1,29 @@
+{
+  "description": "Mechanical Python enforcement: ruff-format on edit (PostToolUse, non-blocking) and steer Bash toward uv inside uv projects (PreToolUse). The uv guard only fires in uv projects and respects CLAUDE_ALLOW_PIP=1.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/ruff_format.py"]
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/uv_enforce.py"]
+          }
+        ]
+      }
+    ]
+  }
+}
