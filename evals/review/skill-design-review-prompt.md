@@ -28,7 +28,7 @@ attention *every time it loads*. To deserve existence a skill must:
 - **Be correct and concrete.** Actionable, current, specific guidance a model will
   actually follow — not vague platitudes or a lecture it will skim past.
 
-## The seven skills to review — READ them, do not assume
+## The nine skills to review — READ them, do not assume
 
 Repo root: `C:\Users\grima\Documents\skill-collection`. For each skill, read its
 `SKILL.md` in full, list its `references/` and `scripts/`, and open the one or two
@@ -38,14 +38,18 @@ reference/script files most relevant to your judgment.
 2. **context-handoff** — `plugins/session-workflow/skills/context-handoff/`
 3. **toolkit-awareness** — `plugins/session-workflow/skills/toolkit-awareness/`
 4. **review-panel** — `plugins/session-workflow/skills/review-panel/`
-5. **python-engineering** — `plugins/engineering-discipline/skills/python-engineering/`
-6. **data-engineering-discipline** — `plugins/engineering-discipline/skills/data-engineering-discipline/`
-7. **refresh-stack** — `plugins/engineering-discipline/skills/refresh-stack/`
+5. **evaluate-skill** — `plugins/session-workflow/skills/evaluate-skill/`
+6. **consolidate-knowledge** — `plugins/session-workflow/skills/consolidate-knowledge/`
+7. **python-engineering** — `plugins/engineering-discipline/skills/python-engineering/`
+8. **data-engineering-discipline** — `plugins/engineering-discipline/skills/data-engineering-discipline/`
+9. **refresh-stack** — `plugins/engineering-discipline/skills/refresh-stack/`
 
 (Context for fairness: `refresh-stack` is deliberately a manual-only `/refresh-stack`
-command — it sets `disable-model-invocation: true` — and `review-panel` is likewise
-command-first (`/review-panel` plus auto-suggest) and Claude-Code-only, since it
-spawns subagents. Judge those two as user-invoked, not on auto-activation.)
+command — it sets `disable-model-invocation: true`. `review-panel` and `evaluate-skill`
+are likewise command-first (`/review-panel`, `/evaluate-skill`) and Claude-Code-only,
+since they spawn subagents / headless runs; `consolidate-knowledge` is user-invocable.
+Judge the command-first ones as user-invoked, not on auto-activation. `evaluate-skill`
+and `consolidate-knowledge` are new — apply the same guilty-until-proven bar.)
 
 **Stay blind.** Read ONLY the skill files themselves. Do NOT open anything else under
 `evals/` — not the behavioral-eval results (`evals/report/`) nor any prior review
@@ -78,7 +82,7 @@ output for every skill.
 
 ## Output format — be structured so reviews can be compared
 
-For **each** of the seven skills, output exactly:
+For **each** of the nine skills, output exactly:
 
 ```
 ### <skill-name>
@@ -91,7 +95,7 @@ For **each** of the seven skills, output exactly:
 ```
 
 Then an **OVERALL** section:
-- **Ranking**: the seven skills ordered best → worst by deserve-to-exist.
+- **Ranking**: the nine skills ordered best → worst by deserve-to-exist.
 - **Cut list**: which (if any) you would remove, and why — or "none".
 - **Collection verdict**: one paragraph — is this a coherent set? redundant
   internally or with base-model behavior? any missing skill that should exist?
