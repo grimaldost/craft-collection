@@ -3,6 +3,11 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.1 — 2026-06-05
+
+- Fixed: corrected the `repository` URL to `grimaldost/craft-collection` (the
+  previous `grimaldo-stanzani` owner did not resolve).
+
 ## 0.1.0 — 2026-06-04
 
 Initial release.
