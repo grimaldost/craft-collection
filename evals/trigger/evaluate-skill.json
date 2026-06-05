@@ -1,0 +1,19 @@
+[
+  { "query": "Evaluate this skill — does it actually trigger and improve the output?", "should_trigger": true, "note": "canonical behavioral-eval ask" },
+  { "query": "How do I test whether my new skill fires on the right prompts and stays quiet otherwise?", "should_trigger": true, "note": "trigger recall/specificity testing" },
+  { "query": "Measure my skill's performance — recall, specificity, correct-usage, the works.", "should_trigger": true, "note": "explicit metrics request" },
+  { "query": "Build a behavioral eval for the journaling skill so I can catch regressions.", "should_trigger": true, "note": "build-an-eval framing" },
+  { "query": "Is my skill's description triggering correctly, or is it too broad?", "should_trigger": true, "note": "description-triggering diagnosis" },
+  { "query": "Benchmark this skill against the no-skill baseline.", "should_trigger": true, "note": "with/without baseline" },
+  { "query": "I changed a skill's description — verify I didn't break its triggering before I ship it.", "should_trigger": true, "note": "regression check" },
+  { "query": "Set up a scorecard that measures whether my skills activate and help.", "should_trigger": true, "note": "scorecard setup" },
+
+  { "query": "Review my skill's design — is it bloated, redundant, or wrong?", "should_trigger": false, "note": "near-miss: qualitative design review (review-panel), not behavioral measurement" },
+  { "query": "Write a new Claude Code skill from scratch for me.", "should_trigger": false, "note": "near-miss: authoring a skill, not evaluating one" },
+  { "query": "Evaluate which Python web framework I should choose for this project.", "should_trigger": false, "note": "near-miss: 'evaluate' but a tech choice, not a skill" },
+  { "query": "Run the pytest suite for my Python package.", "should_trigger": false, "note": "near-miss: running code tests, not skill behavior" },
+  { "query": "How well does this model do on the MMLU benchmark?", "should_trigger": false, "note": "near-miss: model benchmarking, not a skill" },
+  { "query": "What skills and commands do I have installed in Claude Code?", "should_trigger": false, "note": "adjacent: toolkit-awareness inventory" },
+  { "query": "Measure the p99 latency of my API endpoint under load.", "should_trigger": false, "note": "performance measurement, unrelated" },
+  { "query": "Grade these student essays out of 100.", "should_trigger": false, "note": "'grade' but unrelated to skills" }
+]

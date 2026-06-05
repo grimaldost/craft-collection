@@ -1,0 +1,19 @@
+[
+  { "query": "Consolidate my journal entries from the last month into durable guidance.", "should_trigger": true, "note": "canonical consolidation ask" },
+  { "query": "What patterns emerged across all these sessions?", "should_trigger": true, "note": "cross-session pattern synthesis" },
+  { "query": "Distill these captured notes into the lessons actually worth keeping.", "should_trigger": true, "note": "distill-to-durable" },
+  { "query": "Promote the durable insights from my journals and drop the one-offs.", "should_trigger": true, "note": "promotion-gate framing" },
+  { "query": "Synthesize my journal entries into higher-level wisdom for future sessions.", "should_trigger": true, "note": "synthesize-to-guidance" },
+  { "query": "What have we learned over time that's worth remembering long-term, not just this session?", "should_trigger": true, "note": "cross-session, long-term" },
+  { "query": "Cluster my captured entries and pull out the generalizations they support.", "should_trigger": true, "note": "cluster + generalize" },
+  { "query": "Roll up months of session journals into a few reinforced principles.", "should_trigger": true, "note": "roll-up corpus" },
+
+  { "query": "Journal this session before we wrap up.", "should_trigger": false, "note": "near-miss: capture a single session (journaling-sessions), not consolidate many" },
+  { "query": "Summarize what we decided in this conversation.", "should_trigger": false, "note": "near-miss: single-session recall, not cross-session distillation" },
+  { "query": "Consolidate my agent memory files — merge duplicates and prune the index.", "should_trigger": false, "note": "near-miss: agent memory-file consolidation, a different system" },
+  { "query": "Merge these two feature branches and resolve the conflicts.", "should_trigger": false, "note": "near-miss: 'consolidate/merge' but git" },
+  { "query": "Combine these monthly CSV exports into one table.", "should_trigger": false, "note": "near-miss: data merge" },
+  { "query": "Write a one-paragraph summary of this design doc.", "should_trigger": false, "note": "document summary" },
+  { "query": "Cluster these customer support tickets by topic.", "should_trigger": false, "note": "near-miss: clustering, but not journal-entry consolidation" },
+  { "query": "What is the capital of France?", "should_trigger": false, "note": "trivial" }
+]

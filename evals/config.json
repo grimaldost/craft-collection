@@ -16,6 +16,8 @@
     "data-engineering-discipline": "engineering-discipline",
     "python-engineering": "engineering-discipline",
     "toolkit-awareness": "session-workflow",
-    "review-panel": "session-workflow"
+    "review-panel": "session-workflow",
+    "evaluate-skill": "session-workflow",
+    "consolidate-knowledge": "session-workflow"
   }
 }

@@ -1,0 +1,14 @@
+[
+  { "id": "clusters", "weight": 2,
+    "text": "Groups related entries into clusters (entries about the same mechanism/decision/failure across sessions) rather than processing each entry in isolation or just re-listing them — in particular the three idempotency/duplicate-write entries are treated as one cluster." },
+  { "id": "generalizes", "weight": 2,
+    "text": "Synthesizes a generalization for the idempotency cluster that no single entry states alone (e.g. 'retries on non-idempotent mutating endpoints cause duplicate writes; require idempotency keys'), not a copy of one entry." },
+  { "id": "promotion-gate", "weight": 2,
+    "text": "Applies a promotion bar: promotes the reinforced, specific cluster to durable guidance and explicitly LEAVES the one-off singleton (the intern/runbook observation) raw rather than promoting everything." },
+  { "id": "keeps-anchors", "weight": 2,
+    "text": "The promoted guidance keeps the concrete anchors from the sources (idempotency keys, duplicate writes/double-charge, the DST double-count) instead of abstracting them into generic platitudes." },
+  { "id": "rejects-platitude", "weight": 1,
+    "text": "Does NOT promote the generic 'write unit tests' entry to durable guidance — it is base-model-known best practice with no distinctive anchor." },
+  { "id": "supersession", "weight": 1,
+    "text": "Handles the timestamp-storage contradiction as a supersession — the newer UTC decision overrides the older local-time one (citing the DST double-count), rather than emitting two conflicting claims." }
+]

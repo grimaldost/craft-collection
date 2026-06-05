@@ -1,0 +1,7 @@
+[
+  {
+    "id": "consolidate",
+    "prompt": "Below are journal entries captured across several past sessions. Consolidate them into durable, higher-level guidance.",
+    "fixture": "fixtures/journal-corpus.md"
+  }
+]

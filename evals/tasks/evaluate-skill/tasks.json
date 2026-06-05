@@ -1,0 +1,7 @@
+[
+  {
+    "id": "plan-eval",
+    "prompt": "I just wrote the Claude Code skill below. Plan how you would behaviorally evaluate it — what you would measure and exactly how you'd set it up. Don't run anything yet; lay out the eval design.",
+    "fixture": "fixtures/sample-skill.md"
+  }
+]

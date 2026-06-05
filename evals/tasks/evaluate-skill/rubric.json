@@ -1,0 +1,14 @@
+[
+  { "id": "three-axes", "weight": 2,
+    "text": "Identifies the behavioral axes to measure — at minimum triggering (does it auto-activate on the right prompts = recall, and stay quiet on near-misses = specificity) and whether the output satisfies the skill's own discipline (correct-usage); ideally also whether it beats the no-skill baseline." },
+  { "id": "trigger-dataset", "weight": 2,
+    "text": "Proposes a trigger dataset containing positive prompts AND near-miss negative prompts (not positives only), so recall and false-fire specificity are both tested." },
+  { "id": "usage-rubric", "weight": 1,
+    "text": "Proposes scoring the output against an explicit rubric of observable, weighted criteria rather than eyeballing quality." },
+  { "id": "isolation-baseline", "weight": 2,
+    "text": "Compares the skill against a skill-free baseline (with vs without), and shows awareness that the baseline must be genuinely isolated/skill-free rather than the same environment with the skill still loaded." },
+  { "id": "cost-and-repeats", "weight": 1,
+    "text": "Notes that this means many headless runs (cost/time) and that repeats plus confidence intervals are needed because activation is non-deterministic — not a single-run conclusion." },
+  { "id": "behavior-not-design", "weight": 1,
+    "text": "Frames the exercise as measuring behavior (does it fire and help), distinct from a qualitative design review of whether the skill is well-built." }
+]
