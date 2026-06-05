@@ -1,4 +1,4 @@
-# skill-collection
+# craft-collection
 
 A Claude Code plugin marketplace with two plugins:
 
@@ -11,9 +11,9 @@ A Claude Code plugin marketplace with two plugins:
 ## Install
 
 ```text
-/plugin marketplace add grimaldo-stanzani/skill-collection
-/plugin install engineering-discipline@skill-collection
-/plugin install session-workflow@skill-collection
+/plugin marketplace add grimaldo-stanzani/craft-collection
+/plugin install engineering-discipline@craft-collection
+/plugin install session-workflow@craft-collection
 ```
 
 Local development (no marketplace needed):
@@ -65,7 +65,6 @@ plugins/
   engineering-discipline/   .claude-plugin/  skills/  hooks/  evals/
   session-workflow/         .claude-plugin/  skills/  hooks/  evals/
 scripts/validate_plugins.py
-docs/   specs/  plans/  research/
 ```
 
 ## License
