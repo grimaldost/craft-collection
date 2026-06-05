@@ -60,7 +60,32 @@ PAIRWISE_CRITERION = {
         'to break the author\'s anchoring — a neutral brief that strips the leaning, '
         'diverse adversarial lenses, structured comparable output, and asking before '
         'firing — rather than just offering one more opinion from the same context',
+    'evaluate-skill':
+        'which response better lays out a BEHAVIORAL evaluation of the skill — the '
+        'trigger recall/specificity, correct-usage, and with/without baseline axes, '
+        'with positive AND near-miss trigger prompts and a genuinely isolated '
+        'skill-free baseline — rather than a vague or design-only assessment',
+    'consolidate-knowledge':
+        'which response better consolidates the journal entries into durable '
+        'guidance — clusters related entries, synthesizes a generalization each '
+        'cluster supports, promotes only the reinforced and specific ones (leaving '
+        'one-offs and platitudes out), keeps the concrete anchors, and reconciles '
+        'supersession — rather than just re-summarizing the entries',
 }
+
+
+def _pairwise_criterion(skill: str) -> str:
+    """The holistic WITH-vs-WITHOUT comparison criterion for a skill. Falls back to a
+    per-skill `tasks/<skill>/pairwise.txt`, then a generic default — so the engine is
+    not hardcoded to one collection's skills (a shipped/general eval must not KeyError
+    on a skill it has never heard of)."""
+    if skill in PAIRWISE_CRITERION:
+        return PAIRWISE_CRITERION[skill]
+    override = TASKS_DIR / skill / 'pairwise.txt'
+    if override.exists():
+        return override.read_text(encoding='utf-8').strip()
+    return ('which response better accomplishes the task with the discipline and rigor '
+            'the skill is meant to add, versus a generic attempt without it')
 
 
 def _mean(xs) -> float:
@@ -259,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         blob = grade_skill(skill, tasks, rubric, cfg, plugin_dir=plugin_dir,
                            config_with=config_with, config_without=config_without,
-                           pairwise_criterion=PAIRWISE_CRITERION[skill],
+                           pairwise_criterion=_pairwise_criterion(skill),
                            concurrency=args.concurrency)
     finally:
         cleanup_dir(config_with)
