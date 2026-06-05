@@ -1,0 +1,16 @@
+# Keep GitHub Actions pinned to current versions.
+#
+# This repo has no package manifest to scan (scripts are stdlib-first; CI installs
+# its dev tools ad hoc), so only the github-actions ecosystem is watched here. The
+# toolchain the skills *teach* lives in stack.toml and is refreshed by the currency
+# workflow + /refresh-stack, not by Dependabot.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
