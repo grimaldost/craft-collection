@@ -25,13 +25,15 @@ pip-tools — all in a single binary written in Rust.
 
 ## 3. Repository Layout — The `src` Standard
 
-The `src` layout (`src/my_package/`) is mandatory.
+The `src` layout (`src/my_package/`) is the standard for any packaged or
+production project.
 
 - The legacy "flat" layout allows the "implicit import" problem, where tests
   run against local source files rather than the installed package.
 - The `src` layout forces tests to run against `site-packages`, ensuring
   that what you test is exactly what you ship.
-- This applies to *all* Python projects, not just libraries.
+- This applies to apps as well as libraries; the one real exception is a
+  throwaway single-file `uv run` script.
 
 ## 4. Build Backend — `uv_build`
 
@@ -62,7 +64,7 @@ pyupgrade, and autoflake — all in a single Rust binary.
 `ty` is Astral's Rust-based type checker and language server, released in
 beta in December 2025. It is part of the same Astral toolchain as uv and ruff.
 
-- **Speed**: 10-100× faster than mypy. Incremental re-checks in ~5ms.
+- **Speed**: 10-100× faster than mypy on large codebases (Astral-reported), with very fast incremental re-checks.
 - **Language server**: Full LSP with go-to-definition, auto-import, rename,
   inlay hints — replaces Pylance/Pyright for editor integration.
 - **Advanced type system**: First-class intersection types, advanced type

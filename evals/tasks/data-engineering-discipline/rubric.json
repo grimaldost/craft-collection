@@ -1,6 +1,6 @@
 [
   { "id": "pin-baseline", "weight": 2,
-    "text": "Pins/declares the baseline contract being protected before changing anything — schema, dtypes, grain/row-and-group cardinality, null behavior, and known semantic quirks (e.g. refunds attributed to the original order date)." },
+    "text": "Establishes the baseline contract at stake — schema, dtypes, grain/row-and-group cardinality, null behavior, and known semantic quirks (e.g. refunds attributed to the original order date) — either as the contract to protect before a change, or (when investigating) the before-state the changed numbers must be read against." },
   { "id": "output-is-contract", "weight": 2,
     "text": "Treats the output as a contract: explicitly flags that changes to schema, cardinality, or semantics are breaking-by-default for the named consumers (finance dashboard, forecasting model)." },
   { "id": "source-of-truth", "weight": 2,
