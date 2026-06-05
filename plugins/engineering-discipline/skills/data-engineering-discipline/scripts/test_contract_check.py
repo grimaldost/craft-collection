@@ -22,9 +22,9 @@ def test_violations_detected():
         {'id': '', 'status': 'open'},
     ]
     v = validate(rows, CONTRACT)
-    assert any('null' in x for x in v)     # blank id but nullable=false
-    assert any('enum' in x for x in v)     # 'paused' not in enum
-    assert any('unique' in x for x in v)   # duplicate id '1'
+    assert any('null' in x for x in v)  # blank id but nullable=false
+    assert any('enum' in x for x in v)  # 'paused' not in enum
+    assert any('unique' in x for x in v)  # duplicate id '1'
 
 
 if __name__ == '__main__':

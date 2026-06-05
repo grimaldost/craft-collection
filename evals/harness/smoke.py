@@ -31,43 +31,79 @@ def _check(name: str, ok: bool, detail: str = '') -> bool:
 def main() -> int:
     cfg_dir = make_isolated_config()
     work = tempfile.mkdtemp(prefix='eval_work_')
-    common = dict(config_dir=cfg_dir, cwd=work, model=CFG['agent_model'],
-                  max_budget_usd=CFG['max_budget_usd'], timeout=CFG['timeout_seconds'])
+    common = {
+        'config_dir': cfg_dir,
+        'cwd': work,
+        'model': CFG['agent_model'],
+        'max_budget_usd': CFG['max_budget_usd'],
+        'timeout': CFG['timeout_seconds'],
+    }
     results: list[bool] = []
     try:
         # 1. clean config is authenticated, and --plugin-dir loads the plugin cleanly.
-        r1 = run_agent('Reply with the single word: hi.', plugin_dir=SESSION_WORKFLOW,
-                       allowed_tools='Read', max_turns=2, **common)
-        results.append(_check(
-            '1. authed clean config + plugin loads',
-            (not r1.is_error) and r1.plugin_loaded('session-workflow') and not r1.plugin_errors,
-            f'is_error={r1.is_error} plugins={r1.plugins_loaded} errors={r1.plugin_errors}'))
+        r1 = run_agent(
+            'Reply with the single word: hi.',
+            plugin_dir=SESSION_WORKFLOW,
+            allowed_tools='Read',
+            max_turns=2,
+            **common,
+        )
+        results.append(
+            _check(
+                '1. authed clean config + plugin loads',
+                (not r1.is_error) and r1.plugin_loaded('session-workflow') and not r1.plugin_errors,
+                f'is_error={r1.is_error} plugins={r1.plugins_loaded} errors={r1.plugin_errors}',
+            )
+        )
 
         # 2. the skill auto-activates and is detectable in stream-json.
         prompt2 = (
             'We just finished a working session. Decisions: (a) chose Qdrant over LanceDB '
             'for in-traversal filtering; (b) set HNSW m=16. Dead end: tried a three-tier '
             'store hierarchy and abandoned it because the middle tier had no backend. '
-            'Now: journal this session.')
-        r2 = run_agent(prompt2, plugin_dir=SESSION_WORKFLOW, allowed_tools='Skill,Read,Glob,Grep',
-                       max_turns=CFG['max_turns'], **common)
-        results.append(_check(
-            '2. journaling-sessions auto-activates & is detected',
-            r2.activated('journaling-sessions'),
-            f'activated={sorted(r2.activated_skills)} '
-            f'ENTRY_START_in_output={"ENTRY_START" in r2.result_text}'))
+            'Now: journal this session.'
+        )
+        r2 = run_agent(
+            prompt2,
+            plugin_dir=SESSION_WORKFLOW,
+            allowed_tools='Skill,Read,Glob,Grep',
+            max_turns=CFG['max_turns'],
+            **common,
+        )
+        results.append(
+            _check(
+                '2. journaling-sessions auto-activates & is detected',
+                r2.activated('journaling-sessions'),
+                f'activated={sorted(r2.activated_skills)} '
+                f'ENTRY_START_in_output={"ENTRY_START" in r2.result_text}',
+            )
+        )
 
         # 3. a CLI judge (no plugin) returns parseable JSON.
         judge_prompt = (
             'You are a strict grader. Reply with ONLY a JSON object '
             '{"score": <0..1 float>, "pass": <true|false>, "reason": "<short>"} and nothing '
-            'else. Task: does "the cat sat on the mat" contain the word "cat"? pass=true if so.')
-        r3 = run_agent(judge_prompt, allowed_tools='', max_turns=1, stream=False,
-                       model=CFG['judge_model'], config_dir=cfg_dir, cwd=work,
-                       max_budget_usd=CFG['max_budget_usd'], timeout=CFG['timeout_seconds'])
+            'else. Task: does "the cat sat on the mat" contain the word "cat"? pass=true if so.'
+        )
+        r3 = run_agent(
+            judge_prompt,
+            allowed_tools='',
+            max_turns=1,
+            stream=False,
+            model=CFG['judge_model'],
+            config_dir=cfg_dir,
+            cwd=work,
+            max_budget_usd=CFG['max_budget_usd'],
+            timeout=CFG['timeout_seconds'],
+        )
         verdict = extract_verdict(r3.result_text)
-        results.append(_check('3. CLI judge returns parseable JSON', verdict is not None,
-                              f'verdict={verdict} raw={r3.result_text[:120]!r}'))
+        results.append(
+            _check(
+                '3. CLI judge returns parseable JSON',
+                verdict is not None,
+                f'verdict={verdict} raw={r3.result_text[:120]!r}',
+            )
+        )
     finally:
         cleanup_dir(work)
         cleanup_dir(cfg_dir)

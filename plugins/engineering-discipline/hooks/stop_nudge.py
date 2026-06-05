@@ -24,8 +24,12 @@ def should_nudge(changed_files: list[str], globs: tuple[str, ...] = DEFAULT_GLOB
 
 def _changed_files() -> list[str]:
     try:
-        out = subprocess.run(['git', 'diff', '--name-only', 'HEAD'],  # noqa: S603,S607
-                             capture_output=True, text=True, check=False)
+        out = subprocess.run(
+            ['git', 'diff', '--name-only', 'HEAD'],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     except (FileNotFoundError, OSError):
         return []
     return [ln.strip() for ln in out.stdout.splitlines() if ln.strip()]

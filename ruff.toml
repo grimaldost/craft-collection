@@ -1,0 +1,32 @@
+# Ruff configuration for the craft-collection repo.
+#
+# These are stdlib-only tooling scripts (plugin validator, an eval harness, and
+# skill helper scripts) plus their self-contained tests — not a packaged
+# library. The house style mirrors the python-engineering skill: 100-column
+# lines and single quotes. The lint set is deliberately pragmatic for CLI
+# tooling + tests; it omits rules aimed at packaged libraries (flake8-bandit
+# subprocess noise, flake8-print on intentional CLI output, mandatory
+# annotations), which the python-engineering skill still recommends for those.
+line-length = 100
+target-version = "py310"
+extend-exclude = ["__pycache__", ".ruff_cache", ".venv", "dist", "build"]
+
+[format]
+quote-style = "single"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[lint]
+# Correctness + modernization + security, sized for CLI tooling and colocated
+# tests. Deliberately excluded: Q/ISC (conflict with the single-quote formatter,
+# which owns quoting), T20 (intentional CLI output), ANN/PT (mandatory
+# annotations / pytest-only style don't fit plain runnable test scripts), TC
+# (TYPE_CHECKING import blocks add boilerplate not worth it in small scripts).
+select = ["E", "W", "F", "I", "N", "B", "C4", "UP", "SIM", "RUF", "S"]
+ignore = [
+    "E501",    # line length is the formatter's responsibility; only unsplittable URLs/strings trip it
+    "SIM105",  # try/except/pass is idiomatic here; contextlib.suppress is not required
+]
+
+[lint.per-file-ignores]
+"**/test_*.py" = ["S101"]   # asserts are the substance of the tests

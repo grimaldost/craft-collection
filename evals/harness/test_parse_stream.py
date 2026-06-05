@@ -7,13 +7,37 @@ import json
 from claude_runner import parse_stream
 
 LINES = [
-    json.dumps({'type': 'system', 'subtype': 'init',
-                'plugins': [{'name': 'session-workflow'}], 'plugin_errors': []}),
-    json.dumps({'type': 'assistant', 'message': {'content': [
-        {'type': 'tool_use', 'name': 'Skill',
-         'input': {'name': 'session-workflow:journaling-sessions'}}]}}),
-    json.dumps({'type': 'result', 'result': 'done',
-                'total_cost_usd': 0.01, 'num_turns': 2, 'is_error': False}),
+    json.dumps(
+        {
+            'type': 'system',
+            'subtype': 'init',
+            'plugins': [{'name': 'session-workflow'}],
+            'plugin_errors': [],
+        }
+    ),
+    json.dumps(
+        {
+            'type': 'assistant',
+            'message': {
+                'content': [
+                    {
+                        'type': 'tool_use',
+                        'name': 'Skill',
+                        'input': {'name': 'session-workflow:journaling-sessions'},
+                    }
+                ]
+            },
+        }
+    ),
+    json.dumps(
+        {
+            'type': 'result',
+            'result': 'done',
+            'total_cost_usd': 0.01,
+            'num_turns': 2,
+            'is_error': False,
+        }
+    ),
 ]
 
 
@@ -33,15 +57,39 @@ def test_tolerates_garbage_lines():
 # A skill that writes its deliverable to a file + a mid-stream message, ending on a
 # terse confirmation — the shape that floored journaling's measured usage.
 WRITE_LINES = [
-    json.dumps({'type': 'assistant', 'message': {'content': [
-        {'type': 'text', 'text': 'Here are the entries.'},
-        {'type': 'tool_use', 'name': 'Write',
-         'input': {'file_path': 'j.md',
-                   'content': '--- ENTRY_START ---\nbody\n--- ENTRY_END ---'}}]}}),
-    json.dumps({'type': 'assistant', 'message': {'content': [
-        {'type': 'text', 'text': 'Done, 1 entry written.'}]}}),
-    json.dumps({'type': 'result', 'result': 'Done, 1 entry written.',
-                'total_cost_usd': 0.02, 'num_turns': 3, 'usage': {'output_tokens': 50}}),
+    json.dumps(
+        {
+            'type': 'assistant',
+            'message': {
+                'content': [
+                    {'type': 'text', 'text': 'Here are the entries.'},
+                    {
+                        'type': 'tool_use',
+                        'name': 'Write',
+                        'input': {
+                            'file_path': 'j.md',
+                            'content': '--- ENTRY_START ---\nbody\n--- ENTRY_END ---',
+                        },
+                    },
+                ]
+            },
+        }
+    ),
+    json.dumps(
+        {
+            'type': 'assistant',
+            'message': {'content': [{'type': 'text', 'text': 'Done, 1 entry written.'}]},
+        }
+    ),
+    json.dumps(
+        {
+            'type': 'result',
+            'result': 'Done, 1 entry written.',
+            'total_cost_usd': 0.02,
+            'num_turns': 3,
+            'usage': {'output_tokens': 50},
+        }
+    ),
 ]
 
 

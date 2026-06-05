@@ -46,15 +46,16 @@ def extract_verdict(text: str) -> dict | None:
                 depth -= 1
                 if depth == 0:
                     try:
-                        return json.loads(text[start:i + 1])
+                        return json.loads(text[start : i + 1])
                     except (json.JSONDecodeError, ValueError):
                         break  # not valid JSON; advance to the next '{'
         start = text.find('{', start + 1)
     return None
 
 
-def score_from_criteria(verdict: dict, rubric: list[dict],
-                        threshold: float = JUDGE_THRESHOLD) -> dict:
+def score_from_criteria(
+    verdict: dict, rubric: list[dict], threshold: float = JUDGE_THRESHOLD
+) -> dict:
     """Recompute score/pass from rubric weights x the judge's per-criterion `met`
     flags, so the number doesn't depend on the model's arithmetic. Falls back to
     the model's own score if no usable criteria list is present."""
@@ -114,17 +115,33 @@ def _render_pointwise(task: str, output: str, rubric: list[dict]) -> str:
     )
 
 
-def judge_pointwise(task: str, output: str, rubric: list[dict], *, model: str,
-                    repeats: int = 1, runner=run_agent, max_budget_usd: float = 0.25,
-                    timeout: int = 180, threshold: float = JUDGE_THRESHOLD) -> dict:
+def judge_pointwise(
+    task: str,
+    output: str,
+    rubric: list[dict],
+    *,
+    model: str,
+    repeats: int = 1,
+    runner=run_agent,
+    max_budget_usd: float = 0.25,
+    timeout: int = 180,
+    threshold: float = JUDGE_THRESHOLD,
+) -> dict:
     """Grade one output against the rubric `repeats` times; recompute each score
     from weights, then aggregate (mean score, majority pass, agreement)."""
     prompt = _render_pointwise(task, output, rubric)
     verdicts = []
     for _ in range(repeats):
-        r = runner(prompt, plugin_dir=None, allowed_tools='', model=model,
-                   max_turns=1, max_budget_usd=max_budget_usd, timeout=timeout,
-                   stream=False)
+        r = runner(
+            prompt,
+            plugin_dir=None,
+            allowed_tools='',
+            model=model,
+            max_turns=1,
+            max_budget_usd=max_budget_usd,
+            timeout=timeout,
+            stream=False,
+        )
         v = extract_verdict(r.result_text)
         if v:
             verdicts.append(score_from_criteria(v, rubric, threshold))
@@ -144,26 +161,57 @@ def _render_pairwise(task: str, first: str, second: str, criterion: str) -> str:
     )
 
 
-def _ask_pairwise(task, first, second, criterion, *, model, runner,
-                  max_budget_usd, timeout) -> str:
+def _ask_pairwise(task, first, second, criterion, *, model, runner, max_budget_usd, timeout) -> str:
     prompt = _render_pairwise(task, first, second, criterion)
-    r = runner(prompt, plugin_dir=None, allowed_tools='', model=model, max_turns=1,
-               max_budget_usd=max_budget_usd, timeout=timeout, stream=False)
+    r = runner(
+        prompt,
+        plugin_dir=None,
+        allowed_tools='',
+        model=model,
+        max_turns=1,
+        max_budget_usd=max_budget_usd,
+        timeout=timeout,
+        stream=False,
+    )
     v = extract_verdict(r.result_text) or {}
     w = str(v.get('winner', 'tie')).strip().lower()
     return w if w in ('first', 'second', 'tie') else 'tie'
 
 
-def judge_pairwise(task: str, out_a: str, out_b: str, criterion: str, *, model: str,
-                   runner=run_agent, max_budget_usd: float = 0.25,
-                   timeout: int = 180) -> dict:
+def judge_pairwise(
+    task: str,
+    out_a: str,
+    out_b: str,
+    criterion: str,
+    *,
+    model: str,
+    runner=run_agent,
+    max_budget_usd: float = 0.25,
+    timeout: int = 180,
+) -> dict:
     """Ask the judge twice with A/B swapped; A is the WITH-skill output, B WITHOUT.
     Returns a winner only if both orderings agree (else 'tie')."""
-    v1 = _ask_pairwise(task, out_a, out_b, criterion, model=model, runner=runner,
-                       max_budget_usd=max_budget_usd, timeout=timeout)
+    v1 = _ask_pairwise(
+        task,
+        out_a,
+        out_b,
+        criterion,
+        model=model,
+        runner=runner,
+        max_budget_usd=max_budget_usd,
+        timeout=timeout,
+    )
     w1 = {'first': 'A', 'second': 'B', 'tie': 'tie'}[v1]
-    v2 = _ask_pairwise(task, out_b, out_a, criterion, model=model, runner=runner,
-                       max_budget_usd=max_budget_usd, timeout=timeout)
+    v2 = _ask_pairwise(
+        task,
+        out_b,
+        out_a,
+        criterion,
+        model=model,
+        runner=runner,
+        max_budget_usd=max_budget_usd,
+        timeout=timeout,
+    )
     w2 = {'first': 'B', 'second': 'A', 'tie': 'tie'}[v2]
     decision = decide_pairwise(w1, w2)
     decision['order1'], decision['order2'] = w1, w2

@@ -42,9 +42,15 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter) -> dict:
         else:
             neg_succ += repeats - k  # a correct rejection = a NON-fire on a negative
             neg_tri += repeats
-        per_query.append({'query': q['query'], 'should_trigger': q['should_trigger'],
-                          'k': k, 'repeats': repeats,
-                          'rate': (k / repeats if repeats else 0.0)})
+        per_query.append(
+            {
+                'query': q['query'],
+                'should_trigger': q['should_trigger'],
+                'k': k,
+                'repeats': repeats,
+                'rate': (k / repeats if repeats else 0.0),
+            }
+        )
     return {
         'recall': pass_rate(pos_succ, pos_tri),
         'specificity': pass_rate(neg_succ, neg_tri),
@@ -66,19 +72,34 @@ def load_queries(skill: str, limit: int | None = None) -> list[dict]:
     return data
 
 
-def run_skill(skill: str, queries: list[dict], *, plugin_dir: str, cfg: dict,
-              repeats: int, concurrency: int, config_dir: str, cwd: str) -> dict:
+def run_skill(
+    skill: str,
+    queries: list[dict],
+    *,
+    plugin_dir: str,
+    cfg: dict,
+    repeats: int,
+    concurrency: int,
+    config_dir: str,
+    cwd: str,
+) -> dict:
     """Spawn every (query x repeat) run concurrently, tally activations, score."""
     jobs = [(i, q['query']) for i, q in enumerate(queries) for _ in range(repeats)]
 
     def worker(job):
         i, qstr = job
-        run = run_agent(qstr, plugin_dir=plugin_dir,
-                        allowed_tools=cfg['allowed_tools_trigger'],
-                        model=cfg['agent_model'], max_turns=MAX_TURNS_TRIGGER,
-                        max_budget_usd=cfg['max_budget_usd'],
-                        timeout=cfg['timeout_seconds'], stream=True,
-                        config_dir=config_dir, cwd=cwd)
+        run = run_agent(
+            qstr,
+            plugin_dir=plugin_dir,
+            allowed_tools=cfg['allowed_tools_trigger'],
+            model=cfg['agent_model'],
+            max_turns=MAX_TURNS_TRIGGER,
+            max_budget_usd=cfg['max_budget_usd'],
+            timeout=cfg['timeout_seconds'],
+            stream=True,
+            config_dir=config_dir,
+            cwd=cwd,
+        )
         return (i, run.activated(skill), run.cost_usd or 0.0, run.is_error)
 
     results = map_concurrent(jobs, worker, concurrency=concurrency)
@@ -121,8 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     cfg = json.loads((REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
     ap = argparse.ArgumentParser(description='Skill triggering eval (axes 1 & 3)')
     ap.add_argument('skill', choices=sorted(cfg['plugin_of_skill']))
-    ap.add_argument('--limit', type=int, default=None,
-                    help='cap to first N positives + N negatives')
+    ap.add_argument(
+        '--limit', type=int, default=None, help='cap to first N positives + N negatives'
+    )
     ap.add_argument('--repeats', type=int, default=cfg['agent_repeats'])
     ap.add_argument('--concurrency', type=int, default=4)
     ap.add_argument('--dry-run', action='store_true')
@@ -132,9 +154,11 @@ def main(argv: list[str] | None = None) -> int:
     plugin = cfg['plugin_of_skill'][args.skill]
     plugin_dir = str(REPO / 'plugins' / plugin)
     n_spawn = len(queries) * args.repeats
-    print(f'skill={args.skill} plugin={plugin} queries={len(queries)} '
-          f'repeats={args.repeats} -> {n_spawn} spawns '
-          f'(<= ${n_spawn * cfg["max_budget_usd"]:.2f} ceiling)')
+    print(
+        f'skill={args.skill} plugin={plugin} queries={len(queries)} '
+        f'repeats={args.repeats} -> {n_spawn} spawns '
+        f'(<= ${n_spawn * cfg["max_budget_usd"]:.2f} ceiling)'
+    )
     if args.dry_run:
         for q in queries:
             print(f'  [{"+" if q["should_trigger"] else "-"}] {q["query"][:80]}')
@@ -143,9 +167,16 @@ def main(argv: list[str] | None = None) -> int:
     config_dir = make_isolated_config()
     cwd = tempfile.mkdtemp(prefix='eval_trig_')
     try:
-        score = run_skill(args.skill, queries, plugin_dir=plugin_dir, cfg=cfg,
-                          repeats=args.repeats, concurrency=args.concurrency,
-                          config_dir=config_dir, cwd=cwd)
+        score = run_skill(
+            args.skill,
+            queries,
+            plugin_dir=plugin_dir,
+            cfg=cfg,
+            repeats=args.repeats,
+            concurrency=args.concurrency,
+            config_dir=config_dir,
+            cwd=cwd,
+        )
     finally:
         cleanup_dir(cwd)
         cleanup_dir(config_dir)
@@ -156,15 +187,22 @@ def main(argv: list[str] | None = None) -> int:
     slo, shi = score['specificity_ci']
     rec_ok = 'PASS' if score['recall'] >= g['trigger_recall'] else 'FAIL'
     spec_ok = 'PASS' if score['specificity'] >= g['trigger_specificity'] else 'FAIL'
-    print(f'\nrecall      = {score["recall"]:.2f}  CI[{rlo:.2f},{rhi:.2f}]  '
-          f'gate>={g["trigger_recall"]}  {rec_ok}')
-    print(f'specificity = {score["specificity"]:.2f}  CI[{slo:.2f},{shi:.2f}]  '
-          f'gate>={g["trigger_specificity"]}  {spec_ok}')
-    print(f'cost=${score["cost_usd"]}  error_runs={score["error_runs"]}/{score["total_runs"]} '
-          f'(no-activation errors={score["error_runs_no_activation"]})')
+    print(
+        f'\nrecall      = {score["recall"]:.2f}  CI[{rlo:.2f},{rhi:.2f}]  '
+        f'gate>={g["trigger_recall"]}  {rec_ok}'
+    )
+    print(
+        f'specificity = {score["specificity"]:.2f}  CI[{slo:.2f},{shi:.2f}]  '
+        f'gate>={g["trigger_specificity"]}  {spec_ok}'
+    )
+    print(
+        f'cost=${score["cost_usd"]}  error_runs={score["error_runs"]}/{score["total_runs"]} '
+        f'(no-activation errors={score["error_runs_no_activation"]})'
+    )
     for pq in score['per_query']:  # surface misses for description tuning
-        miss = ((pq['should_trigger'] and pq['rate'] < 1.0)
-                or (not pq['should_trigger'] and pq['rate'] > 0.0))
+        miss = (pq['should_trigger'] and pq['rate'] < 1.0) or (
+            not pq['should_trigger'] and pq['rate'] > 0.0
+        )
         if miss:
             sign = '+' if pq['should_trigger'] else '-'
             print(f'  miss [{sign}] k={pq["k"]}/{pq["repeats"]} {pq["query"][:70]}')

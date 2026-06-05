@@ -6,9 +6,16 @@ from __future__ import annotations
 from claude_runner import AgentRun
 from grade_tasks import grade_skill
 
-CFG = {'agent_repeats': 3, 'judge_repeats': 1, 'agent_model': 'm', 'judge_model': 'm',
-       'allowed_tools_task': 'Skill,Read', 'max_turns': 8, 'max_budget_usd': 0.5,
-       'timeout_seconds': 300}
+CFG = {
+    'agent_repeats': 3,
+    'judge_repeats': 1,
+    'agent_model': 'm',
+    'judge_model': 'm',
+    'allowed_tools_task': 'Skill,Read',
+    'max_turns': 8,
+    'max_budget_usd': 0.5,
+    'timeout_seconds': 300,
+}
 
 
 def fake_arm(prompt, *, plugin_dir, cfg, config_dir):
@@ -16,7 +23,8 @@ def fake_arm(prompt, *, plugin_dir, cfg, config_dir):
     run = AgentRun(
         activated_skills={'session-workflow:journaling-sessions'} if with_arm else set(),
         result_text='WITH out' if with_arm else 'WITHOUT out',
-        cost_usd=0.02 if with_arm else 0.01)
+        cost_usd=0.02 if with_arm else 0.01,
+    )
     return run, run.result_text
 
 
@@ -31,20 +39,30 @@ def fake_pair(task, a, b, criterion, *, model):
 def test_grade_skill_shape_over_repeats():
     tasks = [{'id': 't1', 'prompt': 'do x', 'fixture': None}]
     rubric = [{'id': 'r1', 'weight': 1, 'text': '...'}]
-    blob = grade_skill('journaling-sessions', tasks, rubric, CFG, plugin_dir='p',
-                       config_with=None, config_without=None,
-                       pairwise_criterion='better?', concurrency=1,
-                       run_arm=fake_arm, judge_point=fake_point, judge_pair=fake_pair)
+    blob = grade_skill(
+        'journaling-sessions',
+        tasks,
+        rubric,
+        CFG,
+        plugin_dir='p',
+        config_with=None,
+        config_without=None,
+        pairwise_criterion='better?',
+        concurrency=1,
+        run_arm=fake_arm,
+        judge_point=fake_point,
+        judge_pair=fake_pair,
+    )
     task = blob['tasks'][0]
-    assert task['n'] == 3                       # one record per agent-repeat
+    assert task['n'] == 3  # one record per agent-repeat
     assert task['with_pass_rate'] == 1.0
-    assert task['pairwise']['with_wins'] == 3   # fake judge always picks WITH (A)
+    assert task['pairwise']['with_wins'] == 3  # fake judge always picks WITH (A)
     rec = task['records'][0]
     assert 'with_pass' in rec and 'pairwise_winner' in rec
     assert rec['with_cost'] == 0.02 and rec['without_cost'] == 0.01  # per-arm cost
     s = blob['summary']
     assert s['n_records'] == 3 and s['with_win_rate'] == 1.0
-    assert s['with_activation_rate'] == 1.0     # WITH arm always "fired"
+    assert s['with_activation_rate'] == 1.0  # WITH arm always "fired"
 
 
 def test_grade_skill_counts_without_wins_and_ties():
@@ -54,12 +72,23 @@ def test_grade_skill_counts_without_wins_and_ties():
     def mixed_pair(task, a, b, criterion, *, model):
         mixed_pair.calls += 1
         return {'winner': ['A', 'B', 'tie'][mixed_pair.calls % 3]}
+
     mixed_pair.calls = 0
 
-    blob = grade_skill('context-handoff', tasks, rubric, CFG, plugin_dir='p',
-                       config_with=None, config_without=None,
-                       pairwise_criterion='c', concurrency=1,
-                       run_arm=fake_arm, judge_point=fake_point, judge_pair=mixed_pair)
+    blob = grade_skill(
+        'context-handoff',
+        tasks,
+        rubric,
+        CFG,
+        plugin_dir='p',
+        config_with=None,
+        config_without=None,
+        pairwise_criterion='c',
+        concurrency=1,
+        run_arm=fake_arm,
+        judge_point=fake_point,
+        judge_pair=mixed_pair,
+    )
     pw = blob['tasks'][0]['pairwise']
     assert pw['with_wins'] + pw['without_wins'] + pw['ties'] == 3
 

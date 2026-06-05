@@ -34,7 +34,7 @@ def _csv_schema(path: Path) -> dict[str, str]:
         import pandas as pd  # optional dependency
     except ImportError:
         with Path(path).open(newline='', encoding='utf-8') as fh:
-            return {c: 'unknown' for c in next(csv.reader(fh), [])}
+            return dict.fromkeys(next(csv.reader(fh), []), 'unknown')
     frame = pd.read_csv(path, nrows=1000)
     return {str(c): str(t) for c, t in frame.dtypes.items()}
 

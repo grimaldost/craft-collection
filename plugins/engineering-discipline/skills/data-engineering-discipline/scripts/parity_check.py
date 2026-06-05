@@ -34,12 +34,14 @@ def _to_float(v: object) -> float | None:
         return None
 
 
-def compare(rows_a: list[dict], rows_b: list[dict],
-            keys: list[str] | None = None, tol: float = 1e-9) -> dict:
+def compare(
+    rows_a: list[dict], rows_b: list[dict], keys: list[str] | None = None, tol: float = 1e-9
+) -> dict:
     """Compare two list[dict] tables. Returns a report dict with an 'ok' flag."""
     keys = keys or []
-    report: dict = {'row_count': {'a': len(rows_a), 'b': len(rows_b),
-                                  'delta': len(rows_b) - len(rows_a)}}
+    report: dict = {
+        'row_count': {'a': len(rows_a), 'b': len(rows_b), 'delta': len(rows_b) - len(rows_a)}
+    }
 
     def card(rows: list[dict]) -> int | None:
         return len({tuple(r.get(k) for k in keys) for r in rows}) if keys else None
@@ -92,20 +94,22 @@ def main(argv: list[str] | None = None) -> int:
     keys = [k for k in args.keys.split(',') if k]
     rep = compare(_read_csv(args.baseline), _read_csv(args.candidate), keys, args.tol)
     rc = rep['row_count']
-    print(f"row count: {rc['a']} -> {rc['b']} (delta {rc['delta']})")
+    print(f'row count: {rc["a"]} -> {rc["b"]} (delta {rc["delta"]})')
     gc = rep['group_cardinality']
-    print(f"group cardinality: {gc['a']} -> {gc['b']}")
+    print(f'group cardinality: {gc["a"]} -> {gc["b"]}')
     for c, s in rep['sum_delta'].items():
         if abs(s['delta']) > args.tol:
-            print(f"  sum {c}: delta {s['delta']}")
+            print(f'  sum {c}: delta {s["delta"]}')
     for c, d in rep['null_rate_delta'].items():
         if abs(d) > args.tol:
-            print(f"  null-rate {c}: delta {d:+.4f}")
+            print(f'  null-rate {c}: delta {d:+.4f}')
     ok = rep['ok']
     print('PARITY OK' if ok else 'PARITY FAILED')
     if ok:
-        print('  (aggregate-level only: a sum/count-preserving value swap also passes '
-              '- confirm with a row-level diff, parity-recipes.md Recipe 6)')
+        print(
+            '  (aggregate-level only: a sum/count-preserving value swap also passes '
+            '- confirm with a row-level diff, parity-recipes.md Recipe 6)'
+        )
     return 0 if ok else 1
 
 

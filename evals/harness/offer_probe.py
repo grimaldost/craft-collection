@@ -28,13 +28,21 @@ from claude_runner import cleanup_dir, make_isolated_config, run_agent
 REPO = Path(__file__).resolve().parents[2]
 FIX = REPO / 'evals' / 'tasks' / 'journaling-sessions' / 'fixtures'
 CLOSE = "\n\n-----\n\nThat's everything for today — we're wrapping up here. Thanks."
-EXPLICIT = "\n\n-----\n\nJournal this session."
+EXPLICIT = '\n\n-----\n\nJournal this session.'
 # Soft, session-ending preserve-request — the regression risk: the new routing must
 # read this as "the user asked" (write), NOT as a bare wind-down (offer).
 IMPLICIT = "\n\n-----\n\nBefore I move on, make sure we don't lose what we worked out here."
 
-_OFFER_CUES = ('want me to', 'would you like', 'let me know', 'shall i', 'i can ',
-               'happy to', 'if you', 'should i')
+_OFFER_CUES = (
+    'want me to',
+    'would you like',
+    'let me know',
+    'shall i',
+    'i can ',
+    'happy to',
+    'if you',
+    'should i',
+)
 
 
 def _files_text(cwd: str, cap: int = 20000) -> str:
@@ -74,18 +82,28 @@ def _classify(message: str, files_text: str, out_tokens: int) -> tuple[str, str]
 
 
 def _in(u: dict) -> int:
-    return (u.get('input_tokens', 0) + u.get('cache_read_input_tokens', 0)
-            + u.get('cache_creation_input_tokens', 0))
+    return (
+        u.get('input_tokens', 0)
+        + u.get('cache_read_input_tokens', 0)
+        + u.get('cache_creation_input_tokens', 0)
+    )
 
 
 def arm(label, prompt, plugin, cfg, cfgdir, expect) -> dict:
     cwd = tempfile.mkdtemp(prefix='offer_')
     try:
-        run = run_agent(prompt, plugin_dir=plugin,
-                        allowed_tools=cfg['allowed_tools_task'], model=cfg['agent_model'],
-                        max_turns=cfg['max_turns'], max_budget_usd=cfg['max_budget_usd'],
-                        timeout=cfg['timeout_seconds'], stream=True,
-                        config_dir=cfgdir, cwd=cwd)
+        run = run_agent(
+            prompt,
+            plugin_dir=plugin,
+            allowed_tools=cfg['allowed_tools_task'],
+            model=cfg['agent_model'],
+            max_turns=cfg['max_turns'],
+            max_budget_usd=cfg['max_budget_usd'],
+            timeout=cfg['timeout_seconds'],
+            stream=True,
+            config_dir=cfgdir,
+            cwd=cwd,
+        )
         files = _files_text(cwd)
     finally:
         cleanup_dir(cwd)
@@ -99,11 +117,18 @@ def arm(label, prompt, plugin, cfg, cfgdir, expect) -> dict:
         verdict = 'SKIP'  # skill stayed silent — selective, not a regression
     else:
         verdict = 'PASS' if behavior == 'offered' else 'FAIL'
-    return {'label': label, 'expect': expect, 'activated': activated,
-            'behavior': behavior, 'why': why, 'verdict': verdict,
-            'out': run.usage.get('output_tokens', 0), 'in': _in(run.usage),
-            'cost': round(run.cost_usd or 0.0, 4),
-            'message': (run.result_text or '').strip()}
+    return {
+        'label': label,
+        'expect': expect,
+        'activated': activated,
+        'behavior': behavior,
+        'why': why,
+        'verdict': verdict,
+        'out': run.usage.get('output_tokens', 0),
+        'in': _in(run.usage),
+        'cost': round(run.cost_usd or 0.0, 4),
+        'message': (run.result_text or '').strip(),
+    }
 
 
 def main() -> int:
@@ -120,15 +145,19 @@ def main() -> int:
             rows.append(arm(f'{short} | proactive', base + CLOSE, plugin, cfg, cfgdir, 'offer'))
             rows.append(arm(f'{short} | explicit', base + EXPLICIT, plugin, cfg, cfgdir, 'wrote'))
             if short == 'decision-session':  # the soft-ask regression guard
-                rows.append(arm(f'{short} | soft-ask', base + IMPLICIT, plugin, cfg, cfgdir, 'wrote'))
+                rows.append(
+                    arm(f'{short} | soft-ask', base + IMPLICIT, plugin, cfg, cfgdir, 'wrote')
+                )
     finally:
         cleanup_dir(cfgdir)
 
     print(f'\n{"arm":32s} {"fired":5s} {"behavior":9s} {"out":>7s} {"verdict":7s}  why')
     print('-' * 94)
     for r in rows:
-        print(f'{r["label"]:32s} {str(r["activated"]):5s} {r["behavior"]:9s} '
-              f'{r["out"]:>7d} {r["verdict"]:7s}  {r["why"]}')
+        print(
+            f'{r["label"]:32s} {r["activated"]!s:5s} {r["behavior"]:9s} '
+            f'{r["out"]:>7d} {r["verdict"]:7s}  {r["why"]}'
+        )
 
     print('\nProactive-arm messages (the offer, verbatim, truncated):')
     for r in rows:

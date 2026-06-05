@@ -1,0 +1,41 @@
+# Pre-commit quality gates for craft-collection.
+#   Enable:   uv tool run pre-commit install
+#   Run now:  uv tool run pre-commit run --all-files
+# Versions are pinned to match the python-engineering skill's house standard.
+minimum_pre_commit_version: '3.5.0'
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]   # keep intentional Markdown line breaks
+      - id: end-of-file-fixer
+      - id: check-json                          # marketplace.json, plugin.json, hooks.json, eval data
+      - id: check-yaml                          # workflows + this config
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.7
+    hooks:
+      - id: ruff                                # lint (autofix)
+        args: [--fix]
+      - id: ruff-format                         # format to ruff.toml (100-col, single quotes)
+
+  - repo: local
+    hooks:
+      - id: validate-plugins
+        name: validate marketplace structure
+        entry: uv run --no-project --with pyyaml -- python scripts/validate_plugins.py
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: run-tests
+        name: run self-contained test suite
+        entry: python scripts/run_tests.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]                      # keep commits fast; gate before push

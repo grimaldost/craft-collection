@@ -14,16 +14,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Install validator deps
-        run: pip install pyyaml
+      - name: Install tooling
+        run: pip install pyyaml ruff==0.15.7
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Format check (ruff)
+        run: ruff format --check .
       - name: Validate plugins (structural)
         run: python scripts/validate_plugins.py
-      - name: Run skill + hook tests
-        shell: bash
-        run: |
-          fail=0
-          while IFS= read -r t; do
-            echo "== $t"
-            ( cd "$(dirname "$t")" && python "$(basename "$t")" ) || fail=1
-          done < <(find plugins -name 'test_*.py')
-          exit $fail
+      - name: Run tests
+        run: python scripts/run_tests.py

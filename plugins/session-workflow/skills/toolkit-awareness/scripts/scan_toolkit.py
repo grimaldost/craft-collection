@@ -82,9 +82,13 @@ def _scan_skills(skills_dir: Path) -> list[dict]:
         if not skill_md.is_file():
             continue
         fm = _read_frontmatter(skill_md)
-        out.append({'name': fm.get('name', sub.name),
-                    'description': _preview(fm.get('description', '')),
-                    'path': str(sub)})
+        out.append(
+            {
+                'name': fm.get('name', sub.name),
+                'description': _preview(fm.get('description', '')),
+                'path': str(sub),
+            }
+        )
     return out
 
 
@@ -94,9 +98,13 @@ def _scan_markdown_dir(d: Path) -> list[dict]:
         return out
     for md in sorted(d.glob('*.md')):
         fm = _read_frontmatter(md)
-        out.append({'name': fm.get('name', md.stem),
-                    'description': _preview(fm.get('description', '')),
-                    'path': str(md)})
+        out.append(
+            {
+                'name': fm.get('name', md.stem),
+                'description': _preview(fm.get('description', '')),
+                'path': str(md),
+            }
+        )
     return out
 
 
@@ -161,8 +169,11 @@ def _plugins_from_json(data: object) -> list[dict]:
             ver = str(p.get('version', '')).strip()
             tags = [t for t in (ver, 'disabled' if p.get('enabled') is False else '') if t]
             suffix = f' ({", ".join(tags)})' if tags else ''
-            desc = (_preview(str(p['description'])) if p.get('description')
-                    else _plugin_description(p.get('installPath')))
+            desc = (
+                _preview(str(p['description']))
+                if p.get('description')
+                else _plugin_description(p.get('installPath'))
+            )
             out.append({'name': label + suffix, 'description': desc})
     return out
 
@@ -172,8 +183,12 @@ def _scan_plugins() -> list[dict]:
     ask the CLI. Tolerates the CLI being absent or failing; on any failure returns
     [] (the caller still reports the .claude inventory)."""
     try:
-        proc = subprocess.run(['claude', 'plugin', 'list', '--json'],
-                              capture_output=True, text=True, timeout=20)
+        proc = subprocess.run(
+            ['claude', 'plugin', 'list', '--json'],  # noqa: S607 - 'claude' resolved from PATH
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
     except (FileNotFoundError, OSError, subprocess.SubprocessError):
         return []
     if proc.returncode != 0 or not (proc.stdout or '').strip():
@@ -230,10 +245,17 @@ def _default_roots() -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Live Claude Code toolkit inventory.')
     parser.add_argument('--json', action='store_true', help='machine-readable output')
-    parser.add_argument('--session-start', action='store_true',
-                        help='inject inventory only if TOOLKIT_AWARENESS_INJECT=1')
-    parser.add_argument('--root', action='append', default=None,
-                        help='override scan root (repeatable); defaults to ~ and cwd')
+    parser.add_argument(
+        '--session-start',
+        action='store_true',
+        help='inject inventory only if TOOLKIT_AWARENESS_INJECT=1',
+    )
+    parser.add_argument(
+        '--root',
+        action='append',
+        default=None,
+        help='override scan root (repeatable); defaults to ~ and cwd',
+    )
     args = parser.parse_args(argv)
 
     # SessionStart hook entry point: silent unless explicitly opted in, so the hook

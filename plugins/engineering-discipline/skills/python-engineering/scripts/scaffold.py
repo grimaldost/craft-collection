@@ -37,13 +37,15 @@ def name_error(names: dict[str, str]) -> str | None:
     not yield a valid Python identifier, so the scaffolded package would be
     unimportable — catch it before `uv init` rather than emit a broken project."""
     if not names['package'].isidentifier():
-        return (f"resolves to package {names['package']!r}, which is not a valid "
-                'Python identifier (it likely starts with a digit or is empty) — '
-                'choose a name whose first character is a letter')
+        return (
+            f'resolves to package {names["package"]!r}, which is not a valid '
+            'Python identifier (it likely starts with a digit or is empty) — '
+            'choose a name whose first character is a letter'
+        )
     return None
 
 
-PYPROJECT_TEMPLATE = '''\
+PYPROJECT_TEMPLATE = """\
 [project]
 name = "{pypi}"
 version = "0.1.0"
@@ -85,9 +87,9 @@ known-first-party = ["{package}"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-'''
+"""
 
-PRECOMMIT = '''\
+PRECOMMIT = """\
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -102,7 +104,7 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
-'''
+"""
 
 
 def render_pyproject(project: str) -> str:
@@ -112,7 +114,8 @@ def render_pyproject(project: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description='Scaffold a Python project to the python-engineering standard.')
+        description='Scaffold a Python project to the python-engineering standard.'
+    )
     parser.add_argument('project', help='project name (kebab-case)')
     parser.add_argument('--path', default='.', help='parent directory (default: .)')
     args = parser.parse_args(argv)
@@ -132,8 +135,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         subprocess.run(['uv', 'init', '--lib', names['pypi']], cwd=parent, check=True)  # noqa: S603,S607
     except FileNotFoundError:
-        print('error: uv not found on PATH. Install uv (https://docs.astral.sh/uv/).',
-              file=sys.stderr)
+        print(
+            'error: uv not found on PATH. Install uv (https://docs.astral.sh/uv/).', file=sys.stderr
+        )
         return 1
     except subprocess.CalledProcessError as e:
         print(f'error: uv init failed ({e.returncode})', file=sys.stderr)

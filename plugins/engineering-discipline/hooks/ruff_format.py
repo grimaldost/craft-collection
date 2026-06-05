@@ -33,7 +33,7 @@ def main() -> int:
         return 0
     for args in (['uvx', 'ruff', 'format', f], ['uvx', 'ruff', 'check', '--fix', f]):
         try:
-            subprocess.run(args, capture_output=True, check=False)  # noqa: S603,S607
+            subprocess.run(args, capture_output=True, check=False)  # noqa: S603
         except FileNotFoundError:
             # uv/uvx not on PATH — formatting is best-effort, never fatal.
             print('ruff_format hook: uv not found; skipping', file=sys.stderr)

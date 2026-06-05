@@ -50,12 +50,16 @@ release** — Claude Code only pulls an update when the version changes. Do not 
 ## Development
 
 ```text
-uv run --no-project --with pyyaml -- python scripts/validate_plugins.py   # structural checks
-cd <script-dir> && python test_<name>.py                                  # run any test (no pytest needed)
+uv tool run pre-commit install         # enable commit gates: ruff, validator, hygiene
+uv tool run pre-commit run --all-files # run every gate now
+python scripts/run_tests.py            # run every test_*.py (no pytest needed)
+python scripts/validate_plugins.py     # structural marketplace checks (needs pyyaml)
 ```
 
-CI under `.github/workflows/` runs the validator + every `test_*.py` on push/PR
-(`validate.yml`) and a monthly toolchain drift check (`currency.yml`).
+Formatting and lint are governed by `ruff.toml` (100-column, single quotes). CI
+(`.github/workflows/validate.yml`) enforces ruff lint + format, the structural
+validator, and the full test suite on push/PR; `currency.yml` runs a monthly
+toolchain drift check.
 
 ## Layout
 

@@ -21,7 +21,9 @@ def test_flags_missing_ruff_single_quote_but_passes_src_layout():
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         # uv + groups present, but NO ruff single-quote config.
-        _make_project(root, '[build-system]\nrequires = ["uv_build"]\n\n[dependency-groups]\ndev = []\n')
+        _make_project(
+            root, '[build-system]\nrequires = ["uv_build"]\n\n[dependency-groups]\ndev = []\n'
+        )
         results = {cid: ok for cid, ok, _ in audit(root)}
         assert results['src-layout'] is True
         assert results['uv'] is True

@@ -10,7 +10,9 @@ from scaffold import name_error, render_pyproject, resolve_names
 
 def test_resolve_names():
     assert resolve_names('my-cool-tool') == {
-        'pypi': 'my-cool-tool', 'package': 'my_cool_tool', 'class': 'MyCoolTool',
+        'pypi': 'my-cool-tool',
+        'package': 'my_cool_tool',
+        'class': 'MyCoolTool',
     }
 
 

@@ -18,11 +18,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tomllib
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+import tomllib
 
 # stack.toml lives at the skill root, one level up from scripts/.
 DEFAULT_STACK = Path(__file__).resolve().parent.parent / 'stack.toml'
@@ -77,23 +78,38 @@ def fetch_pypi_version(package: str, pinned_min: str) -> dict:
     """
     url = f'https://pypi.org/pypi/{package}/json'
     try:
-        req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+        req = urllib.request.Request(url, headers={'Accept': 'application/json'})  # noqa: S310 - fixed https host
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 - fixed https host
             data = json.loads(resp.read().decode())
         version = data['info']['version']
         files = data.get('releases', {}).get(version) or []
         upload_date = (files[-1].get('upload_time_iso_8601', '') or '')[:10] if files else ''
         return {
-            'package': package, 'latest': version, 'pinned_min': pinned_min,
+            'package': package,
+            'latest': version,
+            'pinned_min': pinned_min,
             'upload_date': upload_date or 'unknown',
-            'behind': is_behind(pinned_min, version), 'status': 'ok',
+            'behind': is_behind(pinned_min, version),
+            'status': 'ok',
         }
     except urllib.error.HTTPError as e:
-        return {'package': package, 'latest': None, 'pinned_min': pinned_min,
-                'upload_date': None, 'behind': False, 'status': f'HTTP {e.code}'}
-    except Exception as e:  # noqa: BLE001 - report any fetch failure, never crash the run
-        return {'package': package, 'latest': None, 'pinned_min': pinned_min,
-                'upload_date': None, 'behind': False, 'status': str(e)}
+        return {
+            'package': package,
+            'latest': None,
+            'pinned_min': pinned_min,
+            'upload_date': None,
+            'behind': False,
+            'status': f'HTTP {e.code}',
+        }
+    except Exception as e:
+        return {
+            'package': package,
+            'latest': None,
+            'pinned_min': pinned_min,
+            'upload_date': None,
+            'behind': False,
+            'status': str(e),
+        }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -109,8 +125,17 @@ def main(argv: list[str] | None = None) -> int:
     behind = [r for r in results if r['behind']]
 
     if args.json:
-        print(json.dumps({'checked_at': now, 'tools': results,
-                          'precommit': precommit, 'behind_count': len(behind)}, indent=2))
+        print(
+            json.dumps(
+                {
+                    'checked_at': now,
+                    'tools': results,
+                    'precommit': precommit,
+                    'behind_count': len(behind),
+                },
+                indent=2,
+            )
+        )
         return 1 if behind else 0
 
     print(f'\n  python-engineering stack - version check ({now})')
@@ -132,8 +157,10 @@ def main(argv: list[str] | None = None) -> int:
     for name, rev in precommit.items():
         print(f'    {name}: {rev}')
     if behind:
-        print(f'\n  {len(behind)} tool(s) behind a newer minor/major. Run /refresh-stack '
-              'to review changelogs and update.')
+        print(
+            f'\n  {len(behind)} tool(s) behind a newer minor/major. Run /refresh-stack '
+            'to review changelogs and update.'
+        )
     print()
     return 1 if behind else 0
 

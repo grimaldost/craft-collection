@@ -32,39 +32,59 @@ def audit(project_dir: Path) -> list[tuple[str, bool, str]]:
     # src layout: a src/ dir containing at least one package directory.
     src = d / 'src'
     has_src = src.is_dir() and any(c.is_dir() for c in src.iterdir())
-    checks.append(('src-layout', has_src,
-                   'src/<package>/ present' if has_src else 'no src/ layout (flat layout?)'))
+    checks.append(
+        (
+            'src-layout',
+            has_src,
+            'src/<package>/ present' if has_src else 'no src/ layout (flat layout?)',
+        )
+    )
 
     # uv: uv.lock, the uv_build backend, or a [tool.uv] table.
     uses_uv = (d / 'uv.lock').is_file() or 'uv_build' in pyproject or '[tool.uv]' in pyproject
-    checks.append(('uv', uses_uv,
-                   'uv detected' if uses_uv else 'no uv.lock / uv_build / [tool.uv]'))
+    checks.append(
+        ('uv', uses_uv, 'uv detected' if uses_uv else 'no uv.lock / uv_build / [tool.uv]')
+    )
 
     # ruff single-quote formatting configured.
     ruff_sq = 'quote-style = "single"' in pyproject or "quote-style = 'single'" in pyproject
-    checks.append(('ruff-single-quote', ruff_sq,
-                   'ruff single-quote configured' if ruff_sq
-                   else 'missing [tool.ruff.format] quote-style = "single"'))
+    checks.append(
+        (
+            'ruff-single-quote',
+            ruff_sq,
+            'ruff single-quote configured'
+            if ruff_sq
+            else 'missing [tool.ruff.format] quote-style = "single"',
+        )
+    )
 
     # dev deps via PEP 735 dependency-groups.
     has_groups = '[dependency-groups]' in pyproject
-    checks.append(('dependency-groups', has_groups,
-                   '[dependency-groups] used' if has_groups
-                   else 'dev deps should use [dependency-groups] (PEP 735)'))
+    checks.append(
+        (
+            'dependency-groups',
+            has_groups,
+            '[dependency-groups] used'
+            if has_groups
+            else 'dev deps should use [dependency-groups] (PEP 735)',
+        )
+    )
 
     # pip-audit wired in deps or a CI workflow.
     ci_files = list(d.glob('.github/workflows/*.yml')) + list(d.glob('.github/workflows/*.yaml'))
     ci = ' '.join(_read(p) for p in ci_files)
     has_audit = 'pip-audit' in pyproject or 'pip-audit' in ci
-    checks.append(('pip-audit', has_audit,
-                   'pip-audit present' if has_audit else 'no pip-audit in deps or CI'))
+    checks.append(
+        ('pip-audit', has_audit, 'pip-audit present' if has_audit else 'no pip-audit in deps or CI')
+    )
 
     return checks
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description='Audit a project against the python-engineering standard.')
+        description='Audit a project against the python-engineering standard.'
+    )
     parser.add_argument('path', nargs='?', default='.', help='project directory (default: .)')
     args = parser.parse_args(argv)
 

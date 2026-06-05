@@ -40,8 +40,8 @@ class AgentRun:
     plugins_loaded: list[str] = field(default_factory=list)
     plugin_errors: list = field(default_factory=list)
     usage: dict = field(default_factory=dict)
-    assistant_text: str = ''   # all assistant message text blocks (mid-stream + final)
-    written_text: str = ''     # contents written via Write/Edit tool calls
+    assistant_text: str = ''  # all assistant message text blocks (mid-stream + final)
+    written_text: str = ''  # contents written via Write/Edit tool calls
     raw: list = field(default_factory=list)
 
     def plugin_loaded(self, name: str) -> bool:
@@ -90,6 +90,7 @@ def map_concurrent(items: Iterable, fn, concurrency: int = 4) -> list:
     if concurrency <= 1 or len(items) <= 1:
         return [fn(x) for x in items]
     from concurrent.futures import ThreadPoolExecutor
+
     with ThreadPoolExecutor(max_workers=concurrency) as ex:
         return list(ex.map(fn, items))
 
@@ -169,11 +170,14 @@ def parse_stream(lines: Iterable[str]) -> AgentRun:
                 if isinstance(txt, str):
                     texts.append(txt)
                 continue
-            name = block.get('name')                      # tool_use block
+            name = block.get('name')  # tool_use block
             inp = block.get('input') or {}
             if name == 'Skill':
-                value = (inp.get('name') or inp.get('skill') or inp.get('command') or ''
-                         if isinstance(inp, dict) else str(inp))
+                value = (
+                    inp.get('name') or inp.get('skill') or inp.get('command') or ''
+                    if isinstance(inp, dict)
+                    else str(inp)
+                )
                 if value:
                     run.activated_skills.add(value)
             elif name in _WRITE_TOOLS and isinstance(inp, dict):
@@ -183,22 +187,35 @@ def parse_stream(lines: Iterable[str]) -> AgentRun:
     return run
 
 
-def build_command(*, plugin_dir: str | None, allowed_tools: str, model: str,
-                  max_turns: int, max_budget_usd: float, stream: bool) -> list[str]:
+def build_command(
+    *,
+    plugin_dir: str | None,
+    allowed_tools: str,
+    model: str,
+    max_turns: int,
+    max_budget_usd: float,
+    stream: bool,
+) -> list[str]:
     """Assemble the `claude -p` argv. Pure — no I/O. No --bare (it strips login);
     isolation comes from a clean CLAUDE_CONFIG_DIR passed to run_agent."""
     cmd = [
-        'claude', '-p',
-        '--permission-mode', 'bypassPermissions',
+        'claude',
+        '-p',
+        '--permission-mode',
+        'bypassPermissions',
         '--no-session-persistence',
-        '--model', model,
-        '--max-turns', str(max_turns),
-        '--allowed-tools', allowed_tools,
+        '--model',
+        model,
+        '--max-turns',
+        str(max_turns),
+        '--allowed-tools',
+        allowed_tools,
     ]
     if max_budget_usd:
         cmd += ['--max-budget-usd', str(max_budget_usd)]
-    cmd += (['--output-format', 'stream-json', '--verbose'] if stream
-            else ['--output-format', 'json'])
+    cmd += (
+        ['--output-format', 'stream-json', '--verbose'] if stream else ['--output-format', 'json']
+    )
     if plugin_dir:
         cmd += ['--plugin-dir', str(plugin_dir)]
     return cmd
@@ -219,17 +236,32 @@ def _parse_proc(stdout: str, stream: bool) -> AgentRun:
     )
 
 
-def run_agent(prompt: str, *, plugin_dir: str | None = None, allowed_tools: str = '',
-              model: str = 'claude-sonnet-4-6', max_turns: int = 8,
-              max_budget_usd: float = 0.5, timeout: int = 300, stream: bool = True,
-              max_attempts: int = 3, config_dir: str | None = None,
-              cwd: str | None = None) -> AgentRun:
+def run_agent(
+    prompt: str,
+    *,
+    plugin_dir: str | None = None,
+    allowed_tools: str = '',
+    model: str = 'claude-sonnet-4-6',
+    max_turns: int = 8,
+    max_budget_usd: float = 0.5,
+    timeout: int = 300,
+    stream: bool = True,
+    max_attempts: int = 3,
+    config_dir: str | None = None,
+    cwd: str | None = None,
+) -> AgentRun:
     """Run one headless `claude -p`, feeding the prompt on stdin. `config_dir`
     sets CLAUDE_CONFIG_DIR (the isolated, authed-but-skill-free config); `cwd`
     sets a neutral working directory. Retries transient failures; never timeouts.
     """
-    cmd = build_command(plugin_dir=plugin_dir, allowed_tools=allowed_tools, model=model,
-                        max_turns=max_turns, max_budget_usd=max_budget_usd, stream=stream)
+    cmd = build_command(
+        plugin_dir=plugin_dir,
+        allowed_tools=allowed_tools,
+        model=model,
+        max_turns=max_turns,
+        max_budget_usd=max_budget_usd,
+        stream=stream,
+    )
     env = os.environ.copy()
     if config_dir:
         env['CLAUDE_CONFIG_DIR'] = config_dir
@@ -237,8 +269,14 @@ def run_agent(prompt: str, *, plugin_dir: str | None = None, allowed_tools: str 
     for attempt in range(1, max_attempts + 1):
         try:
             proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
-                cmd, input=prompt, capture_output=True, text=True,
-                encoding='utf-8', timeout=timeout, env=env, cwd=cwd,
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                timeout=timeout,
+                env=env,
+                cwd=cwd,
             )
         except subprocess.TimeoutExpired:
             return AgentRun(is_error=True, result_text=f'TIMEOUT after {timeout}s')

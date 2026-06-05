@@ -23,8 +23,7 @@ def _gate(value, threshold) -> str:
     return 'PASS' if value >= threshold else 'FAIL'
 
 
-def build_scorecard(triggers: dict, grading: dict, gates: dict,
-                    command_first=()) -> list[dict]:
+def build_scorecard(triggers: dict, grading: dict, gates: dict, command_first=()) -> list[dict]:
     """Merge the two report blobs into one row per skill, with gate flags. Pure.
 
     `command_first` skills (invoked mainly via their slash command, like a panel
@@ -35,25 +34,28 @@ def build_scorecard(triggers: dict, grading: dict, gates: dict,
     for skill in sorted(set(triggers) | set(grading)):
         t = triggers.get(skill) or {}
         g = (grading.get(skill) or {}).get('summary') or {}
-        recall_gate = ('info' if skill in command_first
-                       else _gate(t.get('recall'), gates['trigger_recall']))
-        rows.append({
-            'skill': skill,
-            'recall': t.get('recall'),
-            'recall_ci': t.get('recall_ci'),
-            'recall_gate': recall_gate,
-            'specificity': t.get('specificity'),
-            'specificity_ci': t.get('specificity_ci'),
-            'specificity_gate': _gate(t.get('specificity'), gates['trigger_specificity']),
-            'correct_usage': g.get('correct_usage_rate'),
-            'correct_usage_ci': g.get('correct_usage_ci'),
-            'correct_usage_gate': _gate(g.get('correct_usage_rate'), gates['correct_usage']),
-            'judge_agreement': g.get('mean_agreement'),
-            'with_win_rate': g.get('with_win_rate'),
-            'without_win_rate': g.get('without_win_rate'),
-            'tie_rate': g.get('tie_rate'),
-            'with_activation_rate': g.get('with_activation_rate'),
-        })
+        recall_gate = (
+            'info' if skill in command_first else _gate(t.get('recall'), gates['trigger_recall'])
+        )
+        rows.append(
+            {
+                'skill': skill,
+                'recall': t.get('recall'),
+                'recall_ci': t.get('recall_ci'),
+                'recall_gate': recall_gate,
+                'specificity': t.get('specificity'),
+                'specificity_ci': t.get('specificity_ci'),
+                'specificity_gate': _gate(t.get('specificity'), gates['trigger_specificity']),
+                'correct_usage': g.get('correct_usage_rate'),
+                'correct_usage_ci': g.get('correct_usage_ci'),
+                'correct_usage_gate': _gate(g.get('correct_usage_rate'), gates['correct_usage']),
+                'judge_agreement': g.get('mean_agreement'),
+                'with_win_rate': g.get('with_win_rate'),
+                'without_win_rate': g.get('without_win_rate'),
+                'tie_rate': g.get('tie_rate'),
+                'with_activation_rate': g.get('with_activation_rate'),
+            }
+        )
     return rows
 
 
@@ -67,19 +69,24 @@ def _ci(ci) -> str:
 
 def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
     out = ['# Skill eval scorecard', '']
-    out += ['Each cell is a rate in [0,1] with a Wilson 95% CI; gate verdicts in '
-            'parentheses. Trigger axis = does the right skill auto-fire (recall) and '
-            'stay quiet on near-misses (specificity). Usage axis = does the WITH-skill '
-            'output satisfy the skill\'s discipline rubric. With/without = swap-order '
-            'pairwise win-rate of the skill vs no-skill. A recall verdict of (info) '
-            'marks a command-first skill (e.g. review-panel) whose auto-fire rate is '
-            'reported but not gated — it is invoked deliberately via its slash command.',
-            '']
+    out += [
+        'Each cell is a rate in [0,1] with a Wilson 95% CI; gate verdicts in '
+        'parentheses. Trigger axis = does the right skill auto-fire (recall) and '
+        'stay quiet on near-misses (specificity). Usage axis = does the WITH-skill '
+        "output satisfy the skill's discipline rubric. With/without = swap-order "
+        'pairwise win-rate of the skill vs no-skill. A recall verdict of (info) '
+        'marks a command-first skill (e.g. review-panel) whose auto-fire rate is '
+        'reported but not gated — it is invoked deliberately via its slash command.',
+        '',
+    ]
 
     # main table
-    out += ['## Per-skill summary', '',
-            '| Skill | Recall | Specificity | Correct-usage | Judge agr | WITH win | WITHOUT win | Tie | Activation |',
-            '|---|---|---|---|---|---|---|---|---|']
+    out += [
+        '## Per-skill summary',
+        '',
+        '| Skill | Recall | Specificity | Correct-usage | Judge agr | WITH win | WITHOUT win | Tie | Activation |',
+        '|---|---|---|---|---|---|---|---|---|',
+    ]
     for r in rows:
         out.append(
             f'| `{r["skill"]}` '
@@ -88,7 +95,8 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
             f'| {_pct(r["correct_usage"])}{_ci(r["correct_usage_ci"])} ({r["correct_usage_gate"]}) '
             f'| {_pct(r["judge_agreement"])} '
             f'| {_pct(r["with_win_rate"])} | {_pct(r["without_win_rate"])} | {_pct(r["tie_rate"])} '
-            f'| {_pct(r["with_activation_rate"])} |')
+            f'| {_pct(r["with_activation_rate"])} |'
+        )
     out.append('')
 
     # trigger misses (description-tuning signal)
@@ -96,28 +104,34 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
     any_miss = False
     for skill in sorted(triggers):
         for pq in triggers[skill].get('per_query', []):
-            miss = ((pq['should_trigger'] and pq['rate'] < 1.0)
-                    or (not pq['should_trigger'] and pq['rate'] > 0.0))
+            miss = (pq['should_trigger'] and pq['rate'] < 1.0) or (
+                not pq['should_trigger'] and pq['rate'] > 0.0
+            )
             if miss:
                 any_miss = True
                 kind = 'MISSED positive' if pq['should_trigger'] else 'FALSE FIRE on negative'
-                out.append(f'- `{skill}` — {kind} (fired {pq["k"]}/{pq["repeats"]}): '
-                           f'"{pq["query"]}"')
+                out.append(
+                    f'- `{skill}` — {kind} (fired {pq["k"]}/{pq["repeats"]}): "{pq["query"]}"'
+                )
     if not any_miss:
         out.append('- none — every positive fired and every negative stayed quiet.')
     out.append('')
 
     # per-task with/without detail
-    out += ['## With/without per task', '',
-            '| Skill | Task | Usage pass-rate | WITH/WITHOUT/tie | Activation |',
-            '|---|---|---|---|---|']
+    out += [
+        '## With/without per task',
+        '',
+        '| Skill | Task | Usage pass-rate | WITH/WITHOUT/tie | Activation |',
+        '|---|---|---|---|---|',
+    ]
     for skill in sorted(grading):
         for t in grading[skill].get('tasks', []):
             pw = t.get('pairwise', {})
             out.append(
                 f'| `{skill}` | {t["task_id"]} | {_pct(t.get("with_pass_rate"))} '
                 f'| {pw.get("with_wins", 0)}/{pw.get("without_wins", 0)}/{pw.get("ties", 0)} '
-                f'| {_pct(t.get("with_activation_rate"))} |')
+                f'| {_pct(t.get("with_activation_rate"))} |'
+            )
     out.append('')
     return '\n'.join(out)
 
@@ -129,7 +143,9 @@ def main(argv: list[str] | None = None) -> int:
     cfg = json.loads((REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
     triggers_path = REPORT_DIR / 'triggers.json'
     grading_path = REPORT_DIR / 'grading.json'
-    triggers = json.loads(triggers_path.read_text(encoding='utf-8')) if triggers_path.exists() else {}
+    triggers = (
+        json.loads(triggers_path.read_text(encoding='utf-8')) if triggers_path.exists() else {}
+    )
     grading = json.loads(grading_path.read_text(encoding='utf-8')) if grading_path.exists() else {}
     if not triggers and not grading:
         print('no report/triggers.json or report/grading.json found — run the eval first')

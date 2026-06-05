@@ -32,45 +32,37 @@ SPAWNS_PER_UNIT = 5  # 2 arms + 1 pointwise (judge_repeats=1) + 2 pairwise order
 
 # One holistic pairwise criterion per skill (axis 4 head-to-head).
 PAIRWISE_CRITERION = {
-    'journaling-sessions':
-        'which response better captures the session as structured, separable, '
-        'retrieval-ready memory entries — concrete reasoning inline, anti-patterns '
-        'and dead-ends captured, one idea per entry — that a future session could '
-        'find and reuse in isolation',
-    'context-handoff':
-        'which response is the better self-contained, paste-ready hand-off brief: '
-        'states facts not references, inlines the concrete specifics an executor '
-        'with zero prior context needs, and uses the correct mode framing',
-    'data-engineering-discipline':
-        'which response better applies data-engineering discipline — pins the '
-        'contract/baseline, verifies the observable source over assumptions, '
-        'proposes real-data parity checks, and keeps changes intentional and '
-        'traceable rather than silently altering semantics',
-    'python-engineering':
-        'which response better follows modern Python engineering standards — uv '
-        '(not pip/poetry/virtualenv), src layout, ruff lint+format, static type '
-        'checking, pytest, fail-fast pre-commit/CI gates, and typed startup config',
-    'toolkit-awareness':
-        'which response is the better Claude Code definition-of-done — references '
-        'the installed slash commands and the owning convention/schema skills by '
-        'name instead of restating them, names the quality gates, and invents no '
-        'capabilities that were not listed as installed',
-    'review-panel':
-        'which response better convenes a genuinely independent fresh-eyes review '
-        'to break the author\'s anchoring — a neutral brief that strips the leaning, '
-        'diverse adversarial lenses, structured comparable output, and asking before '
-        'firing — rather than just offering one more opinion from the same context',
-    'evaluate-skill':
-        'which response better lays out a BEHAVIORAL evaluation of the skill — the '
-        'trigger recall/specificity, correct-usage, and with/without baseline axes, '
-        'with positive AND near-miss trigger prompts and a genuinely isolated '
-        'skill-free baseline — rather than a vague or design-only assessment',
-    'consolidate-knowledge':
-        'which response better consolidates the journal entries into durable '
-        'guidance — clusters related entries, synthesizes a generalization each '
-        'cluster supports, promotes only the reinforced and specific ones (leaving '
-        'one-offs and platitudes out), keeps the concrete anchors, and reconciles '
-        'supersession — rather than just re-summarizing the entries',
+    'journaling-sessions': 'which response better captures the session as structured, separable, '
+    'retrieval-ready memory entries — concrete reasoning inline, anti-patterns '
+    'and dead-ends captured, one idea per entry — that a future session could '
+    'find and reuse in isolation',
+    'context-handoff': 'which response is the better self-contained, paste-ready hand-off brief: '
+    'states facts not references, inlines the concrete specifics an executor '
+    'with zero prior context needs, and uses the correct mode framing',
+    'data-engineering-discipline': 'which response better applies data-engineering discipline — pins the '
+    'contract/baseline, verifies the observable source over assumptions, '
+    'proposes real-data parity checks, and keeps changes intentional and '
+    'traceable rather than silently altering semantics',
+    'python-engineering': 'which response better follows modern Python engineering standards — uv '
+    '(not pip/poetry/virtualenv), src layout, ruff lint+format, static type '
+    'checking, pytest, fail-fast pre-commit/CI gates, and typed startup config',
+    'toolkit-awareness': 'which response is the better Claude Code definition-of-done — references '
+    'the installed slash commands and the owning convention/schema skills by '
+    'name instead of restating them, names the quality gates, and invents no '
+    'capabilities that were not listed as installed',
+    'review-panel': 'which response better convenes a genuinely independent fresh-eyes review '
+    "to break the author's anchoring — a neutral brief that strips the leaning, "
+    'diverse adversarial lenses, structured comparable output, and asking before '
+    'firing — rather than just offering one more opinion from the same context',
+    'evaluate-skill': 'which response better lays out a BEHAVIORAL evaluation of the skill — the '
+    'trigger recall/specificity, correct-usage, and with/without baseline axes, '
+    'with positive AND near-miss trigger prompts and a genuinely isolated '
+    'skill-free baseline — rather than a vague or design-only assessment',
+    'consolidate-knowledge': 'which response better consolidates the journal entries into durable '
+    'guidance — clusters related entries, synthesizes a generalization each '
+    'cluster supports, promotes only the reinforced and specific ones (leaving '
+    'one-offs and platitudes out), keeps the concrete anchors, and reconciles '
+    'supersession — rather than just re-summarizing the entries',
 }
 
 
@@ -84,8 +76,10 @@ def _pairwise_criterion(skill: str) -> str:
     override = TASKS_DIR / skill / 'pairwise.txt'
     if override.exists():
         return override.read_text(encoding='utf-8').strip()
-    return ('which response better accomplishes the task with the discipline and rigor '
-            'the skill is meant to add, versus a generic attempt without it')
+    return (
+        'which response better accomplishes the task with the discipline and rigor '
+        'the skill is meant to add, versus a generic attempt without it'
+    )
 
 
 def _mean(xs) -> float:
@@ -109,7 +103,9 @@ def _read_created_files(cwd: str, cap: int = 20000) -> str:
     for p in sorted(Path(cwd).rglob('*')):
         if p.is_file():
             try:
-                chunks.append(f'--- file: {p.name} ---\n{p.read_text(encoding="utf-8", errors="replace")}')
+                chunks.append(
+                    f'--- file: {p.name} ---\n{p.read_text(encoding="utf-8", errors="replace")}'
+                )
             except OSError:
                 continue
     return '\n\n'.join(chunks)[:cap]
@@ -137,22 +133,39 @@ def _run_arm_real(prompt: str, *, plugin_dir: str | None, cfg: dict, config_dir:
     file writes, on-disk files)."""
     cwd = tempfile.mkdtemp(prefix='eval_task_')
     try:
-        run = run_agent(prompt, plugin_dir=plugin_dir,
-                        allowed_tools=cfg['allowed_tools_task'], model=cfg['agent_model'],
-                        max_turns=cfg['max_turns'], max_budget_usd=cfg['max_budget_usd'],
-                        timeout=cfg['timeout_seconds'], stream=True,
-                        config_dir=config_dir, cwd=cwd)
+        run = run_agent(
+            prompt,
+            plugin_dir=plugin_dir,
+            allowed_tools=cfg['allowed_tools_task'],
+            model=cfg['agent_model'],
+            max_turns=cfg['max_turns'],
+            max_budget_usd=cfg['max_budget_usd'],
+            timeout=cfg['timeout_seconds'],
+            stream=True,
+            config_dir=config_dir,
+            cwd=cwd,
+        )
         files = _read_created_files(cwd)
     finally:
         cleanup_dir(cwd)
     return run, _assemble_output(run, files)
 
 
-def grade_skill(skill: str, tasks: list[dict], rubric: list[dict], cfg: dict, *,
-                plugin_dir: str | None, config_with: str | None,
-                config_without: str | None, pairwise_criterion: str,
-                concurrency: int = 4, run_arm=_run_arm_real,
-                judge_point=judge_pointwise, judge_pair=judge_pairwise) -> dict:
+def grade_skill(
+    skill: str,
+    tasks: list[dict],
+    rubric: list[dict],
+    cfg: dict,
+    *,
+    plugin_dir: str | None,
+    config_with: str | None,
+    config_without: str | None,
+    pairwise_criterion: str,
+    concurrency: int = 4,
+    run_arm=_run_arm_real,
+    judge_point=judge_pointwise,
+    judge_pair=judge_pairwise,
+) -> dict:
     """Run every (task x repeat) unit concurrently; each unit does WITH + WITHOUT
     arms then pointwise + pairwise judging. Returns the per-skill grading blob.
 
@@ -166,23 +179,32 @@ def grade_skill(skill: str, tasks: list[dict], rubric: list[dict], cfg: dict, *,
     def do_unit(unit):
         task, r = unit
         prompt = build_task_prompt(skill, task)
-        with_run, with_out = run_arm(prompt, plugin_dir=plugin_dir, cfg=cfg,
-                                     config_dir=config_with)
-        without_run, without_out = run_arm(prompt, plugin_dir=None, cfg=cfg,
-                                            config_dir=config_without)
-        pw = judge_point(prompt, with_out, rubric, model=cfg['judge_model'],
-                         repeats=cfg['judge_repeats'])
-        pair = judge_pair(prompt, with_out, without_out, pairwise_criterion,
-                          model=cfg['judge_model'])
+        with_run, with_out = run_arm(prompt, plugin_dir=plugin_dir, cfg=cfg, config_dir=config_with)
+        without_run, without_out = run_arm(
+            prompt, plugin_dir=None, cfg=cfg, config_dir=config_without
+        )
+        pw = judge_point(
+            prompt, with_out, rubric, model=cfg['judge_model'], repeats=cfg['judge_repeats']
+        )
+        pair = judge_pair(
+            prompt, with_out, without_out, pairwise_criterion, model=cfg['judge_model']
+        )
         return {
-            'task_id': task['id'], 'repeat': r,
-            'with_pass': bool(pw['pass']), 'with_score': pw['score'],
-            'with_agreement': pw['agreement'], 'pairwise_winner': pair['winner'],
+            'task_id': task['id'],
+            'repeat': r,
+            'with_pass': bool(pw['pass']),
+            'with_score': pw['score'],
+            'with_agreement': pw['agreement'],
+            'pairwise_winner': pair['winner'],
             'pairwise_orders': [pair.get('order1'), pair.get('order2')],
             'with_activated': with_run.activated(skill),
-            'with_cost': with_run.cost_usd or 0.0, 'without_cost': without_run.cost_usd or 0.0,
-            'with_error': with_run.is_error, 'without_error': without_run.is_error,
-            'criteria': (pw.get('verdicts') or [{}])[0].get('criteria'),  # per-criterion met+evidence
+            'with_cost': with_run.cost_usd or 0.0,
+            'without_cost': without_run.cost_usd or 0.0,
+            'with_error': with_run.is_error,
+            'without_error': without_run.is_error,
+            'criteria': (pw.get('verdicts') or [{}])[0].get(
+                'criteria'
+            ),  # per-criterion met+evidence
         }
 
     records = map_concurrent(units, do_unit, concurrency=concurrency)
@@ -198,20 +220,23 @@ def _summarize(skill: str, records: list[dict]) -> dict:
     for tid, recs in by_task.items():
         n = len(recs)
         passes = sum(1 for x in recs if x['with_pass'])
-        tasks_out.append({
-            'task_id': tid, 'n': n,
-            'with_pass_rate': pass_rate(passes, n),
-            'with_pass_ci': list(wilson_interval(passes, n)),
-            'mean_score': _mean(x['with_score'] for x in recs),
-            'mean_agreement': _mean(x['with_agreement'] for x in recs),
-            'with_activation_rate': pass_rate(sum(1 for x in recs if x['with_activated']), n),
-            'pairwise': {
-                'with_wins': sum(1 for x in recs if x['pairwise_winner'] == 'A'),
-                'without_wins': sum(1 for x in recs if x['pairwise_winner'] == 'B'),
-                'ties': sum(1 for x in recs if x['pairwise_winner'] == 'tie'),
-            },
-            'records': recs,
-        })
+        tasks_out.append(
+            {
+                'task_id': tid,
+                'n': n,
+                'with_pass_rate': pass_rate(passes, n),
+                'with_pass_ci': list(wilson_interval(passes, n)),
+                'mean_score': _mean(x['with_score'] for x in recs),
+                'mean_agreement': _mean(x['with_agreement'] for x in recs),
+                'with_activation_rate': pass_rate(sum(1 for x in recs if x['with_activated']), n),
+                'pairwise': {
+                    'with_wins': sum(1 for x in recs if x['pairwise_winner'] == 'A'),
+                    'without_wins': sum(1 for x in recs if x['pairwise_winner'] == 'B'),
+                    'ties': sum(1 for x in recs if x['pairwise_winner'] == 'tie'),
+                },
+                'records': recs,
+            }
+        )
 
     n = len(records)
     passes = sum(1 for x in records if x['with_pass'])
@@ -226,7 +251,8 @@ def _summarize(skill: str, records: list[dict]) -> dict:
         'mean_score': _mean(x['with_score'] for x in records),
         'mean_agreement': _mean(x['with_agreement'] for x in records),
         'with_activation_rate': pass_rate(sum(1 for x in records if x['with_activated']), n),
-        'with_win_rate': pass_rate(a, n), 'without_win_rate': pass_rate(b, n),
+        'with_win_rate': pass_rate(a, n),
+        'without_win_rate': pass_rate(b, n),
         'tie_rate': pass_rate(ties, n),
         'error_runs': sum(1 for x in records if x['with_error'] or x['without_error']),
         'cost_usd': round(cost, 4),
@@ -266,26 +292,35 @@ def main(argv: list[str] | None = None) -> int:
     tasks = json.loads((TASKS_DIR / skill / 'tasks.json').read_text(encoding='utf-8'))
     rubric = json.loads((TASKS_DIR / skill / 'rubric.json').read_text(encoding='utf-8'))
     if args.limit:
-        tasks = tasks[:args.limit]
+        tasks = tasks[: args.limit]
     n_units = len(tasks) * cfg['agent_repeats']
     n_spawn = n_units * SPAWNS_PER_UNIT
     plugin = cfg['plugin_of_skill'][skill]
-    print(f'skill={skill} plugin={plugin} tasks={len(tasks)} repeats={cfg["agent_repeats"]} '
-          f'-> {n_units} units x {SPAWNS_PER_UNIT} = {n_spawn} spawns '
-          f'(<= ${n_spawn * cfg["max_budget_usd"]:.2f} ceiling)')
+    print(
+        f'skill={skill} plugin={plugin} tasks={len(tasks)} repeats={cfg["agent_repeats"]} '
+        f'-> {n_units} units x {SPAWNS_PER_UNIT} = {n_spawn} spawns '
+        f'(<= ${n_spawn * cfg["max_budget_usd"]:.2f} ceiling)'
+    )
     if args.dry_run:
         for t in tasks:
             print(f'  task {t["id"]}: {t["prompt"][:70]}')
         return 0
 
     plugin_dir = str(REPO / 'plugins' / plugin)
-    config_with = make_isolated_config()       # --plugin-dir runs cache the plugin here
-    config_without = make_isolated_config()    # never sees --plugin-dir -> stays skill-free
+    config_with = make_isolated_config()  # --plugin-dir runs cache the plugin here
+    config_without = make_isolated_config()  # never sees --plugin-dir -> stays skill-free
     try:
-        blob = grade_skill(skill, tasks, rubric, cfg, plugin_dir=plugin_dir,
-                           config_with=config_with, config_without=config_without,
-                           pairwise_criterion=_pairwise_criterion(skill),
-                           concurrency=args.concurrency)
+        blob = grade_skill(
+            skill,
+            tasks,
+            rubric,
+            cfg,
+            plugin_dir=plugin_dir,
+            config_with=config_with,
+            config_without=config_without,
+            pairwise_criterion=_pairwise_criterion(skill),
+            concurrency=args.concurrency,
+        )
     finally:
         cleanup_dir(config_with)
         cleanup_dir(config_without)
@@ -295,11 +330,15 @@ def main(argv: list[str] | None = None) -> int:
     gate = cfg['gates']['correct_usage']
     clo, chi = s['correct_usage_ci']
     usage_ok = 'PASS' if s['correct_usage_rate'] >= gate else 'FAIL'
-    print(f'\ncorrect_usage = {s["correct_usage_rate"]:.2f}  CI[{clo:.2f},{chi:.2f}]  '
-          f'gate>={gate}  {usage_ok}   (mean_score={s["mean_score"]:.2f}, '
-          f'judge_agreement={s["mean_agreement"]:.2f})')
-    print(f'with/without  = WITH wins {s["with_win_rate"]:.2f} | '
-          f'WITHOUT wins {s["without_win_rate"]:.2f} | tie {s["tie_rate"]:.2f}')
+    print(
+        f'\ncorrect_usage = {s["correct_usage_rate"]:.2f}  CI[{clo:.2f},{chi:.2f}]  '
+        f'gate>={gate}  {usage_ok}   (mean_score={s["mean_score"]:.2f}, '
+        f'judge_agreement={s["mean_agreement"]:.2f})'
+    )
+    print(
+        f'with/without  = WITH wins {s["with_win_rate"]:.2f} | '
+        f'WITHOUT wins {s["without_win_rate"]:.2f} | tie {s["tie_rate"]:.2f}'
+    )
     print(f'activation    = {s["with_activation_rate"]:.2f} (WITH arm fired the skill)')
     print(f'cost=${s["cost_usd"]}  error_runs={s["error_runs"]}/{s["n_records"]}')
     return 0
