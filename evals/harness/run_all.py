@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive the full focused eval: triggers + grading for all 3 skills, then the
+"""Drive the full focused eval: triggers + grading for every skill in config, then the
 scorecard. Skills run sequentially; each stage is internally concurrent, so the
 number of live `claude -p` processes stays bounded by --concurrency.
 

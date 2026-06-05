@@ -33,27 +33,36 @@ _DESC_LIMIT = 100
 
 
 def _read_frontmatter(md: Path) -> dict[str, str]:
-    """Pull simple `key: value` pairs from a leading `---` frontmatter block.
-    No YAML dependency; only top-level scalar keys. {} on any error."""
+    """Pull simple `key: value` pairs from a leading `---` frontmatter block,
+    including `>` / `|` folded or literal block scalars (a `description: >` whose
+    text continues on the following indented lines — a common pattern that a naive
+    first-line parser truncates to just ">"). No YAML dependency; top-level keys
+    only. {} on any error."""
     try:
-        text = md.read_text(encoding='utf-8')
+        lines = md.read_text(encoding='utf-8').splitlines()
     except (OSError, UnicodeDecodeError):
         return {}
-    if not text.startswith('---'):
+    if not lines or lines[0].strip() != '---':
         return {}
     out: dict[str, str] = {}
-    in_fm = False
-    for i, line in enumerate(text.splitlines()):
-        if i == 0 and line.strip() == '---':
-            in_fm = True
-            continue
-        if in_fm and line.strip() == '---':
-            break
-        if in_fm and ':' in line:
+    i = 1
+    while i < len(lines) and lines[i].strip() != '---':
+        line = lines[i]
+        if ':' in line and not line[:1].isspace():  # a top-level key, not a nested line
             key, _, val = line.partition(':')
-            key = key.strip()
+            key, val = key.strip(), val.strip()
+            if val in ('>', '|', '>-', '|-', '>+', '|+'):  # block scalar — gather body
+                body, i = [], i + 1
+                while i < len(lines) and (not lines[i].strip() or lines[i][:1].isspace()):
+                    body.append(lines[i].strip())
+                    i += 1
+                val = ' '.join(s for s in body if s)
+                if key and key not in out:
+                    out[key] = val
+                continue
             if key and key not in out:  # first occurrence wins
-                out[key] = val.strip()
+                out[key] = val
+        i += 1
     return out
 
 

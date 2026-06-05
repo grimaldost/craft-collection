@@ -9,7 +9,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from scan_toolkit import _plugins_from_json, scan
+from scan_toolkit import _plugins_from_json, _read_frontmatter, scan
 
 
 def _make_tree(root: Path) -> None:
@@ -57,8 +57,22 @@ def test_plugins_from_json_uses_id_and_hides_enabled():
     assert all('?' not in r['name'] and 'True' not in r['name'] for r in rows)
 
 
+def test_read_frontmatter_handles_folded_scalar():
+    # A `description: >` folded block must be captured in full, not truncated to ">".
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / 'SKILL.md'
+        p.write_text(
+            '---\nname: folded\ndescription: >\n  First line of the\n'
+            '  folded description.\nuser-invocable: true\n---\nbody\n', encoding='utf-8')
+        fm = _read_frontmatter(p)
+        assert fm['name'] == 'folded'
+        assert fm['description'] == 'First line of the folded description.'
+        assert fm['user-invocable'] == 'true'
+
+
 if __name__ == '__main__':
     test_scan_enumerates_components()
     test_missing_dirs_do_not_raise()
     test_plugins_from_json_uses_id_and_hides_enabled()
+    test_read_frontmatter_handles_folded_scalar()
     print('ok: all scan_toolkit tests passed')
