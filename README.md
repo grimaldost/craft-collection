@@ -11,7 +11,7 @@ A Claude Code plugin marketplace with two plugins:
 ## Install
 
 ```text
-/plugin marketplace add grimaldo-stanzani/craft-collection
+/plugin marketplace add grimaldost/craft-collection
 /plugin install engineering-discipline@craft-collection
 /plugin install session-workflow@craft-collection
 ```

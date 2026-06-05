@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Capture session knowledge into structured entries and consolidate them into durable guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels, behaviorally evaluate skills, and keep live awareness of the installed toolkit.",
   "author": { "name": "Grimaldo Stanzani", "email": "grimaldosj93@gmail.com" },
-  "repository": "https://github.com/grimaldo-stanzani/craft-collection",
+  "repository": "https://github.com/grimaldost/craft-collection",
   "license": "MIT",
   "keywords": ["journal", "handoff", "session", "knowledge-capture", "consolidate", "review", "skill-eval", "toolkit"]
 }
