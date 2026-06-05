@@ -28,7 +28,7 @@ attention *every time it loads*. To deserve existence a skill must:
 - **Be correct and concrete.** Actionable, current, specific guidance a model will
   actually follow — not vague platitudes or a lecture it will skim past.
 
-## The six skills to review — READ them, do not assume
+## The seven skills to review — READ them, do not assume
 
 Repo root: `C:\Users\grima\Documents\skill-collection`. For each skill, read its
 `SKILL.md` in full, list its `references/` and `scripts/`, and open the one or two
@@ -37,13 +37,20 @@ reference/script files most relevant to your judgment.
 1. **journaling-sessions** — `plugins/session-workflow/skills/journaling-sessions/`
 2. **context-handoff** — `plugins/session-workflow/skills/context-handoff/`
 3. **toolkit-awareness** — `plugins/session-workflow/skills/toolkit-awareness/`
-4. **python-engineering** — `plugins/engineering-discipline/skills/python-engineering/`
-5. **data-engineering-discipline** — `plugins/engineering-discipline/skills/data-engineering-discipline/`
-6. **refresh-stack** — `plugins/engineering-discipline/skills/refresh-stack/`
+4. **review-panel** — `plugins/session-workflow/skills/review-panel/`
+5. **python-engineering** — `plugins/engineering-discipline/skills/python-engineering/`
+6. **data-engineering-discipline** — `plugins/engineering-discipline/skills/data-engineering-discipline/`
+7. **refresh-stack** — `plugins/engineering-discipline/skills/refresh-stack/`
 
 (Context for fairness: `refresh-stack` is deliberately a manual-only `/refresh-stack`
-command — it sets `disable-model-invocation: true` — so judge it as a user-invoked
-command, not on auto-activation.)
+command — it sets `disable-model-invocation: true` — and `review-panel` is likewise
+command-first (`/review-panel` plus auto-suggest) and Claude-Code-only, since it
+spawns subagents. Judge those two as user-invoked, not on auto-activation.)
+
+**Stay blind.** Read ONLY the skill files themselves. Do NOT open anything else under
+`evals/` — not the behavioral-eval results (`evals/report/`) nor any prior review
+(`evals/review/`, including earlier panel syntheses). Your judgment must be your own
+and fresh; you are blind to the quantitative eval and to the other reviewers.
 
 ## Your review lens
 
@@ -71,7 +78,7 @@ output for every skill.
 
 ## Output format — be structured so reviews can be compared
 
-For **each** of the six skills, output exactly:
+For **each** of the seven skills, output exactly:
 
 ```
 ### <skill-name>
@@ -84,7 +91,7 @@ For **each** of the six skills, output exactly:
 ```
 
 Then an **OVERALL** section:
-- **Ranking**: the six skills ordered best → worst by deserve-to-exist.
+- **Ranking**: the seven skills ordered best → worst by deserve-to-exist.
 - **Cut list**: which (if any) you would remove, and why — or "none".
 - **Collection verdict**: one paragraph — is this a coherent set? redundant
   internally or with base-model behavior? any missing skill that should exist?
