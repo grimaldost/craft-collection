@@ -22,7 +22,7 @@ Prerequisites: **Python 3.13+** and **[uv](https://docs.astral.sh/uv/)** (used t
 run the pinned tooling without polluting your environment).
 
 ```bash
-git clone https://github.com/grimaldo-stanzani/craft-collection
+git clone https://github.com/grimaldost/craft-collection
 cd craft-collection
 uv tool run pre-commit install   # installs the pre-commit + pre-push gates
 ```
