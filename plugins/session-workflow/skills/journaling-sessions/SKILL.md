@@ -167,8 +167,8 @@ reasoning inline, anti-patterns hunted); drop only the ceremony.
 Five rules carry most of the value; the full craft is in
 **`references/writing-for-retrieval.md`**:
 
-1. **Be concrete and include the reasoning inline.** "Haiku passes gates at
-   Sonnet's rate for 5-15x less cost" beats "Haiku is cheaper."
+1. **Be concrete and include the reasoning inline.** "Connection pooling cut p99
+   latency 6x under load by reusing TCP+TLS setup" beats "pooling is faster."
 2. **One idea per entry.** If it wants to exceed ~300 words, it's two entries.
 3. **Anti-patterns are the most valuable entries** — actively hunt for what was
    tried and failed, not only what worked.

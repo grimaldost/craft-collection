@@ -99,11 +99,11 @@ materialized schema (vs. the schema YAML).
 - The plan tracks intent; the primary source tracks reality. When they
   disagree, reality wins.
 
-**Example (migration form).** The session that motivated this skill
-had a plan that captured "RAV + revenue data" as one input. The actual
-source script extracted TWO tables. The agent deferred the second
-indefinitely; the `revenue` column silently disappeared from output.
-35 commits later, the gap was still being chased.
+**Example (migration form).** A real migration had a plan that captured
+"orders + revenue data" as one input. The actual source script extracted
+TWO tables. The agent deferred the second indefinitely; the `revenue`
+column silently disappeared from output. A migration like this can take
+dozens of commits to chase the gap back down.
 
 **Example (new-dataset form).** The plan describes a source as
 "customer events." The actual source has three distinct event types
@@ -154,8 +154,8 @@ bug, not adjacent cleanup).
   contract conformance: the producer's output matches the declared
   contract exactly.
 
-**Example (migration form).** A migration silently renames `cost_of_funds
-→ cof`, `match_cost → matching_cost`, `take_rate_am → take_rate`. Each
+**Example (migration form).** A migration silently renames `unit_cost
+→ uc`, `base_fee → base_fee_amt`, `margin_raw → margin`. Each
 rename looks reasonable — shorter, more consistent. Downstream Excel
 workbooks keyed on the original names break the next morning.
 
@@ -198,12 +198,12 @@ assumptions the LLM didn't think to encode in fixtures.
 - Every constraint declared in the schema must be validated against
   production data (see Principle 10).
 
-**Example.** Schema declares `nullable: false` on `di_fragged`, `cof`,
-`take_rate`, `matching_cost`. Every unit test passes (fixtures had no
-nulls). First staging run fails: curve coverage gaps produce null `cof`;
-same-day operations have `duration_cd=0` → division by zero → null. The
-constraints were drafted from "what makes sense," not from "what
-production data actually looks like."
+**Example.** Schema declares `nullable: false` on `rate_frag`, `uc`,
+`margin`, `base_fee_amt`. Every unit test passes (fixtures had no
+nulls). First staging run fails: adjustment coverage gaps produce null
+`uc`; same-day operations have `tenure_days=0` → division by zero →
+null. The constraints were drafted from "what makes sense," not from
+"what production data actually looks like."
 
 ---
 
@@ -222,7 +222,7 @@ current installed version of the library.
 - The agent uses keyword arguments with names that "sound right" but
   weren't verified.
 - Runtime errors of the form `TypeError: unexpected keyword argument
-  'rtol'` or `KeyError: 'bdr'`.
+  'rtol'` or `KeyError: 'calendar_c'`.
 
 **Defense.**
 
@@ -231,7 +231,7 @@ current installed version of the library.
 
 ```python
 import inspect
-from analytics.compute import weighted_average
+from mylib.compute import weighted_average
 print(inspect.signature(weighted_average))
 # Now you know the actual parameter names.
 ```
@@ -239,9 +239,9 @@ print(inspect.signature(weighted_average))
 - For any string identifier, enumerate the registry first:
 
 ```python
-from analytics.calendartools import list_calendars
+from mylib.calendars import list_calendars
 print(list_calendars())
-# ['calendar_brazil', 'calendar_us_nyse', ...]
+# ['calendar_a', 'calendar_b', ...]
 ```
 
 - Treat every keyword argument as suspect until verified.
@@ -253,12 +253,12 @@ confabulations caught at runtime:
 |--------------|--------|
 | `assert_frame_equal(rtol=...)` | `rel_tol=` |
 | `weighted_average(keys=...)` | `group_cols=` |
-| `wdate_range(...)` returns `Date` | Returns `Datetime[μs]` |
-| `WindowSpec(position_date=Series)` | Takes `Sequence[date]` |
-| `apply_curve(...)` for interp | Use `interpolate_bulk` |
-| `interpolate_bulk(curve_value_col=...)` | `@singledispatch`, positional only |
+| `business_date_range(...)` returns `Date` | Returns `Datetime[μs]` |
+| `WindowSpec(as_of_date=Series)` | Takes `Sequence[date]` |
+| `apply_adjustment(...)` for resample | Use `resample_bulk` |
+| `resample_bulk(value_col=...)` | `@singledispatch`, positional only |
 | Output col == input col name | Output col literally `'interpolated'` |
-| Calendar `'bdr'` | Registry has `'calendar_brazil'` |
+| Calendar `'calendar_c'` | Registry has `'calendar_a'` |
 
 Each cost a debug round. Total cost: hours. Cost of `inspect.signature`
 per primitive: 30 seconds.

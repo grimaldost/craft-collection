@@ -412,8 +412,8 @@ production data (Principle 10).
 ```sql
 -- Run before declaring `nullable: false`
 SELECT
-    SUM(CASE WHEN cof IS NULL THEN 1 ELSE 0 END) AS null_count_cof,
-    SUM(CASE WHEN take_rate IS NULL THEN 1 ELSE 0 END) AS null_count_take_rate
+    SUM(CASE WHEN uc IS NULL THEN 1 ELSE 0 END) AS null_count_uc,
+    SUM(CASE WHEN margin IS NULL THEN 1 ELSE 0 END) AS null_count_margin
 FROM production_table
 WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
 -- If null_count > 0, you cannot declare nullable: false on that column.

@@ -45,8 +45,8 @@ the same way renaming a public function is.
 - Investigation: a column-rename in the producer's last PR is the first
   thing to suspect.
 
-**Anti-pattern.** Renaming `cost_of_funds → cof`, `match_cost →
-matching_cost`, `take_rate_am → take_rate` "for clarity." Downstream
+**Anti-pattern.** Renaming `unit_cost → uc`, `base_fee →
+base_fee_amt`, `margin_raw → margin` "for clarity." Downstream
 Excel workbooks, notebooks, and dashboards keyed on the original names
 break the next morning.
 
@@ -90,7 +90,7 @@ the contract.
 - Schema evolution: dropping a column requires a deprecation cycle.
 
 **Anti-pattern.** A position dataset includes weighted-average metrics
-(`aging_cd`, `aging_bd`, `aver_di`, `aver_cof`). The new transform
+(`metric_a`, `metric_b`, `avg_rate`, `avg_uc`). The new transform
 "doesn't need" them and silently drops them. Output is "complete" by
 the producer's lens; consumers find their charts missing values.
 
@@ -235,7 +235,7 @@ derived from it.
   not a missing transform.
 
 **Anti-pattern.** A legacy script extracts TWO tables and writes TWO
-parquets. The migration plan captures "RAV + revenue data" as one
+parquets. The migration plan captures "orders + revenue data" as one
 line; the second extraction is deferred indefinitely and never
 lands. The `revenue` column silently disappears from the downstream
 output. The producer doesn't see it because the column lives in an
@@ -294,8 +294,8 @@ re-read.
 
 **LLM gotcha.** This is the *defining* LLM failure mode. The plan
 becomes the source of truth and code drifts from the actual source.
-The session that motivated this skill produced 35 commits chasing
-this. Mechanical defense: re-read the primary source at the start of
+A real migration like this can take dozens of commits to get right.
+Mechanical defense: re-read the primary source at the start of
 each phase, regardless of how confident the agent feels.
 
 ---
@@ -349,16 +349,16 @@ a single phase because parameter names were inferred, not verified:
 
 - `polars.testing.assert_frame_equal(rtol=...)` — actual: `rel_tol`
 - `weighted_average(keys=...)` — actual: `group_cols`
-- `wdate_range(...)` returns `Datetime[μs]`, not `Date` as assumed
-- `WindowSpec(position_date=Series)` — actual type: `Sequence[date]`
-- `apply_curve` is semantically wrong; correct primitive is
-  `interpolate_bulk`
-- `interpolate_bulk` is `@singledispatch`-decorated; positional args
+- `business_date_range(...)` returns `Datetime[μs]`, not `Date` as assumed
+- `WindowSpec(as_of_date=Series)` — actual type: `Sequence[date]`
+- `apply_adjustment` is semantically wrong; correct primitive is
+  `resample_bulk`
+- `resample_bulk` is `@singledispatch`-decorated; positional args
   required
 - The output column is literally named `'interpolated'`, not the
   input column name
-- Calendar identifier `'bdr'` doesn't exist; registry has
-  `'calendar_brazil'`
+- Calendar identifier `'calendar_c'` doesn't exist; registry has
+  `'calendar_a'`
 
 Each cost a debug round.
 
@@ -367,15 +367,15 @@ Each cost a debug round.
 ```python
 # 10-line smoke script per unfamiliar primitive
 import inspect
-from analytics.compute import weighted_average
+from mylib.compute import weighted_average
 print(inspect.signature(weighted_average))
 # (df, value_col, weight_col, group_cols, **kwargs) -> DataFrame
 # Now you know it's group_cols, not keys.
 
 # For string identifiers, list before referencing
-from analytics.calendartools import list_calendars
+from mylib.calendars import list_calendars
 print(list_calendars())
-# ['calendar_brazil', 'calendar_us_nyse', ...]
+# ['calendar_a', 'calendar_b', ...]
 ```
 
 **LLM gotcha.** Second-most-common LLM failure mode (after plan
@@ -440,9 +440,9 @@ before declaring.
 - Investigation: constraint violations in production are evidence
   that the constraint was declared without evidence.
 
-**Anti-pattern.** Schema declares `nullable: false` on `cof` and
-`take_rate`. But legitimate edge cases produce nulls: curve coverage
-gaps produce null `cof`; same-day operations have `duration_cd=0` →
+**Anti-pattern.** Schema declares `nullable: false` on `uc` and
+`margin`. But legitimate edge cases produce nulls: adjustment coverage
+gaps produce null `uc`; same-day operations have `tenure_days=0` →
 division by zero → null. Every unit test passes; the first staging
 run fails on a null. Second run, after loosening that constraint,
 fails on a negative amount because the contract said `ge: 0` but
@@ -453,7 +453,7 @@ reversals are legitimately negative.
 ```sql
 -- Constraint pre-flight check
 SELECT
-    SUM(CASE WHEN cof IS NULL THEN 1 ELSE 0 END) AS null_count_cof,
+    SUM(CASE WHEN uc IS NULL THEN 1 ELSE 0 END) AS null_count_uc,
     SUM(CASE WHEN future_amount < 0 THEN 1 ELSE 0 END) AS neg_count_amount
 FROM production_table
 WHERE trade_date >= CURRENT_DATE - INTERVAL '90 days';
@@ -878,7 +878,7 @@ When multiple principles apply, the contract-preservation group (1–5)
 takes priority. They guard the consumer interface, which is the most
 expensive thing to break.
 
-The session that originally motivated this skill was a migration where
+These rules come from a real migration where
 contract preservation (1–5), source-of-truth (6–8), and scope &
 traceability (17–19) were all violated. That's why the migration
 examples appear most frequently in the anti-patterns. The principles

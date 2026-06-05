@@ -18,15 +18,15 @@ store.)
 
 ## 1. Core writing discipline
 
-**Be concrete.** "Haiku is cheaper" teaches nothing. "Haiku passes gates at the
-same rate as Sonnet at 5-15x lower cost ($0.16-0.49 vs $0.68-3.89 per PR)"
-teaches everything.
+**Be concrete.** "Connection pooling is faster" teaches nothing. "Connection
+pooling cut p99 latency from 800ms to 120ms under 200 concurrent requests by
+eliminating per-request TCP+TLS setup" teaches everything.
 
 **Include reasoning inline.** The decision itself is less valuable than the WHY,
-and it should co-occur in the same embedding. "Haiku chosen as default because
-gate pass rate matches Sonnet at 5-15x lower cost" is one embedding. "Haiku
-chosen as default. Rationale: cost." is the same information but weaker —
-rationale appears as a throwaway second sentence.
+and it should co-occur in the same embedding. "Connection pooling enabled by
+default because it cut p99 latency 6x under load" is one embedding. "Connection
+pooling enabled by default. Rationale: latency." is the same information but
+weaker — rationale appears as a throwaway second sentence.
 
 **Perceptions are first-class.** "The user pushed back on the domain tag list
 being hardcoded — they want this domain-agnostic, applicable to any area of life"
@@ -34,8 +34,8 @@ is as valuable as any technical finding. Don't relegate perceptions to
 afterthoughts.
 
 **One idea per entry.** Split compound entries so each can cluster independently.
-A decision about model routing and an observation about the user's priorities are
-two entries, not one. When an entry wants to be longer than 300 words, it's
+A decision about connection pooling and an observation about the user's priorities
+are two entries, not one. When an entry wants to be longer than 300 words, it's
 usually two entries in disguise.
 
 **Length sweet spot: 80–300 words per entry.** Shorter entries produce sparse
