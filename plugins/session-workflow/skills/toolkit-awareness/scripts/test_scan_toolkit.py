@@ -50,10 +50,10 @@ def test_plugins_from_json_uses_id_and_hides_enabled():
     # name from id and never leak the raw `enabled` bool into the label.
     rows = _plugins_from_json([
         {'id': 'engineering-discipline@skill-collection', 'version': '0.1.0', 'enabled': True},
-        {'id': 'pr-pilot@pr-pilot-marketplace', 'version': '0.3.0', 'enabled': False},
+        {'id': 'example-tool@example-marketplace', 'version': '0.3.0', 'enabled': False},
     ])
     assert rows[0]['name'] == 'engineering-discipline (0.1.0)'   # not '? (0.1.0, True)'
-    assert rows[1]['name'] == 'pr-pilot (0.3.0, disabled)'
+    assert rows[1]['name'] == 'example-tool (0.3.0, disabled)'
     assert all('?' not in r['name'] and 'True' not in r['name'] for r in rows)
 
 

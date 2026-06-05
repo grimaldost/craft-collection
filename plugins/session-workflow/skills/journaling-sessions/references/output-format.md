@@ -25,7 +25,7 @@ into generalizations and, with reinforcement, promote into durable guidance.
 ```
 --- ENTRY_START ---
 type: DECISION | FINDING | OBSERVATION | TRADEOFF | HYPOTHESIS | CONTRADICTION | CONNECTION | ANTI_PATTERN
-author: <stable user ID — e.g., user:grimaldo-br-stone>
+author: <stable user ID — e.g., user:alex-rivera>
 timestamp: <ISO 8601 — when journaled>
 occurred_at: <optional ISO 8601 — when the event happened, if different>
 area: <single value — the life area or activity, e.g., platform_engineering>
@@ -56,8 +56,8 @@ compress multiple entries into one envelope.
 ## 3. Field reference
 
 `author` is the identity of whose memory this entry belongs to, not who is
-discussed in the content. An entry by Grimaldo about a colleague still has
-`author: user:grimaldo-br-stone`. **Format:** `user:<identifier>` where the
+discussed in the content. An entry by Alex about a colleague still has
+`author: user:alex-rivera`. **Format:** `user:<identifier>` where the
 identifier is stable, lowercase, and uniquely identifies the human whose memory
 this is.
 
@@ -68,8 +68,8 @@ journal on Thursday a decision made Monday, `timestamp` is Thursday and
 
 `area` names the life domain or activity this entry belongs to. Single-valued on
 purpose: forcing one choice keeps the vocabulary clean. Examples:
-`platform_engineering`, `payments_development`, `history_teaching`,
-`cardio_training`, `family_life`.
+`platform_engineering`, `api_development`, `language_learning`,
+`endurance_training`, `home_cooking`.
 
 `language` is the ISO 639-1 code of the entry's prose, defaulting to the
 author's preference. It lets retrieval scope to one language when the store holds
@@ -149,7 +149,7 @@ Example:
 ```
 --- ENTRY_START ---
 type: ANTI_PATTERN
-author: user:grimaldo-br-stone
+author: user:alex-rivera
 timestamp: 2026-04-14T16:30:00Z
 area: platform_engineering
 language: en
@@ -191,19 +191,19 @@ means multiple entries.
 
 | area | domains | what the entry is about |
 |------|---------|-----|
-| `platform_engineering` | `working_style, comprehensive_capture` | a perception about how Grimaldo prefers to capture knowledge |
+| `platform_engineering` | `working_style, comprehensive_capture` | a perception about how Alex prefers to capture knowledge |
 | `platform_engineering` | `persistence, embedding_theory, anti_pattern` | a technical insight about why header-field markers fail with embedders |
-| `history_teaching` | `working_style, lesson_planning` | a perception about how Grimaldo plans history lessons |
-| `cardio_training` | `working_style, zone_2, habit_formation` | a perception about how Grimaldo approaches cardio training |
+| `language_learning` | `working_style, study_planning` | a perception about how Alex plans language study |
+| `endurance_training` | `working_style, zone_2, habit_formation` | a perception about how Alex approaches endurance training |
 
 `working_style` appears in three rows but `area` separates them — a query for
 "working_style in platform_engineering" finds the first two and correctly
-excludes history and cardio.
+excludes language-learning and endurance.
 
 **Context anchoring rule.** When a broad domain tag is used, the entry prose must
 name the specific scope even though area encodes it structurally. "In
-platform-engineering work, Grimaldo prefers comprehensive capture" beats
-"Grimaldo prefers comprehensive capture" — the embedder reads only the content
+platform-engineering work, Alex prefers comprehensive capture" beats
+"Alex prefers comprehensive capture" — the embedder reads only the content
 field, so scope must appear in prose to influence clustering.
 
 **Tag format:** short, lowercase, underscore-separated. Reuse tags from prior

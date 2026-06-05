@@ -17,6 +17,10 @@ __pycache__/
 *.skill
 dist/
 
+# Internal design/build history & review notes — kept local, never published
+docs/
+evals/review/
+
 # OS
 .DS_Store
 Thumbs.db

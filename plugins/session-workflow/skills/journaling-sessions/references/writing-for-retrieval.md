@@ -50,7 +50,7 @@ more heavily. Put the most uniquely identifying content in the first sentence.
 - Good: "Qdrant selected as the persistence backend for in-traversal filtering
   and Apache 2.0 licensing — the deciding factors after a 9-candidate evaluation."
 
-**Use specific names, not pronouns or roles.** "Grimaldo" anchors better than
+**Use specific names, not pronouns or roles.** "Alex" anchors better than
 "the user." "MiniLM" beats "the embedder we have now." Proper nouns and IDs also
 give keyword search strong hits that dense vectors may miss.
 
