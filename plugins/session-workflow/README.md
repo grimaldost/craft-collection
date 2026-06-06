@@ -1,6 +1,8 @@
 # session-workflow
 
-Capture session knowledge, hand work off cleanly, and stay aware of your toolkit.
+Manage the work *around* the work: capture session knowledge and distill it into
+durable guidance, hand work off to a fresh context, convene fresh-eyes review
+panels, behaviorally evaluate your skills, and stay aware of your toolkit.
 
 ## Skills
 
@@ -10,10 +12,24 @@ Capture session knowledge, hand work off cleanly, and stay aware of your toolkit
   gaps), so a single invocation produces thorough output — no need to ask for
   "multiple passes." Generic core + on-demand references (output format,
   reference-ingestion taxonomy, coverage check, writing-for-retrieval).
-- **context-handoff** — author a paste-ready, self-contained brief for a fresh
-  context: a new Claude Code session, a spawned task, a teammate, or an issue.
-  SUBTASK mode (an artifact comes back) and FORK mode (continues independently).
-  For in-session parallel work, prefer the Task tool / subagents.
+- **consolidate-knowledge** (`/consolidate-knowledge`) — the downstream pass that
+  distills many `journaling-sessions` entries across sessions into durable,
+  higher-level guidance: cluster related entries → synthesize one generalization
+  each → a strict promotion gate (reinforced · specific · non-reconstructable ·
+  actionable) → reconcile supersession. Under-promotes by design.
+- **context-handoff** (`/subtask`, `/fork`) — author a paste-ready, self-contained
+  brief for a fresh context: a new Claude Code session, a spawned task, a teammate,
+  or an issue. SUBTASK mode (an artifact comes back) and FORK mode (continues
+  independently). For in-session parallel work, prefer the Task tool / subagents.
+- **review-panel** (`/review-panel`) — convene fresh reviewer subagents that are
+  blind to the conversation and to each other, pointed at an artifact you've
+  anchored on from adversarial angles. Neutral brief, structured comparable
+  output, synthesis over averaging, a stakes-scaled ladder. Claude Code only;
+  shows the plan + cost and asks before firing.
+- **evaluate-skill** (`/evaluate-skill`) — behaviorally evaluate a skill by running
+  it headless many times: triggering (recall / specificity), correct-usage (rubric
+  judge), and a with/without baseline, each with Wilson 95% CIs. Ships the eval
+  engine in `scripts/`. Claude Code only; cost-gated.
 - **toolkit-awareness** — `scripts/scan_toolkit.py` produces a live inventory of
   installed skills / commands / agents / hooks (no hand-maintained list); the
   skill adds durable guidance on referencing the toolkit in prompts and specs.

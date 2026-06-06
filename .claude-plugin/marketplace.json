@@ -13,8 +13,8 @@
       "name": "session-workflow",
       "source": "./plugins/session-workflow",
       "category": "productivity",
-      "description": "Capture session knowledge into structured entries, author paste-ready hand-off briefs, and keep live awareness of the installed toolkit.",
-      "keywords": ["journal", "handoff", "session", "knowledge-capture", "toolkit"]
+      "description": "Capture session knowledge into structured entries and consolidate them into durable guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels, behaviorally evaluate skills, and keep live awareness of the installed toolkit.",
+      "keywords": ["journal", "handoff", "session", "knowledge-capture", "consolidate", "review", "skill-eval", "toolkit"]
     }
   ]
 }

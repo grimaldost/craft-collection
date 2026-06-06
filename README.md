@@ -5,8 +5,9 @@ A Claude Code plugin marketplace with two plugins:
 - **engineering-discipline** — modern Python engineering standards + stack-agnostic
   data-engineering discipline, with mechanical enforcement (ruff/uv hooks),
   runnable scripts, and a self-refreshing toolchain.
-- **session-workflow** — capture session knowledge into structured entries, author
-  paste-ready hand-off briefs, and keep a live inventory of the installed toolkit.
+- **session-workflow** — capture session knowledge and distill it into durable
+  guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels,
+  behaviorally evaluate skills, and keep a live inventory of the installed toolkit.
 
 ## Install
 
@@ -29,9 +30,10 @@ claude --plugin-dir ./plugins/engineering-discipline --plugin-dir ./plugins/sess
 auditing, version-checking, schema-diffing, parity, and contract validation;
 hooks for ruff-format and uv enforcement; a `stack.toml`-based freshness loop.
 
-**session-workflow** — skills `journaling-sessions`, `context-handoff`, and
-`toolkit-awareness`; a live `scan_toolkit.py` inventory; an optional
-session-start inject hook.
+**session-workflow** — skills `journaling-sessions`, `consolidate-knowledge`,
+`context-handoff`, `review-panel`, `evaluate-skill`, and `toolkit-awareness`; a
+live `scan_toolkit.py` inventory; the headless skill-eval engine in `scripts/`;
+an optional session-start inject hook.
 
 ## Optional hooks (all off by default)
 
