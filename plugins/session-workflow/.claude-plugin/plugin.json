@@ -1,7 +1,7 @@
 {
   "name": "session-workflow",
   "displayName": "Session Workflow",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Capture session knowledge into structured entries and consolidate them into durable guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels, behaviorally evaluate skills, and keep live awareness of the installed toolkit.",
   "author": { "name": "Grimaldo Stanzani", "email": "grimaldosj93@gmail.com" },
   "repository": "https://github.com/grimaldost/craft-collection",

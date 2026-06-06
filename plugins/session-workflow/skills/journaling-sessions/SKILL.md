@@ -153,14 +153,35 @@ Aim for at least one OBSERVATION entry on the source-reading dynamics.
 
 Write entries in the structured envelope defined in
 **`references/output-format.md`** — the envelope, the full field set (including
-visibility and language), entry types, the ANTI_PATTERN template, area/domains,
-refs, confidence, multi-user privacy, and the VALIDATED marker.
+visibility, language, and the optional `validated` boolean), entry types, the
+ANTI_PATTERN template, area/domains, refs, confidence, multi-user privacy, and the
+VALIDATED marker.
 
-**No long-term memory store downstream?** The metadata envelope exists to be
-machine-ingested and clustered. If these entries are only for your own re-reading
-— no vector store or ingestion pipeline — emit each entry's CONTENT prose and skip
-the envelope. Keep the discipline that carries the value (one idea per entry,
-reasoning inline, anti-patterns hunted); drop only the ceremony.
+**Binding to a specific store (optional).** By default the envelope is generic — a
+placeholder `author` and example `area` values — and any structured store can ingest
+it. But `area` and `author` are scope/partition keys in a typical store (retrieval
+filters by `author`; consolidation runs author+area-scoped), so when you are
+journaling *into a specific existing store*, the host or user can supply an optional
+**`target_store` profile** that binds them to that store's real vocabulary —
+otherwise the entry ingests cleanly and is then silently orphaned from the corpus it
+belongs to. The profile is something you are **given** (stated inline, or by being
+pointed at one) — do not hunt for it at a fixed path or invent one. Absent a profile,
+behavior is exactly as today. See **`references/store-binding.md`** for the profile
+shape and binding rules.
+
+**Envelope vs prose-only — decide by an explicit signal, not inference.** The
+envelope exists to be machine-ingested and clustered, so it is the default; drop it
+only on an explicit opt-in:
+
+- **A `target_store` profile is present** ⇒ there is a store downstream, so the
+  envelope is **mandatory** — never take the prose-only branch.
+- **The user explicitly says there is no store downstream** — "just for my own
+  re-reading", "no vector store", "skip the envelope" ⇒ emit each entry's CONTENT
+  prose and skip the envelope. Keep the discipline that carries the value (one idea
+  per entry, reasoning inline, anti-patterns hunted); drop only the ceremony.
+- **Neither signal** ⇒ default to the envelope. A mis-inferred "no store" yields a
+  whole file that reads like a journal but no store can parse — the costlier error —
+  so when unsure, emit the envelope.
 
 ## Writing quality
 

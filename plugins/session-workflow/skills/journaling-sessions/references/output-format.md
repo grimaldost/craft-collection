@@ -24,24 +24,38 @@ into generalizations and, with reinforcement, promote into durable guidance.
 
 ```
 --- ENTRY_START ---
-type: DECISION | FINDING | OBSERVATION | TRADEOFF | HYPOTHESIS | CONTRADICTION | CONNECTION | ANTI_PATTERN
+type: DECISION | FINDING | OBSERVATION | TRADEOFF | HYPOTHESIS | CONTRADICTION | CONNECTION | PATTERN | ANTI_PATTERN
 author: <stable user ID — e.g., user:alex-rivera>
 timestamp: <ISO 8601 — when journaled>
 occurred_at: <optional ISO 8601 — when the event happened, if different>
 area: <single value — the life area or activity, e.g., platform_engineering>
 language: <ISO 639-1 code — en, pt, etc. Default from author preference.>
 origin: chat | code | meeting | reading
-visibility: private | team:<n> | public
+visibility: private | team:<name> | public
 session: <kebab-case-session-name>
 domains: <2-5 tags, free-form — at least one broad, one narrow>
 entities: <optional comma-separated people, products, systems referenced>
 confidence: <0.0-1.0>
+validated: <optional — true if the claim survived stress-testing; omit otherwise>
 refs: <optional — H-035, investigation-16, arXiv:2501.13956, supersedes:K-002>
 summary: <optional — single sentence compact version for progressive disclosure>
 --- CONTENT ---
 <prose — one idea, concrete, with reasoning>
 --- ENTRY_END ---
 ```
+
+**Enum subset rule.** A structured store may *strict-parse* `type`, `origin`, and
+`visibility` and **silently drop** any entry whose value falls outside its accepted
+set. Keep the values above a **subset** of the target store's enums — and match
+**case**: this skill emits `type` in UPPERCASE but `origin`/`visibility` in
+lowercase, so a store that strict-parses must normalize case (a case-only mismatch
+drops the entry as surely as an unknown value does). When a `target_store` profile
+supplies `allowed_types`/`allowed_origins`, validate every emitted `type`/`origin`
+against them.
+
+A machine-readable companion to this envelope — the field names, the required set,
+and the enum value sets, versioned — lives in **`references/envelope-schema.json`**
+(`schema_version` 1); a consuming store can conformance-test its parser against it.
 
 ## 2. Why explicit markers (not running prose)
 
@@ -59,7 +73,11 @@ compress multiple entries into one envelope.
 discussed in the content. An entry by Alex about a colleague still has
 `author: user:alex-rivera`. **Format:** `user:<identifier>` where the
 identifier is stable, lowercase, and uniquely identifies the human whose memory
-this is.
+this is. It is also a **partition key**: retrieval filters by `author`, so a
+placeholder or wrong id silently hides the entry from the real user's partition.
+When journaling into an existing store, bind `author` to that store's canonical id
+via a `target_store` profile (see `references/store-binding.md`) rather than
+inventing one.
 
 `timestamp` is when the entry was journaled. `occurred_at` is when the event
 actually happened, filled in when it differs from journaling time. If you
@@ -71,6 +89,15 @@ purpose: forcing one choice keeps the vocabulary clean. Examples:
 `platform_engineering`, `api_development`, `language_learning`,
 `endurance_training`, `home_cooking`.
 
+**`area` is a downstream scope key**, not just a label: consolidation is typically
+run author+area-scoped, so the value is a load-bearing join key. When writing into
+an existing store, **reuse that store's existing area vocabulary** rather than
+minting a generic value from these examples — an `area` the store has never seen
+ingests without error but is then **silently orphaned**, because no consolidation
+pass scoped to the corpus's real areas will ever see it. The examples here are for
+the no-store-configured default; bind `area` via a `target_store` profile when one
+is given (see `references/store-binding.md`).
+
 `language` is the ISO 639-1 code of the entry's prose, defaulting to the
 author's preference. It lets retrieval scope to one language when the store holds
 several.
@@ -81,7 +108,7 @@ a conversation with other humans. `reading` = research notes from a paper,
 standard, or article.
 
 `visibility` controls how broadly an entry can be retrieved in a multi-user
-store. `private` (the default) means only the author retrieves it. `team:<n>`
+store. `private` (the default) means only the author retrieves it. `team:<name>`
 means a named team can. `public` means anyone can. Most entries should be
 private; elevate only when the knowledge is genuinely general.
 
@@ -96,6 +123,13 @@ that span multiple arcs use arc-specific names (`qdrant-selection`,
 `summary` is optional but recommended for entries longer than 200 words: a
 single sentence capturing the essence, used for progressive disclosure when a
 cluster is large.
+
+`validated` is an optional boolean: set `true` only when the entry (typically a
+DECISION) survived genuine stress-testing — specific challenges raised and
+answered. **Omit it otherwise; never emit `validated: false`.** A structured store
+parses it into a persistent boolean it can filter and weight on, so it *complements*
+the in-prose VALIDATED marker (§10) rather than duplicating it — the field is for
+the store, the marker is for the embedder. See §10 for emitting the two together.
 
 ## 4. Authorship and multi-user privacy
 
@@ -121,6 +155,11 @@ embedder.
 - **HYPOTHESIS** — a claim was created, validated, or refuted.
 - **CONTRADICTION** — existing knowledge conflicts with new evidence.
 - **CONNECTION** — a pattern in one domain maps to another.
+- **PATTERN** — a recurring approach that *worked* and whose success generalizes:
+  the positive mirror of ANTI_PATTERN. Name the approach, why it keeps working, and
+  the conditions under which it holds. Use when something succeeded repeatedly and
+  the success is reusable — not a single forward-looking choice (that's DECISION),
+  and not a meta-note about the session or reasoning (that's OBSERVATION).
 - **ANTI_PATTERN** — an approach that looked reasonable was tried or strongly
   considered, failed for a specific reason, and the failure generalizes.
 
@@ -258,7 +297,8 @@ guidance. Anchor to evidence type, not to feeling:
 - **Perception entries rarely exceed 0.75.** Most signals about user priorities
   or working style are inferred from limited cues.
 - **Survived-stress-testing bonus is +0.1.** A DECISION that passed genuine
-  challenge earns a one-tier bump AND carries a VALIDATED marker (§10).
+  challenge earns a one-tier bump AND carries **both** the `validated: true` header
+  field (§1, §3) and the in-prose VALIDATED marker (§10).
 - **Confidence does not encode importance.** A 0.95 entry about a naming
   convention is less useful than a 0.65 entry about a controversial architecture
   choice. Importance belongs in the content.
@@ -269,10 +309,19 @@ number is too high.
 
 ## 10. The VALIDATED marker
 
-When a DECISION survived explicit stress-testing, encode that in the CONTENT
-field itself — not only in the confidence number — because a downstream synthesis
-pass clusters on CONTENT, and the stress-test signal only clusters with similar
-signals if it appears in the prose. Required sentence at the end of CONTENT:
+When a DECISION survived explicit stress-testing, record it in **two**
+complementary places — and emit **both**:
+
+1. the **`validated: true` header field** (§1) — a structured store parses it into a
+   persistent boolean it filters and weights on; without it every ingested entry is
+   `validated=None` and that capability is dead;
+2. the **`VALIDATED:` CONTENT marker** (below) — a downstream synthesis pass clusters
+   on CONTENT and the embedder reads only the prose, so the stress-test signal
+   clusters with similar signals only if it appears there.
+
+The field is for structured stores that filter and weight on it; the marker is for
+the embedder. They are complements, not substitutes — emit only one and half the
+signal is lost. Required marker sentence at the end of CONTENT:
 
 ```
 VALIDATED: survived questioning on [brief topic] — key challenges considered:
@@ -291,6 +340,9 @@ because dev tests use >50K vectors, which triggers HNSW in both modes."*
 - **Never invent VALIDATED** for decisions merely discussed, even at length. The
   test: can you name the specific challenge(s) considered? If yes, VALIDATED. If
   "we thought it through carefully," not VALIDATED.
+- **The `validated: true` field travels with the marker** — set the field whenever
+  you emit the marker, and omit it (never `false`) whenever you don't. Same
+  condition, two encodings.
 
 This distinguishes a 0.85 DECISION that survived scrutiny from a 0.85 DECISION
 that merely felt confident — but only if the marker is actually present.
