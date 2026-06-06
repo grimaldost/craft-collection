@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/grimaldost/craft-collection/blob/main/plugins/session-workflow/skills/journaling-sessions/references/envelope-schema.json",
+  "title": "journaling-sessions entry envelope",
+  "description": "Machine-readable contract for ONE journal entry, as parsed from the '--- ENTRY_START --- / --- CONTENT --- / --- ENTRY_END ---' envelope defined in output-format.md. Informative companion to that prose spec; if the two disagree, treat it as a conformance bug and fix it. ENUM CASE NOTE: this skill emits `type` in UPPERCASE and `origin`/`visibility` in lowercase. A consuming store that strict-parses enums should normalize case (or accept these exact spellings), because a case-only mismatch drops the entry as surely as an unknown value does.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "author", "timestamp", "area", "language", "origin", "session"],
+  "properties": {
+    "type": {
+      "description": "Entry type. Emitted UPPERCASE; a store's strict enum should be a case-normalized superset of these.",
+      "enum": [
+        "DECISION", "FINDING", "OBSERVATION", "TRADEOFF", "HYPOTHESIS",
+        "CONTRADICTION", "CONNECTION", "PATTERN", "ANTI_PATTERN"
+      ]
+    },
+    "author": {
+      "type": "string",
+      "description": "Whose memory this is (not who is discussed). Stable, lowercase, of the form user:<identifier>. Partition key — bind to the target store's canonical id when a target_store profile is given.",
+      "examples": ["user:alex-rivera", "user:grimaldo-stanzani"]
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO 8601 — when the entry was journaled."
+    },
+    "occurred_at": {
+      "type": "string",
+      "description": "Optional ISO 8601 — when the event actually happened, if different from timestamp."
+    },
+    "area": {
+      "type": "string",
+      "description": "Single-valued scope key. Consolidation is typically author+area-scoped, so reuse the target store's existing area vocabulary when one is given, or the entry is silently orphaned.",
+      "examples": ["platform_engineering", "mantis_engineering"]
+    },
+    "language": {
+      "type": "string",
+      "description": "ISO 639-1 code of the entry's prose (en, pt, ...)."
+    },
+    "origin": {
+      "description": "Where the knowledge came from. Emitted lowercase. ('meditation' is reserved by some stores — never emit it.)",
+      "enum": ["chat", "code", "meeting", "reading"]
+    },
+    "visibility": {
+      "type": "string",
+      "description": "Retrieval scope. One of: private | public | team:<name>. Emitted lowercase.",
+      "pattern": "^(private|public|team:.+)$"
+    },
+    "session": {
+      "type": "string",
+      "description": "kebab-case name for the arc this entry belongs to."
+    },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "2-5 free-form subject tags; at least one broad, one narrow."
+    },
+    "entities": {
+      "type": "string",
+      "description": "Optional comma-separated people, products, systems referenced, in their most specific form."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Always emitted. Evidence-calibrated per output-format.md §9; a store may default it to 0.5 if ever absent and gate promotion on it."
+    },
+    "validated": {
+      "type": "boolean",
+      "description": "Optional. Emit `true` only when the entry survived genuine stress-testing; omit otherwise (never emit false). Parsed into a persistent, never-mutating boolean a store can filter and weight on. Complements the in-prose VALIDATED marker (§10)."
+    },
+    "refs": {
+      "type": "string",
+      "description": "Optional cross-links — e.g. H-035, investigation-16, arXiv:2501.13956, supersedes:K-002."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Optional single-sentence compact version for progressive disclosure; recommended for entries over ~200 words."
+    }
+  }
+}
