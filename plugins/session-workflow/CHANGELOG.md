@@ -3,6 +3,17 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.3 — 2026-06-07
+
+### Changed
+
+- `toolkit-awareness`: the description now covers ownership resolution — which
+  installed skill owns a given concern (a rubric, a schema, project conventions),
+  so a prompt references the owner instead of duplicating it — plus narrower
+  inventory questions such as which hooks are configured. Triggers eval: recall
+  0.79 (FAIL) → 1.00, with 0.92 on held-out unseen paraphrases and specificity
+  1.00.
+
 ## 0.1.2 — 2026-06-06
 
 Make `journaling-sessions` output faithful to a structured memory store without

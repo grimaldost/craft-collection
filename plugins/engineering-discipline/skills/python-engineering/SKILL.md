@@ -5,7 +5,10 @@ description: >
   whenever a user wants to: scaffold a Python project, configure tooling
   (uv, ruff, ty, mypy, structlog, pytest, hypothesis, pydantic-settings,
   opentelemetry, pip-audit), set up pyproject.toml, src-layout, pre-commit,
-  CI/CD, Docker, or asks about Python architecture, packaging, testing, type
+  CI/CD, Docker — for an existing, inherited, or legacy project as much as a
+  greenfield one (assessing and modernizing current setup, not just scaffolding
+  new) — or asks about Python
+  architecture, packaging, testing, type
   checking, observability, security, async patterns, typing.Protocol, dependency
   injection, CLAUDE.md, or Cursor rules. Covers hexagonal architecture,
   functional core/imperative shell, property-based testing, snapshot testing,

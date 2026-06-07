@@ -1,0 +1,8 @@
+[
+  { "query": "Is my repo's build and lint configuration current, or has it drifted behind what's standard now?", "should_trigger": true, "note": "held-out #2: 'current/drifted' framing, unseen wording" },
+  { "query": "Bring this older internal package's tooling up to modern Python standards.", "should_trigger": true, "note": "held-out #2: 'up to modern standards'" },
+  { "query": "What's outdated or sub-par in how this service's dev environment is set up?", "should_trigger": true, "note": "held-out #2: 'outdated/sub-par setup'" },
+  { "query": "Go over the dev setup in my existing project and point out the weak spots worth fixing.", "should_trigger": true, "note": "held-out #2: 'weak spots' in existing setup" },
+  { "query": "Walk me through what this legacy Python function actually does.", "should_trigger": false, "note": "near-miss: understanding existing code, not auditing project setup" },
+  { "query": "Should I rewrite this old module in Rust for performance?", "should_trigger": false, "note": "near-miss: legacy + rewrite, but a language/perf decision" }
+]

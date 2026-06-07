@@ -3,6 +3,17 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.2 — 2026-06-07
+
+### Changed
+
+- `python-engineering`: the description now scopes to existing, inherited, and
+  legacy projects as much as greenfield — assessing and modernizing a current
+  setup, not only scaffolding a new one — so "modernize this project's tooling"
+  phrasings trigger. Surfaced by the triggers eval; narrow "is my config
+  current?" asks remain a triggering-threshold limit (the model answers them
+  directly) and were left unforced rather than overfit.
+
 ## 0.1.1 — 2026-06-05
 
 - Fixed: corrected the `repository` URL to `grimaldost/craft-collection` (the

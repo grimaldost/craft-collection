@@ -1,6 +1,6 @@
 ---
 name: toolkit-awareness
-description: Know what skills, agents, commands, and hooks are installed in the current Claude Code environment, and reference them well in prompts and specs. Use when answering "what tools/agents/commands/hooks do I have", planning work that will run in Claude Code, or writing a task spec or definition-of-done that should reference slash commands or quality gates. Produces a live inventory via a scan script rather than relying on a hand-maintained list.
+description: Know what skills, agents, commands, and hooks are installed in the current Claude Code environment, and reference them well in prompts and specs. Use when answering "what tools/agents/commands/hooks do I have" (including narrower inventory questions like which hooks are configured), determining which installed skill owns or is responsible for a given concern — a scoring rubric, a schema, project conventions — so you point at the owner instead of duplicating it, planning work that will run in Claude Code, or writing a task spec or definition-of-done that should reference slash commands or quality gates. Produces a live inventory via a scan script rather than relying on a hand-maintained list.
 ---
 
 # Toolkit Awareness
