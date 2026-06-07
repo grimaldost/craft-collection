@@ -1,0 +1,8 @@
+[
+  { "query": "If a spec needs the date-handling conventions, which of my installed skills is the authoritative source I should reference?", "should_trigger": true, "note": "held-out: skill ownership/authority, novel wording" },
+  { "query": "I've got a few overlapping skills — which one is responsible for the complexity-scoring rules so I don't restate them?", "should_trigger": true, "note": "held-out: which skill owns a concern" },
+  { "query": "Among everything I have installed, what's the canonical place for the schema reference versus the project guardrails?", "should_trigger": true, "note": "held-out: owner of schema vs conventions" },
+  { "query": "Point me at whichever skill is the owner of the review gate so my prompt defers to it instead of duplicating it.", "should_trigger": true, "note": "held-out: defer to owning skill" },
+  { "query": "Who owns the billing microservice in our backend — which team is on the hook for it?", "should_trigger": false, "note": "near-miss: service/team ownership, not installed-skill ownership" },
+  { "query": "Which engineer is responsible for maintaining the payments API these days?", "should_trigger": false, "note": "near-miss: people/org ownership, not skills" }
+]

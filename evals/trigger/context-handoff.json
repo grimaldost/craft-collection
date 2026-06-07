@@ -1,12 +1,12 @@
 [
-  { "query": "/subtask write a helper that validates scheduled payment dates against a business-day calendar and returns the ones that fall on a non-business day", "should_trigger": true, "note": "explicit /subtask command" },
+  { "query": "Carve the business-day payment-date validation out into its own bounded sub-task — I want a self-contained brief I can run elsewhere and hand the result back here.", "should_trigger": true, "note": "SUBTASK mode in NL (replaced /subtask: a slash prefix is literal text headless and reads as a plain coding task, so it cannot test auto-triggering)" },
   { "query": "Fork this chat to continue just the API-design thread in a fresh session.", "should_trigger": true, "note": "explicit fork, names the slice to carry" },
   { "query": "Spin this off into a separate session so it stops cluttering this one.", "should_trigger": true, "note": "'spin off' trigger phrase, fork-shaped" },
   { "query": "Hand the schema-migration piece off to a teammate — write them a brief they can act on with zero prior context.", "should_trigger": true, "note": "hand-off across a human boundary, paste-ready brief" },
   { "query": "I want to offload the slow log-parsing analysis to a background task and paste the result back here when it's done.", "should_trigger": true, "note": "offload + artifact returns => subtask mode" },
   { "query": "This session is getting huge. Branch the performance investigation off into its own dedicated session.", "should_trigger": true, "note": "'branch off' an independent thread => fork mode" },
   { "query": "Turn the current state of this refactor into a ticket someone else can pick up cold.", "should_trigger": true, "note": "handoff to an issue/ticket, portable self-contained text" },
-  { "query": "/spinoff the caching-layer design", "should_trigger": true, "note": "/spinoff with a description; skill should ask which mode" },
+  { "query": "The caching-layer design deserves its own focused session — set it up to continue independently from here.", "should_trigger": true, "note": "FORK/spinoff mode in NL (replaced /spinoff: slash text cannot auto-fire headless)" },
 
   { "query": "Run these two independent refactors in parallel right now.", "should_trigger": false, "note": "in-session parallel work => Task tool / subagents, not a handoff" },
   { "query": "Delegate the test-writing to a subagent and bring the results straight back into this session.", "should_trigger": false, "note": "near-miss: in-session subagent delegation, explicitly the Task tool's job" },
