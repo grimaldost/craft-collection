@@ -1,0 +1,16 @@
+[
+  { "id": "shipped-recon", "weight": 2,
+    "text": "The doc opens by reconciling against the CHANGELOG: the --json ask (2026-05-26-wave-6#1) is marked already shipped in 0.7.0 and is NOT re-proposed." },
+  { "id": "cause-clusters", "weight": 2,
+    "text": "The three referent failures (nonexistent model-on file, unfit 'proven helper', counterfactual precedent, plus the wave-9 fixture) are clustered as ONE underlying cause (ungrounded referents / unresolved references), citing the source reports, rather than listed as separate symptom clusters." },
+  { "id": "dispositions", "weight": 1,
+    "text": "Every cluster carries an explicit disposition: ATTACK, ROUTE OUT, or DECLINE." },
+  { "id": "route-out", "weight": 1,
+    "text": "The engine-timeout finding (2026-06-05-wave-8) is ROUTED OUT to relay (engine/execution owner), not treated as a forge increment." },
+  { "id": "promotion-gate", "weight": 2,
+    "text": "The reinforced ungrounded-referents cluster is promoted; the singleton LOW banner friction is NOT promoted; the singleton BLOCKER (wave-9 non-atomic `forge fix --apply` write that truncated the spec) IS promoted despite being single-report (BLOCKER exemption)." },
+  { "id": "table", "weight": 1,
+    "text": "Promotions appear in a table with an id, a concrete change, a home (gate/template/doc/etc.), and status 'proposed'; clusters are leverage-ordered." },
+  { "id": "inputs", "weight": 1,
+    "text": "The doc explicitly lists the five input report files it covers." }
+]

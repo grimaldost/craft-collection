@@ -1,0 +1,12 @@
+[
+  {
+    "id": "tf-explicit",
+    "prompt": "The session digest above is everything that happened. Write the feedback reports for the tools this session used. Since this sandbox does not contain the tool repos, emit each report as its own fenced markdown block whose first line is a comment with the destination path (e.g. <!-- tools/forge/docs/feedback/2026-06-09-wave-9.md -->).",
+    "fixture": "fixtures/session-digest.md"
+  },
+  {
+    "id": "tf-implicit",
+    "prompt": "We're wrapping up the session in the digest above. Make sure the maintainers of the in-development tools we leaned on today hear about how their tools held up, in the usual durable form. Emit each artifact as a fenced block, first line a comment with its destination path.",
+    "fixture": "fixtures/session-digest.md"
+  }
+]

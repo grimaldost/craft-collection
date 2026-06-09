@@ -1,0 +1,7 @@
+[
+  {
+    "id": "ft-triage",
+    "prompt": "Triage forge's feedback backlog above into its improvement backlog document. Since this sandbox does not contain the tool repos, emit the triage doc as one fenced markdown block whose first line is a comment with the destination path (e.g. <!-- tools/forge/docs/feedback/2026-06-09-triage-backlog.md -->).",
+    "fixture": "fixtures/mini-corpus.md"
+  }
+]
