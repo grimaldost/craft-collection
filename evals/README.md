@@ -9,12 +9,14 @@ stdlib only.
 
 ## Coverage
 
-Five of the six skills are evaluated: `journaling-sessions`, `context-handoff`,
-`data-engineering-discipline`, `python-engineering`, `toolkit-awareness`.
-`refresh-stack` is intentionally **excluded** — it sets
-`disable-model-invocation: true` (it is the manual-only `/refresh-stack` command),
-so auto-activation is not-applicable by design rather than a failure, and its real
-behavior needs live PyPI/changelog access a headless run can't supply.
+Every auto-triggering skill in both plugins has a trigger dataset under
+`trigger/` (most also have correct-usage tasks under `tasks/`). `refresh-stack`
+is intentionally **excluded** — it sets `disable-model-invocation: true` (it is
+the manual-only `/refresh-stack` command), so auto-activation is not-applicable
+by design rather than a failure, and its real behavior needs live PyPI/changelog
+access a headless run can't supply. `command_first_skills` in `config.json`
+lists skills whose low auto-recall is expected (slash-first invocation) and
+reported as informational rather than gated.
 
 ## Prerequisites
 

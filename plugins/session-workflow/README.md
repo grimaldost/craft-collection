@@ -2,7 +2,8 @@
 
 Manage the work *around* the work: capture session knowledge and distill it into
 durable guidance, hand work off to a fresh context, convene fresh-eyes review
-panels, behaviorally evaluate your skills, and stay aware of your toolkit.
+panels, behaviorally evaluate your skills, stay aware of your toolkit, and run the
+tool-dogfooding feedback loop (capture + triage).
 
 ## Skills
 
