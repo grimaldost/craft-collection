@@ -100,7 +100,7 @@ should have caught it ("phase: DoR", "phase: pre-mortem", "phase: gate",
 
 ## Proposed promotions / changes
 1. **[SEVERITY]** <candidate template / gate / doc / skill change, with its home>
-2. **[SEVERITY]** extends `<prior-stem>#<n>` — <the new evidence only>
+2. **[SEVERITY]** extends `<prior-file-stem>#<n>` — <the new evidence only>
 
 ## Cost (optional — when engine or eval runs were involved)
 <per-run or per-role cost/token table>
