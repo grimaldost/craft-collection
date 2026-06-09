@@ -3,6 +3,26 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.2.0 — 2026-06-09
+
+### Added
+
+- `tool-feedback` skill — per-session dogfooding feedback capture for registered
+  in-development tools: one report per tool used (design-only use counts), into
+  that tool's own feedback directory. Unified format: keel's six sections plus
+  severity tags (BLOCKER/HIGH/MED/LOW), phase attribution on misses, stable
+  finding IDs on proposals (`<file-stem>#<n>`), capture-time recurrence checks
+  ("extends" refs instead of restatements), and an optional cost table. Targets
+  bind via a user-supplied `feedback-targets` table (ask once, never hunt).
+  Offer-first when self-activated.
+- `feedback-triage` skill — the downstream pass: reconcile shipped work first,
+  cluster reports by underlying cause (not symptom), assign ATTACK / ROUTE OUT /
+  DECLINE dispositions, apply a promotion gate (reinforced ≥2 reports — single-
+  report BLOCKERs exempt — specific, actionable), and emit a leverage-ordered
+  triage doc with a `proposed/accepted/shipped(version)/declined` status table.
+  Defers to tool-registered triage templates (e.g. keel's reflection-triage).
+  `/feedback-triage`.
+
 ## 0.1.3 — 2026-06-07
 
 ### Changed
