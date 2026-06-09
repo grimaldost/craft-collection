@@ -125,3 +125,15 @@ plugin cleanly; headless agents **do** auto-activate skills and the activation i
 detectable in stream-json; and the CLI judge returns parseable JSON. The smoke
 gate also caught a real plugin bug (a redundant `hooks` manifest key causing a
 "Duplicate hooks file detected" error), since fixed.
+
+## Reading the feedback-loop skills' numbers
+
+- `tool-feedback`'s `tf-implicit` task is a deliberate obliqueness probe. If its
+  per-task `with_activation_rate` comes back low (< ~0.7), read its correct-usage
+  contribution as a *triggering* miss (cross-check the trigger eval) rather than
+  a discipline failure.
+- `feedback-triage` has a single grading task, so at `agent_repeats: 3` its
+  correct-usage CI is very wide — treat the gate verdict as directional until
+  more tasks or repeats exist. (A second, incremental-triage task wants a
+  per-task rubric, which the engine's one-rubric-per-skill schema does not yet
+  support — recorded 2026-06-09.)

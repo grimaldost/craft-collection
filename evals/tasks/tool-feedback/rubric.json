@@ -1,6 +1,8 @@
 [
   { "id": "per-tool", "weight": 2,
-    "text": "Exactly two reports are produced — one for forge, one for relay — each destined to that tool's own docs/feedback path; no report is produced for unregistered tooling (the linter)." },
+    "text": "Exactly two reports are produced — one for forge, one for relay — each destined to that tool's own docs/feedback path." },
+  { "id": "no-unregistered", "weight": 1,
+    "text": "No feedback report (and no report-shaped section) is produced for the repo's standard linter or any tool absent from the feedback-targets table; the linter may be mentioned only as session context." },
   { "id": "version-stamp", "weight": 2,
     "text": "Each report stamps the tool version from the digest's manifests (forge 0.7.2, relay 1.3.0) — versions are not invented or omitted." },
   { "id": "sections", "weight": 1,
@@ -10,7 +12,7 @@
   { "id": "phase", "weight": 2,
     "text": "Each miss names the phase that should have caught it (e.g. forge's unresolved fixture reference attributed to a gate/check-ready phase; relay's hollow review verdict attributed to the review phase)." },
   { "id": "extends", "weight": 2,
-    "text": "The relay heartbeat finding is written as extending the prior report's finding (referencing 2026-05-30-pilot-run #2) with today's new evidence — not restated as if new." },
+    "text": "The relay heartbeat finding is written as extending the prior report's finding (referencing 2026-05-30-pilot-run #2) with today's new evidence — not restated as if new. (an `extends <stem>#2` reference or an unambiguous prose link to that prior proposal both qualify; restating the heartbeat ask as a brand-new finding does not)." },
   { "id": "routing", "weight": 1,
     "text": "Findings are routed by ownership: engine liveness/review issues appear in relay's report, spec-gate issues in forge's; neither report mixes in the other tool's defects." },
   { "id": "cost", "weight": 1,
