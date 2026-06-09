@@ -1,0 +1,19 @@
+[
+  { "query": "Triage the feedback backlog for keel.", "should_trigger": true, "note": "canonical explicit ask" },
+  { "query": "Cluster the feedback reports in pr-pilot's docs/feedback and tell me what actually recurs.", "should_trigger": true, "note": "cluster + corpus named" },
+  { "query": "What should craft-collection fix next, based on the feedback that's accumulated?", "should_trigger": true, "note": "implicit: leverage-ordered backlog ask" },
+  { "query": "Promote the recurring feedback into an improvement backlog for the orchestrator.", "should_trigger": true, "note": "promotion framing" },
+  { "query": "We have twenty un-reviewed dogfood reports — turn them into a leverage-ordered improvement list.", "should_trigger": true, "note": "corpus volume + ordering" },
+  { "query": "Run a triage pass over the tool feedback that's piled up since the last one.", "should_trigger": true, "note": "incremental scope (since last triage)" },
+  { "query": "Which proposed changes across these feedback reports have enough reinforcement to act on?", "should_trigger": true, "note": "promotion-gate framing" },
+  { "query": "Reconcile the feedback backlog against what already shipped, then cluster what's left.", "should_trigger": true, "note": "shipped-reconciliation step named" },
+
+  { "query": "Consolidate my journals.", "should_trigger": false, "note": "near-miss: consolidate-knowledge" },
+  { "query": "What patterns emerged across these sessions?", "should_trigger": false, "note": "near-miss: journal-corpus consolidation, not tool feedback" },
+  { "query": "Triage the GitHub issues in this repo.", "should_trigger": false, "note": "near-miss: 'triage' on an issue tracker" },
+  { "query": "Prioritize my task backlog for the sprint.", "should_trigger": false, "note": "near-miss: task management" },
+  { "query": "Triage this series' reflections and promote the recurring traps into checks.", "should_trigger": false, "note": "near-miss: keel-triage's job (series reflections)" },
+  { "query": "Write the feedback report for today's session.", "should_trigger": false, "note": "near-miss: capture side (tool-feedback), not triage" },
+  { "query": "Which of these support tickets should we answer first?", "should_trigger": false, "note": "ticket queue, not a feedback corpus" },
+  { "query": "Dedupe these log lines and tell me the top recurring errors.", "should_trigger": false, "note": "clustering homonym on logs" }
+]
