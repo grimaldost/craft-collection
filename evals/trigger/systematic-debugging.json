@@ -1,0 +1,19 @@
+[
+  { "query": "Tests pass locally but fail in CI — no idea why.", "should_trigger": true, "note": "environment-divergent failure, unknown cause" },
+  { "query": "Production throws intermittent 502s since yesterday's deploy; find the cause.", "should_trigger": true, "note": "production incident, cause unknown" },
+  { "query": "This is the third fix attempt for the cache bug and it's still broken.", "should_trigger": true, "note": "repeated failed fixes — architecture signal" },
+  { "query": "The numbers in the report look wrong since the migration — investigate before changing anything.", "should_trigger": true, "note": "unexpected behavior, investigation requested" },
+  { "query": "Unexpected behavior: the retry logic fires twice per request. Why?", "should_trigger": true, "note": "unexplained behavior" },
+  { "query": "I'm tempted to just bump the timeout and see if the flakiness goes away — right move?", "should_trigger": true, "note": "quick-fix temptation before root cause" },
+  { "query": "The build breaks with a linker error I don't understand.", "should_trigger": true, "note": "build failure, cause unknown" },
+  { "query": "The previous patch didn't stick; the error is back under load.", "should_trigger": true, "note": "fix didn't hold" },
+
+  { "query": "Fix the typo in the error message string.", "should_trigger": false, "note": "known trivial cause — just fix it" },
+  { "query": "Make this query faster — it's correct, just slow.", "should_trigger": false, "note": "near-miss: performance without a defect" },
+  { "query": "Add error handling for the missing-file case.", "should_trigger": false, "note": "feature work, not a defect" },
+  { "query": "Write a failing test for the bug we already diagnosed.", "should_trigger": false, "note": "near-miss: cause proven — test-driven-development" },
+  { "query": "Explain what a race condition is.", "should_trigger": false, "note": "concept Q&A" },
+  { "query": "Run the linter and clean up the warnings.", "should_trigger": false, "note": "mechanical cleanup" },
+  { "query": "Set up error alerting for the checkout service.", "should_trigger": false, "note": "observability setup, no active defect" },
+  { "query": "Review this PR's error-handling code.", "should_trigger": false, "note": "review, not an active failure" }
+]

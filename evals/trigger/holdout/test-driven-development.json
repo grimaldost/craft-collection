@@ -1,0 +1,8 @@
+[
+  { "query": "Ship a currency-rounding helper for the invoice module — it needs banker's rounding.", "should_trigger": true, "note": "held-out: feature, novel wording" },
+  { "query": "We know why the discount applies twice — land the fix with a regression test that proves it.", "should_trigger": true, "note": "held-out: bugfix with known cause" },
+  { "query": "Start the CSV importer feature; I want confidence in every behavior as we go.", "should_trigger": true, "note": "held-out: feature with quality emphasis" },
+  { "query": "I already hacked the feature together locally — what's the disciplined way to bring it in?", "should_trigger": true, "note": "held-out: code-before-test recovery" },
+  { "query": "Sketch the testing pyramid for our monorepo and where contract tests fit.", "should_trigger": false, "note": "held-out near-miss: test strategy" },
+  { "query": "The build fails on CI only — figure out what's going on.", "should_trigger": false, "note": "held-out near-miss: diagnosis — systematic-debugging" }
+]
