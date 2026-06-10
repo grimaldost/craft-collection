@@ -18,6 +18,8 @@
     "toolkit-awareness": "session-workflow",
     "review-panel": "session-workflow",
     "evaluate-skill": "session-workflow",
-    "consolidate-knowledge": "session-workflow"
+    "consolidate-knowledge": "session-workflow",
+    "tool-feedback": "session-workflow",
+    "feedback-triage": "session-workflow"
   }
 }

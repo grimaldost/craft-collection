@@ -8,7 +8,7 @@ latest released line of each plugin; older tags are not patched.
 | Plugin                 | Version | Supported |
 | ---------------------- | ------- | --------- |
 | engineering-discipline | 0.1.x   | ✅        |
-| session-workflow       | 0.1.x   | ✅        |
+| session-workflow       | 0.2.x   | ✅        |
 
 ## Reporting a vulnerability
 

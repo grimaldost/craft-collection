@@ -1,0 +1,8 @@
+[
+  { "query": "Session's ending — drop the usual report into each tool repo we touched today.", "should_trigger": true, "note": "held-out: 'usual report' + per-repo destination, unseen wording" },
+  { "query": "How did keel hold up this time? Get that written down where its maintainer will find it.", "should_trigger": true, "note": "held-out: no feedback/dogfood keyword at all" },
+  { "query": "Do the dogfood write-up for the engine before you forget the rough edges.", "should_trigger": true, "note": "held-out: dogfood write-up variant" },
+  { "query": "Note down what we learned about caching strategies before I forget.", "should_trigger": false, "note": "held-out near-miss: knowledge capture (journaling)" },
+  { "query": "Summarize the friction in this codebase's onboarding docs.", "should_trigger": false, "note": "held-out near-miss: 'friction' but no registered tool report" },
+  { "query": "Leave review comments on my teammate's branch.", "should_trigger": false, "note": "held-out near-miss: code review" }
+]

@@ -7,7 +7,8 @@ A Claude Code plugin marketplace with two plugins:
   runnable scripts, and a self-refreshing toolchain.
 - **session-workflow** — capture session knowledge and distill it into durable
   guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels,
-  behaviorally evaluate skills, and keep a live inventory of the installed toolkit.
+  behaviorally evaluate skills, keep a live inventory of the installed toolkit,
+  and run a tool-dogfooding feedback loop (capture + triage).
 
 ## Install
 
@@ -31,9 +32,9 @@ auditing, version-checking, schema-diffing, parity, and contract validation;
 hooks for ruff-format and uv enforcement; a `stack.toml`-based freshness loop.
 
 **session-workflow** — skills `journaling-sessions`, `consolidate-knowledge`,
-`context-handoff`, `review-panel`, `evaluate-skill`, and `toolkit-awareness`; a
-live `scan_toolkit.py` inventory; the headless skill-eval engine in `scripts/`;
-an optional session-start inject hook.
+`context-handoff`, `review-panel`, `evaluate-skill`, `toolkit-awareness`,
+`tool-feedback`, and `feedback-triage`; a live `scan_toolkit.py` inventory; the
+headless skill-eval engine in `scripts/`; an optional session-start inject hook.
 
 ## Optional hooks (all off by default)
 

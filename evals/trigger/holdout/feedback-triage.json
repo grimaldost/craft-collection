@@ -1,0 +1,8 @@
+[
+  { "query": "The dogfood reports have piled up — boil them down to what we should actually build.", "should_trigger": true, "note": "held-out: no triage/cluster keyword" },
+  { "query": "Go through every feedback file for the method tool and tell me the underlying causes, not the symptoms.", "should_trigger": true, "note": "held-out: cause-vs-symptom framing" },
+  { "query": "Sort the accumulated tool feedback into act-on, route-elsewhere, and drop.", "should_trigger": true, "note": "held-out: dispositions paraphrased" },
+  { "query": "Distill these meeting notes into guidance.", "should_trigger": false, "note": "held-out near-miss: consolidation of notes, not tool feedback" },
+  { "query": "Rank the open pull requests by review urgency.", "should_trigger": false, "note": "held-out near-miss: PR queue" },
+  { "query": "Cluster our retro write-ups from the last few sprints and tell me the recurring themes.", "should_trigger": false, "note": "held-out near-miss: report corpus that is NOT tool dogfooding (sprint retros)" }
+]

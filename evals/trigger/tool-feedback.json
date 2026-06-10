@@ -1,0 +1,19 @@
+[
+  { "query": "Write a dogfooding feedback report for keel — what worked, the friction, and proposed changes.", "should_trigger": true, "note": "canonical explicit ask — context-free, names the tool (headless-safe)" },
+  { "query": "Before we wrap up — capture the friction we hit with keel today as a dogfood report.", "should_trigger": true, "note": "named tool + dogfood report" },
+  { "query": "File tooling feedback for pr-pilot covering that engine run, including what it cost us.", "should_trigger": true, "note": "tooling feedback + cost obligation" },
+  { "query": "This session leaned hard on the data-engineering skill — record what worked and what fought us, back to its own repo.", "should_trigger": true, "note": "implicit: no 'feedback report' keyword, destination = tool's repo" },
+  { "query": "Log the dogfooding notes for craft-collection — the misses and that vacuous gate we found.", "should_trigger": true, "note": "dogfooding notes + report sections named" },
+  { "query": "We just finished the wave — write up where the orchestrator earned its keep and where it cost us, into its feedback folder.", "should_trigger": true, "note": "implicit, feedback folder named" },
+  { "query": "Capture today's tool friction so the maintainers actually see it — one report per tool we touched.", "should_trigger": true, "note": "one-report-per-tool framing" },
+  { "query": "That was a design-only session, but we used keel's templates throughout — still owe it a feedback report.", "should_trigger": true, "note": "design-only use counts" },
+
+  { "query": "Journal this session.", "should_trigger": false, "note": "near-miss: knowledge capture for a memory store (journaling-sessions)" },
+  { "query": "Consolidate my journals into durable guidance.", "should_trigger": false, "note": "near-miss: consolidate-knowledge" },
+  { "query": "Review this PR and give feedback.", "should_trigger": false, "note": "near-miss: 'feedback' on code, i.e. code review" },
+  { "query": "Write a postmortem for yesterday's production incident.", "should_trigger": false, "note": "near-miss: incident retro, not tool dogfooding" },
+  { "query": "File a GitHub issue for this parser bug.", "should_trigger": false, "note": "near-miss: bug filing, different artifact and audience" },
+  { "query": "Capture what we learned this session into my long-term notes.", "should_trigger": false, "note": "near-miss: knowledge capture into a memory store (journaling-sessions), second guard on the hardest boundary" },
+  { "query": "Triage the feedback backlog for keel.", "should_trigger": false, "note": "cross-pair boundary: the downstream pass (feedback-triage), not capture" },
+  { "query": "Send the Notion team feedback about their API rate limits.", "should_trigger": false, "note": "third-party product feedback, not a registered tool" }
+]

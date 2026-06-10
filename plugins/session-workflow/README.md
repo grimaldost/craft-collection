@@ -2,7 +2,8 @@
 
 Manage the work *around* the work: capture session knowledge and distill it into
 durable guidance, hand work off to a fresh context, convene fresh-eyes review
-panels, behaviorally evaluate your skills, and stay aware of your toolkit.
+panels, behaviorally evaluate your skills, stay aware of your toolkit, and run the
+tool-dogfooding feedback loop (capture + triage).
 
 ## Skills
 
@@ -33,6 +34,19 @@ panels, behaviorally evaluate your skills, and stay aware of your toolkit.
 - **toolkit-awareness** — `scripts/scan_toolkit.py` produces a live inventory of
   installed skills / commands / agents / hooks (no hand-maintained list); the
   skill adds durable guidance on referencing the toolkit in prompts and specs.
+- **tool-feedback** — write a per-session dogfooding feedback report for each
+  registered in-development tool the session exercised, into that tool's own
+  feedback directory: what worked, severity-tagged friction, misses with the
+  phase that should have caught them, vacuous gates, and proposals with stable
+  finding IDs (`<file-stem>#<n>`). Targets come from a user-supplied
+  `feedback-targets` table — the skill never hunts the filesystem. Offer-first
+  when self-activated.
+- **feedback-triage** (`/feedback-triage`) — the downstream pass: cluster a
+  tool's accumulated feedback reports by underlying cause, reconcile what
+  already shipped, assign dispositions (ATTACK / ROUTE OUT / DECLINE), apply a
+  promotion gate (reinforced · specific · actionable), and emit a
+  leverage-ordered, status-tracked backlog doc. Defers to a tool-registered
+  triage template (e.g. keel's reflection-triage) when one exists.
 
 ## Hook (optional, off by default)
 

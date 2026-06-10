@@ -9,12 +9,14 @@ stdlib only.
 
 ## Coverage
 
-Five of the six skills are evaluated: `journaling-sessions`, `context-handoff`,
-`data-engineering-discipline`, `python-engineering`, `toolkit-awareness`.
-`refresh-stack` is intentionally **excluded** — it sets
-`disable-model-invocation: true` (it is the manual-only `/refresh-stack` command),
-so auto-activation is not-applicable by design rather than a failure, and its real
-behavior needs live PyPI/changelog access a headless run can't supply.
+Every auto-triggering skill in both plugins has a trigger dataset under
+`trigger/` (most also have correct-usage tasks under `tasks/`). `refresh-stack`
+is intentionally **excluded** — it sets `disable-model-invocation: true` (it is
+the manual-only `/refresh-stack` command), so auto-activation is not-applicable
+by design rather than a failure, and its real behavior needs live PyPI/changelog
+access a headless run can't supply. `command_first_skills` in `config.json`
+lists skills whose low auto-recall is expected (slash-first invocation) and
+reported as informational rather than gated.
 
 ## Prerequisites
 
@@ -123,3 +125,15 @@ plugin cleanly; headless agents **do** auto-activate skills and the activation i
 detectable in stream-json; and the CLI judge returns parseable JSON. The smoke
 gate also caught a real plugin bug (a redundant `hooks` manifest key causing a
 "Duplicate hooks file detected" error), since fixed.
+
+## Reading the feedback-loop skills' numbers
+
+- `tool-feedback`'s `tf-implicit` task is a deliberate obliqueness probe. If its
+  per-task `with_activation_rate` comes back low (< ~0.7), read its correct-usage
+  contribution as a *triggering* miss (cross-check the trigger eval) rather than
+  a discipline failure.
+- `feedback-triage` has a single grading task, so at `agent_repeats: 3` its
+  correct-usage CI is very wide — treat the gate verdict as directional until
+  more tasks or repeats exist. (A second, incremental-triage task wants a
+  per-task rubric, which the engine's one-rubric-per-skill schema does not yet
+  support — recorded 2026-06-09.)
