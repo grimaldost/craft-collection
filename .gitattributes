@@ -1,0 +1,7 @@
+# Store all text files with LF in the repository; auto-detect text vs binary.
+* text=auto
+
+# Always check these out with LF in the working tree, on every platform.
+*.md text eol=lf
+*.py text eol=lf
+*.json text eol=lf
