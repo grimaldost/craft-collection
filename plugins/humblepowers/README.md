@@ -21,10 +21,11 @@ gating every skill from birth.
 | skill-authoring | keystone | Calibration doctrine for writing and revising skills; replaces persuasion-based authoring |
 | test-driven-development | rigid port | Red-green-refactor: production code only against a test seen failing |
 | systematic-debugging | rigid port | Four-phase root-cause-first protocol; three failed fixes is an architecture signal |
+| brainstorming | flexible port | Idea to agreed design before implementation; decomposition for bundled requests |
+| verification-before-completion | rigid port | Evidence before completion claims; red-green regression checks; verify delegated work |
+| receiving-code-review | flexible port | Technical evaluation of incoming feedback; clarify-first; no performative agreement |
 
-Arriving through 0.2.x as derived ports, each with datasets and sealed
-holdouts: brainstorming, verification-before-completion,
-receiving-code-review.
+All seven skills ship with trigger datasets and sealed holdouts.
 
 ## Install
 

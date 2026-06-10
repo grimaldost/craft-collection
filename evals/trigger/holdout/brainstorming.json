@@ -1,0 +1,8 @@
+[
+  { "query": "I keep thinking we need some kind of audit trail — turn this hunch into a concrete design.", "should_trigger": true, "note": "held-out: hunch to design" },
+  { "query": "Greenfield: a service that ingests webhooks from three vendors. Shape it with me before any code.", "should_trigger": true, "note": "held-out: greenfield shaping" },
+  { "query": "The exporter idea from standup — let's get it to an agreed spec.", "should_trigger": true, "note": "held-out: idea to agreed spec" },
+  { "query": "One request: search, recommendations, and an admin console. Where do we even begin?", "should_trigger": true, "note": "held-out: bundled subsystems, decomposition" },
+  { "query": "The design doc is approved — break it into implementation tasks.", "should_trigger": false, "note": "held-out near-miss: planning, design already agreed" },
+  { "query": "Quick gut check: is Redis overkill for a 100-user app?", "should_trigger": false, "note": "held-out: direct assessment question" }
+]

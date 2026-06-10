@@ -1,0 +1,19 @@
+[
+  { "query": "Let's build a notification system for the app — not sure yet how it should work.", "should_trigger": true, "note": "canonical unpinned feature idea" },
+  { "query": "I want to add multi-currency support; help me figure out the shape before we code.", "should_trigger": true, "note": "explicit design-before-code ask" },
+  { "query": "New project: a CLI that syncs bookmarks across browsers. Where do we start?", "should_trigger": true, "note": "greenfield, shape unclear" },
+  { "query": "I have a rough idea for a caching layer — flesh it out with me.", "should_trigger": true, "note": "rough idea to refine" },
+  { "query": "We need offline mode. Requirements are fuzzy; let's nail the design first.", "should_trigger": true, "note": "fuzzy requirements" },
+  { "query": "Build me a platform with chat, billing, file storage, and analytics.", "should_trigger": true, "note": "bundled subsystems — decomposition first" },
+  { "query": "Thinking of reworking how imports are configured — explore the options with me.", "should_trigger": true, "note": "behavior change, options open" },
+  { "query": "Add a plugin system to the editor; I haven't decided on the architecture.", "should_trigger": true, "note": "architecture undecided" },
+
+  { "query": "Implement exactly this spec — the function signature, behavior, and tests are written out below.", "should_trigger": false, "note": "already specified to execution level" },
+  { "query": "What do you think of imperative skill descriptions?", "should_trigger": false, "note": "thinking aloud — assessment, not artifacts" },
+  { "query": "Plan the PR series for the spec we approved yesterday.", "should_trigger": false, "note": "near-miss: planning owner (keel/pr-pilot)" },
+  { "query": "Fix the failing login test.", "should_trigger": false, "note": "bugfix, not an idea" },
+  { "query": "Rename this variable across the repo.", "should_trigger": false, "note": "mechanical change" },
+  { "query": "Journal what we decided this session.", "should_trigger": false, "note": "knowledge capture — journaling-sessions" },
+  { "query": "Which library is better for date parsing, dateutil or arrow?", "should_trigger": false, "note": "direct factual comparison" },
+  { "query": "Write a README for the new module.", "should_trigger": false, "note": "documentation task" }
+]

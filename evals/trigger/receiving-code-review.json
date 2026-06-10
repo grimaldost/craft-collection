@@ -1,0 +1,19 @@
+[
+  { "query": "The reviewer left nine comments on my PR — work through them.", "should_trigger": true, "note": "canonical incoming review feedback" },
+  { "query": "Code review says to remove the legacy path, but I think it's load-bearing — how do I respond?", "should_trigger": true, "note": "questionable suggestion, pushback decision" },
+  { "query": "The review bot flagged this as a security issue; is it actually right for our stack?", "should_trigger": true, "note": "automated reviewer, verify against codebase" },
+  { "query": "Reviewer wants proper metrics with database persistence and CSV export — feels like overkill.", "should_trigger": true, "note": "usage check before gold-plating" },
+  { "query": "I got review feedback I only half understand — items 2 and 5 are unclear.", "should_trigger": true, "note": "unclear items block implementation" },
+  { "query": "I was about to reply 'you're absolutely right' to the reviewer — handle it better.", "should_trigger": true, "note": "performative agreement moment" },
+  { "query": "The review suggests a pattern that would break our Windows support; push back?", "should_trigger": true, "note": "platform-blind suggestion" },
+  { "query": "Address the inline comments on PR 42 and reply in the threads.", "should_trigger": true, "note": "processing inline review comments" },
+
+  { "query": "Review this PR for bugs.", "should_trigger": false, "note": "near-miss: performing a review — /code-review" },
+  { "query": "Red-team this design doc with fresh eyes.", "should_trigger": false, "note": "near-miss: review-panel" },
+  { "query": "Triage the feedback reports in docs/feedback into a backlog.", "should_trigger": false, "note": "near-miss: feedback-triage" },
+  { "query": "Summarize the changes in this diff.", "should_trigger": false, "note": "summary, not feedback processing" },
+  { "query": "Fix the merge conflict on my branch.", "should_trigger": false, "note": "mechanical git work" },
+  { "query": "What makes a good code review checklist?", "should_trigger": false, "note": "concept Q&A" },
+  { "query": "Run a code review on the current branch.", "should_trigger": false, "note": "near-miss: performing review" },
+  { "query": "Draft a reply to the customer's complaint email.", "should_trigger": false, "note": "feedback, but not code review" }
+]
