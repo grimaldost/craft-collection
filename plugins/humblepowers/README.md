@@ -19,11 +19,12 @@ gating every skill from birth.
 |---|---|---|
 | choosing-tools | keystone | Fit-ranking dispatch: which installed skill, if any, owns a task |
 | skill-authoring | keystone | Calibration doctrine for writing and revising skills; replaces persuasion-based authoring |
+| test-driven-development | rigid port | Red-green-refactor: production code only against a test seen failing |
+| systematic-debugging | rigid port | Four-phase root-cause-first protocol; three failed fixes is an architecture signal |
 
 Arriving through 0.2.x as derived ports, each with datasets and sealed
-holdouts: test-driven-development, systematic-debugging, brainstorming,
-verification-before-completion, receiving-code-review. Each port ships with an
-explicit retained/removed ledger against its upstream source.
+holdouts: brainstorming, verification-before-completion,
+receiving-code-review.
 
 ## Install
 

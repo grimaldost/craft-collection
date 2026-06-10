@@ -1,0 +1,19 @@
+[
+  { "query": "Implement a retry helper for flaky network calls.", "should_trigger": true, "note": "feature implementation" },
+  { "query": "Add email validation to the signup form.", "should_trigger": true, "note": "feature implementation" },
+  { "query": "Fix this bug: the empty cart shows NaN as the total.", "should_trigger": true, "note": "bugfix — reproducing test first" },
+  { "query": "I wrote the parser already — I'll add tests afterwards, fine?", "should_trigger": true, "note": "tempted to backfill tests" },
+  { "query": "Build the rate limiter we specced yesterday.", "should_trigger": true, "note": "specced feature, implementation starts" },
+  { "query": "My new test passed on the first run — what does that tell me?", "should_trigger": true, "note": "passes-first-run means unverified test" },
+  { "query": "Refactor this module and make sure behavior doesn't change.", "should_trigger": true, "note": "refactor under green tests" },
+  { "query": "Add a --json flag to the CLI export command.", "should_trigger": true, "note": "feature implementation" },
+
+  { "query": "What's our overall test strategy for this service?", "should_trigger": false, "note": "near-miss: suite/coverage strategy, not the cycle" },
+  { "query": "Why is this test failing? I don't understand the error.", "should_trigger": false, "note": "near-miss: unexplained failure — systematic-debugging" },
+  { "query": "Run the test suite and tell me if it's green.", "should_trigger": false, "note": "just running tests" },
+  { "query": "Write a throwaway script to explore the API response shape.", "should_trigger": false, "note": "declared throwaway prototype" },
+  { "query": "Raise the coverage threshold in the CI config.", "should_trigger": false, "note": "pure configuration" },
+  { "query": "Explain the difference between unit and integration tests.", "should_trigger": false, "note": "concept Q&A" },
+  { "query": "Regenerate the protobuf client from the schema.", "should_trigger": false, "note": "generated code" },
+  { "query": "Review this PR for missing edge cases.", "should_trigger": false, "note": "review, not implementation" }
+]

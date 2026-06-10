@@ -1,0 +1,8 @@
+[
+  { "query": "Orders intermittently vanish between the queue and the database — get to the bottom of it.", "should_trigger": true, "note": "held-out: multi-component mystery" },
+  { "query": "Two patches in and the flaky login test still flakes; what now?", "should_trigger": true, "note": "held-out: repeated failed fixes" },
+  { "query": "After the dependency upgrade everything compiles but the output is subtly different — investigate.", "should_trigger": true, "note": "held-out: behavioral regression, unknown cause" },
+  { "query": "Staging works, prod doesn't, same artifact — diagnose before we touch any config.", "should_trigger": true, "note": "held-out: environment divergence" },
+  { "query": "We traced it to the off-by-one in pagination — just write the fix.", "should_trigger": false, "note": "held-out near-miss: cause already proven" },
+  { "query": "Profile the endpoint and shave the p99 latency.", "should_trigger": false, "note": "held-out near-miss: performance tuning" }
+]

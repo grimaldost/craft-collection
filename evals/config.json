@@ -22,6 +22,8 @@
     "tool-feedback": "session-workflow",
     "feedback-triage": "session-workflow",
     "choosing-tools": "humblepowers",
-    "skill-authoring": "humblepowers"
+    "skill-authoring": "humblepowers",
+    "test-driven-development": "humblepowers",
+    "systematic-debugging": "humblepowers"
   }
 }
