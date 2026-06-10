@@ -3,6 +3,57 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.2.1 — 2026-06-09
+
+Wording promotions from the feedback-loop skills' first dogfood run, recorded
+in `2026-06-09-feedback-skills-first-run` (craft-collection's feedback dir).
+Body-only edits: both skills' `description` blocks — the eval-gated trigger
+surfaces — are untouched.
+
+### Added
+
+- `feedback-triage`: **Promotion-gate ledger** as a first-class template
+  section — the gate shows its work per cluster (cleared on reinforcement /
+  BLOCKER-exempt / `watch` / raw, and why), closing with the assertion that no
+  singleton non-BLOCKER was promoted; pipeline step 5 now requires it
+  (per 2026-06-09-feedback-skills-first-run#1).
+- `feedback-triage`: `watch` added to the status vocabulary — the middle
+  disposition for an anchored-but-singleton row, parked until a second report
+  corroborates it — and the BLOCKER exemption's scope clarified to the
+  BLOCKER's own row: sibling rows from the same report need their own ledger
+  justification or take `watch` (per 2026-06-09-feedback-skills-first-run#4).
+- `feedback-triage`: the cluster-**splitting** rule named as the dual of
+  collapsing — split one super-cause into separate clusters when its
+  corollaries have distinct homes and distinct concrete fixes
+  (per 2026-06-09-feedback-skills-first-run#3).
+- `feedback-triage`: first-run base cases stated explicitly — no triage doc yet
+  ⇒ the whole corpus is un-triaged (step 1); no last triage ⇒ the
+  reconciliation window is the whole CHANGELOG to date (step 2); empty
+  `extras` ⇒ the fallback template is authoritative (step 7)
+  (per 2026-06-09-feedback-skills-first-run#2).
+- `feedback-triage`: the disposition tie-breaker — route by where the fix
+  lands, not where the artifact lives (step 4) — and the disk-is-authoritative
+  scope note: an invocation-vs-directory discrepancy is resolved in the
+  directory's favor and noted under Inputs (step 1)
+  (per 2026-06-09-feedback-skills-first-run#7).
+- `tool-feedback` + `feedback-triage`: the loop's two ID namespaces documented
+  on both sides — report finding IDs (`<file-stem>#<n>`) vs triage promotion
+  IDs (`T1a`) — and triage now explicitly follows `extends` chains when
+  clustering, making capture-time `extends` refs load-bearing
+  (per 2026-06-09-feedback-skills-first-run#5).
+
+### Changed
+
+- evals/README ("Reading the feedback-loop skills' numbers"): holdout
+  interpretation note — two of `tool-feedback`'s three holdout positives are
+  session-framed by design; if holdout recall drops, suspect those two before
+  concluding the description fails to generalize
+  (per 2026-06-09-feedback-skills-first-run#8).
+
+Deliberately not in this release: per-task rubric support in the
+`evaluate-skill` engine (2026-06-09-feedback-skills-first-run#6) — an engine
+schema change, left recorded for a separate initiative.
+
 ## 0.2.0 — 2026-06-09
 
 ### Added
