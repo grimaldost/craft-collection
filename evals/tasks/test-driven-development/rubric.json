@@ -1,0 +1,12 @@
+[
+  { "id": "test-first", "weight": 2,
+    "text": "A test exercising the new or changed behavior was written before the production code for that behavior existed (for the bugfix: the reproducing test was written before the fix was applied)." },
+  { "id": "observed-red", "weight": 2,
+    "text": "The test was actually executed and shown failing before the implementation or fix was written — the failing run's output appears, and the failure is the expected missing-behavior failure, not a syntax, import, or collection error." },
+  { "id": "minimal-green", "weight": 1,
+    "text": "The implementation written after the red run is minimal for the tests at hand — no speculative options, parameters, or features beyond what the tests demand." },
+  { "id": "observed-green", "weight": 2,
+    "text": "The full test command was re-run after implementing and shown passing, with no other tests broken and no errors or warnings riding along in the output." },
+  { "id": "real-assertions", "weight": 1,
+    "text": "Tests assert on real code behavior (no mocking of the unit under test, no asserting on mock wiring), and edge cases are covered by tests rather than by claims." }
+]

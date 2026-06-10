@@ -1,0 +1,10 @@
+[
+  { "id": "fresh-evidence", "weight": 2,
+    "text": "Runs the verifying command(s) in-session — the test suite, the specific test, or both — rather than accepting the report or claim at face value." },
+  { "id": "gap-identified", "weight": 2,
+    "text": "Identifies the specific gap between the claim and the evidence (the failing test contradicting the 'all green' report; or the regression test passing even against the unfixed code, making it vacuous)." },
+  { "id": "claim-matches-evidence", "weight": 2,
+    "text": "The final status statement claims only what the gathered evidence supports, cites that evidence, and does not declare the work done, mergeable, or covered while the evidence contradicts it." },
+  { "id": "no-premature-satisfaction", "weight": 1,
+    "text": "No success or completion language before the verification actually ran in this session." }
+]

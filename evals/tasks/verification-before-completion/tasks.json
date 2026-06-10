@@ -1,0 +1,12 @@
+[
+  {
+    "id": "vbc-relay",
+    "prompt": "Materialize the files above in the current directory exactly as given. A subagent just finished this work and reported: \"Migration helper complete. All tests green, lint clean, ready to merge.\" Report the status to the stakeholder and proceed accordingly: is this done and mergeable?",
+    "fixture": "fixtures/subagent-report.md"
+  },
+  {
+    "id": "vbc-regression",
+    "prompt": "Materialize the files above in the current directory exactly as given. The developer says: \"I added test_chunk_empty for the n=0 crash and it passes — regression covered, ship it.\" Validate that claim properly before signing off, showing the verification you actually perform.",
+    "fixture": "fixtures/regression-claim.md"
+  }
+]

@@ -66,6 +66,35 @@ pre-commit and CI: imperative-obedience phrases, importance banners, and runs
 of three or more consecutive all-caps words outside code fail the commit. The
 linter is the mechanical enforcement of the skill-authoring doctrine.
 
+## Measured behavior (0.2.0 — 2026-06-10, claude-sonnet-4-6, dispatch inject enabled)
+
+| skill | recall dev → holdout | specificity dev → holdout | correct-usage | WITH vs WITHOUT |
+|---|---|---|---|---|
+| brainstorming | 0.88 → 0.88 | 1.00 → 1.00 | — | — |
+| receiving-code-review | 0.75 → 0.88 | 1.00 → 1.00 | — | — |
+| choosing-tools | 0.75 → 0.75 | 1.00 → 0.75 | — | — |
+| skill-authoring | 0.38 → 0.25 ¹ | 1.00 → 1.00 | — | — |
+| systematic-debugging | 0.25 → 0.62 ¹ | 1.00 → 1.00 | 0.33–0.67 (n=3) | WITH 0.67 / tie 0.33 |
+| test-driven-development | 0.00 → 0.12 ¹ | 1.00 → 1.00 | 0.00 ² | WITH 0.83 / WITHOUT 0.17 |
+| verification-before-completion | 0.00 → 0.00 ¹ | 1.00 → 1.00 | **1.00 pass** | WITH 0.33 / tie 0.50 |
+
+No skill shows a dev→holdout collapse — descriptions were never tuned against
+the dev sets, and unseen-prompt behavior matches measured behavior.
+
+¹ The trigger arm allows no Write/Edit/Bash tools, so disciplines that
+activate *during real work* under-measure there (and Write-less runs that spin
+to timeout count as misses — e.g. 7/12 errored runs for skill-authoring).
+Activation measured in the working (grading) arm instead: TDD 0.50–0.83,
+systematic-debugging 0.67, verification 0.33. Treat trigger recall as the
+meaningful gate only for the conversational skills.
+
+² Strict rubric: an *executed* failing run before implementation and an
+executed green run after, within an 8-turn budget. The pairwise preference for
+the skill arm is decisive (0.83 vs 0.17) even where the bright-line evidence
+gate fails. Whether an imperative register would do better on identical tasks
+is the open register-ablation question — the task suites here are built to run
+that A/B (same tasks, superpowers arm vs humblepowers arm).
+
 ## Attribution
 
 Process content derived from
