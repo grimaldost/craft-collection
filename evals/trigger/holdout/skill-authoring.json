@@ -1,0 +1,8 @@
+[
+  { "query": "The handoff skill misses 'spin this off' phrasings — broaden its trigger surface without making it grabby.", "should_trigger": true, "note": "held-out: trigger broadening with specificity concern" },
+  { "query": "Write me a brand-new skill that owns release-notes drafting, with proper non-trigger boundaries.", "should_trigger": true, "note": "held-out: new skill with negative space" },
+  { "query": "Decide whether the new deploy checklist should be bright-line rules or judgment guidance, and author it that way.", "should_trigger": true, "note": "held-out: rigid-vs-flexible, novel wording" },
+  { "query": "Strip the shouty register out of this skill file and keep its constraints intact.", "should_trigger": true, "note": "held-out: register port, novel wording" },
+  { "query": "Run the trigger recall eval for the handoff skill and report the scorecard.", "should_trigger": false, "note": "held-out near-miss: behavior measurement — evaluate-skill" },
+  { "query": "Which of the installed skills should handle this schema migration?", "should_trigger": false, "note": "held-out near-miss: dispatch — choosing-tools" }
+]

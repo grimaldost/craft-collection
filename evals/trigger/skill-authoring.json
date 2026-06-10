@@ -1,0 +1,19 @@
+[
+  { "query": "Create a new skill for capturing meeting notes — write the SKILL.md.", "should_trigger": true, "note": "canonical new-skill authoring" },
+  { "query": "My data-engineering skill triggers on plain Python questions — fix the over-triggering.", "should_trigger": true, "note": "over-trigger rework" },
+  { "query": "This skill never fires when users say 'wrap up' — tune its description's triggers.", "should_trigger": true, "note": "under-trigger rework" },
+  { "query": "Add 'not for X — that is Y' boundaries to my review skill's description.", "should_trigger": true, "note": "negative space authoring" },
+  { "query": "Should this new skill be rigid bright-lines or flexible guidance? Help me decide and write it.", "should_trigger": true, "note": "rigid-vs-flexible design decision" },
+  { "query": "Port this skill from its all-caps imperative style to a neutral register.", "should_trigger": true, "note": "register port" },
+  { "query": "Draft trigger phrasings and example prompts for the description of my deploy skill.", "should_trigger": true, "note": "trigger-surface drafting" },
+  { "query": "What does a skill need before it can ship — datasets, holdout, rubric? Set that up for this one.", "should_trigger": true, "note": "shipping requirement" },
+
+  { "query": "Evaluate whether my skill triggers correctly — run the eval and report the scorecard.", "should_trigger": false, "note": "near-miss: measuring behavior — evaluate-skill" },
+  { "query": "Which installed skill should own this migration task?", "should_trigger": false, "note": "near-miss: dispatch decision — choosing-tools" },
+  { "query": "What skills do I have installed?", "should_trigger": false, "note": "near-miss: inventory — toolkit-awareness" },
+  { "query": "Write a PR prompt for Claude Code and score its complexity.", "should_trigger": false, "note": "near-miss: task-prompt authoring, not skill authoring" },
+  { "query": "Update the README for my Python library.", "should_trigger": false, "note": "docs writing, not a skill" },
+  { "query": "Journal what we learned this session.", "should_trigger": false, "note": "knowledge capture — journaling-sessions" },
+  { "query": "Write a Python decorator that retries failed calls.", "should_trigger": false, "note": "plain coding task" },
+  { "query": "Improve the system prompt for my customer-support chatbot.", "should_trigger": false, "note": "near-miss: prompt engineering, not a Claude Code skill" }
+]

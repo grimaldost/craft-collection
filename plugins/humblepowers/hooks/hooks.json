@@ -1,0 +1,19 @@
+{
+  "description": "Optional compact dispatch-protocol reminder at session start. Ships wired but INERT — the script exits silently unless the environment variable HUMBLEPOWERS_DISPATCH_INJECT=1 is set. See the plugin README to enable.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/skills/choosing-tools/scripts/inject_dispatch.py",
+              "--session-start"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

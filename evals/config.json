@@ -20,6 +20,8 @@
     "evaluate-skill": "session-workflow",
     "consolidate-knowledge": "session-workflow",
     "tool-feedback": "session-workflow",
-    "feedback-triage": "session-workflow"
+    "feedback-triage": "session-workflow",
+    "choosing-tools": "humblepowers",
+    "skill-authoring": "humblepowers"
   }
 }
