@@ -1,0 +1,8 @@
+[
+  { "query": "Kicking off a contract change on the orders dataset — pick the right discipline from what's installed before we touch code.", "should_trigger": true, "note": "held-out: task-start dispatch, novel wording" },
+  { "query": "Three of my plugins could plausibly claim this task; rank them and load the winner.", "should_trigger": true, "note": "held-out: explicit fit ranking" },
+  { "query": "Sanity-check: does anything in the toolkit deserve to run before I start this debugging session?", "should_trigger": true, "note": "held-out: discipline-applies check" },
+  { "query": "We just pivoted from refactor to data backfill mid-session — re-check which skill should own the new direction.", "should_trigger": true, "note": "held-out: direction change re-dispatch" },
+  { "query": "Show me everything installed in this environment, grouped by plugin.", "should_trigger": false, "note": "held-out near-miss: inventory — toolkit-awareness" },
+  { "query": "Keep going with the plan we agreed — next step.", "should_trigger": false, "note": "held-out: continuation, no dispatch moment" }
+]

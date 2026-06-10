@@ -1,0 +1,19 @@
+[
+  { "query": "I'm about to start migrating this pipeline — which of my installed skills should own the work?", "should_trigger": true, "note": "task start, candidate ranking" },
+  { "query": "Which tool or skill should handle this refactor?", "should_trigger": true, "note": "canonical direct ask" },
+  { "query": "Both the data-engineering skill and the Python skill look relevant here — which one applies?", "should_trigger": true, "note": "two skills claim the same job" },
+  { "query": "Does any installed discipline skill apply before I start writing this fix?", "should_trigger": true, "note": "unsure whether a discipline applies" },
+  { "query": "Starting a schema change — should I load a guardrail skill first or just code it?", "should_trigger": true, "note": "load-or-not decision at task start" },
+  { "query": "I have overlapping review skills installed; decide which one fits this PR and why.", "should_trigger": true, "note": "rank overlapping candidates by fit" },
+  { "query": "Before this feature work kicks off, check whether TDD or any other process skill should be active.", "should_trigger": true, "note": "process-vs-implementation ordering" },
+  { "query": "New task: audit our eval harness. Is there a skill for that or do we go without?", "should_trigger": true, "note": "fit check with a possible one-line exit" },
+
+  { "query": "What skills do I have installed?", "should_trigger": false, "note": "near-miss: inventory question — toolkit-awareness" },
+  { "query": "List the hooks configured in this Claude Code environment.", "should_trigger": false, "note": "near-miss: inventory — toolkit-awareness" },
+  { "query": "My skill fires on the wrong prompts — rewrite its description.", "should_trigger": false, "note": "near-miss: trigger-surface rework — skill-authoring" },
+  { "query": "Add 'not for X' boundaries to my journaling skill's description.", "should_trigger": false, "note": "near-miss: negative space authoring — skill-authoring" },
+  { "query": "Continue with step 3 of the migration we planned.", "should_trigger": false, "note": "mid-task continuation, no dispatch moment" },
+  { "query": "Explain how git rebase works.", "should_trigger": false, "note": "concept Q&A, answerable directly" },
+  { "query": "Which Claude model should I use for this agent?", "should_trigger": false, "note": "near-miss: model choice, not skill dispatch" },
+  { "query": "Write a Python function to parse a CSV file.", "should_trigger": false, "note": "plain coding task, direct execution" }
+]
