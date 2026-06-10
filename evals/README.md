@@ -137,3 +137,8 @@ gate also caught a real plugin bug (a redundant `hooks` manifest key causing a
   more tasks or repeats exist. (A second, incremental-triage task wants a
   per-task rubric, which the engine's one-rubric-per-skill schema does not yet
   support — recorded 2026-06-09.)
+- Two of `tool-feedback`'s three holdout positives are session-framed by design
+  ("Session's ending — drop the usual report…", "How did keel hold up this
+  time?…"): they presuppose a winding-down session and carry no
+  feedback/dogfood keyword. If holdout recall drops, check whether the failures
+  are those two before concluding the description fails to generalize.

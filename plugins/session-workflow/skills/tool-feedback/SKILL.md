@@ -108,7 +108,12 @@ should have caught it ("phase: DoR", "phase: pre-mortem", "phase: gate",
 
 The numbered proposals are the report's **stable finding IDs** — `<file-stem>#1`,
 `#2`, … — what triage docs and changelogs cite. Number proposals only; cite
-friction/misses by file stem + section.
+friction/misses by file stem + section. Finding IDs are one of two namespaces in
+the loop: a triage doc cites them as evidence but mints its own **promotion IDs**
+(`T1a` — cluster + row) for its table; don't conflate the two. Your `extends`
+refs are load-bearing downstream — triage follows the chain to cluster a lineage
+under one cause and to count its recurrence — so point them at the exact
+finding, not just the file.
 
 ## Self-check before writing
 

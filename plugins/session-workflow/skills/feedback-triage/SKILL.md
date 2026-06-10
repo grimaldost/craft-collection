@@ -31,30 +31,49 @@ and writing CHANGELOGs belong to the tool's own release process.
 1. **Scope.** Resolve the tool from the `feedback-targets` table in loaded context
    (ask once if absent; never hunt). Un-triaged reports = reports in its feedback
    dir not listed in the **Inputs** section of any existing `*-triage-*.md` doc
-   there — detection is by input lists, not dates.
-2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage.
-   Open the doc with **"Already shipped — NOT re-proposed"**; a cluster that goes
-   further than a shipped change is marked as *extending* it. Each triage sharpens
-   the backlog; it never repeats it.
+   there — detection is by input lists, not dates. First run (no triage doc
+   exists yet): the whole corpus is un-triaged. If the invocation names a
+   different count or set than the directory holds, the directory is
+   authoritative — triage what is on disk and note the discrepancy under
+   **Inputs**.
+2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
+   on a first run, the window is the whole CHANGELOG to date. Open the doc with
+   **"Already shipped — NOT re-proposed"**; a cluster that goes further than a
+   shipped change is marked as *extending* it. Each triage sharpens the backlog;
+   it never repeats it.
 3. **Cluster by underlying cause, not symptom.** Three reports saying "the cited
    file didn't exist", "the helper didn't handle our shape", and "the precedent
-   was counterfactual" are one cluster: *ungrounded referents*. Cite every
-   cluster's evidence as `<file-stem>#<n>` IDs (or stem + section for narrative
-   findings), with counts.
+   was counterfactual" are one cluster: *ungrounded referents*. Collapsing has a
+   dual — **split** one super-cause into separate clusters when its corollaries
+   have distinct homes *and* distinct concrete fixes; each piece must be
+   promotable on its own. Follow `extends` chains while clustering: a finding
+   marked "extends `<stem>#<n>`" belongs with its ancestors, and the chain's
+   length is recurrence evidence. Cite every cluster's evidence as
+   `<file-stem>#<n>` finding IDs (or stem + section for narrative findings),
+   with counts.
 4. **Assign a disposition per cluster:**
    - **ATTACK** — a real increment to this tool; name the home (template / gate /
      skill / doc / ADR).
    - **ROUTE OUT** — it belongs to another registered tool; record the target.
    - **DECLINE** — project-specific or out of charter; record why.
+
+   Tie-breaker when this tool's artifact participates in behavior another tool
+   owns: route by **where the fix lands**, not where the artifact lives.
 5. **Apply the promotion gate.** Promote only clusters that are **reinforced**
    (≥2 reports, ideally across arcs — a single-report **BLOCKER** is exempt),
-   **specific** (a concrete change with a home), and **actionable**.
-   Under-promote rather than pollute; unpromoted clusters stay listed as raw.
+   **specific** (a concrete change with a home), and **actionable**. The
+   exemption's scope is the BLOCKER's own row: sibling rows from the same
+   report need their own explicit justification in the ledger, or take `watch`.
+   `watch` is also the middle disposition for an anchored singleton — keep the
+   row, hold the build, wait for a second report. Under-promote rather than
+   pollute; unpromoted clusters stay listed as raw, and the **Promotion-gate
+   ledger** section shows the gate's work either way.
 6. **Emit the triage doc** (template below) into the tool's feedback dir as
    `<YYYY-MM-DD>-triage-<scope>.md`, clusters leverage-ordered.
 7. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
-   the template below is the fallback for tools without one.
+   if `extras` is empty or registers none, the template below is authoritative —
+   don't hunt for one.
 
 ## Triage doc template
 
@@ -85,10 +104,23 @@ and writing CHANGELOGs belong to the tool's own release process.
 
 ## Declined
 <cluster → reason>
+
+## Promotion-gate ledger
+<the gate's work, auditable per cluster: which cleared on reinforcement, which
+promoted via the BLOCKER exemption (name the exempting finding), which sit at
+`watch`, which stayed raw — and why. Close with the assertion that no singleton
+non-BLOCKER was promoted.>
 ```
 
-Status vocabulary: `proposed` / `accepted` / `shipped(<version>)` / `declined`.
-A fresh triage emits everything as `proposed`; later passes update statuses.
+Status vocabulary: `proposed` / `watch` / `accepted` / `shipped(<version>)` /
+`declined` — `watch` parks an anchored-but-singleton row until a second report
+corroborates it. A fresh triage emits rows as `proposed` (or `watch`); later
+passes update statuses.
+
+Two ID namespaces are in play; don't conflate them. **Report finding IDs**
+(`<file-stem>#<n>`, minted by `tool-feedback`) are what evidence and CHANGELOG
+credits cite; **promotion IDs** (`T1a` — cluster number + row letter, minted
+here) are what statuses track across triage passes.
 
 ## Anti-patterns — hunt these
 
@@ -96,7 +128,8 @@ A fresh triage emits everything as `proposed`; later passes update statuses.
 - **Symptom clusters** — grouping by where it hurt instead of why it happened
   produces ten shallow clusters where two deep ones exist.
 - **Over-promotion** — a singleton observation promoted as if reinforced; the
-  gate (≥2 reports, BLOCKER exempt) exists to kill this.
+  gate (≥2 reports, BLOCKER exempt) exists to kill this, and `watch` exists so
+  the anchored singleton isn't lost instead.
 - **Absorbing what should be routed** — an engine defect "fixed" with a method
   doc; honor each tool's ledger and route out.
 
