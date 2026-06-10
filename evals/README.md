@@ -112,7 +112,22 @@ is about to).
 ## What the numbers mean
 
 - **Recall** — of the should-trigger queries, the fraction of runs that fired the
-  skill. Gate: ≥ `gates.trigger_recall`.
+  skill. Gate: ≥ `gates.trigger_recall`. Errored runs (timeout/budget) count as
+  misses in this strict number; when any non-firing positive run errored, the
+  runner also prints **recall excl. errored runs** — those runs carry no evidence
+  about the description either way (`errors_no_activation` per query in
+  `triggers.json`).
+- **Action-discipline skills** (`action_discipline_skills` in `config.json` —
+  TDD, systematic-debugging, verification-before-completion, skill-authoring):
+  the trigger arm deliberately denies Write/Edit/Bash, so skills that activate
+  *during real work* are structurally unmeasurable there — an agent asked to
+  "implement X" with no working tools answers in prose and consults nothing.
+  Their trigger-arm recall is reported as **(info)**, and the gated recall proxy
+  is the grading arm's **activation rate** (the WITH arm of `grade_tasks`, where
+  the agent actually works); the scorecard carries that gate in the Activation
+  column. Evidence for the split: identical machinery measures conversational
+  skills at 0.75–0.88 recall while TDD floors at 0.00 with 0.50–0.83 task-arm
+  activation (2026-06-10, humblepowers).
 - **Specificity** — of the should-NOT queries, the fraction that correctly stayed
   quiet. Gate: ≥ `gates.trigger_specificity`.
 - **Correct-usage** — pointwise pass-rate of the WITH-arm output against the

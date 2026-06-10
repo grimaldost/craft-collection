@@ -41,8 +41,48 @@ def test_partial_recall_pools_across_repeats():
     assert r['per_query'][0]['k'] == 1
 
 
+def test_error_counter_decomposes_recall():
+    # One positive, 3 repeats: fired once, and one of the two non-firing runs errored.
+    # Strict recall (gated) stays 1/3; excluding the errored run it is 1/2.
+    queries = [{'query': 'p', 'should_trigger': True}]
+    r = score_skill(
+        queries,
+        repeats=3,
+        trigger_counter=lambda q, n: 1,
+        error_counter=lambda q, n: 1,
+    )
+    assert abs(r['recall'] - 1 / 3) < 1e-9
+    assert abs(r['recall_excl_errors'] - 1 / 2) < 1e-9
+    assert r['per_query'][0]['errors_no_activation'] == 1
+    assert r['errors_no_activation_positive'] == 1
+
+
+def test_error_counter_defaults_to_zero():
+    queries = [{'query': 'p', 'should_trigger': True}]
+    r = score_skill(queries, repeats=3, trigger_counter=lambda q, n: 2)
+    assert r['recall_excl_errors'] == r['recall']
+    assert r['per_query'][0]['errors_no_activation'] == 0
+    assert r['errors_no_activation_positive'] == 0
+
+
+def test_all_positive_runs_errored_yields_none():
+    # Every non-firing positive run errored: no valid evidence either way.
+    queries = [{'query': 'p', 'should_trigger': True}]
+    r = score_skill(
+        queries,
+        repeats=2,
+        trigger_counter=lambda q, n: 0,
+        error_counter=lambda q, n: 2,
+    )
+    assert r['recall'] == 0.0  # strict stays conservative
+    assert r['recall_excl_errors'] is None  # zero valid runs -> no rate
+
+
 if __name__ == '__main__':
     test_scoring_recall_specificity()
     test_specificity_failure_when_negative_fires()
     test_partial_recall_pools_across_repeats()
+    test_error_counter_decomposes_recall()
+    test_error_counter_defaults_to_zero()
+    test_all_positive_runs_errored_yields_none()
     print('ok: all run_triggers tests passed')
