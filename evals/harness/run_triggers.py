@@ -92,6 +92,7 @@ def run_skill(
             qstr,
             plugin_dir=plugin_dir,
             allowed_tools=cfg['allowed_tools_trigger'],
+            disallowed_tools=cfg.get('disallowed_tools_trigger', ''),
             model=cfg['agent_model'],
             max_turns=MAX_TURNS_TRIGGER,
             max_budget_usd=cfg['max_budget_usd'],
@@ -163,6 +164,11 @@ def main(argv: list[str] | None = None) -> int:
         for q in queries:
             print(f'  [{"+" if q["should_trigger"] else "-"}] {q["query"][:80]}')
         return 0
+    if args.limit or args.repeats != cfg['agent_repeats']:
+        print(
+            f'NOTE: partial run — overwrites any full "{args.skill}" entry in '
+            f'report/triggers.json; re-run full (or restore a backup) before aggregating'
+        )
 
     config_dir = make_isolated_config()
     cwd = tempfile.mkdtemp(prefix='eval_trig_')

@@ -29,17 +29,29 @@ That's it. No environment variables, no API key.
 
 ## How isolation works (the load-bearing trick)
 
-Each run uses a temp `CLAUDE_CONFIG_DIR` containing **only the top-level files** of
-`~/.claude` (credentials + settings) and **no `plugins/` dir** — authenticated but
-skill-free. The two A/B arms then differ by exactly one thing:
+Each run uses a temp `CLAUDE_CONFIG_DIR` containing **only `.credentials.json`**
+from `~/.claude` — authenticated and nothing else. No `CLAUDE.md` (it carries real
+repo paths and discipline text that contaminate both arms — a trigger-arm spawn
+once followed those breadcrumbs and wrote into a real repo), no `settings.json`
+(permission grants), no `history.jsonl`, no `plugins/` dir. The two A/B arms then
+differ by exactly one thing:
 
 - **WITHOUT arm** — that clean config, no `--plugin-dir`. Zero skills.
 - **WITH arm** — clean config **+ `--plugin-dir plugins/<plugin>`**. Only the one
   target plugin's skills load.
 
+Tool access is the other half of isolation: spawns run in headless default-deny
+(**no** `--permission-mode bypassPermissions` — bypass auto-approves every tool
+and turns `--allowed-tools` into decoration), so only the arm's explicit
+allowlist is usable, and trigger arms additionally pass
+`--disallowed-tools` (`disallowed_tools_trigger` in `config.json`) as
+belt-and-braces. `smoke.py` asserts both properties on real spawns.
+
 `--bare` is **not** used: it strips the config-bound subscription login. Skill
 activation is detected from `--output-format stream-json` (a `tool_use` event that
-names the `Skill` tool). See `harness/claude_runner.py`.
+names the `Skill` tool); on a spawn timeout the partial stream is still parsed, so
+a skill that fired before the kill counts as fired (error runs can otherwise only
+under-count activations, never invent them). See `harness/claude_runner.py`.
 
 ## Layout
 
@@ -91,6 +103,12 @@ Each runner prints an upfront spawn count and a ceiling, and supports `--dry-run
 `--concurrency 6`. Lower `--repeats`, `--limit` the set, or drop `--concurrency`
 to trim.
 
+Run **one runner at a time**: `report/triggers.json` and `report/grading.json` are
+merged read-modify-write only when a runner finishes, so two same-type runners in
+parallel can clobber each other's entry. A `--limit`/`--repeats` partial run
+likewise **overwrites** that skill's full entry (the runner prints a NOTE when it
+is about to).
+
 ## What the numbers mean
 
 - **Recall** — of the should-trigger queries, the fraction of runs that fired the
@@ -137,8 +155,3 @@ gate also caught a real plugin bug (a redundant `hooks` manifest key causing a
   more tasks or repeats exist. (A second, incremental-triage task wants a
   per-task rubric, which the engine's one-rubric-per-skill schema does not yet
   support — recorded 2026-06-09.)
-- Two of `tool-feedback`'s three holdout positives are session-framed by design
-  ("Session's ending — drop the usual report…", "How did keel hold up this
-  time?…"): they presuppose a winding-down session and carry no
-  feedback/dogfood keyword. If holdout recall drops, check whether the failures
-  are those two before concluding the description fails to generalize.
