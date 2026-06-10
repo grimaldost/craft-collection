@@ -24,6 +24,9 @@
     "choosing-tools": "humblepowers",
     "skill-authoring": "humblepowers",
     "test-driven-development": "humblepowers",
-    "systematic-debugging": "humblepowers"
+    "systematic-debugging": "humblepowers",
+    "brainstorming": "humblepowers",
+    "verification-before-completion": "humblepowers",
+    "receiving-code-review": "humblepowers"
   }
 }

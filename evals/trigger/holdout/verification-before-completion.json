@@ -1,0 +1,8 @@
+[
+  { "query": "Everything's green as far as I remember — call it done and push.", "should_trigger": true, "note": "held-out: remembered result, push moment" },
+  { "query": "The subagent finished the refactor; close out the task.", "should_trigger": true, "note": "held-out: delegated work unverified" },
+  { "query": "The fix feels solid — declare victory?", "should_trigger": true, "note": "held-out: feeling as evidence" },
+  { "query": "Before I tag the release, make sure we can actually claim it works.", "should_trigger": true, "note": "held-out: explicit pre-claim verification ask" },
+  { "query": "Outline what kinds of tests the importer needs.", "should_trigger": false, "note": "held-out near-miss: test strategy" },
+  { "query": "Is CI currently red or green on the feature branch?", "should_trigger": false, "note": "held-out: status question" }
+]

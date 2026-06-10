@@ -1,0 +1,19 @@
+[
+  { "query": "Tests should pass now — let's commit.", "should_trigger": true, "note": "claim without fresh evidence, pre-commit" },
+  { "query": "I think the bug is fixed; write it up as done.", "should_trigger": true, "note": "completion claim on an assumption" },
+  { "query": "The agent says it completed the migration — report success.", "should_trigger": true, "note": "relaying a subagent report unverified" },
+  { "query": "Mark the task complete and move on to the next one.", "should_trigger": true, "note": "task-completion moment" },
+  { "query": "I added a regression test for the crash — done, right?", "should_trigger": true, "note": "regression test needs red-green" },
+  { "query": "Ready to open the PR — anything before I do?", "should_trigger": true, "note": "pre-PR gate" },
+  { "query": "The build probably works after that change; ship it.", "should_trigger": true, "note": "'probably' — claim outrunning evidence" },
+  { "query": "Wrap up and summarize the work as finished.", "should_trigger": true, "note": "finished-state claim" },
+
+  { "query": "Design the test plan for the payments service.", "should_trigger": false, "note": "near-miss: test strategy, not a claim moment" },
+  { "query": "What does pytest's -k flag do?", "should_trigger": false, "note": "concept Q&A" },
+  { "query": "Run the test suite.", "should_trigger": false, "note": "plain command, no completion claim" },
+  { "query": "Why is this test failing?", "should_trigger": false, "note": "near-miss: diagnosis — systematic-debugging" },
+  { "query": "Refactor the verification module in src/checks.", "should_trigger": false, "note": "code work that mentions verification" },
+  { "query": "Add more assertions to this test.", "should_trigger": false, "note": "test editing, no claim" },
+  { "query": "Show me the CI status for main.", "should_trigger": false, "note": "status question" },
+  { "query": "Write the release notes for 2.0.", "should_trigger": false, "note": "documentation task" }
+]

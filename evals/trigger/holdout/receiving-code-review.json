@@ -1,0 +1,8 @@
+[
+  { "query": "The upstream maintainer requested changes on my patch — some seem wrong for this codebase; work through the thread.", "should_trigger": true, "note": "held-out: external reviewer, skeptical evaluation" },
+  { "query": "Three review bots disagree about my PR; sort out what's actually worth doing.", "should_trigger": true, "note": "held-out: conflicting automated feedback" },
+  { "query": "The senior dev's review comments conflict with what we decided last sprint — how do I handle them?", "should_trigger": true, "note": "held-out: conflict with prior decisions" },
+  { "query": "Apply the review feedback, but the items about the cache I don't fully get yet.", "should_trigger": true, "note": "held-out: partially unclear items" },
+  { "query": "Give my teammate's PR a thorough review.", "should_trigger": false, "note": "held-out near-miss: performing review" },
+  { "query": "Cluster the accumulated tool-feedback reports into an improvement backlog.", "should_trigger": false, "note": "held-out near-miss: feedback-triage" }
+]
