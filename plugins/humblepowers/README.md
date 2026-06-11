@@ -24,8 +24,9 @@ gating every skill from birth.
 | brainstorming | flexible port | Idea to agreed design before implementation; decomposition for bundled requests |
 | verification-before-completion | rigid port | Evidence before completion claims; red-green regression checks; verify delegated work |
 | receiving-code-review | flexible port | Technical evaluation of incoming feedback; clarify-first; no performative agreement |
+| planned-execution | rigid port | Midweight lane: executable-cold plan contract + per-task subagent loop with two-stage review |
 
-All seven skills ship with trigger datasets and sealed holdouts.
+All eight skills ship with trigger datasets and sealed holdouts.
 
 ## Install
 
@@ -45,13 +46,13 @@ Deduplicated against craft-collection and the Claude Code harness:
 | upstream capability | owner |
 |---|---|
 | requesting code review | `/code-review`, session-workflow:review-panel |
-| writing / executing plans | your planning tool (keel, pr-pilot, harness plan mode) |
-| subagent orchestration | harness Agent tool, pr-pilot |
+| governed series planning / execution | keel, pr-pilot (planned-execution covers the midweight lane in-pack) |
+| ad-hoc parallel agent dispatch | harness Agent tool |
 | git worktrees | harness-native worktree isolation |
 | finishing a branch | folded into verification-before-completion |
 
-No planning or orchestration skills ship here; pair the pack with your
-planning tool of choice.
+Governed multi-PR machinery stays out of the pack by design; planned-execution
+hands off to it the moment work wants gates and dependency DAGs.
 
 ## Optional hook (off by default)
 
@@ -66,7 +67,7 @@ pre-commit and CI: imperative-obedience phrases, importance banners, and runs
 of three or more consecutive all-caps words outside code fail the commit. The
 linter is the mechanical enforcement of the skill-authoring doctrine.
 
-## Measured behavior (0.2.0 — 2026-06-10, claude-sonnet-4-6, dispatch inject enabled)
+## Measured behavior (0.2.0–0.3.0 — 2026-06-10/11, claude-sonnet-4-6, dispatch inject enabled)
 
 | skill | recall dev → holdout | specificity dev → holdout | correct-usage | WITH vs WITHOUT |
 |---|---|---|---|---|
@@ -77,6 +78,7 @@ linter is the mechanical enforcement of the skill-authoring doctrine.
 | systematic-debugging | 0.25 → 0.62 ¹ | 1.00 → 1.00 | 0.33–0.67 (n=3) | WITH 0.67 / tie 0.33 |
 | test-driven-development | 0.00 → 0.12 ¹ | 1.00 → 1.00 | 0.00 ² | WITH 0.83 / WITHOUT 0.17 |
 | verification-before-completion | 0.00 → 0.00 ¹ | 1.00 → 1.00 | **1.00 pass** | WITH 0.33 / tie 0.50 |
+| planned-execution | 0.25 → 0.12 ¹ | 1.00 → 1.00 | 0.67 (n=3) | **WITH 1.00 sweep** ³ |
 
 No skill shows a dev→holdout collapse — descriptions were never tuned against
 the dev sets, and unseen-prompt behavior matches measured behavior.
@@ -91,9 +93,25 @@ meaningful gate only for the conversational skills.
 ² Strict rubric: an *executed* failing run before implementation and an
 executed green run after, within an 8-turn budget. The pairwise preference for
 the skill arm is decisive (0.83 vs 0.17) even where the bright-line evidence
-gate fails. Whether an imperative register would do better on identical tasks
-is the open register-ablation question — the task suites here are built to run
-that A/B (same tasks, superpowers arm vs humblepowers arm).
+gate fails.
+
+³ All six pairwise orderings preferred the WITH arm, at 0.00 Skill-tool
+activation — the pack's presence (inject protocol + descriptions in context)
+improves plan quality even when the skill is never explicitly invoked.
+
+### Register ablation (same tasks, superpowers 5.1.0 arm vs humblepowers arm)
+
+The imperative register buys *consultation*, not *compliance*: superpowers'
+always-on inject lifts Skill activation to 1.00 on every skill (vs
+humblepowers 0.33–0.67 with its calibrated inject), but compliance does not
+move with it: TDD correct-usage is 0.00 on both arms (the executed-red/green
+evidence rubric fails identically regardless of register),
+verification-before-completion is 1.00 on both, and systematic-debugging's
+rubric score is *lower* under superpowers (0.29 vs 0.75–0.79) with elevated
+error runs (heavier context: 14 skills + banner inject). Verdict per axis:
+selection pressure — register works; discipline adherence — register does
+nothing the content didn't already do. Full per-arm records:
+`report/grading.json` keys `<skill>@superpowers`.
 
 ## Attribution
 

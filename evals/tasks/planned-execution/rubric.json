@@ -1,0 +1,12 @@
+[
+  { "id": "file-structure", "weight": 1,
+    "text": "The plan maps the file structure before the tasks: which files are created or modified and what each is responsible for." },
+  { "id": "bite-sized-test-first", "weight": 2,
+    "text": "Tasks decompose into bite-sized single-action steps following the test-first sequence: write the failing test, run it and observe the failure, implement minimally, run to green, commit." },
+  { "id": "exact-and-complete", "weight": 2,
+    "text": "Steps carry exact file paths, complete runnable code (not descriptions of code), and exact commands with their expected output." },
+  { "id": "no-placeholders", "weight": 2,
+    "text": "No placeholder patterns anywhere: no TBD/TODO/'implement later', no 'add appropriate error handling', no 'write tests for the above' without the test code, no 'similar to Task N' instead of repeated code, no references to functions or types that no task defines." },
+  { "id": "header-and-review", "weight": 1,
+    "text": "The plan opens with a header (goal, architecture, tech stack, execution mode) and shows evidence of a self-review pass: spec requirements each map to a task; names and signatures are consistent across tasks." }
+]

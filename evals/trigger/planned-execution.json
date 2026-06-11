@@ -1,0 +1,19 @@
+[
+  { "query": "Write the implementation plan for this spec, then execute it.", "should_trigger": true, "note": "canonical plan-then-execute" },
+  { "query": "Execute the plan in docs/plans/2026-06-11-importer.md task by task.", "should_trigger": true, "note": "execute an existing plan doc" },
+  { "query": "The design is approved — turn it into a step-by-step plan an engineer could run cold.", "should_trigger": true, "note": "plan contract phrasing" },
+  { "query": "Plan then build the export feature; it's a few days of work but not a whole PR series.", "should_trigger": true, "note": "midweight lane, explicitly below series" },
+  { "query": "Implement this plan with a fresh subagent per task and reviews in between.", "should_trigger": true, "note": "subagent loop phrasing" },
+  { "query": "This feature has outgrown a single TDD loop — set up a proper plan and work through it.", "should_trigger": true, "note": "outgrown single-loop" },
+  { "query": "Break the approved spec into bite-sized implementation tasks and start executing them.", "should_trigger": true, "note": "decompose-and-execute" },
+  { "query": "Take yesterday's agreed design for the cache layer and drive it to done with review checkpoints.", "should_trigger": true, "note": "design to done with checkpoints" },
+
+  { "query": "Plan the PR series for this quarter's migration — dependencies, waves, the works.", "should_trigger": false, "note": "near-miss: governed series — pr-pilot" },
+  { "query": "Apply the method to this repo and set up the Definition-of-Ready gate.", "should_trigger": false, "note": "near-miss: governed method — keel" },
+  { "query": "Let's figure out what the notification feature should even be.", "should_trigger": false, "note": "near-miss: design not agreed — brainstorming" },
+  { "query": "Fix the off-by-one in the pagination helper.", "should_trigger": false, "note": "single-loop fix — TDD directly" },
+  { "query": "Dispatch agents in parallel to fix these three independent failing test files.", "should_trigger": false, "note": "ad-hoc parallel dispatch, no plan" },
+  { "query": "Review this implementation plan for gaps.", "should_trigger": false, "note": "reviewing a plan, not executing" },
+  { "query": "What does plan mode do in Claude Code?", "should_trigger": false, "note": "harness concept question" },
+  { "query": "Run the database migration script on staging.", "should_trigger": false, "note": "ops execution, not plan-driven development" }
+]

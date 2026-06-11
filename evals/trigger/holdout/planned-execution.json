@@ -1,0 +1,8 @@
+[
+  { "query": "Spec's signed off — produce the task-by-task build plan and start working it with reviews.", "should_trigger": true, "note": "held-out: plan-then-execute, novel wording" },
+  { "query": "Pick up plans/payment-retry.md and carry it through, task by task.", "should_trigger": true, "note": "held-out: existing plan doc" },
+  { "query": "This is bigger than one sitting but doesn't need the series machinery — structure it and go.", "should_trigger": true, "note": "held-out: midweight lane" },
+  { "query": "Drive the agreed importer design to completion using fresh workers per task.", "should_trigger": true, "note": "held-out: subagent loop phrasing" },
+  { "query": "Decompose the roadmap into PR waves with a dependency graph and cost estimates.", "should_trigger": false, "note": "held-out near-miss: series planning — pr-pilot" },
+  { "query": "Help me think through what the offline mode should do.", "should_trigger": false, "note": "held-out near-miss: brainstorming" }
+]

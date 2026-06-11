@@ -11,7 +11,7 @@
   "allowed_tools_task": "Skill,Read,Glob,Grep,Write,Edit,Bash",
   "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
   "command_first_skills": ["review-panel"],
-  "action_discipline_skills": ["test-driven-development", "systematic-debugging", "verification-before-completion", "skill-authoring"],
+  "action_discipline_skills": ["test-driven-development", "systematic-debugging", "verification-before-completion", "skill-authoring", "planned-execution"],
   "plugin_of_skill": {
     "journaling-sessions": "session-workflow",
     "context-handoff": "session-workflow",
@@ -29,6 +29,7 @@
     "systematic-debugging": "humblepowers",
     "brainstorming": "humblepowers",
     "verification-before-completion": "humblepowers",
-    "receiving-code-review": "humblepowers"
+    "receiving-code-review": "humblepowers",
+    "planned-execution": "humblepowers"
   }
 }
