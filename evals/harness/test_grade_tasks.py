@@ -4,7 +4,7 @@ agents). Runnable with pytest or `python test_grade_tasks.py`."""
 from __future__ import annotations
 
 from claude_runner import AgentRun
-from grade_tasks import grade_skill
+from grade_tasks import grade_skill, resolve_plugin_dir
 
 CFG = {
     'agent_repeats': 3,
@@ -93,7 +93,18 @@ def test_grade_skill_counts_without_wins_and_ties():
     assert pw['with_wins'] + pw['without_wins'] + pw['ties'] == 3
 
 
+def test_resolve_plugin_dir_default_and_override():
+    cfg = {'plugin_of_skill': {'test-driven-development': 'humblepowers'}}
+    default = resolve_plugin_dir(cfg, 'test-driven-development', None)
+    assert default.endswith('humblepowers'), default  # repo plugins/<plugin>
+    # An ablation arm points the WITH arm at a different plugin shipping a
+    # same-named skill (e.g. the superpowers cache); the override wins verbatim.
+    override = resolve_plugin_dir(cfg, 'test-driven-development', r'C:\cache\superpowers\5.1.0')
+    assert override == r'C:\cache\superpowers\5.1.0'
+
+
 if __name__ == '__main__':
     test_grade_skill_shape_over_repeats()
     test_grade_skill_counts_without_wins_and_ties()
+    test_resolve_plugin_dir_default_and_override()
     print('ok: all grade_tasks tests passed')
