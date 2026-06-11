@@ -1,0 +1,1 @@
+which response is the better executable-cold implementation plan — file responsibilities mapped first, bite-sized test-first steps, exact paths, complete code in every code step, exact commands with expected output, zero placeholders, and a header plus self-review consistency check — rather than a high-level outline that defers the real decisions to the implementer

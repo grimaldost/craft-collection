@@ -1,0 +1,7 @@
+[
+  {
+    "id": "pe-plan-contract",
+    "prompt": "The spec above is agreed. Produce the complete implementation plan document for it — ready for an engineer with zero context on this codebase to execute cold — and save it as plan.md in the current directory. Do not start implementing; the plan itself is the deliverable.",
+    "fixture": "fixtures/mini-spec.md"
+  }
+]
