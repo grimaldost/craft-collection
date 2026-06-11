@@ -1,6 +1,6 @@
 # craft-collection
 
-A Claude Code plugin marketplace with two plugins:
+A Claude Code plugin marketplace with three plugins:
 
 - **engineering-discipline** — modern Python engineering standards + stack-agnostic
   data-engineering discipline, with mechanical enforcement (ruff/uv hooks),
@@ -9,6 +9,11 @@ A Claude Code plugin marketplace with two plugins:
   guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels,
   behaviorally evaluate skills, keep a live inventory of the installed toolkit,
   and run a tool-dogfooding feedback loop (capture + triage).
+- **humblepowers** — superpowers-derived process disciplines in a calibrated
+  register (fit-ranked dispatch, calibration-first skill authoring, TDD,
+  root-cause debugging, brainstorming, verification, review reception, midweight
+  planned execution) — eval-gated, with a register linter. **Replaces
+  superpowers; never install both.**
 
 ## Install
 
@@ -16,12 +21,13 @@ A Claude Code plugin marketplace with two plugins:
 /plugin marketplace add grimaldost/craft-collection
 /plugin install engineering-discipline@craft-collection
 /plugin install session-workflow@craft-collection
+/plugin install humblepowers@craft-collection
 ```
 
 Local development (no marketplace needed):
 
 ```text
-claude --plugin-dir ./plugins/engineering-discipline --plugin-dir ./plugins/session-workflow
+claude --plugin-dir ./plugins/engineering-discipline --plugin-dir ./plugins/session-workflow --plugin-dir ./plugins/humblepowers
 ```
 
 ## What's inside
@@ -36,6 +42,15 @@ hooks for ruff-format and uv enforcement; a `stack.toml`-based freshness loop.
 `tool-feedback`, and `feedback-triage`; a live `scan_toolkit.py` inventory; the
 headless skill-eval engine in `scripts/`; an optional session-start inject hook.
 
+**humblepowers** — skills `choosing-tools`, `skill-authoring`, `brainstorming`,
+`test-driven-development`, `systematic-debugging`,
+`verification-before-completion`, `receiving-code-review`, and
+`planned-execution`; every skill measured (trigger datasets + sealed holdouts +
+correct-usage suites under `evals/`); register linter wired into pre-commit;
+an optional dispatch-protocol inject hook. Derived from
+[obra/superpowers](https://github.com/obra/superpowers) (MIT) — see the
+plugin's LICENSE for third-party notices.
+
 ## Optional hooks (all off by default)
 
 | Behaviour | Enable with |
@@ -43,6 +58,7 @@ headless skill-eval engine in `scripts/`; an optional session-start inject hook.
 | Toolkit inventory injected at session start | `TOOLKIT_AWARENESS_INJECT=1` |
 | Data pre-shipping checklist nudge on Stop | `DATAENG_CHECKLIST_NUDGE=1` |
 | Allow one pip/poetry command in a uv project | `CLAUDE_ALLOW_PIP=1` |
+| Dispatch protocol injected at session start | `HUMBLEPOWERS_DISPATCH_INJECT=1` |
 
 ## Versioning
 
