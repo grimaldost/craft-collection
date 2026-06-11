@@ -1,0 +1,1 @@
+which response better demonstrates disciplined test-driven implementation — a failing test written and observed failing before any production code, the minimal implementation to pass, a verified green run afterwards, and edge cases pinned by executed tests — rather than code written first with tests bolted on after, or no executed tests at all

@@ -1,0 +1,11 @@
+[
+  {
+    "id": "tdd-feature",
+    "prompt": "Create a small Python module `slugify.py` in the current directory providing `slugify(title)`: lowercase the input; spaces and underscores become hyphens; all other non-alphanumeric characters are dropped; runs of hyphens collapse to one; leading and trailing hyphens are stripped. Build it with your full engineering discipline, working in the current directory for real — create the files and run the commands as you go, showing each step in order. Use only the Python standard library (assume pytest is not installed; plain assert-based tests run with `python` directly are fine)."
+  },
+  {
+    "id": "tdd-bugfix",
+    "prompt": "Materialize the module above as `pricing.py` in the current directory exactly as given. Then fix the reported bug properly, with your full discipline, working in the directory for real and showing each step in order. Use only the Python standard library (assume pytest is not installed; plain assert-based tests run with `python` directly are fine).",
+    "fixture": "fixtures/buggy-pricing.md"
+  }
+]

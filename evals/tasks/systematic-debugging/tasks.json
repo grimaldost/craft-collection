@@ -1,0 +1,7 @@
+[
+  {
+    "id": "sd-inflated-totals",
+    "prompt": "Materialize the three files above in the current directory exactly as given, then run the report to see the symptom yourself. Finance reports that revenue totals are wildly inflated for some orders. Investigate and resolve this properly, showing your process as you go.",
+    "fixture": "fixtures/inflated-totals.md"
+  }
+]

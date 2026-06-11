@@ -1,0 +1,12 @@
+[
+  { "id": "evidence-first", "weight": 2,
+    "text": "Reproduces the symptom (actually runs the report) and examines the real data and output before proposing or making any change." },
+  { "id": "boundary-localization", "weight": 2,
+    "text": "Localizes the failing layer by inspecting what crosses the loader/report boundary (printing, logging, or directly examining the parsed values), identifying the loader's number parsing as the failure point with evidence — not by guessing from the report's arithmetic." },
+  { "id": "single-hypothesis", "weight": 1,
+    "text": "States an explicit root-cause hypothesis (decimal-comma prices mis-parsed into hundredfold values) before changing code, and tests it minimally rather than changing several things at once." },
+  { "id": "fix-at-source", "weight": 2,
+    "text": "The fix lands at the root cause — the loader's price parsing — not as a compensating patch where the symptom shows (no dividing totals by 100, no special-casing in the report)." },
+  { "id": "test-pinned", "weight": 1,
+    "text": "A failing test reproducing the mis-parse was added before the fix and shown passing after, and the report was re-run to confirm the symptom is gone." }
+]
