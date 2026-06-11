@@ -62,29 +62,55 @@ The choice is part of the design, not the prose: a rigid skill with soft
 constraints fails differently from a flexible skill with hard constraints,
 and both fail.
 
-## Register rules (lint-enforced)
+## Register rules
 
-`scripts/lint_register.py` (repo pre-commit) rejects the patterns that buy
-salience instead of fit: imperative-obedience phrases, importance banners, and
-runs of three or more consecutive all-caps words outside code. Emphasis budget
-inside a body: bold the one load-bearing sentence of a section, sparingly. If
-a constraint feels like it needs caps to hold, it needs a verification step or
-a gate instead — move the enforcement to mechanism.
+The deny-list: imperative-obedience phrases, importance banners, and runs of
+three or more consecutive all-caps words outside code — the patterns that buy
+salience instead of fit. Emphasis budget inside a body: bold the one
+load-bearing sentence of a section, sparingly. If a constraint feels like it
+needs caps to hold, it needs a verification step or a gate instead — move the
+enforcement to mechanism. Enforce the deny-list mechanically where you can:
+craft-collection wires a register linter (`scripts/lint_register.py`) into
+pre-commit; a standalone install applies the same rules by review until it
+wires its own gate.
 
 ## Shipping requirement
 
 A skill ships when all of these exist, not before:
 
-1. **Trigger dataset** — `evals/trigger/<skill>.json`, balanced positives and
-   negatives; the negatives include near-misses that sit in named siblings'
-   territory.
-2. **Sealed holdout** — `evals/trigger/holdout/<skill>.json`, authored at the
-   same sitting as the dev set and never consulted while tuning the
-   description. A holdout that informed tuning is dev data, not a holdout.
+1. **Trigger dataset** — balanced positives and negatives; the negatives
+   include near-misses that sit in named siblings' territory.
+2. **Sealed holdout** — authored at the same sitting as the dev set and never
+   consulted while tuning the description. A holdout that informed tuning is
+   dev data, not a holdout.
 3. **Correct-usage rubric** (rigid skills) — tasks plus checks that the output
    actually followed the discipline, deterministic where possible.
-4. **Gates pass** — thresholds live in `evals/config.json`; evaluate-skill
-   owns the run mechanics and the scorecard.
+4. **Gates pass** — recall, specificity, and correct-usage thresholds, run by
+   a behavioral eval harness when one is available (craft-collection ships
+   one: datasets under `evals/trigger/`, thresholds in `evals/config.json`,
+   run mechanics owned by session-workflow's evaluate-skill). Standalone
+   installs keep requirements 1–3 as authored artifacts and run them with
+   whatever harness they have — the discipline is the contract, the harness
+   is one implementation.
+
+## References between tools
+
+Skills reference other tools without depending on them. Four rules and a test:
+
+1. **Same-plugin references are free** — the plugin installs as a unit.
+2. **Cross-tool references are role-generic with a named example and a
+   working fallback**: "when a registered model-tier policy is installed
+   (e.g. pr-pilot's model-tiers), its thresholds win — otherwise these
+   heuristics." Name the role, give the example, work alone.
+3. **Artifacts never carry tool dependencies.** A plan or spec that embeds
+   "REQUIRED SUB-SKILL: <tool>" locks the artifact to a toolchain; state the
+   execution contract in the artifact itself instead.
+4. **Bindings over assumptions** — when integration genuinely needs wiring,
+   the user supplies it (a bindings table, a config entry); tools never hunt
+   the environment for each other.
+
+The degradation test: uninstall every other tool — the skill still produces a
+correct, if less optimized, result.
 
 ## Evidence
 
@@ -105,6 +131,7 @@ otherwise.
 - [ ] Negative space names every adjacent owner
 - [ ] No obedience language anywhere in the description
 - [ ] Rigid or flexible declared; bright lines plain; catalogs descriptive
-- [ ] Register linter passes
+- [ ] Register deny-list clean (lint-enforced where a gate is wired)
+- [ ] Cross-tool references are role-generic with fallback (degradation test)
 - [ ] Dev dataset and sealed holdout authored together, before any tuning
 - [ ] Correct-usage rubric for rigid skills

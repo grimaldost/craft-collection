@@ -113,9 +113,12 @@ selection pressure — register works; discipline adherence — register does
 nothing the content didn't already do. Full per-arm records:
 `report/grading.json` keys `<skill>@superpowers`.
 
-## Attribution
+## Attribution and license
 
 Process content derived from
-[obra/superpowers](https://github.com/obra/superpowers) by Jesse Vincent
-(MIT). The register, dispatch architecture, and authoring doctrine are
-replaced; the ported disciplines keep their upstream constraint sets.
+[obra/superpowers](https://github.com/obra/superpowers), Copyright (c) 2025
+Jesse Vincent, MIT License. The register, dispatch architecture, and authoring
+doctrine are replaced; the ported disciplines keep their upstream constraint
+sets, and several reference examples are reproduced near-verbatim. This
+plugin's [LICENSE](LICENSE) carries both license texts (ours and the upstream
+third-party notice).

@@ -25,8 +25,10 @@ answerable directly. A dispatch check on "hang on" is ceremony, not selection.
    "unexplained test failure", "new feature, shape unclear". The phrase is
    what candidates get ranked against.
 2. **Shortlist candidates.** Installed skills whose triggers plausibly match.
-   When unsure what is installed, get the live inventory (toolkit-awareness)
-   rather than recalling from memory.
+   When unsure what is installed, get a live inventory rather than recalling
+   from memory — an inventory skill when one is installed (e.g.
+   session-workflow's toolkit-awareness), else the skill listing already in
+   context.
 3. **Check positive and negative triggers.** A candidate that matches the
    phrase but sits in another skill's declared territory ("not for X — that
    is Y") loses to the owner. Negative space decides ties.
@@ -59,8 +61,10 @@ rules of thumb hold:
 
 ## Boundaries
 
-- **toolkit-awareness** owns the inventory — what is installed and who owns
-  which concern. This skill consumes that answer; it does not produce it.
+- **The inventory is someone else's job** — what is installed and who owns
+  which concern comes from an inventory skill when one is installed (e.g.
+  session-workflow's toolkit-awareness) or from the in-context skill listing.
+  This skill consumes that answer; it does not produce it.
 - **skill-authoring** owns descriptions — when a skill keeps winning or losing
   dispatch wrongly, fix its trigger surface there. Never compensate by
   inflating register; selection quality depends on descriptions staying
