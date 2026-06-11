@@ -71,9 +71,46 @@ def test_render_includes_misses_and_tables():
     assert 'journal-explicit' in md  # per-task row present
 
 
+def test_action_discipline_recall_info_and_task_arm_gate():
+    # An action-discipline skill: trigger-arm recall is informational; the
+    # grading-arm activation rate is surfaced and gated as the recall proxy.
+    rows = build_scorecard(TRIG, GRAD, GATES, action_disciplines=['journaling-sessions'])
+    r = rows[0]
+    assert r['recall'] == 0.75  # still reported
+    assert r['recall_gate'] == 'info'
+    assert r['task_arm_recall'] == 1.0  # == grading summary with_activation_rate
+    assert r['task_arm_recall_gate'] == 'PASS'  # gated on trigger_recall threshold
+
+
+def test_action_discipline_without_grading_is_na():
+    rows = build_scorecard(
+        {'a': {'recall': 0.0, 'specificity': 1.0}}, {}, GATES, action_disciplines=['a']
+    )
+    assert rows[0]['recall_gate'] == 'info'
+    assert rows[0]['task_arm_recall'] is None
+    assert rows[0]['task_arm_recall_gate'] == 'n/a'
+
+
+def test_non_action_rows_have_no_task_arm_gate():
+    rows = build_scorecard(TRIG, GRAD, GATES)
+    assert rows[0]['task_arm_recall'] is None
+    assert rows[0]['task_arm_recall_gate'] is None
+
+
+def test_render_marks_action_discipline_activation():
+    rows = build_scorecard(TRIG, GRAD, GATES, action_disciplines=['journaling-sessions'])
+    md = render_scorecard(rows, TRIG, GRAD)
+    assert '1.00 (PASS)' in md  # activation cell carries the task-arm gate
+    assert 'action-discipline' in md  # legend explains the marker
+
+
 if __name__ == '__main__':
     test_build_scorecard_rows()
     test_build_scorecard_handles_missing_grading()
     test_command_first_skill_recall_is_informational()
     test_render_includes_misses_and_tables()
+    test_action_discipline_recall_info_and_task_arm_gate()
+    test_action_discipline_without_grading_is_na()
+    test_non_action_rows_have_no_task_arm_gate()
+    test_render_marks_action_discipline_activation()
     print('ok: all aggregate tests passed')

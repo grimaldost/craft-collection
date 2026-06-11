@@ -23,26 +23,39 @@ def _gate(value, threshold) -> str:
     return 'PASS' if value >= threshold else 'FAIL'
 
 
-def build_scorecard(triggers: dict, grading: dict, gates: dict, command_first=()) -> list[dict]:
+def build_scorecard(
+    triggers: dict, grading: dict, gates: dict, command_first=(), action_disciplines=()
+) -> list[dict]:
     """Merge the two report blobs into one row per skill, with gate flags. Pure.
 
     `command_first` skills (invoked mainly via their slash command, like a panel
     you deliberately convene) report recall for information but are not gated on
-    it — auto-firing is a bonus, not the contract."""
+    it — auto-firing is a bonus, not the contract.
+
+    `action_disciplines` skills activate during real work (TDD, debugging,
+    verification): the Write-less trigger arm cannot exercise them, so trigger-arm
+    recall is informational and the grading arm's activation rate is surfaced as
+    `task_arm_recall`, gated on the same `trigger_recall` threshold."""
     command_first = set(command_first)
+    action_disciplines = set(action_disciplines)
     rows = []
     for skill in sorted(set(triggers) | set(grading)):
         t = triggers.get(skill) or {}
         g = (grading.get(skill) or {}).get('summary') or {}
-        recall_gate = (
-            'info' if skill in command_first else _gate(t.get('recall'), gates['trigger_recall'])
-        )
+        ungated = skill in command_first or skill in action_disciplines
+        recall_gate = 'info' if ungated else _gate(t.get('recall'), gates['trigger_recall'])
+        is_action = skill in action_disciplines
+        task_arm_recall = g.get('with_activation_rate') if is_action else None
         rows.append(
             {
                 'skill': skill,
                 'recall': t.get('recall'),
                 'recall_ci': t.get('recall_ci'),
                 'recall_gate': recall_gate,
+                'task_arm_recall': task_arm_recall,
+                'task_arm_recall_gate': (
+                    _gate(task_arm_recall, gates['trigger_recall']) if is_action else None
+                ),
                 'specificity': t.get('specificity'),
                 'specificity_ci': t.get('specificity_ci'),
                 'specificity_gate': _gate(t.get('specificity'), gates['trigger_specificity']),
@@ -76,7 +89,10 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
         "output satisfy the skill's discipline rubric. With/without = swap-order "
         'pairwise win-rate of the skill vs no-skill. A recall verdict of (info) '
         'marks a command-first skill (e.g. review-panel) whose auto-fire rate is '
-        'reported but not gated — it is invoked deliberately via its slash command.',
+        'reported but not gated — it is invoked deliberately via its slash command — '
+        'or an action-discipline skill (TDD, debugging, verification), which the '
+        'Write-less trigger arm cannot exercise: for those, the Activation column '
+        'carries the gated task-arm recall proxy in parentheses.',
         '',
     ]
 
@@ -95,7 +111,13 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
             f'| {_pct(r["correct_usage"])}{_ci(r["correct_usage_ci"])} ({r["correct_usage_gate"]}) '
             f'| {_pct(r["judge_agreement"])} '
             f'| {_pct(r["with_win_rate"])} | {_pct(r["without_win_rate"])} | {_pct(r["tie_rate"])} '
-            f'| {_pct(r["with_activation_rate"])} |'
+            f'| {_pct(r["with_activation_rate"])}'
+            + (
+                f' ({r["task_arm_recall_gate"]})'
+                if r.get('task_arm_recall_gate') is not None
+                else ''
+            )
+            + ' |'
         )
     out.append('')
 
@@ -151,7 +173,13 @@ def main(argv: list[str] | None = None) -> int:
         print('no report/triggers.json or report/grading.json found — run the eval first')
         return 1
 
-    rows = build_scorecard(triggers, grading, cfg['gates'], cfg.get('command_first_skills', []))
+    rows = build_scorecard(
+        triggers,
+        grading,
+        cfg['gates'],
+        cfg.get('command_first_skills', []),
+        cfg.get('action_discipline_skills', []),
+    )
     md = render_scorecard(rows, triggers, grading)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = REPORT_DIR / 'scorecard.md'

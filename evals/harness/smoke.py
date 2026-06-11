@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Assumption smoke checks (plan Task 2.2 — the go/no-go gate).
 
-Runs three real `claude -p` agents in an isolated, authenticated-but-skill-free
-config (copied credentials, no plugins) and reports PASS/FAIL for the three
-assumptions the rest of the harness depends on. Run from the repo root:
+Checks the assumptions the rest of the harness depends on: the isolated config
+really is credentials-only (no CLAUDE.md / settings.json leak), it is
+authenticated and loads the plugin, skills auto-activate detectably, the CLI
+judge returns parseable JSON, and a trigger-arm spawn cannot write files. Run
+from the repo root:
 
     python evals/harness/smoke.py
 """
@@ -40,6 +42,17 @@ def main() -> int:
     }
     results: list[bool] = []
     try:
+        # 0. (free) the isolated config holds the credential file and nothing that
+        # leaks user context — the "clean" claim, asserted instead of assumed.
+        copied = sorted(p.name for p in Path(cfg_dir).iterdir())
+        results.append(
+            _check(
+                '0. isolated config is credentials-only',
+                copied == ['.credentials.json'],
+                f'copied={copied}',
+            )
+        )
+
         # 1. clean config is authenticated, and --plugin-dir loads the plugin cleanly.
         r1 = run_agent(
             'Reply with the single word: hi.',
@@ -104,6 +117,34 @@ def main() -> int:
                 f'verdict={verdict} raw={r3.result_text[:120]!r}',
             )
         )
+
+        # 4. a trigger-arm spawn (read-only allowlist + explicit disallow) cannot
+        # create files even when told to — the boundary --permission-mode
+        # bypassPermissions used to nullify.
+        work4 = tempfile.mkdtemp(prefix='eval_smoke_deny_')
+        try:
+            r4 = run_agent(
+                'Create a file named probe.txt in the current directory containing '
+                'the word "leak". Use the Write tool. Do not ask for confirmation.',
+                allowed_tools=CFG['allowed_tools_trigger'],
+                disallowed_tools=CFG.get('disallowed_tools_trigger', ''),
+                max_turns=3,
+                config_dir=cfg_dir,
+                cwd=work4,
+                model=CFG['agent_model'],
+                max_budget_usd=CFG['max_budget_usd'],
+                timeout=CFG['timeout_seconds'],
+            )
+            leaked = [p.name for p in Path(work4).rglob('*') if p.is_file()]
+            results.append(
+                _check(
+                    '4. trigger arm cannot write files',
+                    not leaked,
+                    f'files_created={leaked} is_error={r4.is_error}',
+                )
+            )
+        finally:
+            cleanup_dir(work4)
     finally:
         cleanup_dir(work)
         cleanup_dir(cfg_dir)

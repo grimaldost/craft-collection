@@ -27,18 +27,23 @@ REPORT_DIR = REPO / 'evals' / 'report'
 MAX_TURNS_TRIGGER = 3  # enough for the skill to fire; keeps per-spawn cost low
 
 
-def score_skill(queries: list[dict], repeats: int, trigger_counter) -> dict:
+def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counter=None) -> dict:
     """Pooled recall (over positives) and specificity (over negatives) with Wilson
     CIs. `trigger_counter(query_str, repeats) -> k` returns how many of `repeats`
-    runs fired the skill. Pure: inject a fake counter in tests, the real one in the
-    CLI."""
-    pos_succ = pos_tri = neg_succ = neg_tri = 0
+    runs fired the skill; `error_counter(query_str, repeats) -> e` returns how many
+    of the NON-firing runs errored (timeout/budget) — those runs carry no evidence
+    that the description failed, so recall is also reported with them excluded.
+    The strict `recall` (errors count as misses) stays the gated number. Pure:
+    inject fake counters in tests, the real ones in the CLI."""
+    pos_succ = pos_tri = pos_err = neg_succ = neg_tri = 0
     per_query = []
     for q in queries:
         k = trigger_counter(q['query'], repeats)
+        e = error_counter(q['query'], repeats) if error_counter else 0
         if q['should_trigger']:
             pos_succ += k
             pos_tri += repeats
+            pos_err += e
         else:
             neg_succ += repeats - k  # a correct rejection = a NON-fire on a negative
             neg_tri += repeats
@@ -49,13 +54,20 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter) -> dict:
                 'k': k,
                 'repeats': repeats,
                 'rate': (k / repeats if repeats else 0.0),
+                'errors_no_activation': e,
             }
         )
+    pos_valid = pos_tri - pos_err
     return {
         'recall': pass_rate(pos_succ, pos_tri),
         'specificity': pass_rate(neg_succ, neg_tri),
         'recall_ci': list(wilson_interval(pos_succ, pos_tri)),
         'specificity_ci': list(wilson_interval(neg_succ, neg_tri)),
+        'recall_excl_errors': (pass_rate(pos_succ, pos_valid) if pos_valid > 0 else None),
+        'recall_excl_errors_ci': (
+            list(wilson_interval(pos_succ, pos_valid)) if pos_valid > 0 else None
+        ),
+        'errors_no_activation_positive': pos_err,
         'n_positive': sum(1 for q in queries if q['should_trigger']),
         'n_negative': sum(1 for q in queries if not q['should_trigger']),
         'repeats': repeats,
@@ -92,6 +104,7 @@ def run_skill(
             qstr,
             plugin_dir=plugin_dir,
             allowed_tools=cfg['allowed_tools_trigger'],
+            disallowed_tools=cfg.get('disallowed_tools_trigger', ''),
             model=cfg['agent_model'],
             max_turns=MAX_TURNS_TRIGGER,
             max_budget_usd=cfg['max_budget_usd'],
@@ -104,6 +117,7 @@ def run_skill(
 
     results = map_concurrent(jobs, worker, concurrency=concurrency)
     counts = [0] * len(queries)
+    err_counts = [0] * len(queries)  # errored runs that did NOT fire, per query
     cost = 0.0
     errors = errors_no_act = 0
     for i, fired, c, err in results:
@@ -113,8 +127,12 @@ def run_skill(
             errors += 1
             if not fired:  # the only kind that can distort the score
                 errors_no_act += 1
+                err_counts[i] += 1
     by_str = {queries[i]['query']: counts[i] for i in range(len(queries))}
-    score = score_skill(queries, repeats, lambda s, _r: by_str[s])
+    err_by_str = {queries[i]['query']: err_counts[i] for i in range(len(queries))}
+    score = score_skill(
+        queries, repeats, lambda s, _r: by_str[s], error_counter=lambda s, _r: err_by_str[s]
+    )
     score['cost_usd'] = round(cost, 4)
     score['error_runs'] = errors  # mostly benign: positives truncate at max_turns
     score['error_runs_no_activation'] = errors_no_act  # the diagnostic that matters
@@ -163,6 +181,11 @@ def main(argv: list[str] | None = None) -> int:
         for q in queries:
             print(f'  [{"+" if q["should_trigger"] else "-"}] {q["query"][:80]}')
         return 0
+    if args.limit or args.repeats != cfg['agent_repeats']:
+        print(
+            f'NOTE: partial run — overwrites any full "{args.skill}" entry in '
+            f'report/triggers.json; re-run full (or restore a backup) before aggregating'
+        )
 
     config_dir = make_isolated_config()
     cwd = tempfile.mkdtemp(prefix='eval_trig_')
@@ -183,14 +206,37 @@ def main(argv: list[str] | None = None) -> int:
 
     write_report(args.skill, score)
     g = cfg['gates']
+    action = args.skill in set(cfg.get('action_discipline_skills', []))
     rlo, rhi = score['recall_ci']
     slo, shi = score['specificity_ci']
-    rec_ok = 'PASS' if score['recall'] >= g['trigger_recall'] else 'FAIL'
+    if action:
+        rec_ok = 'INFO (action-discipline: not gated on trigger-arm recall)'
+    else:
+        rec_ok = 'PASS' if score['recall'] >= g['trigger_recall'] else 'FAIL'
     spec_ok = 'PASS' if score['specificity'] >= g['trigger_specificity'] else 'FAIL'
     print(
         f'\nrecall      = {score["recall"]:.2f}  CI[{rlo:.2f},{rhi:.2f}]  '
         f'gate>={g["trigger_recall"]}  {rec_ok}'
     )
+    if action:
+        print(
+            '              this skill activates during real work; the gated recall '
+            "proxy is the grading arm's activation rate (grade_tasks / scorecard)"
+        )
+    if score['errors_no_activation_positive'] > 0:
+        ree = score['recall_excl_errors']
+        if ree is None:
+            print(
+                f'recall excl. errored runs = n/a (all '
+                f'{score["errors_no_activation_positive"]} non-firing positive runs errored)'
+            )
+        else:
+            elo, ehi = score['recall_excl_errors_ci']
+            print(
+                f'recall excl. errored runs = {ree:.2f}  CI[{elo:.2f},{ehi:.2f}]  '
+                f'({score["errors_no_activation_positive"]} errored positive runs '
+                f'carry no description evidence)'
+            )
     print(
         f'specificity = {score["specificity"]:.2f}  CI[{slo:.2f},{shi:.2f}]  '
         f'gate>={g["trigger_specificity"]}  {spec_ok}'
@@ -205,7 +251,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         if miss:
             sign = '+' if pq['should_trigger'] else '-'
-            print(f'  miss [{sign}] k={pq["k"]}/{pq["repeats"]} {pq["query"][:70]}')
+            err = pq.get('errors_no_activation', 0)
+            err_note = f' err={err}/{pq["repeats"]}' if err else ''
+            print(f'  miss [{sign}] k={pq["k"]}/{pq["repeats"]}{err_note} {pq["query"][:70]}')
     return 0
 
 

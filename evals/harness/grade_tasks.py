@@ -305,6 +305,11 @@ def main(argv: list[str] | None = None) -> int:
         for t in tasks:
             print(f'  task {t["id"]}: {t["prompt"][:70]}')
         return 0
+    if args.limit or args.repeats:
+        print(
+            f'NOTE: partial run — overwrites any full "{skill}" entry in '
+            f'report/grading.json; re-run full (or restore a backup) before aggregating'
+        )
 
     plugin_dir = str(REPO / 'plugins' / plugin)
     config_with = make_isolated_config()  # --plugin-dir runs cache the plugin here
