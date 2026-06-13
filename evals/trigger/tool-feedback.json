@@ -13,7 +13,7 @@
   { "query": "Review this PR and give feedback.", "should_trigger": false, "note": "near-miss: 'feedback' on code, i.e. code review" },
   { "query": "Write a postmortem for yesterday's production incident.", "should_trigger": false, "note": "near-miss: incident retro, not tool dogfooding" },
   { "query": "File a GitHub issue for this parser bug.", "should_trigger": false, "note": "near-miss: bug filing, different artifact and audience" },
-  { "query": "Capture what we learned this session into my long-term notes.", "should_trigger": false, "note": "near-miss: knowledge capture into a memory store (journaling-sessions), second guard on the hardest boundary" },
+  { "query": "Update the CHANGELOG for this release.", "should_trigger": false, "note": "spec-mandated boundary: CHANGELOG/release-notes writing belongs to the tool's release process, not a dogfood report" },
   { "query": "Triage the feedback backlog for keel.", "should_trigger": false, "note": "cross-pair boundary: the downstream pass (feedback-triage), not capture" },
   { "query": "Send the Notion team feedback about their API rate limits.", "should_trigger": false, "note": "third-party product feedback, not a registered tool" }
 ]

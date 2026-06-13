@@ -6,9 +6,11 @@ description: >
   should have caught them, vacuous gates, and severity-tagged proposed changes with
   stable finding IDs — saved into that tool's own feedback directory. Use when the
   user asks for feedback on their tools ("write the feedback reports", "tooling
-  feedback", "dogfood report", "capture the friction with keel / pr-pilot"), and
-  offer once, unprompted, when a session that exercised a registered tool is winding
-  down. Registered tools come from a feedback-targets table the user supplies (e.g.
+  feedback", "dogfood report", "capture the friction with keel / pr-pilot") — a
+  direct imperative naming one tool ("write a dogfooding feedback report for keel")
+  is this skill too, since writing that report IS the skill; route it here rather
+  than drafting the report freehand — and offer once, unprompted, when a session
+  that exercised a registered tool is winding down. Registered tools come from a feedback-targets table the user supplies (e.g.
   in CLAUDE.md) — never hunt the filesystem for targets. Design-only or
   authoring-only use of a tool still counts as use. Not for feedback on code or PRs
   (that is code review), not for capturing general session knowledge into a memory
@@ -43,6 +45,10 @@ the user's CLAUDE.md) or the user points you at one. Shape:
 - The session **used** a tool if it invoked any of its skills/agents/commands, ran
   its engine or CLI, or substantively applied its templates/doctrine.
   **Design-only and authoring-only use counts.**
+- When the tool is a skill in a repo you are also developing, its authoritative
+  body is the working-tree `SKILL.md` — the copy the `Skill` loader serves is the
+  installed/cached version and can lag the repo. Read the working-tree file before
+  reporting on, or reconciling against, the skill's current behavior.
 
 ## Were you asked, or did you notice?
 

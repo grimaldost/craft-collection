@@ -3,6 +3,56 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.2.2 — 2026-06-13
+
+Two strands land together: body/process fixes from the three-tool digest run
+(`2026-06-13-feedback-loop-multitool-run`), and trigger-surface calibration from
+the feedback-loop eval remediation (`2026-06-09-feedback-loop-live-eval`,
+`2026-06-10-feedback-loop-eval-remediation`).
+
+### Added
+
+- `feedback-triage`: reconcile-shipped (step 2) now also reads `git log` and the
+  current source for a component that ships without its own CHANGELOG (an eval
+  harness, a scripts dir) — its increments land as commits, so a CHANGELOG-only
+  pass reads shipped work as still-open (per
+  `2026-06-13-feedback-loop-multitool-run#1`; a triage subagent had filed three
+  already-committed eval-harness fixes as open).
+- `feedback-triage`: scope (step 1) recognizes a triage doc by a `# Triage —`
+  first heading or a filename containing `triage`, not only a `*-triage-*.md`
+  glob, so a house naming variant (keel's `<date>-backlog-triage.md`) is not
+  silently re-triaged; the dir is listed directly rather than globbed (per
+  `2026-06-13-feedback-loop-multitool-run#2`).
+- `feedback-triage`: a concurrent-triage guard — note any triage doc already
+  dated today at scope, and re-list the dir at emit (step 6) before writing, to
+  avoid duplicating a concurrent session's triage (per
+  `2026-06-13-feedback-loop-multitool-run#4`, extending
+  `2026-06-09-cc-gitattributes-hygiene#2`).
+- `tool-feedback`: a note that a skill under development is authoritative in its
+  working-tree `SKILL.md`, not the installed/cached copy the `Skill` loader serves
+  (per `2026-06-13-feedback-loop-multitool-run#3`).
+
+### Changed
+
+- `tool-feedback` `description`: a direct imperative naming one tool ("write a
+  dogfooding feedback report for keel") now routes here — the canonical-imperative
+  trigger the eval measured as a miss (per
+  `2026-06-10-feedback-loop-eval-remediation` Miss "canonical imperative 0/14",
+  `2026-06-09-feedback-loop-live-eval#3`).
+- `feedback-triage` `description`: negative space added — a governed series' own
+  reflections go to the method tool's triage skill (e.g. keel's `keel-triage`),
+  not this generic pass (specificity, per
+  `2026-06-10-feedback-loop-eval-remediation`).
+- `evals/trigger/tool-feedback.json`: swapped the journaling near-miss negative
+  for a CHANGELOG/release-notes boundary negative — the spec-mandated boundary
+  ("does not write CHANGELOG entries") was untested (per
+  `2026-06-09-feedback-loop-live-eval#5`, `2026-06-09-pr9-premerge-gap-disposition#2`).
+
+These are trigger-surface (`description`) and trigger-dataset changes; the sealed
+holdout sets (`evals/trigger/holdout/{tool-feedback,feedback-triage}.json`) exist —
+re-run `evaluate-skill` to re-confirm recall/specificity before relying on the
+numbers.
+
 ## 0.2.1 — 2026-06-09
 
 Wording promotions from the feedback-loop skills' first dogfood run, recorded
