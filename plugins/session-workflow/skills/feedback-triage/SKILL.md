@@ -12,8 +12,10 @@ description: >
   maintenance — never run proactively; it reads a whole corpus. If the tool's
   binding registers its own triage template (e.g. keel's reflection-triage),
   follow that template. Not for consolidating journal entries into guidance (that
-  is consolidate-knowledge), not for a single report (nothing to cluster yet), and
-  not for triaging GitHub issues or a PR queue.
+  is consolidate-knowledge), not for a single report (nothing to cluster yet), not
+  for triaging GitHub issues or a PR queue, and not for triaging a governed
+  series' own reflections into durable checks — the owning method tool's triage
+  skill (e.g. keel's keel-triage) does that, not this generic feedback pass.
 user-invocable: true
 ---
 
@@ -29,18 +31,28 @@ and writing CHANGELOGs belong to the tool's own release process.
 ## The pipeline — run in order
 
 1. **Scope.** Resolve the tool from the `feedback-targets` table in loaded context
-   (ask once if absent; never hunt). Un-triaged reports = reports in its feedback
-   dir not listed in the **Inputs** section of any existing `*-triage-*.md` doc
-   there — detection is by input lists, not dates. First run (no triage doc
-   exists yet): the whole corpus is un-triaged. If the invocation names a
-   different count or set than the directory holds, the directory is
-   authoritative — triage what is on disk and note the discrepancy under
-   **Inputs**.
+   (ask once if absent; never hunt). List the feedback dir directly — a plain
+   directory listing, not a glob, which a non-cwd path or a house naming
+   convention can silently miss. Un-triaged reports = reports in its feedback dir
+   not listed in the **Inputs** section of any existing triage doc there —
+   detection is by input lists, not dates. A doc counts as a triage doc if its
+   first heading is `# Triage —` or its filename contains `triage`; this catches
+   house variants like keel's `<date>-backlog-triage.md` that a bare
+   `*-triage-*.md` glob skips. First run (no triage doc exists yet): the whole
+   corpus is un-triaged. If the invocation names a different count or set than the
+   directory holds, the directory is authoritative — triage what is on disk and
+   note the discrepancy under **Inputs**. If another session may be triaging the
+   same corpus, note any triage doc already dated today before you start, and
+   re-check at emit (step 6) so two sessions don't write competing docs.
 2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
-   on a first run, the window is the whole CHANGELOG to date. Open the doc with
-   **"Already shipped — NOT re-proposed"**; a cluster that goes further than a
-   shipped change is marked as *extending* it. Each triage sharpens the backlog;
-   it never repeats it.
+   on a first run, the window is the whole CHANGELOG to date. For a component that
+   ships without its own CHANGELOG (an eval harness, a scripts dir, a doc set),
+   also read `git log` over that window and check the current source: its
+   increments land as commits, so a CHANGELOG-only reconciliation reads
+   already-shipped work as still-open. Map each finding to the version or commit
+   that resolved it. Open the doc with **"Already shipped — NOT re-proposed"**; a
+   cluster that goes further than a shipped change is marked as *extending* it.
+   Each triage sharpens the backlog; it never repeats it.
 3. **Cluster by underlying cause, not symptom.** Three reports saying "the cited
    file didn't exist", "the helper didn't handle our shape", and "the precedent
    was counterfactual" are one cluster: *ungrounded referents*. Collapsing has a
@@ -69,7 +81,10 @@ and writing CHANGELOGs belong to the tool's own release process.
    pollute; unpromoted clusters stay listed as raw, and the **Promotion-gate
    ledger** section shows the gate's work either way.
 6. **Emit the triage doc** (template below) into the tool's feedback dir as
-   `<YYYY-MM-DD>-triage-<scope>.md`, clusters leverage-ordered.
+   `<YYYY-MM-DD>-triage-<scope>.md` — a name a later `triage`-detecting scope step
+   will find — clusters leverage-ordered. Before writing, re-list the dir: if a
+   triage doc covering this same corpus appeared since step 1 (a concurrent
+   session), reconcile with it instead of emitting a duplicate.
 7. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
    if `extras` is empty or registers none, the template below is authoritative —
