@@ -34,11 +34,13 @@ the feedback-loop eval remediation (`2026-06-09-feedback-loop-live-eval`,
 
 ### Changed
 
-- `tool-feedback` `description`: a direct imperative naming one tool ("write a
-  dogfooding feedback report for keel") now routes here — the canonical-imperative
-  trigger the eval measured as a miss (per
-  `2026-06-10-feedback-loop-eval-remediation` Miss "canonical imperative 0/14",
-  `2026-06-09-feedback-loop-live-eval#3`).
+- `tool-feedback` `description`: added a clause targeting the canonical imperative
+  ("write a dogfooding feedback report for keel") — the trigger measured as a miss
+  (per `2026-06-10-feedback-loop-eval-remediation` Miss "canonical imperative
+  0/14", `2026-06-09-feedback-loop-live-eval#3`). It is additive and
+  specificity-safe, but the 2026-06-13 re-run shows it still fires 0/3 headless —
+  see the eval note below; it reads as a triggering-threshold limit, not a
+  description gap.
 - `feedback-triage` `description`: negative space added — a governed series' own
   reflections go to the method tool's triage skill (e.g. keel's `keel-triage`),
   not this generic pass (specificity, per
@@ -48,10 +50,15 @@ the feedback-loop eval remediation (`2026-06-09-feedback-loop-live-eval`,
   ("does not write CHANGELOG entries") was untested (per
   `2026-06-09-feedback-loop-live-eval#5`, `2026-06-09-pr9-premerge-gap-disposition#2`).
 
-These are trigger-surface (`description`) and trigger-dataset changes; the sealed
-holdout sets (`evals/trigger/holdout/{tool-feedback,feedback-triage}.json`) exist —
-re-run `evaluate-skill` to re-confirm recall/specificity before relying on the
-numbers.
+These are trigger-surface (`description`) and trigger-dataset changes.
+`evaluate-skill` was re-run 2026-06-13 (132 spawns, ~$9): **specificity 1.00**
+across dev + holdout for both skills (the new CHANGELOG-boundary negative is
+correctly rejected). **Recall is inconclusive** — the trigger arm's
+flail-to-error rate (~55–65%, the unshipped trigger-arm-damping residual) muddies
+it; error-excluded recall is 0.89 (`tool-feedback`) / 0.79 (`feedback-triage`),
+and the canonical imperative fires 0/3 (a likely triggering-threshold limit, to
+flag as expected-hard rather than chase). Treat recall as provisional until the
+harness damps flail.
 
 ## 0.2.1 — 2026-06-09
 
