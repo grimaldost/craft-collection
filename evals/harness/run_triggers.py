@@ -33,17 +33,28 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counte
     runs fired the skill; `error_counter(query_str, repeats) -> e` returns how many
     of the NON-firing runs errored (timeout/budget) — those runs carry no evidence
     that the description failed, so recall is also reported with them excluded.
-    The strict `recall` (errors count as misses) stays the gated number. Pure:
-    inject fake counters in tests, the real ones in the CLI."""
-    pos_succ = pos_tri = pos_err = neg_succ = neg_tri = 0
+    The strict `recall` (errors count as misses) stays the gated number. An
+    `expected_hard` positive — its miss is an accepted model-behavior boundary,
+    not a description gap — is scored into `recall_hard` and EXCLUDED from the
+    gated `recall`, so tuning stops re-spending on immovable queries while a
+    regression stays visible. Pure: inject fake counters in tests, the real ones
+    in the CLI."""
+    pos_succ = pos_tri = pos_err = 0  # gated recall: non-hard positives
+    hard_succ = hard_tri = 0  # reported separately: expected-hard positives
+    neg_succ = neg_tri = 0
     per_query = []
     for q in queries:
         k = trigger_counter(q['query'], repeats)
         e = error_counter(q['query'], repeats) if error_counter else 0
+        hard = bool(q.get('expected_hard'))
         if q['should_trigger']:
-            pos_succ += k
-            pos_tri += repeats
-            pos_err += e
+            if hard:
+                hard_succ += k
+                hard_tri += repeats
+            else:
+                pos_succ += k
+                pos_tri += repeats
+                pos_err += e
         else:
             neg_succ += repeats - k  # a correct rejection = a NON-fire on a negative
             neg_tri += repeats
@@ -51,6 +62,7 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counte
             {
                 'query': q['query'],
                 'should_trigger': q['should_trigger'],
+                'expected_hard': hard,
                 'k': k,
                 'repeats': repeats,
                 'rate': (k / repeats if repeats else 0.0),
@@ -68,7 +80,12 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counte
             list(wilson_interval(pos_succ, pos_valid)) if pos_valid > 0 else None
         ),
         'errors_no_activation_positive': pos_err,
+        'recall_hard': (pass_rate(hard_succ, hard_tri) if hard_tri else None),
+        'recall_hard_ci': (list(wilson_interval(hard_succ, hard_tri)) if hard_tri else None),
         'n_positive': sum(1 for q in queries if q['should_trigger']),
+        'n_positive_hard': sum(
+            1 for q in queries if q['should_trigger'] and q.get('expected_hard')
+        ),
         'n_negative': sum(1 for q in queries if not q['should_trigger']),
         'repeats': repeats,
         'per_query': per_query,
@@ -82,6 +99,58 @@ def load_queries(skill: str, limit: int | None = None) -> list[dict]:
         neg = [q for q in data if not q['should_trigger']][:limit]
         return pos + neg
     return data
+
+
+def validate_queries(queries: list[dict]) -> list[str]:
+    """Structural pre-run check on a trigger dataset: return a list of problems
+    (empty == valid). The mechanical spec-MUST — every entry well-formed,
+    `expected_hard` only on a documented positive, no duplicate queries — is
+    validated BEFORE a run so a malformed dataset fails fast instead of after
+    spending spawns. Pure."""
+    problems: list[str] = []
+    seen: set[str] = set()
+    for i, q in enumerate(queries):
+        if not isinstance(q, dict):
+            problems.append(f'entry {i}: not an object')
+            continue
+        query = q.get('query')
+        tag = repr(str(query)[:40])
+        if not isinstance(query, str) or not query.strip():
+            problems.append(f'entry {i}: missing or empty "query"')
+        if not isinstance(q.get('should_trigger'), bool):
+            problems.append(f'entry {i} ({tag}): "should_trigger" must be a bool')
+        if 'expected_hard' in q:
+            if not isinstance(q['expected_hard'], bool):
+                problems.append(f'entry {i} ({tag}): "expected_hard" must be a bool')
+            elif q['expected_hard']:
+                if not q.get('should_trigger'):
+                    problems.append(
+                        f'entry {i} ({tag}): "expected_hard" is only valid on a positive '
+                        '(should_trigger=true)'
+                    )
+                if not (isinstance(q.get('note'), str) and q['note'].strip()):
+                    problems.append(
+                        f'entry {i} ({tag}): "expected_hard" requires a "note" documenting '
+                        'why the miss is immovable'
+                    )
+        if isinstance(query, str):
+            if query in seen:
+                problems.append(f'entry {i}: duplicate query {tag}')
+            seen.add(query)
+    return problems
+
+
+def merge_report(blob: dict, skill: str, score: dict) -> tuple[dict, bool]:
+    """Pure merge of one skill's `score` into the report blob. Returns
+    (new_blob, clobbered_fuller): `clobbered_fuller` is True when an existing
+    entry for `skill` had MORE total_runs than `score` — i.e. a partial
+    (--limit/--repeats) run is about to overwrite a fuller one. Does not mutate
+    the input blob."""
+    prior = blob.get(skill) or {}
+    clobbered = prior.get('total_runs', 0) > score.get('total_runs', 0)
+    new_blob = dict(blob)
+    new_blob[skill] = score
+    return new_blob, clobbered
 
 
 def run_skill(
@@ -105,8 +174,9 @@ def run_skill(
             plugin_dir=plugin_dir,
             allowed_tools=cfg['allowed_tools_trigger'],
             disallowed_tools=cfg.get('disallowed_tools_trigger', ''),
+            append_system_prompt=cfg.get('trigger_routing_frame', ''),
             model=cfg['agent_model'],
-            max_turns=MAX_TURNS_TRIGGER,
+            max_turns=cfg.get('trigger_max_turns', MAX_TURNS_TRIGGER),
             max_budget_usd=cfg['max_budget_usd'],
             timeout=cfg['timeout_seconds'],
             stream=True,
@@ -140,7 +210,11 @@ def run_skill(
     return score
 
 
-def write_report(skill: str, score: dict) -> Path:
+def write_report(skill: str, score: dict) -> bool:
+    """Merge `score` into report/triggers.json atomically (temp + replace, so a
+    crash mid-write can't corrupt the blob). Returns `clobbered_fuller` — True when
+    a smaller (partial) run overwrote a fuller existing entry for the same skill,
+    so the CLI can warn loudly rather than only printing the pre-run NOTE."""
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     path = REPORT_DIR / 'triggers.json'
     blob: dict = {}
@@ -149,9 +223,11 @@ def write_report(skill: str, score: dict) -> Path:
             blob = json.loads(path.read_text(encoding='utf-8'))
         except (json.JSONDecodeError, ValueError):
             blob = {}
-    blob[skill] = score
-    path.write_text(json.dumps(blob, indent=2), encoding='utf-8')
-    return path
+    new_blob, clobbered = merge_report(blob, skill, score)
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(json.dumps(new_blob, indent=2), encoding='utf-8')
+    tmp.replace(path)  # atomic rename on the same filesystem
+    return clobbered
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -169,6 +245,12 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     queries = load_queries(args.skill, args.limit)
+    problems = validate_queries(queries)
+    if problems:
+        print(f'dataset {args.skill}.json has {len(problems)} problem(s) — fix before running:')
+        for p in problems:
+            print(f'  - {p}')
+        return 1
     plugin = cfg['plugin_of_skill'][args.skill]
     plugin_dir = str(REPO / 'plugins' / plugin)
     n_spawn = len(queries) * args.repeats
@@ -204,7 +286,13 @@ def main(argv: list[str] | None = None) -> int:
         cleanup_dir(cwd)
         cleanup_dir(config_dir)
 
-    write_report(args.skill, score)
+    clobbered = write_report(args.skill, score)
+    if clobbered:
+        print(
+            f'WARNING: this run overwrote a FULLER existing "{args.skill}" entry in '
+            'report/triggers.json (a partial --limit/--repeats run). Re-run full or '
+            'restore a backup before aggregating.'
+        )
     g = cfg['gates']
     action = args.skill in set(cfg.get('action_discipline_skills', []))
     rlo, rhi = score['recall_ci']
@@ -241,6 +329,12 @@ def main(argv: list[str] | None = None) -> int:
         f'specificity = {score["specificity"]:.2f}  CI[{slo:.2f},{shi:.2f}]  '
         f'gate>={g["trigger_specificity"]}  {spec_ok}'
     )
+    if score.get('n_positive_hard'):
+        hlo, hhi = score['recall_hard_ci']
+        print(
+            f'recall (expected-hard) = {score["recall_hard"]:.2f}  CI[{hlo:.2f},{hhi:.2f}]  '
+            f'({score["n_positive_hard"]} immovable positive(s): reported, NOT gated)'
+        )
     print(
         f'cost=${score["cost_usd"]}  error_runs={score["error_runs"]}/{score["total_runs"]} '
         f'(no-activation errors={score["error_runs_no_activation"]})'
@@ -253,7 +347,11 @@ def main(argv: list[str] | None = None) -> int:
             sign = '+' if pq['should_trigger'] else '-'
             err = pq.get('errors_no_activation', 0)
             err_note = f' err={err}/{pq["repeats"]}' if err else ''
-            print(f'  miss [{sign}] k={pq["k"]}/{pq["repeats"]}{err_note} {pq["query"][:70]}')
+            hard_note = ' [expected-hard: not gated]' if pq.get('expected_hard') else ''
+            print(
+                f'  miss [{sign}] k={pq["k"]}/{pq["repeats"]}{err_note}{hard_note} '
+                f'{pq["query"][:70]}'
+            )
     return 0
 
 

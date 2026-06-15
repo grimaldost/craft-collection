@@ -101,13 +101,19 @@ Each runner prints an upfront spawn count and a ceiling, and supports `--dry-run
 (plan only) and `--limit` (cap). The full focused run is ~250 `claude -p` spawns
 (~144 trigger + ~105 grading); empirically ~$15–25 and ~30 min wall at
 `--concurrency 6`. Lower `--repeats`, `--limit` the set, or drop `--concurrency`
-to trim.
+to trim. `trigger_max_turns` (config) caps the trigger arm; `trigger_routing_frame`
+(config, default off) is an opt-in flail-damping lever — an `--append-system-prompt`
+that frames each trigger run as a routing check, so a non-firing positive answers
+briefly instead of burning turns with no tools. It changes spawn behavior, so
+validate it with a live re-run (error-run rate drops, recall/specificity hold)
+before enabling.
 
 Run **one runner at a time**: `report/triggers.json` and `report/grading.json` are
 merged read-modify-write only when a runner finishes, so two same-type runners in
-parallel can clobber each other's entry. A `--limit`/`--repeats` partial run
-likewise **overwrites** that skill's full entry (the runner prints a NOTE when it
-is about to).
+parallel can clobber each other's entry. The trigger writer is **atomic** (temp +
+rename, so a crash can't corrupt the blob) and **warns** when a `--limit`/`--repeats`
+partial run overwrites a fuller existing entry for that skill (it also prints a NOTE
+before running) — re-run full or restore a backup before aggregating.
 
 ## What the numbers mean
 
@@ -116,7 +122,11 @@ is about to).
   misses in this strict number; when any non-firing positive run errored, the
   runner also prints **recall excl. errored runs** — those runs carry no evidence
   about the description either way (`errors_no_activation` per query in
-  `triggers.json`).
+  `triggers.json`). A positive flagged `expected_hard` in the dataset (an accepted
+  model-behavior boundary, e.g. a bare imperative the model executes instead of
+  routing) is **excluded from this gated recall** and reported separately as
+  **recall (expected-hard)**, so tuning stops re-spending on immovable queries while
+  a regression on them stays visible.
 - **Action-discipline skills** (`action_discipline_skills` in `config.json` —
   TDD, systematic-debugging, verification-before-completion, skill-authoring):
   the trigger arm deliberately denies Write/Edit/Bash, so skills that activate

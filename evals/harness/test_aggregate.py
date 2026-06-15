@@ -104,6 +104,33 @@ def test_render_marks_action_discipline_activation():
     assert 'action-discipline' in md  # legend explains the marker
 
 
+def test_render_marks_expected_hard_miss_not_as_failure():
+    # An expected-hard positive that fires 0/3 is surfaced but labelled as
+    # reported-not-gated, NOT counted as a "MISSED positive" gate failure.
+    trig = {
+        's': {
+            'recall': 1.0,
+            'recall_ci': [0.4, 1.0],
+            'recall_hard': 0.0,
+            'specificity': 1.0,
+            'specificity_ci': [0.4, 1.0],
+            'per_query': [
+                {
+                    'query': 'immovable imperative',
+                    'should_trigger': True,
+                    'expected_hard': True,
+                    'k': 0,
+                    'repeats': 3,
+                    'rate': 0.0,
+                }
+            ],
+        }
+    }
+    md = render_scorecard(build_scorecard(trig, {}, GATES), trig, {})
+    assert 'expected-hard' in md
+    assert 'MISSED positive' not in md  # the hard miss is not a gate failure
+
+
 if __name__ == '__main__':
     test_build_scorecard_rows()
     test_build_scorecard_handles_missing_grading()
@@ -113,4 +140,5 @@ if __name__ == '__main__':
     test_action_discipline_without_grading_is_na()
     test_non_action_rows_have_no_task_arm_gate()
     test_render_marks_action_discipline_activation()
+    test_render_marks_expected_hard_miss_not_as_failure()
     print('ok: all aggregate tests passed')

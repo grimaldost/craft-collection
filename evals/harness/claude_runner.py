@@ -205,6 +205,7 @@ def build_command(
     max_budget_usd: float,
     stream: bool,
     disallowed_tools: str = '',
+    append_system_prompt: str = '',
 ) -> list[str]:
     """Assemble the `claude -p` argv. Pure — no I/O. No --bare (it strips login);
     isolation comes from a clean CLAUDE_CONFIG_DIR passed to run_agent. No
@@ -226,6 +227,8 @@ def build_command(
     ]
     if disallowed_tools:
         cmd += ['--disallowed-tools', disallowed_tools]
+    if append_system_prompt:
+        cmd += ['--append-system-prompt', append_system_prompt]
     if max_budget_usd:
         cmd += ['--max-budget-usd', str(max_budget_usd)]
     cmd += (
@@ -257,6 +260,7 @@ def run_agent(
     plugin_dir: str | None = None,
     allowed_tools: str = '',
     disallowed_tools: str = '',
+    append_system_prompt: str = '',
     model: str = 'claude-sonnet-4-6',
     max_turns: int = 8,
     max_budget_usd: float = 0.5,
@@ -274,6 +278,7 @@ def run_agent(
         plugin_dir=plugin_dir,
         allowed_tools=allowed_tools,
         disallowed_tools=disallowed_tools,
+        append_system_prompt=append_system_prompt,
         model=model,
         max_turns=max_turns,
         max_budget_usd=max_budget_usd,

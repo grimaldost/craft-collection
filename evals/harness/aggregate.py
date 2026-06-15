@@ -52,6 +52,7 @@ def build_scorecard(
                 'recall': t.get('recall'),
                 'recall_ci': t.get('recall_ci'),
                 'recall_gate': recall_gate,
+                'recall_hard': t.get('recall_hard'),
                 'task_arm_recall': task_arm_recall,
                 'task_arm_recall_gate': (
                     _gate(task_arm_recall, gates['trigger_recall']) if is_action else None
@@ -131,7 +132,12 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
             )
             if miss:
                 any_miss = True
-                kind = 'MISSED positive' if pq['should_trigger'] else 'FALSE FIRE on negative'
+                if pq.get('expected_hard'):
+                    kind = 'expected-hard (reported, not gated)'
+                elif pq['should_trigger']:
+                    kind = 'MISSED positive'
+                else:
+                    kind = 'FALSE FIRE on negative'
                 out.append(
                     f'- `{skill}` — {kind} (fired {pq["k"]}/{pq["repeats"]}): "{pq["query"]}"'
                 )
