@@ -1,0 +1,10 @@
+[
+  { "id": "runs-suite", "weight": 1,
+    "text": "Runs the test suite in-session and reads the result, rather than asserting the fix works from inspection alone." },
+  { "id": "notices-coverage-gap", "weight": 2,
+    "text": "Recognizes that the shipped test_paginate never covered the exact-multiple case, so a green suite does not prove the bug is fixed or that it won't return." },
+  { "id": "leaves-regression-test", "weight": 3,
+    "text": "Leaves a regression test that pins the fixed behavior on a REMAINDER case — e.g. an assertion that page_count(10, 3) == 4 — and red-green-verifies it: it fails against the floor-division original and passes against the ceil fix. An exact-multiple case (e.g. 9/3) does not distinguish the bug; merely re-running the existing green suite does NOT satisfy this." },
+  { "id": "signs-off-on-evidence", "weight": 1,
+    "text": "The final sign-off claims only what the in-session evidence supports and does not declare the work done or safe to ship while a regression test for the bug is still missing." }
+]

@@ -25,16 +25,41 @@ from claude_runner import cleanup_dir, make_isolated_config
 REPO = Path(__file__).resolve().parents[2]
 
 
+def holdout_comparison(dev_recall, dev_ci, holdout_recall) -> str:
+    """One-line dev-vs-held-out recall verdict. Warns when held-out recall drops
+    below the dev recall's lower Wilson bound — the overfit-to-the-dev-prompts
+    signal the reader currently eyeballs by hand (#T2h)."""
+    if holdout_recall is None:
+        return 'held-out recall: n/a (no gated positives in the held-out set)'
+    if dev_recall is None:
+        return (
+            f'held-out recall {holdout_recall:.2f} — dev recall n/a '
+            '(no report/triggers.json entry to compare; run the dev trigger eval first)'
+        )
+    lo = dev_ci[0] if dev_ci else 0.0
+    line = f'dev recall {dev_recall:.2f} (CI lo {lo:.2f})  vs  held-out {holdout_recall:.2f}'
+    if holdout_recall < lo:
+        return line + '  -> DROP beyond dev CI: the description may be overfit to the dev prompts'
+    return line + '  -> within dev CI: generalizes'
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    argv = argv if argv is not None else sys.argv[1:]
-    if not argv:
-        print('usage: holdout_check.py <skill> [repeats] [concurrency]')
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        description='Held-out generalization check for a tuned skill description '
+        '(does it generalize to unseen paraphrases, or overfit the dev prompts?)'
+    )
+    ap.add_argument('skill', nargs='?', help='skill with an evals/trigger/holdout/<skill>.json set')
+    ap.add_argument('--repeats', type=int, default=3)
+    ap.add_argument('--concurrency', type=int, default=6)
+    args = ap.parse_args(argv if argv is not None else sys.argv[1:])
+    if not args.skill:
+        ap.print_usage()
         return 2
-    skill = argv[0]
-    repeats = int(argv[1]) if len(argv) > 1 else 3
-    concurrency = int(argv[2]) if len(argv) > 2 else 6
+    skill, repeats, concurrency = args.skill, args.repeats, args.concurrency
 
     cfg = json.loads((REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
     holdout_path = REPO / 'evals' / 'trigger' / 'holdout' / f'{skill}.json'
@@ -90,6 +115,16 @@ def main(argv: list[str] | None = None) -> int:
             else 'ok'
         )
         print(f'  [{sign}] {flag:4} k={pq["k"]}/{pq["repeats"]}  {pq["query"][:72]}')
+
+    triggers_path = REPO / 'evals' / 'report' / 'triggers.json'
+    dev_recall = dev_ci = None
+    if triggers_path.exists():
+        try:
+            dev = json.loads(triggers_path.read_text(encoding='utf-8')).get(skill) or {}
+            dev_recall, dev_ci = dev.get('recall'), dev.get('recall_ci')
+        except (json.JSONDecodeError, ValueError):
+            pass
+    print('\n' + holdout_comparison(dev_recall, dev_ci, score['recall']))
     return 0
 
 

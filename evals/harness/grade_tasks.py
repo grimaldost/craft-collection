@@ -105,6 +105,21 @@ def build_task_prompt(skill: str, task: dict) -> str:
     return '\n\n-----\n\n'.join(parts)
 
 
+def resolve_task_rubric(skill: str, task: dict, default_rubric: list) -> list:
+    """A task's rubric: its own inline `rubric` list if present, else a
+    `tasks/<skill>/rubric.<task_id>.json` file if one exists, else the skill's
+    shared `rubric.json`. Lets one bank grade differently-shaped tasks (a feature
+    vs a bug-fix, a relay vs a red-green) without a single shared rubric distorting
+    the ones it doesn't fit."""
+    inline = task.get('rubric')
+    if isinstance(inline, list) and inline:
+        return inline
+    per_task = TASKS_DIR / skill / f'rubric.{task["id"]}.json'
+    if per_task.exists():
+        return json.loads(per_task.read_text(encoding='utf-8'))
+    return default_rubric
+
+
 def _read_created_files(cwd: str, cap: int = 20000) -> str:
     """Concatenate text files the agent wrote in its temp cwd (journaling writes
     its entries to a file rather than the final message). Capped, best-effort."""
@@ -192,8 +207,9 @@ def grade_skill(
         without_run, without_out = run_arm(
             prompt, plugin_dir=None, cfg=cfg, config_dir=config_without
         )
+        task_rubric = resolve_task_rubric(skill, task, rubric)
         pw = judge_point(
-            prompt, with_out, rubric, model=cfg['judge_model'], repeats=cfg['judge_repeats']
+            prompt, with_out, task_rubric, model=cfg['judge_model'], repeats=cfg['judge_repeats']
         )
         pair = judge_pair(
             prompt, with_out, without_out, pairwise_criterion, model=cfg['judge_model']
