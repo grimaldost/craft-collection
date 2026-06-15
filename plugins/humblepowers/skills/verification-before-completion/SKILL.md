@@ -28,7 +28,7 @@ Before stating any status — done, fixed, passing, ready, complete:
 | Tests pass | This session's run: zero failures | A previous run, "should pass" |
 | Linter clean | Linter output: zero errors | A partial check, extrapolation |
 | Build succeeds | Build command: exit 0 | Linter passing, logs looking fine |
-| Bug fixed | The original symptom re-tested: gone | Code changed, fix assumed |
+| Bug fixed | Symptom re-tested gone **and** a regression test that red-greens | Symptom gone, no test left behind |
 | Regression test works | Red-green verified (below) | The test passing once |
 | Delegated work done | The diff inspected, checks re-run | The agent's success report |
 | Requirements met | Line-by-line check against the plan | Tests passing |
@@ -38,6 +38,12 @@ Before stating any status — done, fixed, passing, ready, complete:
 Write the test → it passes → revert the fix → the test fails → restore the
 fix → it passes again. A regression test that was never seen failing against
 the bug proves nothing about the bug.
+
+**A bug fix is not done until that test exists** — even a one-line fix, even when
+you judged the full test-driven-development cycle not worth loading for the change.
+The regression test costs seconds and is the only thing that keeps the bug from
+returning; "the fix is obvious" is how a fixed bug comes back a month later. Shipping
+a fix without one is an unverified durability claim, not a smaller scope.
 
 ## Delegated work
 

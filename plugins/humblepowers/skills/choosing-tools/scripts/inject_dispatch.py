@@ -32,6 +32,8 @@ plan - not conversational turns or follow-ups inside an active task):
 5. Nothing clears the bar: proceed, and say so in one line.
 6. A loaded skill that turns out wrong is set aside explicitly, not followed
    through.
+7. After fixing a bug, leave a regression test that fails without the fix -
+   cheap, durable insurance, even when the full TDD skill was not worth loading.
 </toolkit-dispatch>"""
 
 
