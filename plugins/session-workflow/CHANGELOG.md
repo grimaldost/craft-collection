@@ -3,6 +3,27 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.2.3 — 2026-06-14
+
+Body-only refinements to `tool-feedback` from the 2026-06-14 feedback batch
+(`2026-06-13-dyno-skilleval-design-build-run`, `2026-06-14-humble-vs-super-design`
+/ `-run`); the `description` (the eval-gated trigger surface) is unchanged, so no
+holdout re-seal.
+
+### Added
+
+- `tool-feedback`: the cache-vs-working-tree note now covers **version skew in
+  either direction** — the installed/cached copy can run *behind* the working tree
+  (a stale install) or *ahead* of it (a newer install over an older manifest), so
+  the manifest version and the executed version can disagree; record which copy you
+  actually ran and flag the skew (per
+  `2026-06-13-dyno-skilleval-design-build-run#5`, extending the 0.2.2
+  working-tree-authoritative note).
+- `tool-feedback`: a **README-fallback** rule — if a registered tool's `extras`
+  cites a format README that doesn't exist in the tree, fall back to this skill's
+  template and note the missing README as a maintainer gap (per
+  `2026-06-14-humble-vs-super-design` §Friction, reinforced by `-run`).
+
 ## 0.2.2 — 2026-06-13
 
 Two strands land together: body/process fixes from the three-tool digest run
