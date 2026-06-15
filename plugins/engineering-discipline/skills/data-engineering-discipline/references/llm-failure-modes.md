@@ -390,6 +390,153 @@ contract YAML would have caught the staleness immediately.
 
 ---
 
+## Mode 9 — Fabricated telemetry: async status events treated as system state
+
+**The pattern.** In orchestrated or long-running work, the agent treats
+asynchronous status signals — progress notifications, monitor streams,
+dry-run callbacks, "approved" / "merged" / "complete" events, cost
+summaries — as the system's actual state. They are the agent's (or a
+tool's) *narration about* the system, generated from expectation, not
+read from it. When the narration runs ahead of reality, the agent acts
+on events that never happened: it reports approvals for work not done,
+marks runs complete that did not finish, records costs for runs that did
+not execute.
+
+This is Axiom 2's blind spot in its sharpest form. Modes 2 and 8 cover
+*drift* — a fact that existed, paraphrased lossily. This is *invention* —
+a fact that never existed, asserted with the same fluent confidence.
+
+**Detection signals.**
+
+- A status claim ("wave approved", "all merged", "5/5 passed") with no
+  artifact named — no commit SHA, no log line, no file on disk.
+- An outcome reported before the process that produces it could have
+  finished; costs and identifiers that are too clean, too fast, or
+  suspiciously round.
+- Bulk success in progress/dry-run output ("COMPLETE … SUCCESS" for every
+  item at once) rather than one verified result at a time.
+- The agent narrates the next step's result while still inside the
+  current step.
+
+**Defense — the disk-truth protocol.**
+
+- Every event claim is unconfirmed until verified against an append-only
+  source: VCS state (the commit/merge on disk), an append-only run log,
+  the process table, the materialized artifact. A notification is a prompt
+  to go look, not a fact.
+- No state-changing action and no status report on the strength of an
+  event alone — read the disk truth first.
+- For an orchestrated run, the close step is an independent
+  re-verification from disk (git log, tracker file, process exit), never
+  a trust of the run's own progress stream.
+
+**Example.** An orchestration run reported two waves of approvals — with
+realistic costs and plausible branch names — for changes that had not
+been created; a `git log` would have shown nothing. Separately, a dry-run
+emitted "COMPLETE … SUCCESS" for every item in a series it had not
+executed. In both, the defense is identical: the commit on disk is the
+truth; the event is a claim.
+
+---
+
+## Mode 10 — Confabulated anchors and projected verification
+
+**The pattern.** The agent cites an anchor — a test, a fixture, a file
+path, a line range, a symbol — that it never actually read or that does
+not exist, and builds on it as if verified. Three shapes recur:
+
+- *Fabricated anchor* — the cited test / fixture / file isn't in the tree.
+- *Projected verification* — one part is checked and the whole is recorded
+  clean.
+- *Partial read* — a `file:lo-hi` slice that ends inside an open
+  collection literal, read as complete, producing *higher* false
+  confidence than no read at all.
+
+This is Mode 5 generalized from library calls to *any* cited referent,
+and it is the verification-side twin of Mode 9: there the agent invents
+the system's state; here it invents the evidence that the state was
+checked.
+
+**Detection signals.**
+
+- A "verified" / "confirmed clean" claim that doesn't name the exact scope
+  checked ("verified the file" rather than "verified the constants table
+  only").
+- A cited `file:line` range whose end falls inside an unclosed `[`, `{`,
+  or `(` — the read was sliced mid-literal.
+- A spec or review names a fixture / test / symbol that a grep doesn't
+  find.
+- A handed-down brief ("X drifted; add Y") applied without reading the
+  cited X — and the brief turns out accurate-but-incomplete.
+
+**Defense — the anchor-provenance pass.**
+
+- Every cited anchor traces to a read actually performed. Before shipping
+  a spec or a review, grep-verify each cited `file:line` / fixture /
+  symbol exists and says what you claim.
+- A verified-clean entry names the exact scope read. "Verified clean"
+  without a scope is an unverified claim wearing a verified label.
+- A cited line range that ends inside an unclosed bracket / brace is
+  evidence the read was truncated — re-read to the closing delimiter
+  before citing any collection literal.
+- A handed-down fix brief is a *claim*, not a contract: when a task
+  supplies a root cause AND a fix, verify each cited anchor against the
+  source before applying. The brief's own diagnostic step is often the
+  tell that a second site needs the same change.
+
+**Example.** A spec cited a parity-baseline fixture that did not exist in
+the tree (fabricated anchor). A reviewer verified one table in a config
+file and recorded the whole file clean; six other entries had wrong
+signatures (projected verification). A `file:0-40` read ended inside a
+list literal, so a three-element set was read as two and the truncated
+value became the spec's concrete instance (partial read). A handed-down
+brief said "the hook drifted; add the missing entry to its exclusion
+set"; reading the source showed the *scanner's* exclusion set was
+byte-identical and *also* lacked the entry — the one-file fix was a
+two-file fix, and the brief's own step-1 diagnostic ("read the scanner;
+is it missing too?") was the tell.
+
+---
+
+## Mode 11 — The verifier inherits none of the design's documented traps
+
+**The pattern.** A design or spec documents a pattern trap (a regex that
+matches only column-0 anchors and misses function-scoped imports; an enum
+that must include a rare value). Then a *fresh* piece of verification or
+pattern-matching code — a review script, a CI check, the run's own first
+verifier — reproduces the exact trap the design warned about, because the
+trap lived only in the design doc and the verifier's author (a different
+agent, or the same agent in a different role) never read it.
+
+**Detection signals.**
+
+- A verifier / check / review script written from scratch in a wave whose
+  design documents a relevant trap.
+- Pattern-matching anchored on position (column 0, line start) rather than
+  content.
+- The trap is recorded in a design doc or ADR that the verifier's prompt
+  does not include.
+- "We documented this" used as if documentation were enforcement.
+
+**Defense.**
+
+- Put traps in the artifacts the verifier actually reads — the review
+  prompt, a wave-output flag, the checker's own test fixtures — not only
+  in the design doc.
+- A documented trap is a candidate test case: encode it as a
+  planted-failure fixture the verifier must catch, so a verifier blind to
+  the trap fails its own self-test.
+- Treat "the design documents X" as necessary, not sufficient: the
+  question is whether the code that checks for X reads where X is written.
+
+**Example.** A wave's design documented that a column-0-anchored regex
+would miss function-scoped imports. The run's own first verification
+script — written fresh for that wave — used a column-0-anchored regex and
+missed exactly those imports. The trap was in the design doc; the verifier
+read only its prompt.
+
+---
+
 ## Cross-mode patterns
 
 Several failure modes share common roots:
@@ -407,6 +554,16 @@ than trusting session summaries.
 **"The agent improves what it shouldn't and accepts what it shouldn't."**
 Modes 3, 7 share this. The defense pattern: explicit instructions about
 when to defer to the user vs. when to act.
+
+**"The agent fabricates evidence and presents it as observation."**
+Modes 9, 10, 11 share this — the sharpest form of the Axiom-2 violation:
+not drift from a fact that existed, but a fact, anchor, or verification
+*invented*. The defense is identical across them: disk truth over
+narration — every event, every cited anchor, every "verified" claim
+traces to something actually read from an append-only source (VCS state,
+logs, the materialized artifact, the file at the cited line). Where Modes
+2/5/8 say "re-read the source instead of the summary," these say "confirm
+the thing exists at all before citing it."
 
 ---
 
@@ -427,6 +584,9 @@ Every mode above is defended by one or more of these mechanical layers:
 | Improvement-freeze rule | 3 | Explicit in agent instructions |
 | Documented divergences (MIGRATION_NOTES) | 3, 7, 8 | Required artifact |
 | Ambiguity-flagging requirement | 7 | Agent instructions: ask before defaulting |
+| Disk-truth protocol (events vs VCS/logs/disk) | 9 | Append-only source check before any status report or state-changing action |
+| Anchor-provenance pass (cited anchors trace to a read) | 5, 10 | grep-verify `file:line`/fixture/symbol; name the scope verified; read to the closing delimiter |
+| Traps in the verifier's own inputs | 11 | Review prompts, planted-failure fixtures, wave-output flags |
 | Pre-shipping checklist | 6, all | `SKILL.md` |
 
 None of these defenses rely on the agent's self-assessment. All are
