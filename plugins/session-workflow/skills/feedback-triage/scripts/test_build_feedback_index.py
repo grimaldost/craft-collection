@@ -51,9 +51,24 @@ def test_build_index_handles_empty_dir():
         assert '0 report' in build_index(Path(d))
 
 
+def test_build_index_survives_non_utf8_file():
+    # A non-UTF-8 byte in one report must not abort the whole index (UnicodeDecodeError
+    # is a ValueError, not OSError — read with errors='replace').
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-04-good.md').write_text(
+            '# good\n## Proposed promotions\n1. **[MED]** ok.\n', encoding='utf-8'
+        )
+        (dd / '2026-01-05-bad.md').write_bytes(b'# bad\n\xff\xfe not utf-8\n')
+        idx = build_index(dd)  # must not raise
+    assert '`2026-01-04-good#1` — ok.' in idx
+    assert '## 2026-01-05-bad' in idx  # the bad file is still listed, not a crash
+
+
 if __name__ == '__main__':
     test_extract_proposals_pulls_numbered_titles()
     test_extract_proposals_empty_when_no_section()
     test_build_index_lists_reports_and_excludes_meta()
     test_build_index_handles_empty_dir()
+    test_build_index_survives_non_utf8_file()
     print('ok: all build_feedback_index tests passed')

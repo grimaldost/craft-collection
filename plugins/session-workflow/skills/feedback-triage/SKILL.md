@@ -99,8 +99,9 @@ and writing CHANGELOGs belong to the tool's own release process.
    if `extras` is empty or registers none, the template below is authoritative —
    don't hunt for one. When the ask is to triage "everything" across tools and one
    of them owns its triage flow, that tool's slice is a **digest-for-handoff** —
-   extracted, clustered, owner-tagged findings written as INPUT to its flow (a
-   `<date>-new-findings-digest.md`), not a competing generic triage and not skipped.
+   extracted, clustered, and owner-tagged (per step 4) findings written as INPUT to
+   its flow (a `<date>-new-findings-digest.md`), not a competing generic triage and
+   not skipped.
 
 ## Triage doc template
 

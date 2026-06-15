@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 _PROPOSAL = re.compile(r'^\s*(\d+)\.\s+(.+?)\s*$')
-_SEVERITY = re.compile(r'\*\*\[?[A-Za-z/]+\]?\*\*\s*')  # a leading **[MED]** / **[HIGH]** tag
+_SEVERITY = re.compile(r'\*\*\[[A-Za-z/]+\]\*\*\s*')  # a leading **[MED]** / **[HIGH]** tag
 
 
 def extract_proposals(text: str) -> list[tuple[str, str]]:
@@ -63,7 +63,7 @@ def build_index(feedback_dir: Path) -> str:
     for p in reports:
         lines.append(f'## {p.stem}')
         try:
-            props = extract_proposals(p.read_text(encoding='utf-8'))
+            props = extract_proposals(p.read_text(encoding='utf-8', errors='replace'))
         except OSError:
             lines += ['- (unreadable)', '']
             continue
@@ -86,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     out = d / 'INDEX.md'
     out.write_text(build_index(d), encoding='utf-8')
-    print(f'wrote {out} ({len([p for p in d.glob("*.md") if _is_report(p)])} reports)')
+    print(f'wrote {out}')  # the index header carries the report count
     return 0
 
 

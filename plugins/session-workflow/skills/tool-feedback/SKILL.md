@@ -93,7 +93,7 @@ the user's CLAUDE.md) or the user points you at one. Shape:
    wave/phase so reports never clobber earlier ones. Then **rebuild the dir's
    `INDEX.md`** (so the next session's recurrence check at step 2 is one Read, not N
    greps) by running the session-workflow plugin's
-   `feedback-triage/scripts/build_feedback_index.py <feedback dir>`.
+   `skills/feedback-triage/scripts/build_feedback_index.py <feedback dir>`.
 
 ## Report template
 
