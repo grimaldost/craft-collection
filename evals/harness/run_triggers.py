@@ -71,9 +71,9 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counte
         )
     pos_valid = pos_tri - pos_err
     return {
-        'recall': pass_rate(pos_succ, pos_tri),
+        'recall': (pass_rate(pos_succ, pos_tri) if pos_tri else None),
         'specificity': pass_rate(neg_succ, neg_tri),
-        'recall_ci': list(wilson_interval(pos_succ, pos_tri)),
+        'recall_ci': (list(wilson_interval(pos_succ, pos_tri)) if pos_tri else None),
         'specificity_ci': list(wilson_interval(neg_succ, neg_tri)),
         'recall_excl_errors': (pass_rate(pos_succ, pos_valid) if pos_valid > 0 else None),
         'recall_excl_errors_ci': (
@@ -295,17 +295,22 @@ def main(argv: list[str] | None = None) -> int:
         )
     g = cfg['gates']
     action = args.skill in set(cfg.get('action_discipline_skills', []))
-    rlo, rhi = score['recall_ci']
     slo, shi = score['specificity_ci']
-    if action:
+    if score['recall'] is None:
+        rec_ok = 'INFO (no gated positives — all expected_hard, or none in the slice)'
+    elif action:
         rec_ok = 'INFO (action-discipline: not gated on trigger-arm recall)'
     else:
         rec_ok = 'PASS' if score['recall'] >= g['trigger_recall'] else 'FAIL'
     spec_ok = 'PASS' if score['specificity'] >= g['trigger_specificity'] else 'FAIL'
-    print(
-        f'\nrecall      = {score["recall"]:.2f}  CI[{rlo:.2f},{rhi:.2f}]  '
-        f'gate>={g["trigger_recall"]}  {rec_ok}'
-    )
+    if score['recall'] is None:
+        print(f'\nrecall      = n/a    gate>={g["trigger_recall"]}  {rec_ok}')
+    else:
+        rlo, rhi = score['recall_ci']
+        print(
+            f'\nrecall      = {score["recall"]:.2f}  CI[{rlo:.2f},{rhi:.2f}]  '
+            f'gate>={g["trigger_recall"]}  {rec_ok}'
+        )
     if action:
         print(
             '              this skill activates during real work; the gated recall '

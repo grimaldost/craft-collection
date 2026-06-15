@@ -151,6 +151,62 @@ def test_merge_report_full_over_partial_is_fine():
     assert clobbered is False
 
 
+def test_all_positive_hard_yields_none_recall():
+    # Every positive is expected_hard -> no GATED positives -> recall is undefined
+    # (None), not 0.0/FAIL; the rate still surfaces as recall_hard.
+    queries = [{'query': 'h', 'should_trigger': True, 'expected_hard': True, 'note': 'doc'}]
+    r = score_skill(queries, repeats=3, trigger_counter=lambda q, n: 0)
+    assert r['recall'] is None and r['recall_ci'] is None
+    assert r['recall_hard'] == 0.0
+
+
+def test_run_skill_passes_routing_frame_and_max_turns():
+    # The T2f config->param plumbing: run_skill must thread trigger_routing_frame and
+    # trigger_max_turns from cfg into run_agent. Patch run_agent directly (no pytest
+    # fixture, so this runs under both the script runner and pytest).
+    import run_triggers as rt
+
+    captured = {}
+
+    class _FakeRun:
+        cost_usd = 0.0
+        is_error = False
+
+        def activated(self, _skill):
+            return False
+
+    def _fake_run_agent(_prompt, **kw):
+        captured.update(kw)
+        return _FakeRun()
+
+    cfg = {
+        'allowed_tools_trigger': 'Skill',
+        'disallowed_tools_trigger': '',
+        'trigger_routing_frame': 'FRAME',
+        'trigger_max_turns': 2,
+        'agent_model': 'm',
+        'max_budget_usd': 0.5,
+        'timeout_seconds': 300,
+    }
+    orig = rt.run_agent
+    rt.run_agent = _fake_run_agent
+    try:
+        rt.run_skill(
+            'tool-feedback',
+            [{'query': 'q', 'should_trigger': True}],
+            plugin_dir='p',
+            cfg=cfg,
+            repeats=1,
+            concurrency=1,
+            config_dir='c',
+            cwd='w',
+        )
+    finally:
+        rt.run_agent = orig
+    assert captured['append_system_prompt'] == 'FRAME'
+    assert captured['max_turns'] == 2
+
+
 if __name__ == '__main__':
     test_scoring_recall_specificity()
     test_specificity_failure_when_negative_fires()
@@ -165,4 +221,6 @@ if __name__ == '__main__':
     test_merge_report_adds_and_preserves_without_mutating()
     test_merge_report_flags_partial_overwriting_fuller()
     test_merge_report_full_over_partial_is_fine()
+    test_all_positive_hard_yields_none_recall()
+    test_run_skill_passes_routing_frame_and_max_turns()
     print('ok: all run_triggers tests passed')

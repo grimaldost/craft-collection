@@ -93,7 +93,9 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
         'reported but not gated — it is invoked deliberately via its slash command — '
         'or an action-discipline skill (TDD, debugging, verification), which the '
         'Write-less trigger arm cannot exercise: for those, the Activation column '
-        'carries the gated task-arm recall proxy in parentheses.',
+        'carries the gated task-arm recall proxy in parentheses. A `hard=` annotation '
+        'on Recall is the expected-hard rate — immovable queries reported but excluded '
+        'from the gate.',
         '',
     ]
 
@@ -105,9 +107,10 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
         '|---|---|---|---|---|---|---|---|---|',
     ]
     for r in rows:
+        hard = '' if r.get('recall_hard') is None else f' hard={_pct(r["recall_hard"])}'
         out.append(
             f'| `{r["skill"]}` '
-            f'| {_pct(r["recall"])}{_ci(r["recall_ci"])} ({r["recall_gate"]}) '
+            f'| {_pct(r["recall"])}{_ci(r["recall_ci"])} ({r["recall_gate"]}){hard} '
             f'| {_pct(r["specificity"])}{_ci(r["specificity_ci"])} ({r["specificity_gate"]}) '
             f'| {_pct(r["correct_usage"])}{_ci(r["correct_usage_ci"])} ({r["correct_usage_gate"]}) '
             f'| {_pct(r["judge_agreement"])} '
