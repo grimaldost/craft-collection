@@ -291,7 +291,10 @@ renaming changes. Principle 14.
   tools).
 
 **Watch for.** Off-platform consumers are the silent killer. They
-don't appear in lineage graphs.
+don't appear in lineage graphs. A grep that establishes the blast radius
+must not be `src`-only — scope it to `tests/`, `docs/`, config and
+generated trees, and sibling consumer repos too, or the site count
+silently understates the impact (Principle 20, blast-radius corollary).
 
 ### Step 2.4 — Additive changes: ship the schema-as-code first
 
@@ -508,7 +511,12 @@ from. This becomes the column-source map.
 **Watch for.** Hidden inputs — config files read at runtime, calendar
 data fetched from a registry, exchange rates pulled from an external
 API. These don't appear in obvious read patterns but contribute to
-the output.
+the output. The grep above is scoped to one `existing/etl/path/`; when
+the same enumeration establishes a *blast radius* (every site that reads
+or imports the surface, not just this pipeline's own reads), widen the
+scope past `src`/the pipeline dir to `tests/`, `docs/`, generated trees,
+and sibling consumer repos — a `src`-only radius is the dominant
+understatement (Principle 20, blast-radius corollary).
 
 ### Step 4.3 — Identify all consumers
 

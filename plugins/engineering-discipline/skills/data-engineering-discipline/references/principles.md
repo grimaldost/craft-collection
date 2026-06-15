@@ -836,6 +836,23 @@ they're reading. They will declare downstream impact "low" without
 ever consulting a lineage graph. Mechanical defense: lineage walk is
 a required step before any subtractive or renaming schema change.
 
+**Blast-radius corollary — an "all sites" precondition by grep must not
+be `src`-only.** When a change's correctness rests on having found *every*
+site that touches a thing — every caller of a renamed function, every
+importer of a moved symbol, every reader of a changed column — the
+enumeration scope is load-bearing, and a grep scoped to `src/` silently
+understates it. The dominant misses live outside `src/`: test importers,
+re-exports, generated or vendored code, config and fixture files, docs and
+notebooks, and sibling repos that consume the surface. A `src`-only radius
+is an observed-vs-inferred gap (Axiom 2): the grep *infers* "these are all
+the sites" from an incomplete corpus, and the count it returns is wrong in
+exactly the direction that makes the change look safer than it is. The
+mechanical defense: scope the radius grep to include `tests/`, `docs/`,
+config and generated trees, and any known sibling-repo consumers — and
+treat the resulting site list as a checklist every later step is verified
+against, not a one-time count. A blast radius is only believable once
+you've named where you *didn't* look.
+
 ---
 
 ### Principle 21 — Production drift is monitored, not assumed away

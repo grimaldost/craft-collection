@@ -120,6 +120,44 @@ def test_sort_is_idempotent(data):
 
 Install: `uv add --group test hypothesis`
 
+### Test strength vs. test presence — mutation testing
+
+Coverage and a green suite measure *presence*, not *strength*: a suite can run
+every line and assert almost nothing. Mutation testing is the standard strength
+check — a tool (`mutmut` or `cosmic-ray`) makes small edits to the source (flip a
+comparison, drop a `+ 1`, swap a boolean) and re-runs the suite; a *surviving*
+mutant is a change to production behavior that no test objected to. The mutation
+score (killed / total) is the metric that distinguishes a suite that pins
+behavior from one that merely executes it.
+
+```bash
+uv add --group test mutmut
+uv run mutmut run            # mutate src, run the suite against each mutant
+uv run mutmut results        # surviving mutants = behavior no test pins
+```
+
+Reach for it on the code where a silent regression is expensive — parsers,
+money/precision math, serialization, dispatch logic — not on every module.
+Property-based tests (above) are the cheapest way to raise the score, because
+one property kills a whole class of mutants a single example would miss. A
+passing suite that survives mutation is not proving as much as its green badge
+suggests.
+
+### The economics of shift-left
+
+Each layer of the test pyramid is cheaper than the one below it because it
+catches the defect earlier, when the fix is local and cheap. The cost of a
+defect climbs by roughly an order of magnitude at each stage it survives: an
+assertion written *as the code is authored* costs almost nothing; the same bug
+caught in review costs a round-trip; caught by a retroactive audit after the
+fact it costs a focused investigation campaign; reaching production it costs
+real money and trust. This is the concrete reason the pyramid's cheap layers
+(typed config that fails at startup, pre-commit gates, unit and property tests
+at authoring time) are not optional polish — they are where a defect is cheapest
+to kill, and every stage skipped multiplies what the same defect costs to fix
+later. "We'll test it properly after it works" is a decision to pay the later,
+larger price.
+
 ## 4. Snapshot Testing
 
 Snapshot testing eliminates the tedium of writing assertions for complex

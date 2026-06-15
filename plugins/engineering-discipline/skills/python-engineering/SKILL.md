@@ -47,6 +47,43 @@ and configuration.
 
 ---
 
+## Modifying existing code (the edit lane)
+
+Most work in an existing project is an *edit*, not a scaffold. When the task
+is to change a few files in a project that already has its layout, tooling,
+and CI, the scaffolding, Docker, observability, and CI sections below are
+not the relevant rules — skip them. Match what the surrounding code already
+does, and apply only the rules that govern the lines you touch:
+
+- **Match the local convention first.** Read 2–3 nearby files before editing.
+  The project's existing patterns — even where they differ from this skill's
+  greenfield defaults — are the contract for an edit; a one-file modernization
+  that diverges from the rest of the module is noise, not improvement.
+- **Protocol-first typing for new interfaces.** A new seam introduced inside
+  existing code prefers `typing.Protocol` (structural) over an ABC, unless the
+  surrounding code already commits to ABCs. See the Typing Philosophy section.
+- **`@override` semantics.** When overriding a real base-class method, annotate
+  it `@override` (PEP 698); do not add `@override` to a class that only
+  structurally satisfies a `Protocol` — see the caveat in Typing Philosophy.
+- **Import hygiene.** Keep imports at module top, grouped stdlib / third-party /
+  first-party (ruff's isort handles ordering). When a format-on-save or
+  autofix hook strips unused imports, add an import in the *same* edit that
+  first references it — an "import now, use later" split loses the import to
+  the hook between edits.
+- **Quoting and docstrings.** Single quotes for code literals, double quotes
+  for docstrings (the project's ruff config enforces this; an edit that fights
+  it just gets reformatted).
+- **Don't widen the scope.** An edit's diff is its scope. Adjacent cleanup,
+  renames, and "while I'm here" refactors belong in a separate change — the
+  same scope discipline `data-engineering-discipline` applies to a migration.
+
+If the task is actually to *modernize* an inherited project's tooling (assess
+the current setup and bring it to standard), that is the broader scope the
+rest of this skill and `scripts/doctor.py` cover — run the doctor, then work
+through its findings.
+
+---
+
 ## The Canonical Stack
 
 | Layer            | Tool                  | Notes                                      |
@@ -116,6 +153,14 @@ evaluated. Forward references work natively — no need for
 **Other modern typing patterns**: use `Self` for fluent APIs, `@override` for
 explicit method overriding, `ParamSpec` for typed decorators, and
 `TypeIs` / `TypeGuard` for type narrowing in guards.
+
+> **`@override` caveat (PEP 698).** `@override` requires an actual base-class
+> method to override. On a plain structural class that satisfies a `Protocol`
+> *without* subclassing it — the Protocol-first default above — do not add
+> `@override`: there is no base method, so the type checker flags it as an
+> error. Structural conformance and `@override` are mutually exclusive; reach
+> for `@override` only inside a real inheritance chain (an ABC subclass, or a
+> class that explicitly subclasses its base).
 
 → Full architecture rationale: **Read `references/ecosystem_rationale.md`**
 
@@ -363,7 +408,8 @@ For exhaustive templates and patterns, read these as needed:
   pytest integration. Read when setting up logging or observability.
 
 - **`references/testing_and_qa.md`** — Pytest patterns, Hypothesis for
-  property-based testing, snapshot testing, testcontainers, unit vs
+  property-based testing, mutation testing (test *strength* vs. presence), the
+  economics of shift-left, snapshot testing, testcontainers, unit vs
   integration split, async testing. Read when generating tests or QA strategy.
 
 - **`references/docker_patterns.md`** — Multi-stage Dockerfile with uv, CI/CD
