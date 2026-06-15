@@ -41,7 +41,9 @@ default).
    tech stack, and the execution mode (this skill's loop, or inline).
 6. **Self-review before execution**: every spec requirement maps to a task;
    no placeholder patterns survive; names and signatures used in later tasks
-   match their definitions in earlier tasks. Fix inline and move on.
+   match their definitions in earlier tasks; every config field, limit, or
+   flag the plan introduces is consumed by a task, not merely declared. Fix
+   inline and move on.
 
 ## The execution loop
 
@@ -71,8 +73,30 @@ track them (one tracked item per task). Then, per task:
    Stop only for BLOCKED-beyond-recovery, genuine ambiguity, or completion.
 
 After the last task: one final review subagent over the whole implementation
-against the whole plan, then hand the completion claim to
+against the whole plan — including an **integration trace**: follow every
+config field, limit, flag, or option the plan introduced (task fields,
+scenario fields, CLI options) to a consumer, confirming each is actually
+read end-to-end, not merely declared. Plan-fidelity review is blind here by
+construction — a declared-but-unconsumed limit passes both code-matches-plan
+and code-is-well-built while doing nothing, surfacing only at runtime. Then
+hand the completion claim to
 verification-before-completion — its evidence rules govern the "done".
+
+## Authoring and dispatch notes
+
+**Strip-on-save hooks.** If the project runs a format-on-save hook that strips
+unused imports or symbols, author each import in the *same* step that first
+references it. An "add the import now, use it later" sequence breaks: the hook
+removes the still-unused import the instant it lands, and the later step hits
+an undefined name. It bites fresh implementers and the controller identically —
+sequence the edit so the symbol is introduced and used together.
+
+**Task granularity vs dispatch economics.** "Bite-sized" means one clear action
+per step, not one subagent per step. When several small steps form one
+tightly-coupled responsibility, batching them into a single coherent *unit* —
+still running the full implementer + two-stage review loop — is a valid reading,
+and often the right one: a dozen two-line steps don't each need three subagents.
+Batch by responsibility, never to skip a review.
 
 ## Model selection per role
 
