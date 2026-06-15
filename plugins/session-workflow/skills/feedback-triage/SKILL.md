@@ -43,7 +43,10 @@ and writing CHANGELOGs belong to the tool's own release process.
    directory holds, the directory is authoritative — triage what is on disk and
    note the discrepancy under **Inputs**. If another session may be triaging the
    same corpus, note any triage doc already dated today before you start, and
-   re-check at emit (step 6) so two sessions don't write competing docs.
+   re-check at emit (step 6) so two sessions don't write competing docs. Rebuild the
+   dir's `INDEX.md` at scope (run `scripts/build_feedback_index.py <dir>`) so the
+   `extends`-lookup in steps 2–3 is one Read of a current index, not N
+   phrasing-fragile greps.
 2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
    on a first run, the window is the whole CHANGELOG to date. For a component that
    ships without its own CHANGELOG (an eval harness, a scripts dir, a doc set),
@@ -62,7 +65,9 @@ and writing CHANGELOGs belong to the tool's own release process.
    marked "extends `<stem>#<n>`" belongs with its ancestors, and the chain's
    length is recurrence evidence. Cite every cluster's evidence as
    `<file-stem>#<n>` finding IDs (or stem + section for narrative findings),
-   with counts.
+   with counts. For a same-wave `-execution`/`-authoring` report pair, read the
+   `-execution` report first — it holds the evidence; the `-authoring` report
+   explains the causes and the folds.
 4. **Assign a disposition per cluster:**
    - **ATTACK** — a real increment to this tool; name the home (template / gate /
      skill / doc / ADR).
@@ -70,7 +75,11 @@ and writing CHANGELOGs belong to the tool's own release process.
    - **DECLINE** — project-specific or out of charter; record why.
 
    Tie-breaker when this tool's artifact participates in behavior another tool
-   owns: route by **where the fix lands**, not where the artifact lives.
+   owns: route by **where the fix lands**, not where the artifact lives. When you
+   fan out per-tool digest subagents over a multi-tool corpus, enumerate **each
+   registered tool's own skills/components** in the brief's owner taxonomy — a
+   finding about tool X's own skill is otherwise misrouted to whichever tool the
+   brief described in most detail (e.g. a pr-pilot skill mistagged as craft's).
 5. **Apply the promotion gate.** Promote only clusters that are **reinforced**
    (≥2 reports, ideally across arcs — a single-report **BLOCKER** is exempt),
    **specific** (a concrete change with a home), and **actionable**. The
@@ -88,7 +97,10 @@ and writing CHANGELOGs belong to the tool's own release process.
 7. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
    if `extras` is empty or registers none, the template below is authoritative —
-   don't hunt for one.
+   don't hunt for one. When the ask is to triage "everything" across tools and one
+   of them owns its triage flow, that tool's slice is a **digest-for-handoff** —
+   extracted, clustered, owner-tagged findings written as INPUT to its flow (a
+   `<date>-new-findings-digest.md`), not a competing generic triage and not skipped.
 
 ## Triage doc template
 

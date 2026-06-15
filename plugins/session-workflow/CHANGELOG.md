@@ -3,6 +3,45 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.3.0 — 2026-06-15
+
+Feedback-loop ergonomics from the carried-forward 2026-06-14 triage backlog (`#T3`,
+`#T5`, context-handoff `#T7`) plus the owner-tagging fix from
+`2026-06-14-feedback-triage-batch-run`. Doctrine + a new stdlib script; the three
+skills' `description` blocks (the eval-gated trigger surfaces) are unchanged, so no
+holdout re-seal.
+
+### Added
+
+- `feedback-triage/scripts/build_feedback_index.py` — rebuilds a feedback dir's
+  `INDEX.md` (one entry per report + its numbered proposals) so an `extends`-lookup
+  is one Read instead of N phrasing-fragile greps (`#T5a`). `tool-feedback` rebuilds
+  it on write and reads it in the recurrence check; `feedback-triage` rebuilds it at
+  scope. Stdlib-only, unit-tested; the `INDEX.md` output is a generated, gitignored
+  local artifact.
+- `tool-feedback`: a **standing-directive = asked** branch — an autonomous session
+  under a CLAUDE.md "run at session close" mandate treats it as asked and writes,
+  instead of emitting an offer no one is present to accept (`#T3a`); and
+  **maintaining a registered tool's own repo now explicitly counts as use** (`#T3b`).
+- `feedback-triage`: a fan-out **owner-tagging** rule — enumerate each registered
+  tool's own skills/components in a digest brief's owner taxonomy so a finding about
+  tool X's own skill isn't misrouted (`2026-06-14-feedback-triage-batch-run#1`); a
+  **digest-for-handoff** middle path for a tool that owns its triage flow (`#2`); and
+  a **read-order convention** for same-wave `-execution`/`-authoring` pairs (`#T5c`).
+- `context-handoff`: **state the INTENT behind an adaptable step**, not just the
+  procedure — strongest in FORK mode, where an executor resolves novel situations in
+  a step's spirit only if the spirit is written down (`#T7`).
+
+### Changed
+
+- `tool-feedback` recurrence check (step 2) now reads `INDEX.md` first, with grep as
+  the fallback.
+
+Deliberately not done: a committed `docs/feedback/README.md` (`#T5b`) — craft's
+`docs/` is gitignored and its binding cites no format README (unlike keel's), so the
+skill's own report template stays the format authority; a gitignored README would
+only duplicate and drift.
+
 ## 0.2.3 — 2026-06-14
 
 Body-only refinements to `tool-feedback` from the 2026-06-14 feedback batch

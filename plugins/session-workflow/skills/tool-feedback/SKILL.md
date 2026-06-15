@@ -46,7 +46,8 @@ the user's CLAUDE.md) or the user points you at one. Shape:
   the report (a gap for the tool's maintainer).
 - The session **used** a tool if it invoked any of its skills/agents/commands, ran
   its engine or CLI, or substantively applied its templates/doctrine.
-  **Design-only and authoring-only use counts.**
+  **Design-only and authoring-only use counts — and so does maintaining the tool's
+  own repo** (editing its skills, scripts, or docs is exercising it).
 - When the tool is a skill in a repo you are also developing, its authoritative
   body is the working-tree `SKILL.md` — the copy the `Skill` loader serves is the
   installed/cached version and can lag *or lead* the repo. Read the working-tree
@@ -59,7 +60,10 @@ the user's CLAUDE.md) or the user points you at one. Shape:
 ## Were you asked, or did you notice?
 
 - **Asked** ("write the feedback reports", "tooling feedback", "dogfood report") —
-  write now, no confirmation step.
+  write now, no confirmation step. A **standing per-session directive** (e.g. a
+  CLAUDE.md "run tool-feedback at session close" mandate) is the asked branch for an
+  autonomous session: treat it as asked and write now — offer-first has no one
+  present to accept, so it would only deadlock.
 - **You noticed** the session winding down after exercising registered tools —
   do not auto-write. Emit a **single one-line offer** naming the tools: *"This
   session exercised keel and pr-pilot — want the two feedback reports?"* One offer,
@@ -70,8 +74,10 @@ the user's CLAUDE.md) or the user points you at one. Shape:
 
 1. **Resolve targets.** From the bindings table, list every registered tool the
    session used. One report per tool.
-2. **Check recurrence before drafting.** Grep each tool's feedback dir for the key
-   terms of each candidate finding. A repeat is written as
+2. **Check recurrence before drafting.** Read the dir's `INDEX.md` (one entry per
+   prior report + its numbered proposals) and scan it for a finding your candidate
+   repeats — one Read of a current index instead of N phrasing-fragile greps; fall
+   back to a grep only if no INDEX is present. A repeat is written as
    **"extends `<prior-file-stem>#<n>`"** (or "extends `<prior-file-stem>` §Misses"
    for a narrative finding) plus only the *new* evidence — never restated fresh.
 3. **Route by ownership.** Engine/execution findings go to the engine tool's
@@ -84,7 +90,10 @@ the user's CLAUDE.md) or the user points you at one. Shape:
    above), record the version you actually ran and note the discrepancy.
 5. **Self-check, then write** each report to
    `<repo>/<feedback dir>/<YYYY-MM-DD>-<source-slug>.md`, slug distinct per
-   wave/phase so reports never clobber earlier ones.
+   wave/phase so reports never clobber earlier ones. Then **rebuild the dir's
+   `INDEX.md`** (so the next session's recurrence check at step 2 is one Read, not N
+   greps) by running the session-workflow plugin's
+   `feedback-triage/scripts/build_feedback_index.py <feedback dir>`.
 
 ## Report template
 
