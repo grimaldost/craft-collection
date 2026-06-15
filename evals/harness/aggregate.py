@@ -52,6 +52,7 @@ def build_scorecard(
                 'recall': t.get('recall'),
                 'recall_ci': t.get('recall_ci'),
                 'recall_gate': recall_gate,
+                'recall_hard': t.get('recall_hard'),
                 'task_arm_recall': task_arm_recall,
                 'task_arm_recall_gate': (
                     _gate(task_arm_recall, gates['trigger_recall']) if is_action else None
@@ -92,7 +93,9 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
         'reported but not gated — it is invoked deliberately via its slash command — '
         'or an action-discipline skill (TDD, debugging, verification), which the '
         'Write-less trigger arm cannot exercise: for those, the Activation column '
-        'carries the gated task-arm recall proxy in parentheses.',
+        'carries the gated task-arm recall proxy in parentheses. A `hard=` annotation '
+        'on Recall is the expected-hard rate — immovable queries reported but excluded '
+        'from the gate.',
         '',
     ]
 
@@ -104,9 +107,10 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
         '|---|---|---|---|---|---|---|---|---|',
     ]
     for r in rows:
+        hard = '' if r.get('recall_hard') is None else f' hard={_pct(r["recall_hard"])}'
         out.append(
             f'| `{r["skill"]}` '
-            f'| {_pct(r["recall"])}{_ci(r["recall_ci"])} ({r["recall_gate"]}) '
+            f'| {_pct(r["recall"])}{_ci(r["recall_ci"])} ({r["recall_gate"]}){hard} '
             f'| {_pct(r["specificity"])}{_ci(r["specificity_ci"])} ({r["specificity_gate"]}) '
             f'| {_pct(r["correct_usage"])}{_ci(r["correct_usage_ci"])} ({r["correct_usage_gate"]}) '
             f'| {_pct(r["judge_agreement"])} '
@@ -131,7 +135,12 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
             )
             if miss:
                 any_miss = True
-                kind = 'MISSED positive' if pq['should_trigger'] else 'FALSE FIRE on negative'
+                if pq.get('expected_hard'):
+                    kind = 'expected-hard (reported, not gated)'
+                elif pq['should_trigger']:
+                    kind = 'MISSED positive'
+                else:
+                    kind = 'FALSE FIRE on negative'
                 out.append(
                     f'- `{skill}` — {kind} (fired {pq["k"]}/{pq["repeats"]}): "{pq["query"]}"'
                 )

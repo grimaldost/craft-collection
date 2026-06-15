@@ -28,6 +28,8 @@ evals/
   "max_turns": 8,
   "max_budget_usd": 0.50,
   "timeout_seconds": 300,
+  "trigger_max_turns": 3,
+  "trigger_routing_frame": "",
   "allowed_tools_trigger": "Skill,Read,Glob,Grep",
   "allowed_tools_task": "Skill,Read,Glob,Grep,Write,Edit,Bash",
   "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
@@ -42,6 +44,13 @@ evals/
   higher tightens the CIs). `gates` are the pass/fail thresholds.
 - `command_first_skills` are slash-invoked skills whose auto-recall is reported as
   informational, not gated (they are meant to be invoked, not to auto-fire).
+- `trigger_max_turns` caps the trigger arm (default 3 — enough for a skill to fire,
+  cheap). `trigger_routing_frame`, when non-empty, is passed as `--append-system-prompt`
+  to every trigger spawn: a flail-damping lever that frames the run as a routing check,
+  so a non-firing positive answers briefly instead of burning turns trying to do the
+  task with no tools. **Default empty (off): it changes spawn behavior, so validate it
+  with a live re-run — error-run rate drops while recall/specificity hold — before
+  making it a default.**
 - Exclude a `disable-model-invocation: true` skill from `plugin_of_skill` entirely —
   it cannot auto-activate by design, so the trigger axis does not apply.
 
@@ -57,6 +66,15 @@ evals/
 The **negatives are the hard part** — make them *near-misses* (share vocabulary with
 the positives but are genuinely out of scope), not trivially unrelated. Cheap
 negatives ("capital of France") inflate specificity without testing it.
+
+A positive may carry `"expected_hard": true` (with a `note` documenting why): its miss
+is an accepted model-behavior boundary, not a description gap — e.g. a bare imperative
+("write a dogfooding feedback report for keel") the model executes directly instead of
+routing to the Skill. It is scored and reported as **recall (expected-hard)** but
+EXCLUDED from the gated recall, so tuning rounds stop re-spending on immovable queries
+while a regression on them stays visible. `run_triggers.py` validates the dataset
+before running — well-formedness, `expected_hard` only on a noted positive, no
+duplicate queries — and fails fast on a malformed file.
 
 ### tasks/<skill>/tasks.json and rubric.json
 
@@ -76,9 +94,10 @@ will be unsatisfiable elsewhere and depress the score unfairly.
 ## 2. The three axes and how they are computed
 
 - **Triggering** (`run_triggers.py`): runs each `query` headless with the plugin
-  loaded, `allowed_tools_trigger`. **Recall** = positives that fired / positives.
-  **Specificity** = negatives that stayed quiet / negatives. Per-query rates over
-  `agent_repeats`. Wilson CIs on both.
+  loaded, `allowed_tools_trigger`. **Recall** = positives that fired / positives
+  (`expected_hard` positives are excluded from this gated number and reported as
+  `recall_hard`). **Specificity** = negatives that stayed quiet / negatives. Per-query
+  rates over `agent_repeats`. Wilson CIs on both.
 - **Correct-usage** (`grade_tasks.py`, WITH arm): a pointwise LLM judge scores the
   WITH-skill output against the rubric; the score is recomputed from rubric weights ×
   the judge's met-flags (not the judge's gestalt number). Pass = score ≥ gate.

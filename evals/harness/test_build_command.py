@@ -48,8 +48,31 @@ def test_disallowed_tools_flag():
     assert cmd[cmd.index('--disallowed-tools') + 1] == 'Write,Edit,Bash'
 
 
+def test_append_system_prompt_flag():
+    frame = 'If a skill applies, invoke it; you need not complete the task.'
+    cmd = build_command(
+        plugin_dir=None,
+        allowed_tools='Skill,Read',
+        model='m',
+        max_turns=3,
+        max_budget_usd=0.5,
+        stream=True,
+        append_system_prompt=frame,
+    )
+    assert cmd[cmd.index('--append-system-prompt') + 1] == frame
+
+
+def test_append_system_prompt_omitted_when_empty():
+    cmd = build_command(
+        plugin_dir=None, allowed_tools='', model='m', max_turns=4, max_budget_usd=0, stream=False
+    )
+    assert '--append-system-prompt' not in cmd  # off by default -> no behavior change
+
+
 if __name__ == '__main__':
     test_with_plugin_stream()
     test_without_plugin_json()
     test_disallowed_tools_flag()
+    test_append_system_prompt_flag()
+    test_append_system_prompt_omitted_when_empty()
     print('ok: all build_command tests passed')

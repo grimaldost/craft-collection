@@ -3,7 +3,7 @@ pytest or `python test_run_triggers.py`."""
 
 from __future__ import annotations
 
-from run_triggers import score_skill
+from run_triggers import merge_report, score_skill, validate_queries
 
 
 def fake_run(query, repeats):  # fires only on queries containing "journal"
@@ -78,6 +78,135 @@ def test_all_positive_runs_errored_yields_none():
     assert r['recall_excl_errors'] is None  # zero valid runs -> no rate
 
 
+def test_expected_hard_excluded_from_gated_recall():
+    # A hard positive that never fires must NOT drag the gated recall; its rate is
+    # reported as recall_hard instead, so a tuning round stops re-spending on it.
+    queries = [
+        {'query': 'normal', 'should_trigger': True},
+        {'query': 'canonical imperative', 'should_trigger': True, 'expected_hard': True},
+    ]
+    counter = lambda q, n: 3 if q == 'normal' else 0  # noqa: E731 - test stub
+    r = score_skill(queries, repeats=3, trigger_counter=counter)
+    assert r['recall'] == 1.0  # gated recall over non-hard positives only -> perfect
+    assert r['recall_hard'] == 0.0  # the hard one is reported, not gated
+    assert r['recall_hard_ci'] is not None
+    assert r['n_positive'] == 2 and r['n_positive_hard'] == 1
+    hard_pq = next(pq for pq in r['per_query'] if pq['query'] == 'canonical imperative')
+    assert hard_pq['expected_hard'] is True
+
+
+def test_no_hard_queries_leaves_recall_unchanged():
+    queries = [{'query': 'p', 'should_trigger': True}]
+    r = score_skill(queries, repeats=3, trigger_counter=lambda q, n: 3)
+    assert r['recall'] == 1.0
+    assert r['recall_hard'] is None and r['n_positive_hard'] == 0
+    assert r['per_query'][0]['expected_hard'] is False
+
+
+def test_validate_queries_accepts_well_formed():
+    queries = [
+        {'query': 'a', 'should_trigger': True},
+        {'query': 'b', 'should_trigger': False},
+        {
+            'query': 'c',
+            'should_trigger': True,
+            'expected_hard': True,
+            'note': 'documented immovable',
+        },
+    ]
+    assert validate_queries(queries) == []
+
+
+def test_validate_queries_flags_problems():
+    queries = [
+        {'query': '', 'should_trigger': True},  # empty query
+        {'query': 'x', 'should_trigger': 'yes'},  # non-bool should_trigger
+        {'query': 'y', 'should_trigger': False, 'expected_hard': True, 'note': 'n'},  # hard on neg
+        {'query': 'z', 'should_trigger': True, 'expected_hard': True},  # hard without a note
+        {'query': 'x', 'should_trigger': True},  # duplicate 'x'
+    ]
+    problems = validate_queries(queries)
+    assert any('expected_hard' in p and 'positive' in p for p in problems)
+    assert any('note' in p for p in problems)
+    assert any('duplicate' in p for p in problems)
+    assert any('should_trigger' in p for p in problems)
+
+
+def test_merge_report_adds_and_preserves_without_mutating():
+    blob = {'a': {'total_runs': 10}}
+    new, clobbered = merge_report(blob, 'b', {'total_runs': 5})
+    assert new['a'] == {'total_runs': 10} and new['b'] == {'total_runs': 5}
+    assert clobbered is False  # a new skill clobbers nothing
+    assert blob == {'a': {'total_runs': 10}}  # input not mutated
+
+
+def test_merge_report_flags_partial_overwriting_fuller():
+    blob = {'s': {'total_runs': 48}}  # a full run already on disk
+    _, clobbered = merge_report(blob, 's', {'total_runs': 6})  # a --limit partial
+    assert clobbered is True
+
+
+def test_merge_report_full_over_partial_is_fine():
+    _, clobbered = merge_report({'s': {'total_runs': 6}}, 's', {'total_runs': 48})
+    assert clobbered is False
+
+
+def test_all_positive_hard_yields_none_recall():
+    # Every positive is expected_hard -> no GATED positives -> recall is undefined
+    # (None), not 0.0/FAIL; the rate still surfaces as recall_hard.
+    queries = [{'query': 'h', 'should_trigger': True, 'expected_hard': True, 'note': 'doc'}]
+    r = score_skill(queries, repeats=3, trigger_counter=lambda q, n: 0)
+    assert r['recall'] is None and r['recall_ci'] is None
+    assert r['recall_hard'] == 0.0
+
+
+def test_run_skill_passes_routing_frame_and_max_turns():
+    # The T2f config->param plumbing: run_skill must thread trigger_routing_frame and
+    # trigger_max_turns from cfg into run_agent. Patch run_agent directly (no pytest
+    # fixture, so this runs under both the script runner and pytest).
+    import run_triggers as rt
+
+    captured = {}
+
+    class _FakeRun:
+        cost_usd = 0.0
+        is_error = False
+
+        def activated(self, _skill):
+            return False
+
+    def _fake_run_agent(_prompt, **kw):
+        captured.update(kw)
+        return _FakeRun()
+
+    cfg = {
+        'allowed_tools_trigger': 'Skill',
+        'disallowed_tools_trigger': '',
+        'trigger_routing_frame': 'FRAME',
+        'trigger_max_turns': 2,
+        'agent_model': 'm',
+        'max_budget_usd': 0.5,
+        'timeout_seconds': 300,
+    }
+    orig = rt.run_agent
+    rt.run_agent = _fake_run_agent
+    try:
+        rt.run_skill(
+            'tool-feedback',
+            [{'query': 'q', 'should_trigger': True}],
+            plugin_dir='p',
+            cfg=cfg,
+            repeats=1,
+            concurrency=1,
+            config_dir='c',
+            cwd='w',
+        )
+    finally:
+        rt.run_agent = orig
+    assert captured['append_system_prompt'] == 'FRAME'
+    assert captured['max_turns'] == 2
+
+
 if __name__ == '__main__':
     test_scoring_recall_specificity()
     test_specificity_failure_when_negative_fires()
@@ -85,4 +214,13 @@ if __name__ == '__main__':
     test_error_counter_decomposes_recall()
     test_error_counter_defaults_to_zero()
     test_all_positive_runs_errored_yields_none()
+    test_expected_hard_excluded_from_gated_recall()
+    test_no_hard_queries_leaves_recall_unchanged()
+    test_validate_queries_accepts_well_formed()
+    test_validate_queries_flags_problems()
+    test_merge_report_adds_and_preserves_without_mutating()
+    test_merge_report_flags_partial_overwriting_fuller()
+    test_merge_report_full_over_partial_is_fine()
+    test_all_positive_hard_yields_none_recall()
+    test_run_skill_passes_routing_frame_and_max_turns()
     print('ok: all run_triggers tests passed')
