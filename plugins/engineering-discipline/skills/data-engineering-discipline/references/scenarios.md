@@ -812,6 +812,183 @@ history is not.
 
 ---
 
+## 8. Building an enforcement gate (the data product is a verdict function)
+
+Some waves don't ship a dataset — they ship a *checker*: a lint rule, a
+CI gate, a validation function, a contract-enforcement plant whose output
+is a pass/fail verdict over a tree, not rows in a table. The four
+non-negotiables still apply, but they translate: the "schema" is the
+verdict function's contract (what it must catch and must pass); the
+"parity baseline" is the set of cases it must classify correctly; "real
+data finds what synthetic can't" becomes "run the gate against the real
+tree, not only planted fixtures." The dominant failure is a *vacuous
+gate* — green because it checks nothing, not because the tree is clean.
+
+### Step 8.1 — Write the dataset→verdict translation table
+
+**What.** Before building the checker, write down what each non-negotiable
+becomes for this gate: the contract = the exact conditions that must FAIL
+and must PASS; the baseline = the current tree's verdict (green-on-arrival
+is the contract — the gate must pass on the tree as it exists the moment
+it lands); the real-data check = running against the whole real tree, not
+only fixtures.
+
+**Why.** A verdict function has a contract just as a dataset does. Leaving
+it implicit is how a gate ships that passes everything.
+
+**Watch for.** A gate whose only test is "passes on the current tree."
+That proves it isn't a false positive; it does not prove it can fail.
+
+### Step 8.2 — Prove the gate can fail (the non-vacuity matrix)
+
+**What.** Three planted checks, each a test fixture:
+
+- *plant-fires* — a deliberately bad case the gate MUST flag.
+- *empty-allow-list* — when the allow-list / exclusion set is emptied, the
+  gate fails loudly (proves it actually reads the list).
+- *real-tree negative-pin* — pin a known-good real entity so a future
+  regression that breaks it is caught.
+
+**Why.** A gate that cannot demonstrate a failure is indistinguishable
+from `return PASS`. The plant-fires fixture is the single most important
+test of an enforcement gate.
+
+**How.** Encode each as a CI unit test: plant-fires asserts a non-empty
+violation list; empty-allow-list asserts failure when the list is cleared;
+the negative-pin asserts the real entity stays correctly classified.
+
+**Watch for.** Plant fixtures too easy to count — a syntactically broken
+file the parser rejects *before* the gate's logic runs. The plant must be
+valid input that the gate's logic must catch.
+
+### Step 8.3 — Green-on-arrival is the contract
+
+**What.** The gate must pass on the tree exactly as it exists when it
+lands. If it would fail on existing code, either fix the existing code in
+the same wave (in scope) or scope the gate to new code only — explicitly,
+with the boundary recorded.
+
+**Why.** A gate that lands red trains everyone to ignore it. A gate that
+lands green on a clean tree is enforceable from day one.
+
+**Watch for.** Shipping the gate and the fixes it requires in different
+waves with no ordering — the gate is either vacuous (silently scoped
+around the existing failures) or broken (red on arrival).
+
+---
+
+## 9. Repairing a contract to match shipped reality
+
+The schema-evolution playbook (Scenario 2) assumes the contract moves
+*forward* — you change the declaration and migrate consumers. This is the
+inverse: the declared schema and the shipped producer disagree, and the
+*declaration* is the thing that's wrong — consumers have only ever
+observed the emitted shape. Repairing the contract *backward* to match
+shipped reality is legitimate, but it is still a contract change and gets
+the same discipline. The trap is treating "fix the obviously-wrong
+declaration" as a no-op.
+
+### Step 9.1 — Establish which side consumers actually depend on
+
+**What.** Before changing either the declaration or the producer,
+enumerate consumers and determine what each reads — the declared shape or
+the emitted shape.
+
+**Why.** The repair direction depends entirely on this. If consumers
+observed only the emitted shape, the declaration is an aspiration and the
+emission is the de-facto contract — repair the declaration. If any
+consumer depends on the declaration, you have a real breaking change, not
+a repair — go to Scenario 2.
+
+**Watch for.** Assuming "the declaration is the contract" by definition.
+The contract is what consumers depend on (non-negotiable #1); a
+declaration no consumer reads is documentation, not a commitment.
+
+### Step 9.2 — Record the retired aspiration durably
+
+**What.** The declaration you're removing represented an intent. Record
+why it never became real and why it's being retired — in an ADR or the
+contract changelog, not just the diff.
+
+**Why.** Non-negotiable #4: all change is traceable. A silently-deleted
+aspiration is exactly the kind of thing a future session re-introduces.
+
+### Step 9.3 — Land the repair with a parity pin
+
+**What.** Pin the now-agreed shape (a frozen contract token / golden over
+the full surface) in the same change that lands the repair, so the
+declaration and the emission can't silently diverge again.
+
+**Why.** The divergence happened once because nothing held the two in
+sync. Repairing without a pin invites the same drift straight back.
+
+**How.** A byte-stable contract fingerprint over the full surface,
+asserted in CI (see `parity-recipes.md` Recipe 11, contract fingerprint).
+Recompute it at the repair commit and pin it.
+
+**Watch for.** Pinning only the repaired field. Pin the whole surface —
+the next divergence won't announce which field it touches.
+
+---
+
+## 10. Cutting a release across independently-merged waves
+
+Several waves merged independently, each green on its own gates. The cut
+validates that they still *compose* into one coherent contract surface — a
+property no per-wave gate can check, because each wave was reviewed
+against the tree as it stood then, not the assembled whole. This is the
+shape that catches added-surface drift (a CHANGELOG / migration entry each
+wave skipped) and cross-wave contract divergence.
+
+### Step 10.1 — Re-seal the freeze over the assembled surface
+
+**What.** Recompute the public-surface and data-contract freeze (the
+byte-stable fingerprints / goldens) over the assembled tree at the cut
+commit, and diff against the last sealed point.
+
+**Why.** A per-wave fingerprint proves that wave didn't drift; only an
+assembled re-seal proves the waves didn't drift *each other*.
+
+**How.** Recompute the contract token over the full dataset set in a clean
+base worktree (the contract-fingerprint pattern, `parity-recipes.md`
+Recipe 11); a byte-identical diff is the no-silent-drift evidence.
+
+### Step 10.2 — Real-data sweep, clean-room and strict
+
+**What.** Rebuild every buildable dataset through the *current* contracts
+— fresh cache, fresh state, strict mode — not from stale cache.
+
+**Why.** Non-negotiable #3. A green synthetic-fixture suite cannot prove
+the assembled contracts hold against real data; only a from-scratch
+real-data rebuild can. Stale cache masks exactly the drift the cut is
+meant to catch.
+
+**Watch for.** A sweep that reads cached outputs. Clean-room means the
+cache and any incremental state are discarded; every dataset rebuilds from
+source through the new contracts.
+
+### Step 10.3 — Cross-wave docs / release-notes completeness pass
+
+**What.** Audit that every wave's new public surface or behavior change
+has a CHANGELOG entry and, if consumer-facing, a migration note.
+
+**Why.** The most common release-cut miss is not a broken dataset — it's a
+real behavior change that shipped with no consumer-facing record. Per-wave
+gates miss it because added-surface drift is invisible to a wave reviewed
+in isolation.
+
+**How.** A blind multi-agent audit panel suits this well: independent
+readers for boundaries, public-surface/freeze, cross-wave contract
+composition, and release-docs completeness, each blind to the others (see
+`review-panel`). It catches release-notes drift per-wave gates structurally
+cannot.
+
+**Watch for.** Trusting that "each wave had a pre-mortem" covers the
+assembly. Per-wave pre-mortems are blind to the composed surface by
+construction.
+
+---
+
 ## Cross-scenario notes
 
 **When in doubt about which playbook applies**, ask: what is the
@@ -834,3 +1011,15 @@ forward" task touches three playbooks. Run all the relevant steps
 from each; the playbooks overlap (e.g., the contract is defined once
 in the new dataset playbook and reused), but the non-overlapping
 discipline of each scenario still applies.
+
+**The lint/format toolchain is a consumer.** When a task constrains the
+*shape* of a diff or output literal — a migration preserving a
+line-for-line form, a refactor pinning a diff shape, an enforcement gate
+asserting on formatting — the repo's own formatter and linter are
+consumers of that shape. Apply the planned transform to one representative
+file and run the full lint+format gate on it *before* locking any
+diff-shape constraint. If the tools rewrite the literal form (strip
+imports, reflow, reorder), restate the constraint in content terms (a
+pattern that must hold, a line that must be pure) rather than position
+terms (column, exact line). A constraint the repo's own ruff rejects is a
+defect you shipped to yourself.

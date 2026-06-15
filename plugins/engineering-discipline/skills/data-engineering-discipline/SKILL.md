@@ -188,6 +188,10 @@ Other recurring modes:
   the tests and the code that satisfies them.
 - **"Looks reasonable" as done-gate** — the weakest test pyramid
   layer used as the only gate.
+- **Fabricated inference presented as observation** — an async status
+  event, a cited anchor, or a "verified" claim *invented* rather than
+  read (the sharpest Axiom-2 violation); the defense is disk truth over
+  narration — confirm the thing exists before citing it.
 
 For full taxonomy, detection patterns, and mechanical defenses, read
 **`references/llm-failure-modes.md`**. Consult this file before any
@@ -276,7 +280,7 @@ Wire them into CI or run by hand before declaring done.
 |------|-----------|
 | `references/principles.md` | Drafting a design decision, code review, or stuck on which principle applies. The 21 principles in full, each with anti-pattern, corrective, verification, and the LLM-specific gotcha. Principles are universal; per-scenario applications are noted inline. |
 | `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for new dataset, migration, refactor, schema evolution, backfill, incremental/streaming, and investigating downstream breakage. |
-| `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." Eight documented failure modes with detection patterns and mechanical defenses. |
+| `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." Eleven documented failure modes (incl. the fabrication family: telemetry, anchors, verifier-inherited traps) with detection patterns and mechanical defenses. |
 | `references/parity-recipes.md` | Implementing a parity check, row-level diff, schema diff, or any verification step. Concrete code/SQL/CLI recipes for SQL warehouses, Polars, PySpark, dbt, and Python. |
 | `references/contract-templates.md` | Designing or reviewing a data contract. Worked templates for the same dataset expressed as a dbt `schema.yml`, an ODCS YAML, a Pydantic model, and a JSON Schema. |
 | `references/glossary.md` | When precision matters: schema vs. contract vs. interface, parity vs. equivalence, partition vs. snapshot, replay vs. backfill. |

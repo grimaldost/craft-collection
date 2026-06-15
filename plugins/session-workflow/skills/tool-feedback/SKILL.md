@@ -41,14 +41,20 @@ the user's CLAUDE.md) or the user points you at one. Shape:
   filesystem** for candidate repos.
 - `extras` carries per-tool obligations — a format README that stays authoritative
   for that directory, a registered triage template, "include cost table for engine
-  runs". Read and honor it.
+  runs". Read and honor it. If `extras` cites a format README that does not exist
+  in the tree, fall back to this skill's template and note the missing README in
+  the report (a gap for the tool's maintainer).
 - The session **used** a tool if it invoked any of its skills/agents/commands, ran
   its engine or CLI, or substantively applied its templates/doctrine.
   **Design-only and authoring-only use counts.**
 - When the tool is a skill in a repo you are also developing, its authoritative
   body is the working-tree `SKILL.md` — the copy the `Skill` loader serves is the
-  installed/cached version and can lag the repo. Read the working-tree file before
-  reporting on, or reconciling against, the skill's current behavior.
+  installed/cached version and can lag *or lead* the repo. Read the working-tree
+  file before reporting on, or reconciling against, the skill's current behavior,
+  and **record which copy you actually exercised**: the cache can run *behind* the
+  working tree (a stale install) or *ahead* of it (a newer install over an older
+  manifest), so the manifest version and the executed version can disagree in either
+  direction — note the copy you ran and flag the skew.
 
 ## Were you asked, or did you notice?
 
@@ -73,7 +79,9 @@ the user's CLAUDE.md) or the user points you at one. Shape:
    collection's. If ownership is genuinely ambiguous, report it where it surfaced
    and say so — triage's ROUTE OUT is the backstop.
 4. **Draft one report per tool** using the template below. Read the tool's version
-   from its manifest (`plugin.json`, `pyproject.toml`, `__version__`) — never guess.
+   from its manifest (`plugin.json`, `pyproject.toml`, `__version__`) — never guess;
+   if the executed copy may differ from the working-tree manifest (cache skew,
+   above), record the version you actually ran and note the discrepancy.
 5. **Self-check, then write** each report to
    `<repo>/<feedback dir>/<YYYY-MM-DD>-<source-slug>.md`, slug distinct per
    wave/phase so reports never clobber earlier ones.

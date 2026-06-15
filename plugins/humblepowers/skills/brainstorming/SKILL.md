@@ -21,14 +21,18 @@ assumptions cost the most rework.
    first: what are the pieces, how do they relate, what order. Then design
    the first piece through the normal flow. Don't spend questions polishing
    details of something that needs splitting.
-3. **Ask one question per message.** Multiple choice when it fits, open-ended
-   when it doesn't. Aim at purpose, constraints, and success criteria.
+3. **Ask focused questions, one decision at a time.** One question per turn by
+   default; for an expert user facing orthogonal decisions, batch a few into one
+   turn via the host's question UI rather than forcing strict serialization.
+   Multiple choice when it fits, open-ended when it doesn't. Aim at purpose,
+   constraints, and success criteria.
 4. **Propose two or three approaches** with trade-offs. Lead with the
    recommendation and the reasoning, not a neutral menu.
 5. **Present the design in sections,** each scaled to its complexity — a few
    sentences when straightforward, a few hundred words when nuanced. Confirm
    each section before the next. Cover architecture, components, data flow,
-   error handling, and testing.
+   error handling, and testing — and, for work an agent or capped spawn will
+   execute, whether the turn/time/cost budget suffices for the expected work.
 6. **Record the agreed design** where the project keeps specs (user
    preference wins; a dated file under the repo's design-docs convention is a
    sensible default). Then self-review it with fresh eyes: placeholders or
@@ -57,7 +61,8 @@ design. Unrelated refactoring doesn't.
 
 ## Working principles
 
-One question at a time · cut features that aren't needed yet, ruthlessly ·
+One focused question per turn (batch orthogonal decisions for an expert user) ·
+cut features that aren't needed yet, ruthlessly ·
 alternatives before settling · validate incrementally rather than presenting
 a finished monolith · go back when something stops making sense.
 
