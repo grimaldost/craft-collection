@@ -77,6 +77,13 @@ The session owns this judgment — only it knows what matters right now. Apply:
   some schema decisions") are useless; specifics are load-bearing.
 - **Preserve constraints the executor would otherwise violate.** Coding
   conventions, naming patterns, forbidden libraries, style preferences.
+- **State the INTENT behind a step the executor might adapt, not just the
+  procedure.** An executor meets situations you didn't enumerate and can resolve
+  them in the spirit of a step only if the spirit is on the page. For any
+  instruction it might need to deviate from, give the *why* — the gate it protects,
+  the invariant it preserves — so a step followed literally into a situation it
+  doesn't fit is caught, not silently obeyed. Strongest in FORK mode, where the
+  executor continues independently with no one to ask.
 - **Omit narrative.** The executor doesn't need to know how the conversation
   arrived here, only what the current state is.
 - **Include a fact only if its absence would change the artifact.** This is the
