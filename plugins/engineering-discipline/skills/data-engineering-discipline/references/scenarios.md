@@ -923,7 +923,7 @@ declaration and the emission can't silently diverge again.
 sync. Repairing without a pin invites the same drift straight back.
 
 **How.** A byte-stable contract fingerprint over the full surface,
-asserted in CI (see `parity-recipes.md` for the fingerprint pattern).
+asserted in CI (see `parity-recipes.md` Recipe 11, contract fingerprint).
 Recompute it at the repair commit and pin it.
 
 **Watch for.** Pinning only the repaired field. Pin the whole surface —
@@ -950,7 +950,8 @@ commit, and diff against the last sealed point.
 assembled re-seal proves the waves didn't drift *each other*.
 
 **How.** Recompute the contract token over the full dataset set in a clean
-base worktree; a byte-identical diff is the no-silent-drift evidence.
+base worktree (the contract-fingerprint pattern, `parity-recipes.md`
+Recipe 11); a byte-identical diff is the no-silent-drift evidence.
 
 ### Step 10.2 — Real-data sweep, clean-room and strict
 

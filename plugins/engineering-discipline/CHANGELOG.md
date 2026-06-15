@@ -47,10 +47,13 @@ unchanged, so no holdout re-seal.
   - Cross-scenario note: **the lint / format toolchain is a consumer** — run the
     repo's own gate on a representative transformed file before locking a diff-shape
     constraint; state constraints in content terms, not position terms.
+- `references/parity-recipes.md` — **Recipe 11: contract fingerprint** (byte-stable
+  surface token): the pin / re-seal mechanism Scenarios 9 and 10 rely on, with its
+  strictness-ladder and recipe-selector rows.
 
 Carried forward (still unbuilt): the prior triage's axiom-2 corollaries
 (unattended-run observability, src-only blast-radius, non-vacuous-parity recipes,
-fail-open tooling) and the `#T6e` behavior-change-no-output proxy (`watch`).
+fail-open tooling) and the `N2e` behavior-change-no-output proxy (`watch`).
 
 ## 0.1.2 — 2026-06-07
 

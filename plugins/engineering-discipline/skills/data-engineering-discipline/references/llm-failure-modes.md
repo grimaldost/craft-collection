@@ -585,7 +585,7 @@ Every mode above is defended by one or more of these mechanical layers:
 | Documented divergences (MIGRATION_NOTES) | 3, 7, 8 | Required artifact |
 | Ambiguity-flagging requirement | 7 | Agent instructions: ask before defaulting |
 | Disk-truth protocol (events vs VCS/logs/disk) | 9 | Append-only source check before any status report or state-changing action |
-| Anchor-provenance pass (cited anchors trace to a read) | 5, 10 | grep-verify `file:line`/fixture/symbol; name the scope verified; read to the closing delimiter |
+| Anchor-provenance pass (cited anchors trace to a read) | 5, 10 | Name the scope verified; read to the closing delimiter; grep-verify the cited `file:line`/fixture/symbol exists |
 | Traps in the verifier's own inputs | 11 | Review prompts, planted-failure fixtures, wave-output flags |
 | Pre-shipping checklist | 6, all | `SKILL.md` |
 

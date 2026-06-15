@@ -29,6 +29,7 @@ of regression.
 | Distributional checks | Subtle systematic shifts in distributions | Minutes |
 | Row-level value match (sampled) | Single-row computation errors, value transformations | Minutes |
 | Row-level value match (exhaustive) | The strictest gate; catches anything | Minutes-to-hours |
+| Contract fingerprint (identity pin) | Any drift in a sealed surface, across commits / waves | Microseconds |
 
 ---
 
@@ -470,6 +471,71 @@ provide turnkey alternatives.
 
 ---
 
+## Recipe 11 — Contract fingerprint (byte-stable surface token)
+
+A fingerprint reduces an entire contract surface — the schema, the declared
+constraints, the set of participating datasets, or the full output of a
+deterministic build — to a single hash. Two builds that should be identical
+produce the same token; any drift, however small, changes it. Unlike the
+row-level recipes, a fingerprint is cheap to store and compare across commits,
+which makes it the right tool for a *parity pin* (freeze the agreed shape so it
+can't silently change — Scenario 9) and a *release re-seal* (prove
+independently-merged waves still compose to the same surface — Scenario 10).
+
+```python
+import hashlib
+import json
+import polars as pl
+
+def contract_fingerprint(df: pl.DataFrame) -> str:
+    """A byte-stable token over a dataset's contract surface: columns, dtypes,
+    and the canonically-ordered data. Deterministic across runs."""
+    schema = sorted((name, str(dtype)) for name, dtype in df.schema.items())
+    # Canonical ordering so row/column order can't change the token.
+    body = df.select(sorted(df.columns)).sort(sorted(df.columns)).write_csv()
+    payload = json.dumps({"schema": schema, "rows": df.height}, sort_keys=True) + body
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+# Pin: store the token at the agreed / sealed commit, checked into the repo.
+SEALED = "a1b2c3..."
+assert contract_fingerprint(build_output()) == SEALED, "contract surface drifted"
+```
+
+For a *set* of datasets (a multi-wave surface), fingerprint each and hash the
+sorted `(name, token)` pairs into one surface token:
+
+```python
+def surface_token(outputs: dict[str, pl.DataFrame]) -> str:
+    parts = sorted((name, contract_fingerprint(df)) for name, df in outputs.items())
+    return hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()
+```
+
+For SQL warehouses, the equivalent is a deterministic digest over the ordered
+output:
+
+```sql
+-- DuckDB / Snowflake: a digest over the sorted result rows
+SELECT md5(string_agg(row_text, '\n' ORDER BY row_text)) AS surface_token
+FROM (
+    SELECT concat_ws('|', key_a, key_b, cast(amount AS varchar)) AS row_text
+    FROM new_output WHERE partition_date = '2026-05-26'
+);
+```
+
+**Usage notes.**
+
+- A fingerprint proves *identity*, not *correctness* — it says the surface is
+  byte-for-byte what you sealed, not that the sealed value was right. Seal only
+  after a value-level gate (Recipe 4 or 6) has passed once.
+- Make the input canonical (sort rows and columns; pin float formatting) or the
+  token churns on benign reorderings and loses its signal. A token that flaps is
+  a token everyone ignores.
+- Recompute in a clean room — a fresh build from source, not from cache — when
+  using the token to prove no silent drift across a release (Scenario 10). A
+  token recomputed from stale cache only proves the cache didn't change.
+
+---
+
 ## Choosing the right strictness
 
 | Scenario | Recommended recipes |
@@ -482,6 +548,8 @@ provide turnkey alternatives.
 | Backfill | 2, 4, 8 against full-recompute |
 | Incremental load smoke test | 1, 8 |
 | Investigating downstream breakage | 1, 4, 5 across the change window |
+| Contract repair to shipped reality (Scenario 9) | 1, 4, 11 (pin the repaired surface) |
+| Release cut / multi-wave assembly (Scenario 10) | 1, 4, 6, 11 (re-seal in a clean room) |
 
 ---
 
