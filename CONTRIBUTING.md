@@ -53,6 +53,10 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
 
 - **Python style** is governed by [`ruff.toml`](ruff.toml): 100-column lines, single
   quotes. `ruff format` + `ruff check --fix` run automatically on commit.
+- **Author an import in the same edit that first uses it.** A format-on-save hook
+  (and `ruff check --fix`) strips an unused import the instant it lands, so an "add
+  the import now, reference it in a later edit" sequence breaks with an undefined-name
+  error. Introduce the symbol and its first use together.
 - **Stdlib-first.** Scripts avoid third-party dependencies where practical (heavier
   libs like pandas stay optional). This keeps the harness and scripts runnable with
   nothing to install.

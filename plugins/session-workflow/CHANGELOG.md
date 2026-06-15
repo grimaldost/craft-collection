@@ -3,6 +3,22 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.3.1 — 2026-06-15
+
+Two watch-item refinements from the backlog; body-only, descriptions unchanged (no
+holdout re-seal).
+
+### Added
+
+- `tool-feedback`: a proposal carries its **resolution and referents**, not just its
+  question — record the clarification the session validated (or the deciding
+  precedent) and name any counted objects, so the downstream lander doesn't re-derive
+  or hunt (per `2026-06-09-feedback-skills-021-landing#1`, the prior triage's `#T4`).
+- `evaluate-skill`: a boundary note — it evaluates one skill's triggering + output,
+  not a whole plugin's end-task outcomes; a plugin-vs-plugin comparison is an
+  outcome/task-bank harness (dyno-style), not this single-skill behavioral eval (per
+  `2026-06-14-humble-vs-super-run#2`, the `#N7a` watch row).
+
 ## 0.3.0 — 2026-06-15
 
 Feedback-loop ergonomics from the carried-forward 2026-06-14 triage backlog (`#T3`,
