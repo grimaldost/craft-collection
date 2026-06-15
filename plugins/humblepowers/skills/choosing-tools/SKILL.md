@@ -58,6 +58,11 @@ rules of thumb hold:
   task that actually has the failure modes they prevent.
 - Keyword overlap alone never clears the bar. "Test" appearing in the task
   does not load a TDD skill; implementing behavior does.
+- Declining to load a skill is not declining its cheapest, most durable core.
+  The bar gates skill *ceremony*, not the cheap insurance some disciplines carry
+  (e.g. leaving a red-green regression test after a bug fix — seconds of work,
+  lasting protection — even when the full skill isn't worth loading). Apply the
+  core, skip the ceremony.
 
 ## Boundaries
 

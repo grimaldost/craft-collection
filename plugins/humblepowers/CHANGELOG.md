@@ -5,6 +5,36 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.0 — 2026-06-15
+
+Close the regression-test gap the humblepowers-vs-superpowers eval found (N4): on a
+small bug fix the worth-loading bar declines the full `test-driven-development` skill,
+and the regression test gets skipped ~half the time (50–60% vs superpowers' ~90–100%).
+This is a calibration **refinement, not a reversal** — the bar still gates skill
+*ceremony*, but a bug fix's cheap, durable core (leave a red-green regression test) now
+applies even when the full skill isn't loaded. Body/doctrine + the inert dispatch
+injection only; no `description` changed, so no holdout re-seal. **Validated by the
+dyno `humble-vs-super-v1` outcome eval (2026-06-15, n=10/arm on the two bug-fix
+tasks):** `regression_test_present` rose from **50% (humble-only) / 60%
+(stack-humble)** to **100% / 100%** — matching superpowers (90% / 100%) — while
+`fix_correct` and `no_regression` held at 100%. With the economy lead already
+established (smaller corpus, ~30–40% cheaper per trial), humblepowers now
+Pareto-dominates superpowers on these tasks.
+
+### Changed
+
+- `verification-before-completion`: a bug fix is **not done without a regression test
+  that red-greens against the bug** — the "Bug fixed" completion gate now requires the
+  test, not just symptom-gone. A fix's durability is a claim like any other; the
+  evidence is a test that fails without the fix.
+- `choosing-tools` (the loading bar): a third rule of thumb — **declining a skill is
+  not declining its cheapest core**; after a bug fix leave the regression test even
+  when the full `test-driven-development` skill isn't worth loading. The bar gates
+  ceremony, not cheap insurance.
+- `choosing-tools` dispatch injection (`inject_dispatch.py`): the always-on protocol
+  gains the regression-test-after-fix line (interactive sessions with
+  `HUMBLEPOWERS_DISPATCH_INJECT=1`).
+
 ## 0.3.2 — 2026-06-14
 
 `planned-execution` hardening from its first real-feature dogfood
