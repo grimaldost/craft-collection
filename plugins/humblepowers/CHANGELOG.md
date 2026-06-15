@@ -13,9 +13,13 @@ and the regression test gets skipped ~half the time (50–60% vs superpowers' ~9
 This is a calibration **refinement, not a reversal** — the bar still gates skill
 *ceremony*, but a bug fix's cheap, durable core (leave a red-green regression test) now
 applies even when the full skill isn't loaded. Body/doctrine + the inert dispatch
-injection only; no `description` changed, so no holdout re-seal. Effect on the
-regression-test rate measured by the dyno `humble-vs-super-v1` outcome eval — see the
-PR for the before/after.
+injection only; no `description` changed, so no holdout re-seal. **Validated by the
+dyno `humble-vs-super-v1` outcome eval (2026-06-15, n=10/arm on the two bug-fix
+tasks):** `regression_test_present` rose from **50% (humble-only) / 60%
+(stack-humble)** to **100% / 100%** — matching superpowers (90% / 100%) — while
+`fix_correct` and `no_regression` held at 100%. With the economy lead already
+established (smaller corpus, ~30–40% cheaper per trial), humblepowers now
+Pareto-dominates superpowers on these tasks.
 
 ### Changed
 
