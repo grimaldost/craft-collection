@@ -59,10 +59,10 @@ rules of thumb hold:
 - Keyword overlap alone never clears the bar. "Test" appearing in the task
   does not load a TDD skill; implementing behavior does.
 - Declining to load a skill is not declining its cheapest, most durable core.
-  The clearest case: after a bug fix, leave a regression test that red-greens
-  against the bug — seconds of work, lasting protection — even when the full
-  `test-driven-development` skill isn't worth loading for a one-line change. The
-  bar gates skill *ceremony*, not cheap insurance.
+  The bar gates skill *ceremony*, not the cheap insurance some disciplines carry
+  (e.g. leaving a red-green regression test after a bug fix — seconds of work,
+  lasting protection — even when the full skill isn't worth loading). Apply the
+  core, skip the ceremony.
 
 ## Boundaries
 
