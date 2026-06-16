@@ -138,6 +138,12 @@ refs are load-bearing downstream — triage follows the chain to cluster a linea
 under one cause and to count its recurrence — so point them at the exact
 finding, not just the file.
 
+A proposal carries its **resolution and referents**, not just its question. If it
+asks to *clarify* something the session already settled, record the clarification it
+validated (or name the deciding precedent) — otherwise the downstream lander
+re-derives it and can land the wrong one. If it counts objects ("two holdout
+positives"), name them, so a reader isn't sent hunting.
+
 ## Self-check before writing
 
 - Every path the report cites exists.
