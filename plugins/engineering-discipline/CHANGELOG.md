@@ -3,6 +3,68 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.4 — 2026-06-15
+
+Clears the carried-forward axiom-2 corollaries the 2026-06-13 / 2026-06-14
+triages marked "still UNBUILT" (`2026-06-09-triage-craft-collection` clusters
+`T3`, `T4`, `T5`, `T7`, `T9`, surfaced again in the 2026-06-14 carry-forward
+list), plus the two `python-engineering` items (`2026-06-13-triage` `T9a`
+edit-lane and `T9b` `@override` caveat) and the `T13` testing-strength /
+shift-left asks. Reference/body content only — no skill's `description` (the
+eval-gated trigger surface) changed, so no holdout re-seal.
+
+### Added
+
+- `references/llm-failure-modes.md` — the **absence-read-as-state** pair, the
+  mirror of the 0.1.3 fabrication family (Modes 9–11):
+  - **Mode 12 — silence read as status on an unattended run** (`T3`): a frozen
+    tracker / unmoved HEAD is slow-vs-dead-ambiguous, not terminal; disambiguate
+    with an independent observable (process tree + artifact mtimes) before any
+    takeover, and read completion from the materialized result, never from
+    quiet. Includes the stall→takeover recovery sequence (quiescence → in-diff
+    review → independent re-verify → merge). Extends Mode 9's disk-truth
+    protocol rather than restating it.
+  - **Mode 13 — fail-open tooling** (`T9`): a gate where *did-not-run* and
+    *found-nothing* produce the same green (`command | filter` + "no output ⇒
+    pass", return-code-blind, exception-swallowing) manufactures false
+    confidence; assert the tool exists and exited zero, treat non-zero as
+    BLOCKED, prefer built-ins for fences, and prove the gate red twice (planted
+    violation + tool removed).
+  - Cross-mode synthesis gains an "absence read as a state" entry; the
+    mechanical-defenses table gains liveness-probe and fail-closed-tooling rows.
+    `SKILL.md` quick-warning list + resource count updated (11 → 13 modes).
+- `references/principles.md` — Principle 20 gains a **blast-radius corollary**
+  (`T4`): an "all sites" precondition by grep must not be `src`-only — scope to
+  `tests/`, `docs/`, config / generated trees, and sibling consumer repos, and
+  treat the result as a checklist, not a one-time count. Cross-referenced from
+  the consumer-enumeration steps in `scenarios.md` (2.3 lineage walk, 4.2
+  input inventory).
+- `references/parity-recipes.md` — two checks that govern whether any strictness
+  rung can be trusted:
+  - **Recipe 12 — cover every unit, not a sample** (`T5`): enumerate the
+    complete set from the source-of-truth registry and assert the gate covers
+    all of it (the CONSUMER-SWAP input-set diff included); a gate that pins a
+    sample is hollow in coverage.
+  - **Recipe 13 — prove the check can fail before trusting it green** (`T7`):
+    plant a known divergence and watch the check catch it before trusting the
+    pass; covers the fixture-must-participate trap and the verbatim-move
+    `git show HEAD:… | diff` recipe.
+  - Strictness-ladder note added distinguishing these (coverage / non-vacuity
+    preconditions) from the strictness layers.
+- `skills/python-engineering/SKILL.md` — a **"modifying existing code (the edit
+  lane)"** section (`T9a`) surfacing only edit-relevant rules (match local
+  convention, Protocol-first seams, `@override` semantics, import hygiene under
+  strip-on-save, quoting, scope discipline) without the scaffold / Docker /
+  observability / CI payload; and the **`@override` PEP-698 caveat** (`T9b`) in
+  the Typing Philosophy section (do not annotate `@override` on a plain
+  structural class that doesn't subclass its Protocol — the two are mutually
+  exclusive).
+- `skills/python-engineering/references/testing_and_qa.md` — **mutation testing**
+  (test strength vs. presence; `mutmut`, killed/total score) and **the economics
+  of shift-left** (the cost-of-defect curve that makes the pyramid's cheap layers
+  non-optional) (`T13`), with a pointer added from the `SKILL.md` reference-files
+  index.
+
 ## 0.1.3 — 2026-06-14
 
 Acts on the data-engineering backlog from the 2026-06-13 / 2026-06-14 triages
@@ -54,6 +116,7 @@ unchanged, so no holdout re-seal.
 Carried forward (still unbuilt): the prior triage's axiom-2 corollaries
 (unattended-run observability, src-only blast-radius, non-vacuous-parity recipes,
 fail-open tooling) and the `N2e` behavior-change-no-output proxy (`watch`).
+*Update: the four axiom-2 corollaries shipped in 0.1.4; `N2e` remains `watch`.*
 
 ## 0.1.2 — 2026-06-07
 

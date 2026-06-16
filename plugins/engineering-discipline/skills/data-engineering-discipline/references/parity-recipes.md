@@ -31,6 +31,14 @@ of regression.
 | Row-level value match (exhaustive) | The strictest gate; catches anything | Minutes-to-hours |
 | Contract fingerprint (identity pin) | Any drift in a sealed surface, across commits / waves | Microseconds |
 
+Two checks below the ladder govern whether any rung above can be trusted —
+they are not strictness levels but preconditions for believing a green
+result: **Recipe 12 (cover every unit, not a sample)** ensures the gate's
+*coverage* is complete, and **Recipe 13 (prove the check can fail)** ensures
+the gate is *non-vacuous*. A check that is strict but covers a sample, or
+strict but never proven red, is still a green light over an unverified
+surface.
+
 ---
 
 ## Recipe 1 — Schema diff
@@ -533,6 +541,104 @@ FROM (
 - Recompute in a clean room — a fresh build from source, not from cache — when
   using the token to prove no silent drift across a release (Scenario 10). A
   token recomputed from stale cache only proves the cache didn't change.
+
+---
+
+## Recipe 12 — Cover every unit, not a sample
+
+A parity gate can be non-vacuous in *method* — it really diffs, it really
+fails on a mismatch — and still hollow in *coverage*: it pins a
+representative handful of the migrated columns, rerouted operations, or
+swapped inputs and leaves the rest unchecked. The one unit you don't diff
+is the one that drifted. "Preserve behavior" carries an unstated quantifier:
+*every* unit, enumerated against the source-of-truth registry, not a
+plausible sample.
+
+The defense is to derive the complete set mechanically — from the registry,
+the dispatch table, the column list, the set of rerouted ops — and assert
+the gate covers all of it, rather than hand-picking cases the author
+happened to think of.
+
+```python
+# The gate's coverage is itself a checkable claim. Enumerate the complete
+# set from the source of truth, then assert the parity gate touches each one.
+from mylib.dispatch import REGISTERED_OPS  # the source-of-truth registry
+
+covered = set(parity_cases.keys())          # what the gate actually checks
+expected = set(REGISTERED_OPS)              # what it must check
+missing = expected - covered
+assert not missing, f'parity gate omits {len(missing)} units: {sorted(missing)}'
+```
+
+The same shape applies to a mechanism swap (the CONSUMER-SWAP framing):
+when a wave replaces one data-access mechanism with another, enumerate
+exactly which inputs the OLD mechanism reads / refreshes and which the NEW
+one does, and diff the *sets*. A superset on the new path (it reads an input
+the old one never did) is a behavior change, not parity — and a coverage
+check over a sample will not see it, because the extra input simply isn't in
+the sample.
+
+```python
+old_inputs = inputs_read_by(old_mechanism)   # enumerate, don't assume
+new_inputs = inputs_read_by(new_mechanism)
+assert old_inputs == new_inputs, (
+    f'input set changed: only-old={old_inputs - new_inputs}, '
+    f'only-new={new_inputs - old_inputs}'
+)
+```
+
+**Usage notes.**
+
+- "We checked the tricky ones" is sampling by another name. The registry,
+  not intuition about which units are risky, defines the complete set.
+- Make the completeness assertion fail loudly when a *new* unit is added
+  upstream but not wired into the gate — that turns a silent coverage gap
+  into a red build the day the unit appears.
+
+---
+
+## Recipe 13 — Prove the check can fail before trusting it green
+
+A parity check that has only ever been seen green proves nothing: green can
+mean "the outputs match" or "the check never actually compared anything." A
+typo in a join key, a filter that drops both sides to empty, a tolerance set
+so wide nothing trips it, a fixture that exercises a fallback path instead of
+the unit under test — each yields a passing check that verifies nothing. The
+discipline that separates a real gate from a green light is the same one
+Scenario 8 applies to enforcement gates: **prove it red first.** Plant a
+known divergence, watch the check catch it, then remove the plant and trust
+the green.
+
+```python
+def test_parity_check_is_not_vacuous():
+    """The parity gate must fail on a planted divergence — else green is meaningless."""
+    baseline = load_baseline()
+    perturbed = baseline.with_columns(
+        (pl.col('amount') + 0.01).alias('amount')  # one cell, deliberately wrong
+    )
+    try:
+        run_parity_gate(baseline, perturbed)
+    except AssertionError:
+        return  # good: the gate caught the planted divergence
+    raise AssertionError('parity gate passed on a planted divergence — it is vacuous')
+```
+
+**Usage notes.**
+
+- The plant must be a divergence the gate *should* catch — a value off by
+  more than the tolerance, a missing row, a renamed column — not noise below
+  the tolerance floor (that would prove the opposite of what you want).
+- Watch especially for the fixture that satisfies the check via the wrong
+  path: when a change adds an eligibility / participation guard, the headline
+  fixture must be a *participating* instance, or the check passes through the
+  fallback and never exercises the new logic. The red-first plant surfaces
+  this — a vacuous fixture stays green even when you perturb the value the
+  gate claims to protect.
+- For a "verbatim move" refactor, the red-first analog is to diff the
+  *actual* relocated body against `HEAD` (e.g. `git show HEAD:path | ...`),
+  not a mental model of what moved. The deltas a mental model forgets — a log
+  line that now needs a local, a module-level import the moved block relied
+  on — are exactly what the byte diff surfaces.
 
 ---
 

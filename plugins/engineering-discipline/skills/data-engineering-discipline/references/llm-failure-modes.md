@@ -537,6 +537,122 @@ read only its prompt.
 
 ---
 
+## Mode 12 — Silence read as status on an unattended run
+
+**The pattern.** On a long unattended job — an overnight migration, a
+headless multi-PR run, a backfill left to churn — the agent treats the
+*absence* of new output as a fact: a tracker that hasn't moved and a HEAD
+that hasn't advanced get read as "it finished" or "it stopped," and the
+agent reports done or steps in to take over. But a quiet job is
+slow-versus-dead-ambiguous: a still-live writer mid-computation and a
+wedged process produce the *same* surface (no new lines, unmoved HEAD).
+Acting on the inference corrupts the work — declaring a still-running job
+complete reports a result that isn't materialized yet; taking over a
+still-live writer collides two processes on the same worktree.
+
+This is the inverse of Mode 9. Mode 9 is a *fabricated* event — narration
+ahead of reality. This is a *missing* event read as a terminal state —
+silence treated as a status it cannot, on its own, convey. Both share the
+Axiom-2 root: a signal *about* the system stood in for the system.
+
+**Detection signals.**
+
+- A "the run finished / stalled / is stuck" claim with no independent
+  observable named — no process-table check, no artifact mtime, no log
+  tail, only "nothing new appeared."
+- A takeover (kill, branch reset, re-fire) about to start on the strength
+  of a frozen tracker alone.
+- "No errors, so it must have worked" on a job whose result was never read
+  from disk.
+- The job's own progress stream is trusted to *stop reporting* as proof of
+  termination (a wedged process stops reporting too).
+
+**Defense — disambiguate before acting, verify from disk before reporting.**
+
+- Silence is a prompt to probe, not a status. Disambiguate slow-vs-dead
+  with an independent observable: the process tree (is the writer still
+  alive?), artifact mtimes (is anything still being written?), an
+  append-only run log's tail. Only a dead process *and* quiescent artifacts
+  is "stopped."
+- No state-changing takeover — kill, branch reset, re-fire — until
+  quiescence is confirmed; a takeover that collides with a live writer
+  corrupts the worktree, and that is the irreversible move.
+- Completion is read from the materialized result (Mode 9's disk-truth
+  protocol), never inferred from quiet. "No new errors" is not "succeeded";
+  a job can die silently between log lines.
+- When the gates-green output of a stalled run is salvageable, the recovery
+  sequence is itself disciplined: confirm quiescence, review the in-diff
+  artifact, re-verify it independently from disk, then merge — the same
+  observable-source discipline the run itself owed.
+
+**Example.** An overnight multi-PR run went quiet: the tracker file hadn't
+advanced in an hour and HEAD was unmoved. Read as "stuck," the safe-looking
+move was to take over and re-fire. The independent probe told a different
+story each time it was run — a process-tree check plus artifact mtimes
+distinguished a writer still mid-PR (do not touch) from a genuinely wedged
+orchestrator (safe to salvage). Where the run had genuinely stopped with a
+gates-green PR in the tree, the recovery was a quiescence check → in-diff
+review → independent re-verify → merge, not a blind re-run.
+
+---
+
+## Mode 13 — Fail-open tooling: a check that passes when it errors
+
+**The pattern.** A gate is written so that *failing to run* and *finding
+nothing* produce the same green verdict. The classic shape is
+`command | filter` with "no output means pass": if the command itself is
+absent from PATH, mis-invoked, or errors out, it prints nothing, the filter
+matches nothing, and the gate reports clean — not because the tree is clean
+but because the check never executed. A return-code-blind gate (pattern-
+matching stdout while ignoring a non-zero exit) and an exception-swallowing
+validator (`try: check() except: pass`) have the same defect. A gate that
+manufactures false confidence is worse than no gate: no gate at least leaves
+you knowing you haven't checked.
+
+This is Mode 12's logic inside the project's own tooling — *absence of
+output* read as *found-nothing*, when it may mean *the check didn't run*.
+The per-invocation environment is not always sticky across an agent's
+shell calls, so a tool present in one step can be missing in the next, and
+a fence built on it silently flips from enforcing to vacuous.
+
+**Detection signals.**
+
+- A gate of the form `<tool> ... | grep/Select-String ...` whose pass
+  condition is "no matching lines," with no prior check that `<tool>` exists
+  and exited zero.
+- A check that prints `CLEAN` / `PASS` unconditionally on an empty result,
+  including the empty result an error produces.
+- Stdout parsed for a success token while the process's exit code is
+  discarded.
+- A `try/except` around a validation step whose `except` branch lets the
+  caller proceed.
+- A gate that has never been observed to fail — neither on a planted bad
+  input nor when its own tool was removed.
+
+**Defense — distinguish did-not-run from found-nothing.**
+
+- A check is fail-closed only when *tool-missing* is distinguishable from
+  *nothing-found*. Assert the command exists and exited zero before trusting
+  an empty result; treat a non-zero exit as BLOCKED, not CLEAN.
+- Prefer a built-in over a shelled-out external tool for a fence (a
+  language built-in or `Select-String` / Python over a PATH-dependent
+  binary), so tool-absence can't silently zero the result.
+- Let exceptions in a validator propagate, or catch-and-fail — never
+  catch-and-pass. The error path defaults to blocked.
+- Prove the gate can fail twice: once on a planted violation (Scenario 8's
+  plant-fires), and once by removing its own tool — a fail-closed gate goes
+  red in both cases.
+
+**Example.** A documentation fence ran `<formatter> --check ... | <filter>`
+and treated empty output as pass. In a shell where the formatter binary
+wasn't on PATH that invocation, the command errored, printed nothing, and
+the fence reported CLEAN over a tree it had never inspected. Rewritten to
+assert the tool resolved and exited zero — and to read a non-zero exit as
+BLOCKED — the same fence went correctly red the next time the tool was
+absent, surfacing the gap instead of hiding it.
+
+---
+
 ## Cross-mode patterns
 
 Several failure modes share common roots:
@@ -565,6 +681,18 @@ logs, the materialized artifact, the file at the cited line). Where Modes
 2/5/8 say "re-read the source instead of the summary," these say "confirm
 the thing exists at all before citing it."
 
+**"The agent reads absence as a state."**
+Modes 12, 13 share this — the mirror image of the fabrication family.
+There a signal was invented; here a *missing* signal is over-read: silence
+on an unattended run taken as "finished/stopped" (12), or an empty
+check-result taken as "clean" when the check may not have run (13). The
+defense is the same shape in both: an absence is a prompt to probe, not a
+verdict — confirm the process is actually dead (not just quiet) and the
+tool actually ran (not just silent) before acting on "nothing happened."
+The Axiom-2 root is shared with 9/10/11 (a signal about the system stood
+in for the system); the tell is opposite — too little output read as a
+conclusion rather than too much asserted as a fact.
+
 ---
 
 ## Mechanical defenses summary
@@ -584,9 +712,11 @@ Every mode above is defended by one or more of these mechanical layers:
 | Improvement-freeze rule | 3 | Explicit in agent instructions |
 | Documented divergences (MIGRATION_NOTES) | 3, 7, 8 | Required artifact |
 | Ambiguity-flagging requirement | 7 | Agent instructions: ask before defaulting |
-| Disk-truth protocol (events vs VCS/logs/disk) | 9 | Append-only source check before any status report or state-changing action |
+| Disk-truth protocol (events vs VCS/logs/disk) | 9, 12 | Append-only source check before any status report or state-changing action |
 | Anchor-provenance pass (cited anchors trace to a read) | 5, 10 | Name the scope verified; read to the closing delimiter; grep-verify the cited `file:line`/fixture/symbol exists |
 | Traps in the verifier's own inputs | 11 | Review prompts, planted-failure fixtures, wave-output flags |
+| Liveness probe before takeover (process tree + artifact mtimes) | 12 | Confirm dead *and* quiescent before any kill / reset / re-fire; completion read from the materialized result |
+| Fail-closed-tooling check (did-not-run ≠ found-nothing) | 13 | Assert the tool exists and exited zero; non-zero exit is BLOCKED; prefer built-ins for fences; catch-and-fail, never catch-and-pass |
 | Pre-shipping checklist | 6, all | `SKILL.md` |
 
 None of these defenses rely on the agent's self-assessment. All are
