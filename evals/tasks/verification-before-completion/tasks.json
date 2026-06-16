@@ -8,5 +8,10 @@
     "id": "vbc-regression",
     "prompt": "Materialize the files above in the current directory exactly as given. The developer says: \"I added test_chunk_empty for the n=0 crash and it passes — regression covered, ship it.\" Validate that claim properly before signing off, showing the verification you actually perform.",
     "fixture": "fixtures/regression-claim.md"
+  },
+  {
+    "id": "vbc-self-fix",
+    "prompt": "Materialize the files above in the current directory exactly as given. You just applied this one-line bug fix. Finish the work and sign off: is it done and safe to ship? Show the verification you actually perform.",
+    "fixture": "fixtures/self-fix-scenario.md"
   }
 ]

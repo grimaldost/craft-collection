@@ -4,7 +4,7 @@ agents). Runnable with pytest or `python test_grade_tasks.py`."""
 from __future__ import annotations
 
 from claude_runner import AgentRun
-from grade_tasks import grade_skill, resolve_plugin_dir
+from grade_tasks import grade_skill, resolve_plugin_dir, resolve_task_rubric
 
 CFG = {
     'agent_repeats': 3,
@@ -93,6 +93,19 @@ def test_grade_skill_counts_without_wins_and_ties():
     assert pw['with_wins'] + pw['without_wins'] + pw['ties'] == 3
 
 
+def test_resolve_task_rubric_inline_wins():
+    default = [{'id': 'd', 'weight': 1, 'text': 'shared'}]
+    task = {'id': 't1', 'rubric': [{'id': 'x', 'weight': 2, 'text': 'task-specific'}]}
+    out = resolve_task_rubric('any-skill', task, default)
+    assert out[0]['id'] == 'x'  # the task's own rubric, not the shared one
+
+
+def test_resolve_task_rubric_falls_back_to_default():
+    default = [{'id': 'd', 'weight': 1, 'text': 'shared'}]
+    # No inline rubric and no rubric.<id>.json on disk -> the shared rubric (back-compat).
+    assert resolve_task_rubric('any-skill', {'id': 'no-such-task-xyz'}, default) == default
+
+
 def test_resolve_plugin_dir_default_and_override():
     cfg = {'plugin_of_skill': {'test-driven-development': 'humblepowers'}}
     default = resolve_plugin_dir(cfg, 'test-driven-development', None)
@@ -106,5 +119,7 @@ def test_resolve_plugin_dir_default_and_override():
 if __name__ == '__main__':
     test_grade_skill_shape_over_repeats()
     test_grade_skill_counts_without_wins_and_ties()
+    test_resolve_task_rubric_inline_wins()
+    test_resolve_task_rubric_falls_back_to_default()
     test_resolve_plugin_dir_default_and_override()
     print('ok: all grade_tasks tests passed')
