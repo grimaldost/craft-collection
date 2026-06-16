@@ -34,6 +34,13 @@ neighbors — high when the task is the skill's, low when it is not.
    description that needs to demand attention is compensating for triggers
    that fail to earn it.
 
+A plain-scalar `description` must not contain `: ` (a colon followed by a space):
+YAML reads it as a nested mapping and the frontmatter silently breaks — the skill
+never loads and its recall collapses to zero, caught only by `validate_plugins`, not
+by anything as you write. Quote the whole scalar, use a `>` folded block (colons are
+safe inside one), or replace the `: ` with an em-dash. `evaluate-skill` documents the
+same trap from the measurement side: it surfaces as an instant, total recall collapse.
+
 ## Selection and execution are different layers
 
 The description decides *when* the skill loads. The body instructs *how* the

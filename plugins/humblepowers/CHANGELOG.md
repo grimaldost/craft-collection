@@ -5,6 +5,21 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.1 — 2026-06-15
+
+A `skill-authoring` correctness note (the prior triage's `#T8a` watch item); body
+only, no description changed.
+
+### Added
+
+- `skill-authoring`: the description contract now warns that a plain-scalar
+  `description` must not contain `: ` (colon-space) — YAML reads it as a nested
+  mapping and the frontmatter silently breaks, collapsing the skill's recall to zero,
+  caught only by `validate_plugins`. Quote it, use a `>` folded block, or an em-dash.
+  Shifts the catch left from `evaluate-skill`'s measurement-side pitfall to authoring
+  time (per `2026-06-10-humblepowers-build#5`). (`#T8b`, an Edit-tool anchor-hygiene
+  note, was declined as a niche, single-report workflow item.)
+
 ## 0.4.0 — 2026-06-15
 
 Close the regression-test gap the humblepowers-vs-superpowers eval found (N4): on a
