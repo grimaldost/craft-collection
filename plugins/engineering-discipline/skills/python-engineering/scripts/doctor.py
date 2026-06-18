@@ -40,6 +40,19 @@ def audit(project_dir: Path) -> list[tuple[str, bool, str]]:
         )
     )
 
+    # Tests live in a top-level tests/ tree, never inside src/ (colocated tests
+    # ship inside the built wheel and pollute the installed package).
+    src_tests = sorted(p.name for p in src.rglob('test_*.py')) if src.is_dir() else []
+    checks.append(
+        (
+            'tests-not-in-src',
+            not src_tests,
+            'no tests under src/'
+            if not src_tests
+            else f'{len(src_tests)} test module(s) under src/ - move to tests/ (e.g. {src_tests[0]})',
+        )
+    )
+
     # uv: uv.lock, the uv_build backend, or a [tool.uv] table.
     uses_uv = (d / 'uv.lock').is_file() or 'uv_build' in pyproject or '[tool.uv]' in pyproject
     checks.append(

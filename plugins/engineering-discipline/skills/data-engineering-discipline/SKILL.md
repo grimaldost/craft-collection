@@ -87,7 +87,12 @@ exceptions to "should."
 Concretely, this means:
 
 - For an existing pipeline: read the source code end-to-end and inspect
-  the materialized output. Don't trust your summary of either.
+  the materialized output. Don't trust your summary of either — and
+  confirm the source you read is the code that *runs*: resolve the
+  imported module's `__file__` and installed version first, because an
+  editable checkout and an installed release of the same library diverge
+  silently (reading a non-executing copy is inference, not observation).
+  `systematic-debugging` owns the debug-time form of this check.
 - For an unfamiliar library: run `inspect.signature(fn)` or read the
   docstring. Don't trust your memory of the signature.
 - For a string identifier (calendar name, source name, schema name):
@@ -179,7 +184,9 @@ runs, and produces believable numbers while silently changing meaning.
 Other recurring modes:
 
 - **Inference instead of verification** — the agent reasons about what
-  the code/signature/identifier should be rather than reading it.
+  the code/signature/identifier should be rather than reading it — or
+  reads the *wrong copy* (an editable checkout while the venv runs the
+  installed release), so the read isn't the code that ran.
 - **Plan drift** — the conversational summary becomes the spec;
   subsequent work drifts from the actual source.
 - **Improving while executing** — reflexive renames, refactors, and
@@ -284,7 +291,7 @@ Wire them into CI or run by hand before declaring done.
 |------|-----------|
 | `references/principles.md` | Drafting a design decision, code review, or stuck on which principle applies. The 21 principles in full, each with anti-pattern, corrective, verification, and the LLM-specific gotcha. Principles are universal; per-scenario applications are noted inline. |
 | `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for new dataset, migration, refactor, schema evolution, backfill, incremental/streaming, and investigating downstream breakage. |
-| `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." Thirteen documented failure modes (incl. the fabrication family: telemetry, anchors, verifier-inherited traps; and the absence-read-as-state pair: unattended-run silence, fail-open tooling) with detection patterns and mechanical defenses. |
+| `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." Fourteen documented failure modes (incl. the fabrication family: telemetry, anchors, verifier-inherited traps; the absence-read-as-state pair: unattended-run silence, fail-open tooling; and traced-the-wrong-copy: editable-vs-installed divergence) with detection patterns and mechanical defenses. |
 | `references/parity-recipes.md` | Implementing a parity check, row-level diff, schema diff, or any verification step. Concrete code/SQL/CLI recipes for SQL warehouses, Polars, PySpark, dbt, and Python. |
 | `references/contract-templates.md` | Designing or reviewing a data contract. Worked templates for the same dataset expressed as a dbt `schema.yml`, an ODCS YAML, a Pydantic model, and a JSON Schema. |
 | `references/glossary.md` | When precision matters: schema vs. contract vs. interface, parity vs. equivalence, partition vs. snapshot, replay vs. backfill. |

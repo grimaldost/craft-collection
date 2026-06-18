@@ -44,7 +44,18 @@ def test_passes_full_standard_project():
         assert all(results.values()), results
 
 
+def test_flags_tests_under_src():
+    # A test module colocated under src/ must fail tests-not-in-src.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _make_project(root, '[build-system]\nrequires = ["uv_build"]\n')
+        (root / 'src' / 'mypkg' / 'test_thing.py').write_text('', encoding='utf-8')
+        results = {cid: ok for cid, ok, _ in audit(root)}
+        assert results['tests-not-in-src'] is False
+
+
 if __name__ == '__main__':
     test_flags_missing_ruff_single_quote_but_passes_src_layout()
     test_passes_full_standard_project()
+    test_flags_tests_under_src()
     print('ok: all doctor tests passed')

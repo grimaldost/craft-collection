@@ -3,6 +3,49 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.5 — 2026-06-17
+
+From the 2026-06-17 triage (revised by a fresh-eyes review panel). The headline is
+**N10** — the recurring strip-on-save trap, fixed at last at the **hook** layer after
+three shipped prose notes failed to bind it (the worked example behind
+session-workflow 0.4.0's new escalation rule). Mechanism / body / reference only; no
+skill `description` changed, so no holdout re-seal.
+
+### Changed
+
+- **`hooks/ruff_format.py` is now format-only.** It ran `uvx ruff format` then
+  `uvx ruff check --fix`; the `--fix` strips an import added in one edit before a later
+  edit uses it (F401 is a false positive on an incomplete file). `--fix` is dropped —
+  it is owned by the pre-commit/CI gate, where the file is complete (`ruff check .` in
+  `validate.yml` is the non-silent backstop). Command construction is extracted to
+  `ruff_commands()` and guarded by a red-green test (`test_never_runs_destructive_autofix`);
+  `CONTRIBUTING.md` and the hook docstring are updated in lockstep so the behavior isn't
+  "restored" by a future maintainer. Closes the 4×-recurring trap
+  (`2026-06-15-eval-harness-hardening-build`, `2026-06-16-context-size-calibration#2`,
+  and the two prior `planned-execution` instances).
+
+### Added
+
+- `data-engineering-discipline`: **Mode 14 — traced the wrong copy**
+  (editable-vs-installed / stale-cache divergence) in `references/llm-failure-modes.md`,
+  with its mechanical defense (resolve `module.__file__` + version before any
+  source-based behavior claim) and a defenses-table row; Axiom 2 §2 now states that
+  reading a non-executing copy is inference, not observation, and cross-links
+  `systematic-debugging` for the debug-time check (`#N8d`, from the
+  `2026-06-17-di-incremental-debug-data-engineering-discipline` arc — the data facet of
+  the round's reinforced observe-don't-infer cluster).
+- `python-engineering`: a **project-convention-deference** rule in the edit lane —
+  where a project states its own conventions (`AGENTS.md` / `CLAUDE.md` / `ruff.toml`),
+  those govern and this skill's defaults are the fallback — plus a micro-edit (one-line
+  docstring/string) carve-out (`#N13a`); and an explicit **tests live in a top-level
+  `tests/` tree, never under `src/`** layout rule, mechanically enforced by a new
+  `doctor.py` `tests-not-in-src` check, since colocated tests ship in the built wheel
+  (`#N13b`).
+
+Deferred (watch): the incremental-freshness gate (`scripts/freshness_check.py`, `#N12a`)
+— single-arc, so by this round's own escalation rule a new mechanism waits for a
+reinforced recurrence; the trigger-phrasing tuning (`#N12b`) is reseal-gated.
+
 ## 0.1.4 — 2026-06-15
 
 Clears the carried-forward axiom-2 corollaries the 2026-06-13 / 2026-06-14

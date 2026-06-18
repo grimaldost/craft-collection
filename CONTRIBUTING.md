@@ -53,10 +53,14 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
 
 - **Python style** is governed by [`ruff.toml`](ruff.toml): 100-column lines, single
   quotes. `ruff format` + `ruff check --fix` run automatically on commit.
-- **Author an import in the same edit that first uses it.** A format-on-save hook
-  (and `ruff check --fix`) strips an unused import the instant it lands, so an "add
-  the import now, reference it in a later edit" sequence breaks with an undefined-name
-  error. Introduce the symbol and its first use together.
+- **The per-edit format hook is format-only and won't remove your imports.**
+  `engineering-discipline`'s PostToolUse hook runs `ruff format` only; the
+  import-removing autofix (`ruff check --fix`) runs at the pre-commit/CI gate, where
+  the file is complete — so adding an import in one edit and using it in a later one
+  is safe within a session. (If you run `ruff check --fix` *manually* mid-sequence it
+  will still strip the not-yet-used import; introduce the symbol and its first use
+  together. Do not re-add `check --fix` to the per-edit hook — `test_ruff_format.py`
+  guards against it.)
 - **Stdlib-first.** Scripts avoid third-party dependencies where practical (heavier
   libs like pandas stay optional). This keeps the harness and scripts runnable with
   nothing to install.
