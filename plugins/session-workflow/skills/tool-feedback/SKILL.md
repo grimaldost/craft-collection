@@ -72,14 +72,26 @@ the user's CLAUDE.md) or the user points you at one. Shape:
 
 ## Workflow
 
-1. **Resolve targets.** From the bindings table, list every registered tool the
-   session used. One report per tool.
-2. **Check recurrence before drafting.** Read the dir's `INDEX.md` (one entry per
-   prior report + its numbered proposals) and scan it for a finding your candidate
-   repeats — one Read of a current index instead of N phrasing-fragile greps; fall
-   back to a grep only if no INDEX is present. A repeat is written as
-   **"extends `<prior-file-stem>#<n>`"** (or "extends `<prior-file-stem>` §Misses"
-   for a narrative finding) plus only the *new* evidence — never restated fresh.
+1. **Resolve targets and destination.** From the bindings table (or an inline
+   ask), list every registered tool the session **used** (per the binding
+   section's definition); one report per tool. A tool the user *named* but the
+   session never exercised gets a one-line "named but not exercised → no report"
+   back to the user — not an empty file. Each report's **destination**, in
+   precedence, is: a dir the user named *this session* ("save them in `<dir>`"; a
+   consolidated sink with per-tool subdirs ⇒ `<sink>/<tool>/`) → the registered
+   feedback dir → the tool's own repo. Resolve only a **named or registered** dir,
+   never an inferred one. A redirected destination moves the *write* only: when a
+   registered binding exists, the recurrence check still reads **its** index
+   (step 2), so a one-off sink can't sever the recurrence baseline — state which
+   baseline you used.
+2. **Check recurrence before drafting.** Read the recurrence dir's `INDEX.md` (one
+   entry per prior report + its numbered proposals) and scan it for a finding your
+   candidate repeats — one Read of a current index instead of N phrasing-fragile
+   greps. If that dir holds reports but no `INDEX.md`, **build it first**
+   (`build_feedback_index.py <dir>`) rather than degrading to a grep. A repeat is
+   written as **"extends `<prior-file-stem>#<n>`"** (or "extends
+   `<prior-file-stem>` §Misses" for a narrative finding) plus only the *new*
+   evidence — never restated fresh.
 3. **Route by ownership.** Engine/execution findings go to the engine tool's
    report; method/gate findings to the method tool's; skill findings to the skill
    collection's. If ownership is genuinely ambiguous, report it where it surfaced
@@ -89,11 +101,11 @@ the user's CLAUDE.md) or the user points you at one. Shape:
    if the executed copy may differ from the working-tree manifest (cache skew,
    above), record the version you actually ran and note the discrepancy.
 5. **Self-check, then write** each report to
-   `<repo>/<feedback dir>/<YYYY-MM-DD>-<source-slug>.md`, slug distinct per
-   wave/phase so reports never clobber earlier ones. Then **rebuild the dir's
-   `INDEX.md`** (so the next session's recurrence check at step 2 is one Read, not N
-   greps) by running the session-workflow plugin's
-   `skills/feedback-triage/scripts/build_feedback_index.py <feedback dir>`.
+   `<resolved destination>/<YYYY-MM-DD>-<source-slug>.md` (step 1), slug distinct
+   per wave/phase so reports never clobber earlier ones. Then **rebuild that
+   destination's `INDEX.md`** (so the next session's recurrence check at step 2 is
+   one Read, not N greps) by running the session-workflow plugin's
+   `skills/feedback-triage/scripts/build_feedback_index.py <destination>`.
 
 ## Report template
 

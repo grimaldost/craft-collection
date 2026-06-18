@@ -70,7 +70,15 @@ and writing CHANGELOGs belong to the tool's own release process.
    explains the causes and the folds.
 4. **Assign a disposition per cluster:**
    - **ATTACK** — a real increment to this tool; name the home (template / gate /
-     skill / doc / ADR).
+     skill / doc / ADR). **Escalate the layer on a recurrence:** when a finding
+     recurred *after* a fix already shipped at the same enforcement layer (≥2
+     post-fix reports) and its cause is **mechanically reachable** at the next
+     layer, attack one rung down — advisory prose → required structure →
+     script/gate → hook → linter/CI — instead of re-prosing the same advice. A
+     judgment-bound recurrence no mechanism can reach (a dispatch-timing nudge, a
+     naming call) takes sharper prose or DECLINE, not a forced rung. This is the
+     loop-side of the rule `skill-authoring` states for a skill: a constraint that
+     needs caps to hold needs a gate, not louder prose.
    - **ROUTE OUT** — it belongs to another registered tool; record the target.
    - **DECLINE** — project-specific or out of charter; record why.
 
@@ -160,6 +168,10 @@ here) are what statuses track across triage passes.
   the anchored singleton isn't lost instead.
 - **Absorbing what should be routed** — an engine defect "fixed" with a method
   doc; honor each tool's ledger and route out.
+- **Re-prosing a recurrence** — a finding that recurred past a shipped prose fix
+  needs a stronger enforcement layer (a structure, script, gate, hook, or linter),
+  not a fourth sentence of the same advice; more prose symptom-patches the cause
+  the prose layer already failed to bind.
 
 ## Relationship to neighbors
 

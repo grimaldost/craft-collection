@@ -3,6 +3,47 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.4.0 — 2026-06-17
+
+Two changes from the 2026-06-17 triage, both shaped by a fresh-eyes review panel.
+Body/doctrine only — neither skill's `description` (the eval-gated trigger surface)
+changed, so no holdout re-seal.
+
+### Added
+
+- `feedback-triage`: an **escalation rule** in the ATTACK disposition (step 4) plus a
+  matching **"Re-prosing a recurrence"** anti-pattern. When a finding recurred *after*
+  a fix already shipped at the same enforcement layer (≥2 post-fix reports) and its
+  cause is **mechanically reachable** at the next layer, the promotion moves one rung
+  down — prose → required structure → script/gate → hook → linter/CI — instead of
+  re-prosing the same advice. Gated so it can't over-mechanize a judgment-bound
+  recurrence (a dispatch-timing nudge, a naming call), which takes sharper prose or
+  DECLINE, not a forced rung. Cross-references the existing `skill-authoring` rule
+  ("a constraint that needs caps to hold needs a gate, not louder prose") so the two
+  statements don't drift. (The meta-finding from this round: a class of finding that
+  recurs despite shipped prose is signalling the wrong enforcement layer, not weak
+  prose — e.g. the strip-on-save trap, fixed at last in the hook.)
+
+### Changed
+
+- `tool-feedback`: **destination resolution** folded into Workflow step 1, replacing
+  the assumption that a report always lands in the tool's own repo. A report's
+  destination, in precedence, is a dir the user named *this session* (a consolidated
+  external sink with per-tool subdirs ⇒ `<sink>/<tool>/`) → the registered feedback
+  dir → the tool's own repo; only a **named or registered** dir is resolved, never an
+  inferred one (per `2026-06-17-datatools-docs-plugin-remediation-tool-feedback#2`,
+  `2026-06-17-debt-engine-tool-feedback#2`). A **redirected write does not relocate
+  the recurrence baseline** — when a registered binding exists, step 2 still reads
+  *its* index, so a one-off sink can't sever recurrence and resurface settled findings
+  (the silent-misroute bug the panel caught). Step 2 now **builds a missing `INDEX.md`
+  first** rather than degrading to grep (`2026-06-17-debt-engine-tool-feedback#1`), and
+  a tool the user *named* but the session never exercised gets an explicit "named but
+  not exercised → no report" line, not a silent omission
+  (`2026-06-17-datatools-docs-plugin-remediation-tool-feedback#3`,
+  `2026-06-17-v1-publish-wheel-fix-tool-feedback#2`). The persistent-binding registry
+  (`#N9c`) stays routed to the user's CLAUDE.md — a `TARGETS.md` under the gitignored
+  `docs/feedback/` would not travel.
+
 ## 0.3.1 — 2026-06-15
 
 Two watch-item refinements from the backlog; body-only, descriptions unchanged (no
