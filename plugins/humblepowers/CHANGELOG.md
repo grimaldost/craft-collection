@@ -5,6 +5,38 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.2 — 2026-06-17
+
+The debugging facet of the 2026-06-17 triage's reinforced "observe, don't infer"
+cluster (4 reports / 2 arcs), plus the choosing-tools re-dispatch refinement. Body
+only — no `description` changed, so no holdout re-seal. Factored, not triplicated: the
+principle's canonical statement stays in `data-engineering-discipline` Axiom 2; these
+skills state their own facet and cross-link by name.
+
+### Changed
+
+- `systematic-debugging`: Phase 1's "reproduce" step now makes **dynamic observation
+  precede static theory** — for a behavior/regression question, run the failing path and
+  read real output before hypothesizing from source — with an explicit exception for
+  destructive / irreversible / not-yet-buildable paths (read and instrument first), so
+  the rigid skill doesn't mandate "run it" where running is the wrong move. Same step
+  adds **confirm the code that ran is the code you read** (resolve `module.__file__` +
+  version; editable vs installed diverge silently), cross-linking
+  `data-engineering-discipline` Axiom 2. Two new "Common shortcuts" rows — "I read the
+  code, so I know what it does" and "I'm pretty sure it's X" (no run yet) — keep the
+  inference tripwire descriptive rather than adding a second bright line. (From the
+  `2026-06-17-di-incremental-debug-systematic-debugging` and
+  `2026-06-17-v1-publish-wheel-fix-systematic-debugging` arcs.)
+- `verification-before-completion`: a claims-table row — **an artifact ships right only
+  when the built artifact is inspected directly**; a green editable/CI run may never
+  build the wheel/image/bundle it stands in for (per
+  `2026-06-17-v1-publish-wheel-fix-verification-before-completion#1`).
+- `choosing-tools`: "When this runs" now states that **inside a long autonomous task the
+  internal phase shifts (design→build→run→report) are direction changes too** — a cheap
+  re-dispatch and a one-line naming of the active discipline, rather than riding the
+  opening choice for hours (per `2026-06-16-model-tier-calibration#1`,
+  `2026-06-16-context-size-calibration#1`).
+
 ## 0.4.1 — 2026-06-15
 
 A `skill-authoring` correctness note (the prior triage's `#T8a` watch item); body

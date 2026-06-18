@@ -15,9 +15,13 @@ decision, and the judgment inside each step is yours.
 ## When this runs
 
 At task starts and direction changes — the moments where work could take a
-shape: build, fix, migrate, refactor, review, plan, audit. It does not run on
-conversational turns, follow-up messages inside an active task, or questions
-answerable directly. A dispatch check on "hang on" is ceremony, not selection.
+shape: build, fix, migrate, refactor, review, plan, audit. **Inside a long
+autonomous task the internal phase shifts are direction changes too** —
+design→build→run→report each invite a quick re-check and a one-line naming of
+the active discipline, rather than riding the opening dispatch for hours. It
+does not run on conversational turns, follow-up messages inside an active task,
+or questions answerable directly. A dispatch check on "hang on" is ceremony,
+not selection.
 
 ## The dispatch procedure
 
