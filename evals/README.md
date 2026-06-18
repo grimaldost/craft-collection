@@ -75,7 +75,9 @@ evals/
 ## Running it
 
 ```bash
-# unit tests (pure logic; no agents, no cost)
+# unit tests (pure logic; no agents, no cost) — run AS SCRIPTS, not pytest-from-root:
+# the modules import their siblings by top-level name (e.g. `from claude_runner import …`),
+# which pytest's rootdir import mode breaks with ModuleNotFoundError. Use python, from here.
 cd evals/harness && for t in test_*.py; do python "$t"; done
 
 # cheap previews (no spawns)
