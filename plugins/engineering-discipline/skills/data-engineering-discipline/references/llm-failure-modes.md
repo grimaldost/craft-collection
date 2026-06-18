@@ -653,6 +653,50 @@ absent, surfacing the gap instead of hiding it.
 
 ---
 
+## Mode 14 — Traced the wrong copy: editable-vs-installed / stale-cache divergence
+
+**The pattern.** The agent debugs a behavior by reading source — but the
+source it reads is not the code the process runs. The same library is present
+twice: an editable checkout (`pip install -e`, a sibling repo on `PYTHONPATH`)
+and an installed release in the venv, often at different versions with
+different internals. The agent traces the editable copy, forms a confident
+causal claim from it, and the claim is false because the *release* copy — a
+different architecture — is what executed.
+
+This is Axiom 2's blind spot at import resolution: reading source is only
+observation if it is the source that ran. Mode 10 cites an anchor that doesn't
+exist; this reads a real anchor that isn't the live one.
+
+**Detection signals.**
+
+- A behavior / regression claim ("the source has no 2026-06-16 branch", "this
+  function returns X") with no `module.__file__` / version resolved first.
+- The library is present editable AND as a release (a sibling checkout plus a
+  venv install), or a stale `__pycache__` / cached wheel is in play.
+- Logger names, class names, or code paths in the real run don't match the
+  source being read (`facade._sink` runs while `manager._parquet` is read).
+- "I verified by reading the code" — but the failing path was never run.
+
+**Defense — resolve the loaded module before reading its source.**
+
+- Before any source-based behavior claim, run
+  `python -c "import m; print(m.__file__, getattr(m, '__version__', '?'))"`
+  and read *that* file. The run's logs / emitted query / loaded-module path
+  outrank the source tree.
+- In editable / multi-repo / stale-cache setups, treat "I read the code" as
+  unverified until the loaded path is confirmed.
+- This is the data form of `systematic-debugging`'s "confirm the source you
+  read is the code that runs."
+
+**Example.** A "DI pipeline ran but the dataset didn't update to 2026-06-16"
+regression: the agent traced an editable `treasuryutils 0.6.x` sibling and
+asserted "the source has no 2026-06-16" — while the venv imported the `1.0.1`
+release, a different read architecture. A direct query showed the date existed
+(3,644 rows). One `import treasuryutils; print(__file__, version)` before
+reading would have pre-empted pages of wrong inference.
+
+---
+
 ## Cross-mode patterns
 
 Several failure modes share common roots:
@@ -665,7 +709,8 @@ parity diff is the data-inspection gate that covers all five modes.
 **"The agent treats summarized context as ground truth."**
 Modes 2, 5, 8 share this. The defense pattern: re-read primary sources
 (existing code, library signatures, contract YAML, source data) rather
-than trusting session summaries.
+than trusting session summaries — and (Mode 14) confirm the primary source
+you re-read is the copy that actually runs, not an editable or cached twin.
 
 **"The agent improves what it shouldn't and accepts what it shouldn't."**
 Modes 3, 7 share this. The defense pattern: explicit instructions about
@@ -714,6 +759,7 @@ Every mode above is defended by one or more of these mechanical layers:
 | Ambiguity-flagging requirement | 7 | Agent instructions: ask before defaulting |
 | Disk-truth protocol (events vs VCS/logs/disk) | 9, 12 | Append-only source check before any status report or state-changing action |
 | Anchor-provenance pass (cited anchors trace to a read) | 5, 10 | Name the scope verified; read to the closing delimiter; grep-verify the cited `file:line`/fixture/symbol exists |
+| Resolve the loaded module before a source claim | 14 | `python -c "import m; print(m.__file__, m.__version__)"`; logs / loaded path outrank the source tree |
 | Traps in the verifier's own inputs | 11 | Review prompts, planted-failure fixtures, wave-output flags |
 | Liveness probe before takeover (process tree + artifact mtimes) | 12 | Confirm dead *and* quiescent before any kill / reset / re-fire; completion read from the materialized result |
 | Fail-closed-tooling check (did-not-run ≠ found-nothing) | 13 | Assert the tool exists and exited zero; non-zero exit is BLOCKED; prefer built-ins for fences; catch-and-fail, never catch-and-pass |

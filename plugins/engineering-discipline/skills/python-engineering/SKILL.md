@@ -53,12 +53,17 @@ Most work in an existing project is an *edit*, not a scaffold. When the task
 is to change a few files in a project that already has its layout, tooling,
 and CI, the scaffolding, Docker, observability, and CI sections below are
 not the relevant rules — skip them. Match what the surrounding code already
-does, and apply only the rules that govern the lines you touch:
+does, and apply only the rules that govern the lines you touch (for a
+**micro-edit** — a one-line docstring or string change — even these are mostly
+moot: match the touched line's local form, run the project's gate, and stop):
 
-- **Match the local convention first.** Read 2–3 nearby files before editing.
-  The project's existing patterns — even where they differ from this skill's
-  greenfield defaults — are the contract for an edit; a one-file modernization
-  that diverges from the rest of the module is noise, not improvement.
+- **Match the local convention first — project config governs.** Read 2–3
+  nearby files before editing. The project's existing patterns — even where
+  they differ from this skill's greenfield defaults — are the contract for an
+  edit; a one-file modernization that diverges from the rest of the module is
+  noise, not improvement. Where the project states its own conventions
+  (`AGENTS.md`, `CLAUDE.md`, `ruff.toml`, a style guide), **those govern and
+  this skill's defaults are the fallback** — defer, don't override.
 - **Protocol-first typing for new interfaces.** A new seam introduced inside
   existing code prefers `typing.Protocol` (structural) over an ABC, unless the
   surrounding code already commits to ABCs. See the Typing Philosophy section.
@@ -175,6 +180,10 @@ Ask (or infer) whether the project is a **Library/Data tool** or an
   (`src/mylib/datatools/`, `src/mylib/core/`)
 - **Application layout** → decouple logic from entry points
   (`src/myapp/core/` + `src/myapp/interface/`)
+- **Tests** → a top-level `tests/` tree, **never inside `src/`**. Colocated
+  `src/.../tests/` modules ship inside the built wheel and pollute the installed
+  package; for per-unit suites (datajobs, plugins) mirror the package under
+  `tests/<area>/<name>/`. (`doctor.py` flags any `test_*.py` found under `src/`.)
 
 The application layout follows the **functional core / imperative shell**
 pattern: `core/` contains pure business logic (no I/O, fully testable),
