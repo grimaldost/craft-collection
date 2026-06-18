@@ -32,6 +32,7 @@ Before stating any status — done, fixed, passing, ready, complete:
 | Regression test works | Red-green verified (below) | The test passing once |
 | Delegated work done | The diff inspected, checks re-run | The agent's success report |
 | Requirements met | Line-by-line check against the plan | Tests passing |
+| Artifact ships right (wheel, image, bundle) | The built artifact inspected directly | A green editable/CI run — it may never build the artifact |
 
 ## Regression tests are red-green verified
 

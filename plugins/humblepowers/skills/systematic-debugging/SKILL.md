@@ -19,8 +19,17 @@ like any other.
 
 1. **Read the error completely.** The full stack trace, line numbers, error
    codes. The exact answer is often already in it.
-2. **Reproduce reliably.** Exact steps, every time. Not reproducible yet
-   means gather more data, not guess.
+2. **Reproduce reliably — observe before you theorize.** Exact steps, every
+   time; not reproducible yet means gather more data, not guess. For a behavior
+   or regression question, run the failing path and read its real output (logs,
+   stack, emitted query) *before* forming hypotheses from source — dynamic
+   observation precedes static theory. (Exception: when running the path is
+   destructive, irreversible, or not yet buildable, read and instrument first —
+   don't trigger a payment or drop a table to "observe" it.) And **confirm the
+   code that ran is the code you read** — resolve the imported module's
+   `__file__` and installed version; an editable checkout and an installed
+   release of the same library diverge silently (the data form is
+   `data-engineering-discipline` Axiom 2).
 3. **Check recent changes.** Diff, recent commits, new dependencies, config
    and environment differences.
 4. **Instrument boundaries in multi-component systems.** Before theorizing
@@ -75,6 +84,8 @@ protocol exactly where it's needed.
 | "Several fixes at once saves time" | Nothing can be isolated; regressions ride along. |
 | "Emergency — no time for process" | The protocol is the fast path; thrashing is the slow one. |
 | "One more attempt" (after two failures) | The third failure is an architecture signal, not bad luck. |
+| "I read the code, so I know what it does" | The code you read may not be the code that runs — resolve `module.__file__` + version. |
+| "I'm pretty sure it's X" (no run yet) | A causal claim with zero confirming observation is a guess; produce the observation first. |
 
 ## When investigation finds no root cause
 
