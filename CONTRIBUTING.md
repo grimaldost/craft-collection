@@ -82,6 +82,12 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
   belong in their own PR.
 - PRs are **squash-merged**, so the PR title becomes the commit — make it a good
   Conventional Commit line.
+- **Stacked PRs and squash-merge don't mix well — prefer independent branches off
+  `main`.** If you must stack, push the base branch *before* `gh pr create --base <base>`
+  (an unpushed base gives `Base sha can't be blank`); and once the base **squash**-merges,
+  its commits never land on `main` as authored, so the stacked PR shows the base's whole
+  diff until you `git rebase --onto main <old-base> <stacked-branch>` to drop the now-
+  orphaned base commits.
 
 ## Releasing
 
