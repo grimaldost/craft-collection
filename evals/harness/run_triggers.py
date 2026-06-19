@@ -183,18 +183,22 @@ def run_skill(
             config_dir=config_dir,
             cwd=cwd,
         )
-        return (i, run.activated(skill), run.cost_usd or 0.0, run.is_error)
+        text = (run.result_text or '') if run.is_error else ''  # carry cause only on error
+        return (i, run.activated(skill), run.cost_usd or 0.0, run.is_error, text)
 
     results = map_concurrent(jobs, worker, concurrency=concurrency)
     counts = [0] * len(queries)
     err_counts = [0] * len(queries)  # errored runs that did NOT fire, per query
+    err_texts: list[str] = []  # raw cause text from errored runs, for a sample
     cost = 0.0
     errors = errors_no_act = 0
-    for i, fired, c, err in results:
+    for i, fired, c, err, text in results:
         counts[i] += 1 if fired else 0
         cost += c
         if err:
             errors += 1
+            if text:
+                err_texts.append(text)
             if not fired:  # the only kind that can distort the score
                 errors_no_act += 1
                 err_counts[i] += 1
@@ -207,6 +211,7 @@ def run_skill(
     score['error_runs'] = errors  # mostly benign: positives truncate at max_turns
     score['error_runs_no_activation'] = errors_no_act  # the diagnostic that matters
     score['total_runs'] = len(jobs)
+    score['error_samples'] = distinct_error_samples(err_texts)  # WHY they errored, sampled
     return score
 
 
@@ -228,6 +233,39 @@ def write_report(skill: str, score: dict) -> bool:
     tmp.write_text(json.dumps(new_blob, indent=2), encoding='utf-8')
     tmp.replace(path)  # atomic rename on the same filesystem
     return clobbered
+
+
+def distinct_error_samples(texts: list[str], limit: int = 3, width: int = 200) -> list[dict]:
+    """Group raw per-run error strings into up to `limit` DISTINCT samples, most
+    frequent first, each truncated to `width` chars with an occurrence count. This
+    surfaces *why* runs errored (401 vs timeout vs network) — the diagnostic
+    `run_skill` otherwise discards, since it keeps each run's `is_error` bool but not
+    its `result_text` (2026-06-19-eval-harness-auth-race#3, when a 401 had to be
+    recovered by hand via a separate `claude -p` probe). Blank/whitespace-only
+    strings are dropped (a non-errored run carries no text). The stable sort keeps
+    first-seen order on count ties, so a single dominant cause reads as 'the first
+    non-empty result_text' (the original ask). Pure: feed it the collected error
+    texts; no truncation/dedup is done upstream."""
+    counts: dict[str, int] = {}
+    for t in texts:
+        if not t or not t.strip():
+            continue
+        key = t.strip()[:width]
+        counts[key] = counts.get(key, 0) + 1
+    ranked = sorted(counts, key=lambda k: -counts[k])  # stable -> ties keep first-seen
+    return [{'text': k, 'count': counts[k]} for k in ranked[:limit]]
+
+
+def format_error_samples(samples: list[dict]) -> list[str]:
+    """Render `distinct_error_samples()` output as printable lines (empty list when
+    there are no samples, so a clean run prints nothing). Kept separate from the
+    extractor so the all-errored INVALID branch and the normal partial-error path
+    print identically."""
+    if not samples:
+        return []
+    lines = ['error sample(s) — distinct run.result_text, most frequent first:']
+    lines += [f'  ({s["count"]}x) {s["text"]}' for s in samples]
+    return lines
 
 
 def all_runs_errored(score: dict) -> bool:
@@ -335,6 +373,8 @@ def main(argv: list[str] | None = None) -> int:
             f'are artifacts of nothing running, so the result is discarded (not written to '
             f'report/triggers.json). {hint}'
         )
+        for line in format_error_samples(score.get('error_samples') or []):
+            print(line)
         return 2
 
     clobbered = write_report(args.skill, score)
@@ -395,6 +435,8 @@ def main(argv: list[str] | None = None) -> int:
         f'cost=${score["cost_usd"]}  error_runs={score["error_runs"]}/{score["total_runs"]} '
         f'(no-activation errors={score["error_runs_no_activation"]})'
     )
+    for line in format_error_samples(score.get('error_samples') or []):
+        print(line)
     for pq in score['per_query']:  # surface misses for description tuning
         miss = (pq['should_trigger'] and pq['rate'] < 1.0) or (
             not pq['should_trigger'] and pq['rate'] > 0.0

@@ -105,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
             f'(cost=${score["cost_usd"]}). Infrastructure failure (auth/network/CLI), NOT a '
             f'measurement — re-run after fixing (a $0 cost points to auth: claude /login).'
         )
+        for line in run_triggers.format_error_samples(score.get('error_samples') or []):
+            print(line)
         return 2
 
     rlo, rhi = score['recall_ci']
@@ -121,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
         f'cost=${score["cost_usd"]}  error_runs={score["error_runs"]}/{score["total_runs"]} '
         f'(no-activation errors={score["error_runs_no_activation"]})'
     )
+    for line in run_triggers.format_error_samples(score.get('error_samples') or []):
+        print(line)
     for pq in score['per_query']:
         sign = '+' if pq['should_trigger'] else '-'
         flag = (
