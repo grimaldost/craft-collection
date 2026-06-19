@@ -230,6 +230,36 @@ def write_report(skill: str, score: dict) -> bool:
     return clobbered
 
 
+def all_runs_errored(score: dict) -> bool:
+    """True when every spawn errored — an infrastructure failure (auth / network /
+    CLI), not a measurement. Such a run is the harness's own fail-open trap: a
+    did-not-run counts as a non-fire, so recall reads 0.00 (looks like the skill
+    never triggers) and specificity reads 1.00 (every negative 'correctly' silent)
+    — both artifacts of nothing running, not signal. Callers must refuse to report
+    or persist it as a result. (Observed 2026-06-19: a concurrent run 401'd at $0
+    after the OAuth token aged mid-burst and every spawn errored.)"""
+    return score.get('total_runs', 0) > 0 and score.get('error_runs', 0) == score['total_runs']
+
+
+def preflight_auth(cfg: dict, config_dir: str, cwd: str) -> tuple[bool, str]:
+    """One cheap spawn before the fan-out: fail fast if auth is dead (don't burn N
+    real spawns to discover a 401), and warm/refresh the token ONCE so the
+    concurrent fan-out doesn't have many spawns racing to refresh a single-use
+    token simultaneously (the race that invalidated auth on 2026-06-19). Returns
+    (ok, detail)."""
+    probe = run_agent(
+        'Reply with the single word: ok',
+        allowed_tools='',
+        model=cfg['agent_model'],
+        max_turns=1,
+        max_budget_usd=cfg['max_budget_usd'],
+        timeout=cfg['timeout_seconds'],
+        config_dir=config_dir,
+        cwd=cwd,
+    )
+    return (not probe.is_error), (probe.result_text or 'unknown error')[:200]
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')  # query text is unicode
@@ -272,6 +302,13 @@ def main(argv: list[str] | None = None) -> int:
     config_dir = make_isolated_config()
     cwd = tempfile.mkdtemp(prefix='eval_trig_')
     try:
+        ok, detail = preflight_auth(cfg, config_dir, cwd)
+        if not ok:
+            print(
+                f'\nPRE-FLIGHT FAILED: the auth/CLI probe errored ({detail}). '
+                f'Re-login (claude /login) and retry — not spending the {n_spawn} run spawns.'
+            )
+            return 2
         score = run_skill(
             args.skill,
             queries,
@@ -285,6 +322,20 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         cleanup_dir(cwd)
         cleanup_dir(config_dir)
+
+    if all_runs_errored(score):
+        hint = (
+            '$0 cost points to auth — re-login (claude /login) and re-run.'
+            if not score['cost_usd']
+            else 'Likely network/CLI — re-run.'
+        )
+        print(
+            f'\nINVALID: all {score["total_runs"]} runs errored (cost=${score["cost_usd"]}). '
+            f'Infrastructure failure, NOT a measurement — the recall/specificity it would print '
+            f'are artifacts of nothing running, so the result is discarded (not written to '
+            f'report/triggers.json). {hint}'
+        )
+        return 2
 
     clobbered = write_report(args.skill, score)
     if clobbered:

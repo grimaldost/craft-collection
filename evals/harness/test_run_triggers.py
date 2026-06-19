@@ -3,7 +3,7 @@ pytest or `python test_run_triggers.py`."""
 
 from __future__ import annotations
 
-from run_triggers import merge_report, score_skill, validate_queries
+from run_triggers import all_runs_errored, merge_report, score_skill, validate_queries
 
 
 def fake_run(query, repeats):  # fires only on queries containing "journal"
@@ -207,6 +207,53 @@ def test_run_skill_passes_routing_frame_and_max_turns():
     assert captured['max_turns'] == 2
 
 
+def test_all_runs_errored_flags_total_failure():
+    # Every spawn errored -> infrastructure failure, not a measurement.
+    assert all_runs_errored({'total_runs': 66, 'error_runs': 66}) is True
+    # A partial-error run is still a valid measurement (the 2026-06-19 real run was 19/66).
+    assert all_runs_errored({'total_runs': 66, 'error_runs': 19}) is False
+    assert all_runs_errored({'total_runs': 66, 'error_runs': 0}) is False
+    # No runs at all is not a "total failure".
+    assert all_runs_errored({'total_runs': 0, 'error_runs': 0}) is False
+
+
+def test_preflight_auth_detects_dead_auth():
+    import run_triggers as rt
+
+    class _Err:
+        is_error = True
+        result_text = 'API Error: 401 Invalid authentication credentials'
+
+    orig = rt.run_agent
+    rt.run_agent = lambda *a, **k: _Err()
+    try:
+        ok, detail = rt.preflight_auth(
+            {'agent_model': 'm', 'max_budget_usd': 0.5, 'timeout_seconds': 300}, 'cfg', 'cwd'
+        )
+    finally:
+        rt.run_agent = orig
+    assert ok is False
+    assert '401' in detail
+
+
+def test_preflight_auth_passes_when_healthy():
+    import run_triggers as rt
+
+    class _Ok:
+        is_error = False
+        result_text = 'ok'
+
+    orig = rt.run_agent
+    rt.run_agent = lambda *a, **k: _Ok()
+    try:
+        ok, _ = rt.preflight_auth(
+            {'agent_model': 'm', 'max_budget_usd': 0.5, 'timeout_seconds': 300}, 'cfg', 'cwd'
+        )
+    finally:
+        rt.run_agent = orig
+    assert ok is True
+
+
 if __name__ == '__main__':
     test_scoring_recall_specificity()
     test_specificity_failure_when_negative_fires()
@@ -223,4 +270,7 @@ if __name__ == '__main__':
     test_merge_report_full_over_partial_is_fine()
     test_all_positive_hard_yields_none_recall()
     test_run_skill_passes_routing_frame_and_max_turns()
+    test_all_runs_errored_flags_total_failure()
+    test_preflight_auth_detects_dead_auth()
+    test_preflight_auth_passes_when_healthy()
     print('ok: all run_triggers tests passed')

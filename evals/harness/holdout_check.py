@@ -78,6 +78,13 @@ def main(argv: list[str] | None = None) -> int:
     config_dir = make_isolated_config()
     cwd = tempfile.mkdtemp(prefix='holdout_')
     try:
+        ok, detail = run_triggers.preflight_auth(cfg, config_dir, cwd)
+        if not ok:
+            print(
+                f'\nPRE-FLIGHT FAILED: the auth/CLI probe errored ({detail}). '
+                f'Re-login (claude /login) and retry — not spending the {n_spawn} held-out spawns.'
+            )
+            return 2
         score = run_triggers.run_skill(
             skill,
             queries,
@@ -91,6 +98,14 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         cleanup_dir(cwd)
         cleanup_dir(config_dir)
+
+    if run_triggers.all_runs_errored(score):
+        print(
+            f'\nINVALID: all {score["total_runs"]} held-out runs errored '
+            f'(cost=${score["cost_usd"]}). Infrastructure failure (auth/network/CLI), NOT a '
+            f'measurement — re-run after fixing (a $0 cost points to auth: claude /login).'
+        )
+        return 2
 
     rlo, rhi = score['recall_ci']
     slo, shi = score['specificity_ci']
