@@ -6,7 +6,11 @@ recurrence-grep robustness fix). Stdlib only; best-effort parsing of the report
 template's "## Proposed promotions" section. The output (INDEX.md) is a generated
 artifact — regenerate it, do not hand-edit.
 
-    python build_feedback_index.py <feedback-dir>
+    uv run --no-project python build_feedback_index.py <feedback-dir>
+
+Use `uv run --no-project python` (not a bare `python` / `python3`): on Windows
+without Python on PATH, both resolve to the Microsoft-Store app-execution stub
+and abort.
 """
 
 from __future__ import annotations

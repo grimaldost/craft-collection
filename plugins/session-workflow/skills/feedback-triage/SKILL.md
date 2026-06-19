@@ -44,7 +44,7 @@ and writing CHANGELOGs belong to the tool's own release process.
    note the discrepancy under **Inputs**. If another session may be triaging the
    same corpus, note any triage doc already dated today before you start, and
    re-check at emit (step 6) so two sessions don't write competing docs. Rebuild the
-   dir's `INDEX.md` at scope (run `scripts/build_feedback_index.py <dir>`) so the
+   dir's `INDEX.md` at scope (run `uv run --no-project python scripts/build_feedback_index.py <dir>`) so the
    `extends`-lookup in steps 2–3 is one Read of a current index, not N
    phrasing-fragile greps.
 2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
