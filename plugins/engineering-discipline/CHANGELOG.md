@@ -3,6 +3,23 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.6 — 2026-06-19
+
+From the 2026-06-19 triage, hardened by a pre-mortem + 3-lens blind review before any
+code. **N16a** — a new runnable freshness gate
+(`data-engineering-discipline/scripts/freshness_check.py`): the executable escalation
+of the prose "freshness monitor" checklist line that did not bind a 2nd
+incremental-staleness recurrence (the cache-builds-once-never-re-pulls bug, where
+`max(cursor)` freezes while the run self-reports `success`). The review hardened it
+pre-ship: a typed-comparison contract (a string cursor — `'9' > '10'` mis-orders — and
+a tz-aware-vs-naive mix are rejected as `uncomparable`, not silently compared), a
+non-vacuous default (`ok=None` when neither a prior snapshot nor a source max is
+available — never a false pass), and a per-group helper + a row-count-per-bucket recipe
+so a single frozen partition or a skipped-rows gap is catchable rather than hidden
+behind a global max. Red-green tested; Recipe 14 + a pre-shipping checklist line + the
+"Runnable checks" entry wire it in. Script / reference / body only — no skill
+`description` changed, so no holdout re-seal.
+
 ## 0.1.5 — 2026-06-17
 
 From the 2026-06-17 triage (revised by a fresh-eyes review panel). The headline is

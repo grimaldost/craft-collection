@@ -642,6 +642,58 @@ def test_parity_check_is_not_vacuous():
 
 ---
 
+## Recipe 14 — Freshness / watermark advance (incremental loads)
+
+Schema, parity, and contract checks are all invariant under *staleness*: a run
+that re-writes structurally identical, aggregate-identical rows with a frozen
+cursor passes every recipe above. Freshness is an orthogonal axis. The failure
+this catches: a cache builds once under a default `if_missing` and never
+re-pulls, so `max(cursor)` is frozen while the run self-reports `success: true`.
+
+Assert the watermark moved — never trust the pipeline's self-reported success:
+
+```bash
+# stuck cursor (built once, never re-pulled) -> STALE, exit 1
+python freshness_check.py --prev "$PREV_MAX" --curr "$CURR_MAX" --source "$SOURCE_MAX"
+```
+
+```python
+from freshness_check import check_freshness, check_freshness_groups
+
+# Single global watermark — the floor check (ok=False if frozen or behind source).
+rep = check_freshness(prev_max, curr_max, source_max)
+assert rep['ok'] is True, rep['reason']
+```
+
+A global `max(cursor)` is **necessary, not sufficient** — it is blind to
+per-partition staleness (one tenant frozen while the global max advances) and to
+a watermark that advances while rows below it were skipped. Two companions:
+
+```python
+# Per-partition freshness: one frozen partition fails the aggregate.
+groups = [{'group': k, 'prev': prev[k], 'curr': curr[k]} for k in partitions]
+rep = check_freshness_groups(groups)
+assert rep['ok'] is True, f'stale partitions: {rep["stale"]}'
+```
+
+```sql
+-- Row-count-per-watermark-bucket: catches "watermark advanced but rows skipped".
+-- Any nonzero delta between source and output counts per bucket is a gap.
+SELECT bucket, src_n, out_n, coalesce(src_n, 0) - coalesce(out_n, 0) AS missing
+FROM (SELECT date_trunc('hour', cursor) AS bucket, count(*) src_n FROM source GROUP BY 1) s
+FULL JOIN (SELECT date_trunc('hour', cursor) AS bucket, count(*) out_n FROM output GROUP BY 1) o
+  USING (bucket)
+WHERE coalesce(src_n, 0) <> coalesce(out_n, 0);
+```
+
+Cursors must be a comparable type (int / date / datetime). `freshness_check`
+rejects a string cursor (`'9' > '10'` mis-orders; unpadded ISO dates mis-order)
+and a tz-aware-vs-naive mix as `uncomparable` rather than comparing them wrongly,
+and returns `ok=None` ("unknown") when it has neither a prior snapshot nor a
+source max — never a silent pass.
+
+---
+
 ## Choosing the right strictness
 
 | Scenario | Recommended recipes |
@@ -652,7 +704,7 @@ def test_parity_check_is_not_vacuous():
 | Schema evolution (additive) | 1 only |
 | Schema evolution (breaking) | 1 + version-bump validation |
 | Backfill | 2, 4, 8 against full-recompute |
-| Incremental load smoke test | 1, 8 |
+| Incremental load smoke test | 1, 8, 14 |
 | Investigating downstream breakage | 1, 4, 5 across the change window |
 | Contract repair to shipped reality (Scenario 9) | 1, 4, 11 (pin the repaired surface) |
 | Release cut / multi-wave assembly (Scenario 10) | 1, 4, 6, 11 (re-seal in a clean room) |
@@ -680,6 +732,11 @@ Be honest about the gaps. Parity recipes are powerful but not omniscient.
 - **Upstream source drift** — these recipes compare two pipelines against
   their respective inputs. If the upstream source has drifted, both
   pipelines may agree on the (wrong) new shape.
+- **Staleness beyond the global watermark** — Recipe 14's `max(cursor)` check
+  confirms the watermark moved, not that every partition advanced or that no
+  rows below the mark were skipped (use per-group + row-count-per-bucket).
+  Soft-deletes and late-arriving data below the watermark are invisible to a
+  max-cursor check.
 
 The pre-shipping checklist in `SKILL.md` covers more than parity. Parity
 is necessary; the checklist asserts it's sufficient.
