@@ -8,8 +8,10 @@ description: >
   refactoring a transform, backfilling or replaying history, evolving a schema
   (add / rename / retype / drop a column), creating a new dataset that has
   consumers, designing or reviewing a data contract, writing tests for a
-  pipeline, generating pipeline code with an LLM, and investigating "the
-  numbers changed / look different" regressions. The test for activation:
+  pipeline, generating pipeline code with an LLM, and investigating a consumed
+  dataset that misbehaves — "the numbers changed / look different", or a
+  table/extract that "ran but didn't update / is stale / isn't refreshing / the
+  watermark didn't advance". The test for activation:
   could this change the columns, dtypes, row or group cardinality, null
   behavior, semantics, or freshness of a dataset that something or someone
   else reads? If so, this skill applies — pin the contract, verify the
@@ -48,7 +50,9 @@ Activate on any task where downstream consumers might be affected:
 - Designing incremental or streaming loads (watermarks, late-arriving
   data).
 - Writing tests for a data pipeline.
-- Investigating "the numbers look different" reports.
+- Investigating "the numbers look different" reports — or a consumed dataset
+  that ran but didn't update / is stale / isn't refreshing / the watermark
+  didn't advance.
 - Generating data-pipeline code with an LLM where semantics matter.
 - Designing or reviewing a data contract.
 
