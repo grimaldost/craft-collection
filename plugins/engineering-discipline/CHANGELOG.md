@@ -3,6 +3,27 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.8 — 2026-06-19
+
+(0.1.7 is the concurrent hooks/pre-commit `python`-portability fix; this N17a
+change ceded it and took 0.1.8 since it is eval-gated and lands later.)
+
+From the 2026-06-19 triage. **N17a** — the `data-engineering-discipline`
+`description` (the eval-gated trigger surface) gains the operational/freshness
+phrasing family it under-fired on across two arcs (`di-incremental-debug` +
+`parquet-upsert-direct-serving`): a consumed dataset that "ran but didn't update /
+is stale / isn't refreshing / the watermark didn't advance", **data-qualified**
+("a consumed dataset", "a table/extract") so it does NOT fire on non-data "didn't
+update" cases (a stale CI badge, a UI that won't re-render, an in-app memoized
+value). A first held-out set (`evals/trigger/holdout/data-engineering-discipline.json`)
+was sealed **before** the edit, and the base trigger dataset gains both freshness
+positives and the non-data over-fire negatives so the gated specificity actually
+tests the over-fire (not just the held-out recall, which is verdict-only).
+
+**Trigger-surface change — gated on the eval before merge:** must clear
+`run_triggers.py data-engineering-discipline` (specificity ≥ 0.9, recall ≥ 0.8) and
+`holdout_check.py data-engineering-discipline` (held-out recall within the dev CI).
+
 ## 0.1.7 — 2026-06-19
 
 Hook `python`-invocation portability. The three hooks — `ruff_format` (PostToolUse),

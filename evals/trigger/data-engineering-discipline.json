@@ -7,6 +7,9 @@
   { "query": "Backfill six months of history into the sessions table and make sure a replay matches a full recompute.", "should_trigger": true, "note": "backfill + replay determinism" },
   { "query": "Write tests for the billing aggregation pipeline so a bad change can't ship silently.", "should_trigger": true, "note": "tests for a data pipeline" },
   { "query": "Generate a PySpark job that rolls daily events up to monthly revenue for the finance dashboard.", "should_trigger": true, "note": "LLM-generated data code feeding a real consumer; semantic-drift risk" },
+  { "query": "The orders pipeline ran green but the data didn't update — the finance dashboard still shows yesterday's numbers.", "should_trigger": true, "note": "freshness: self-reported success but stale output for a consumer" },
+  { "query": "Our incremental load into customer_events isn't refreshing; the max event date has been stuck for two days.", "should_trigger": true, "note": "freshness: incremental watermark not advancing" },
+  { "query": "The nightly job reports success but the extract the BI team reads hasn't changed in three days.", "should_trigger": true, "note": "freshness: reported success vs stale consumed extract" },
 
   { "query": "Just exploring this CSV in a throwaway notebook out of my own curiosity.", "should_trigger": false, "note": "no downstream consumer => explicitly excluded" },
   { "query": "Plot a histogram of this dataframe so I can eyeball the distribution.", "should_trigger": false, "note": "near-miss: data-flavored but exploratory viz, no consumer" },
@@ -15,5 +18,8 @@
   { "query": "Explain the difference between a LEFT JOIN and an INNER JOIN.", "should_trigger": false, "note": "conceptual Q&A, no pipeline work" },
   { "query": "Write a Typer CLI for parsing command-line arguments.", "should_trigger": false, "note": "non-data software work" },
   { "query": "Set up pytest and ruff for my new Python repo.", "should_trigger": false, "note": "tooling/scaffolding, not data discipline" },
-  { "query": "Help me design the REST API routes for the user service.", "should_trigger": false, "note": "software API design, not a data pipeline/contract" }
+  { "query": "Help me design the REST API routes for the user service.", "should_trigger": false, "note": "software API design, not a data pipeline/contract" },
+  { "query": "The CI badge in my README still says passing but didn't update after the last push.", "should_trigger": false, "note": "over-fire guard: non-data 'didn't update' (stale CI badge)" },
+  { "query": "My React component isn't re-rendering when state changes — the UI won't update.", "should_trigger": false, "note": "over-fire guard: non-data 'won't update' (UI re-render)" },
+  { "query": "The memoized value in this function is stale and won't refresh after the inputs change.", "should_trigger": false, "note": "over-fire guard: non-data 'stale/won't refresh' (in-app memoization)" }
 ]
