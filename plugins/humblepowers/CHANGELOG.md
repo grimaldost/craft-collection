@@ -5,6 +5,14 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.3 — 2026-06-19
+
+Hook `python`-invocation portability: the SessionStart dispatch hook
+(`choosing-tools/scripts/inject_dispatch.py`) ran via a bare `python`, which hits the
+Microsoft-Store app-execution stub on a Windows machine without Python on PATH. Now
+`uv run --no-project -- python …`. Inert-by-default and once-per-session, so the uv
+startup cost is negligible. Hook-manifest only — no skill `description` changed.
+
 ## 0.4.2 — 2026-06-17
 
 The debugging facet of the 2026-06-17 triage's reinforced "observe, don't infer"

@@ -28,7 +28,7 @@ repos:
     hooks:
       - id: lint-register
         name: register linter (humblepowers doctrine)
-        entry: python scripts/lint_register.py
+        entry: uv run --no-project -- python scripts/lint_register.py
         language: system
         pass_filenames: false
         always_run: true
@@ -40,7 +40,7 @@ repos:
         always_run: true
       - id: run-tests
         name: run self-contained test suite
-        entry: python scripts/run_tests.py
+        entry: uv run --no-project -- python scripts/run_tests.py
         language: system
         pass_filenames: false
         always_run: true

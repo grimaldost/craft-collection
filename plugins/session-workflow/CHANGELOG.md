@@ -3,6 +3,14 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.4.2 — 2026-06-19
+
+Hook `python`-invocation portability: the SessionStart toolkit-inventory hook
+(`toolkit-awareness/scripts/scan_toolkit.py`) ran via a bare `python` (the
+Microsoft-Store app-execution stub trap on Windows without Python on PATH). Now `uv run
+--no-project -- python …` — completing the portability fix begun in 0.4.1 (the feedback
+index-builder invocation). Hook-manifest only — no skill `description` changed.
+
 ## 0.4.1 — 2026-06-19
 
 From the 2026-06-19 triage. **N18a** — the `feedback-triage` index-builder
