@@ -1,0 +1,10 @@
+[
+  { "query": "Why isn't the warehouse fact table picking up new rows even though the nightly job finished clean?", "should_trigger": true, "note": "held-out freshness: incremental not advancing despite reported success" },
+  { "query": "The BI report's 'last refreshed' date hasn't moved since Tuesday — the customer feed looks stale, dig into why.", "should_trigger": true, "note": "held-out freshness: consumer-surface staleness, plain language" },
+  { "query": "We're porting the attribution pipeline to BigQuery and the per-channel totals have to match the old warehouse exactly.", "should_trigger": true, "note": "held-out classic (regression guard): migration with parity" },
+  { "query": "Add a region column to the accounts dataset that two finance models already consume.", "should_trigger": true, "note": "held-out classic (regression guard): schema evolution on a consumed dataset" },
+
+  { "query": "The browser keeps serving stale CSS — the page won't pick up the new styles after I deploy.", "should_trigger": false, "note": "held-out over-fire guard: non-data 'stale/won't update' (browser cache)" },
+  { "query": "My npm lockfile didn't update after I edited package.json — sort out the install.", "should_trigger": false, "note": "held-out over-fire guard: non-data 'didn't update' (lockfile)" },
+  { "query": "Just poking at this parquet file in a scratch notebook; nothing depends on it.", "should_trigger": false, "note": "held-out classic near-miss: exploratory, no consumer" }
+]
