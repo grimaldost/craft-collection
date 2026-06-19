@@ -88,7 +88,7 @@ the user's CLAUDE.md) or the user points you at one. Shape:
    entry per prior report + its numbered proposals) and scan it for a finding your
    candidate repeats — one Read of a current index instead of N phrasing-fragile
    greps. If that dir holds reports but no `INDEX.md`, **build it first**
-   (`build_feedback_index.py <dir>`) rather than degrading to a grep. A repeat is
+   (`uv run --no-project python build_feedback_index.py <dir>`) rather than degrading to a grep. A repeat is
    written as **"extends `<prior-file-stem>#<n>`"** (or "extends
    `<prior-file-stem>` §Misses" for a narrative finding) plus only the *new*
    evidence — never restated fresh.
@@ -105,7 +105,7 @@ the user's CLAUDE.md) or the user points you at one. Shape:
    per wave/phase so reports never clobber earlier ones. Then **rebuild that
    destination's `INDEX.md`** (so the next session's recurrence check at step 2 is
    one Read, not N greps) by running the session-workflow plugin's
-   `skills/feedback-triage/scripts/build_feedback_index.py <destination>`.
+   `uv run --no-project python skills/feedback-triage/scripts/build_feedback_index.py <destination>`.
 
 ## Report template
 

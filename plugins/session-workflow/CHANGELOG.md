@@ -3,6 +3,19 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.4.1 — 2026-06-19
+
+From the 2026-06-19 triage. **N18a** — the `feedback-triage` index-builder
+(`scripts/build_feedback_index.py`) docstring and the `tool-feedback` /
+`feedback-triage` invocation references now use `uv run --no-project python …`. A bare
+`python` (or `python3`) resolves to the Microsoft-Store app-execution stub on a Windows
+machine without Python on PATH and aborts — it cost a retry on each index rebuild in
+the field. Doc / invocation only — no skill `description` changed, so no holdout re-seal.
+
+Known broader scope (out of this fix, tracked separately): the plugins' `hooks.json` and
+the pre-commit `lint_register` / `run_tests` entries invoke a bare `python` and have the
+same failure on that setup.
+
 ## 0.4.0 — 2026-06-17
 
 Two changes from the 2026-06-17 triage, both shaped by a fresh-eyes review panel.
