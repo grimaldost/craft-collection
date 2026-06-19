@@ -3,6 +3,20 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.7 — 2026-06-19
+
+Hook `python`-invocation portability. The three hooks — `ruff_format` (PostToolUse),
+`uv_enforce` (PreToolUse), `stop_nudge` (Stop) — invoked a bare `python`, which on a
+Windows machine without Python on PATH resolves to the Microsoft-Store app-execution
+stub and aborts (the trap fixed for the index-builder in session-workflow 0.4.1). They
+now run via `uv run --no-project -- python …`, the form `.pre-commit-config.yaml`'s
+`validate-plugins` hook already uses (this release also brings the repo's `lint-register`
+and `run-tests` pre-commit entries to the same form). Trade-off: ~150 ms of uv startup
+per invocation — acceptable, since the project is uv-native and `ruff_format` already
+shells to `uvx`. CI (`validate.yml`) is unaffected — `actions/setup-python` puts `python`
+on PATH there. Hook-manifest / repo-config only; no skill `description` changed, so no
+holdout re-seal.
+
 ## 0.1.6 — 2026-06-19
 
 From the 2026-06-19 triage, hardened by a pre-mortem + 3-lens blind review before any
