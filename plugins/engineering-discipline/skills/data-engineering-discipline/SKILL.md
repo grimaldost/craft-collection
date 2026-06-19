@@ -239,6 +239,8 @@ can't tell whether a change is additive or breaking, treat it as breaking.
 **Real-data checks.**
 
 - [ ] Pipeline has been run end-to-end on a production-shaped sample.
+- [ ] If the load is incremental, the cursor/watermark advanced this run
+      (`freshness_check.py`) — a self-reported `success` is not freshness.
 - [ ] Every constraint declared in the schema is satisfied by the
       sample.
 - [ ] If the framework supports multiple backends, each backend has
@@ -275,10 +277,11 @@ For concrete recipes implementing each check (SQL EXCEPT queries,
 Polars `assert_frame_equal`, dbt-utils macros, custom comparison
 scripts), read **`references/parity-recipes.md`**.
 
-**Runnable checks (`scripts/`).** Three of those recipes ship as runnable,
+**Runnable checks (`scripts/`).** Four of those recipes ship as runnable,
 stdlib-first tools: `schema_diff.py` (column/dtype diff), `parity_check.py`
 (row-count, group-cardinality, null-rate, and aggregate-sum diff within
-tolerance), and `contract_check.py` (validate rows against a contract spec).
+tolerance), `contract_check.py` (validate rows against a contract spec), and
+`freshness_check.py` (assert an incremental cursor advanced — Recipe 14).
 Wire them into CI or run by hand before declaring done.
 
 > **last-reviewed: 2026-06-04.** The four non-negotiables and the 21 principles
