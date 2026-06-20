@@ -3,6 +3,20 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.4.3 — 2026-06-19
+
+`feedback-triage` index-builder (`scripts/build_feedback_index.py`) false-exclusion fix.
+`_is_report` dropped any file whose name contained the substring `triage`, treating it as
+a loop output — silently excluding legitimate INPUT reports from the generated `INDEX.md`:
+a `tool-feedback` report *about* the `feedback-triage` tool, or a
+`<date>-triage-round-<tool>` wave slug. With the report invisible to `INDEX.md`, the next
+session's recurrence check (`extends`-lookup) could not see it. Observed this round: 7
+`triage-round-*` reports plus the pre-existing `2026-06-14-feedback-triage-batch-run.md`,
+and the keel `…-craft-triage-design-premortem.md` report, were all dropped. Triage docs are
+now detected by their `# Triage` H1 (`_is_triage_doc`), not a filename substring; a report
+whose slug merely contains `triage` is indexed. (`digest` stays name-based — no observed
+false-exclusion.) Script + test only — no skill `description` changed, so no holdout re-seal.
+
 ## 0.4.2 — 2026-06-19
 
 Hook `python`-invocation portability: the SessionStart toolkit-inventory hook
