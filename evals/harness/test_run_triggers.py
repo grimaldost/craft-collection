@@ -254,6 +254,89 @@ def test_preflight_auth_passes_when_healthy():
     assert ok is True
 
 
+def test_distinct_error_samples_groups_and_counts():
+    # Distinct causes surface, most frequent first, with occurrence counts — so a
+    # high-error run that mixes 401s and timeouts shows BOTH, not just whichever ran first.
+    import run_triggers as rt
+
+    texts = [
+        'API Error: 401 Invalid authentication credentials',
+        'API Error: 401 Invalid authentication credentials',
+        'Timed out after 300s',
+    ]
+    samples = rt.distinct_error_samples(texts)
+    assert samples[0]['text'].startswith('API Error: 401')
+    assert samples[0]['count'] == 2  # the two 401s grouped and ranked first
+    assert any('Timed out' in s['text'] for s in samples)
+
+
+def test_distinct_error_samples_ignores_blank_and_respects_limit():
+    import run_triggers as rt
+
+    assert rt.distinct_error_samples([]) == []
+    assert rt.distinct_error_samples(['', '   ']) == []  # non-errored runs carry no text
+    samples = rt.distinct_error_samples(['e1', 'e2', 'e3', 'e4'], limit=2)
+    assert len(samples) == 2  # capped at limit even with 4 distinct causes
+
+
+def test_distinct_error_samples_truncates_to_width():
+    import run_triggers as rt
+
+    samples = rt.distinct_error_samples(['x' * 500], width=50)
+    assert len(samples[0]['text']) == 50  # a sample, not a wall of text
+
+
+def test_format_error_samples_renders_lines_or_empty():
+    import run_triggers as rt
+
+    assert rt.format_error_samples([]) == []  # nothing to print on a clean run
+    lines = rt.format_error_samples([{'text': '401 bad creds', 'count': 3}])
+    assert any('401 bad creds' in ln for ln in lines)
+    assert any('3' in ln for ln in lines)  # the count is shown
+
+
+def test_run_skill_collects_error_samples():
+    # The threading regression guard: run_skill must carry run.result_text from
+    # errored runs into score['error_samples'] (it previously kept only is_error).
+    import run_triggers as rt
+
+    class _ErrRun:
+        cost_usd = 0.0
+        is_error = True
+        result_text = 'API Error: 401 Invalid authentication credentials'
+
+        def activated(self, _skill):
+            return False
+
+    cfg = {
+        'allowed_tools_trigger': 'Skill',
+        'disallowed_tools_trigger': '',
+        'trigger_routing_frame': '',
+        'trigger_max_turns': 2,
+        'agent_model': 'm',
+        'max_budget_usd': 0.5,
+        'timeout_seconds': 300,
+    }
+    orig = rt.run_agent
+    rt.run_agent = lambda *a, **k: _ErrRun()
+    try:
+        score = rt.run_skill(
+            'tool-feedback',
+            [{'query': 'q', 'should_trigger': True}],
+            plugin_dir='p',
+            cfg=cfg,
+            repeats=2,
+            concurrency=1,
+            config_dir='c',
+            cwd='w',
+        )
+    finally:
+        rt.run_agent = orig
+    assert score['error_runs'] == 2
+    assert score['error_samples'][0]['text'].startswith('API Error: 401')
+    assert score['error_samples'][0]['count'] == 2  # both errored runs grouped
+
+
 if __name__ == '__main__':
     test_scoring_recall_specificity()
     test_specificity_failure_when_negative_fires()
@@ -273,4 +356,9 @@ if __name__ == '__main__':
     test_all_runs_errored_flags_total_failure()
     test_preflight_auth_detects_dead_auth()
     test_preflight_auth_passes_when_healthy()
+    test_distinct_error_samples_groups_and_counts()
+    test_distinct_error_samples_ignores_blank_and_respects_limit()
+    test_distinct_error_samples_truncates_to_width()
+    test_format_error_samples_renders_lines_or_empty()
+    test_run_skill_collects_error_samples()
     print('ok: all run_triggers tests passed')
