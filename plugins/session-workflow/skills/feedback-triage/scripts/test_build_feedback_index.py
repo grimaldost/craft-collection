@@ -65,10 +65,43 @@ def test_build_index_survives_non_utf8_file():
     assert '## 2026-01-05-bad' in idx  # the bad file is still listed, not a crash
 
 
+def test_triage_named_input_report_is_indexed():
+    # A legitimate input report whose SLUG contains 'triage' — a tool-feedback report
+    # ABOUT feedback-triage, or a '<date>-triage-round-<tool>' wave — opens with a
+    # '# <tool> feedback' H1 and must still be indexed. (Regression: the old substring
+    # filter silently dropped these, incl. 2026-06-14-feedback-triage-batch-run.md.)
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-06-triage-round-foo.md').write_text(
+            '# foo feedback — bar\n## Proposed promotions / changes\n1. **[MED]** Do it.\n',
+            encoding='utf-8',
+        )
+        idx = build_index(dd)
+    assert '## 2026-01-06-triage-round-foo' in idx  # indexed despite 'triage' in the name
+    assert '`2026-01-06-triage-round-foo#1` — Do it.' in idx
+
+
+def test_triage_doc_detected_by_h1_not_filename():
+    # A triage doc is identified by its '# Triage' H1, not its filename — so a file
+    # WITHOUT 'triage' in the name but WITH a '# Triage' H1 is still excluded.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-07-weekly-summary.md').write_text(
+            '# Triage — craft backlog\n## Proposed promotions / changes\n1. **[MED]** x.\n',
+            encoding='utf-8',
+        )
+        (dd / '2026-01-08-real.md').write_text('# real feedback — y\n', encoding='utf-8')
+        idx = build_index(dd)
+    assert 'weekly-summary' not in idx  # excluded by its '# Triage' H1, not its name
+    assert '## 2026-01-08-real' in idx
+
+
 if __name__ == '__main__':
     test_extract_proposals_pulls_numbered_titles()
     test_extract_proposals_empty_when_no_section()
     test_build_index_lists_reports_and_excludes_meta()
     test_build_index_handles_empty_dir()
     test_build_index_survives_non_utf8_file()
+    test_triage_named_input_report_is_indexed()
+    test_triage_doc_detected_by_h1_not_filename()
     print('ok: all build_feedback_index tests passed')

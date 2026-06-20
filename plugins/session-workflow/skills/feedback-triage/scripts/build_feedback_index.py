@@ -42,15 +42,38 @@ def extract_proposals(text: str) -> list[tuple[str, str]]:
     return out
 
 
+def _is_triage_doc(p: Path) -> bool:
+    """A triage doc (a loop OUTPUT, not a source report) declares itself with a
+    `# Triage` H1 — detect it by that, not by a 'triage' substring in the filename.
+    A substring match also catches legitimate INPUT reports: a tool-feedback report
+    ABOUT the `feedback-triage` tool, or a `<date>-triage-round-<tool>` wave slug,
+    both open with a `# <tool> feedback` H1 and must still be indexed (the old filter
+    silently dropped them — e.g. `2026-06-14-feedback-triage-batch-run.md`). Reads
+    only the file head; on a read error returns False (index it, never silently
+    drop)."""
+    try:
+        with p.open(encoding='utf-8', errors='replace') as fh:
+            head = fh.read(512)
+    except OSError:
+        return False
+    for line in head.splitlines():
+        s = line.strip()
+        if s.startswith('# '):
+            return s[2:].lstrip().lower().startswith('triage')
+    return False  # no H1 found -> not a triage doc
+
+
 def _is_report(p: Path) -> bool:
-    """A source report — not the index/readme, and not a triage doc or digest
-    (those are outputs of the loop, not inputs to index)."""
+    """A source report — not the index/readme, not a digest, and not a triage doc
+    (those are OUTPUTS of the loop, not inputs to index). Triage docs are detected by
+    their `# Triage` H1 (see `_is_triage_doc`), so a legitimate report whose slug
+    contains 'triage' is still indexed."""
     name = p.name.lower()
     return (
         p.suffix == '.md'
         and name not in ('index.md', 'readme.md')
-        and 'triage' not in name
         and 'digest' not in name
+        and not _is_triage_doc(p)
     )
 
 
