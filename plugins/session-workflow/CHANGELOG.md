@@ -3,6 +3,17 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.4.4 — 2026-06-23
+
+`review-panel` "When to convene" — name the **design/spec-before-build** case explicitly (a
+qualifier on the high-stakes trigger, where pre-code defects are cheapest to catch) **with a
+maturity gate**: a design is panel-ready only when concrete enough to critique (explicit
+interfaces, failure modes, data flow, ≥1 worked example) — panelling a bare sketch yields
+bikeshedding and false confidence, not defects. From the 2026-06-23 triage (**N19a**, reinforced
+across two design-stage arcs — `2026-06-17-backlog-remediation-design-build#2` +
+`2026-06-19-triage-round-review-panel#1`); a blind fresh-eyes review of the proposal added the
+maturity guard. Body-only — no `description` change, so no holdout re-seal.
+
 ## 0.4.3 — 2026-06-19
 
 `feedback-triage` index-builder (`scripts/build_feedback_index.py`) false-exclusion fix.
