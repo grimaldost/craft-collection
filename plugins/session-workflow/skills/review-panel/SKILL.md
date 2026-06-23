@@ -18,8 +18,16 @@ surfaces what the anchored view structurally cannot. The deliverable is a
 Convene when the cost of being wrong exceeds the cost of the panel:
 
 - you have iterated many rounds and genuinely can't tell if it's good anymore;
-- a high-stakes or hard-to-reverse decision (architecture, a launch, a structural choice);
+- a high-stakes or hard-to-reverse decision (architecture, a launch, a structural choice) —
+  **including a design or spec _before_ any build**, where pre-code defects (a wrong interface, a
+  missed failure mode, a motivated assumption) are cheapest to fix;
 - an explicit ask: "fresh eyes", "second opinion", "red team", "poke holes", "am I anchored", `/review-panel`.
+
+**A design/spec is panel-ready only when it is concrete enough to critique** — explicit interfaces,
+failure modes, data flow, and at least one worked example. Panelling a bare sketch or intent yields
+bikeshedding and false confidence, not defects; iterate it to concreteness first (or fire a single
+Level-1 contrarian instead). Design-stage review is a qualifier on the high-stakes trigger above,
+not a standing "always review the design" gate.
 
 Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 question):
 
