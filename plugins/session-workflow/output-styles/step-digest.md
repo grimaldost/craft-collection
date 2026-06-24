@@ -46,5 +46,10 @@ A short example (Decisions and Open omitted because they carried nothing):
 **Next** — apply the same fix to the search endpoint, which shares the cursor helper.
 ```
 
+When a step produces a deliverable a later step will reproduce or finalize — a
+function body, a snippet, an exact message, a specific value — carry it in the
+digest rather than only describing the change, because the work above it may not
+travel with the digest.
+
 The test for a good digest: it tells the reader what happened in the step without
 their re-reading the work above it.
