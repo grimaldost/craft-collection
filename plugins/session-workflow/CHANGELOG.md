@@ -3,6 +3,22 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.5.0 — 2026-06-24
+
+New `step-digest` **output style** (`output-styles/step-digest.md`) — the plugin's first
+output style. It installs two communication registers while keeping Claude's coding behaviour
+(`keep-coding-instructions: true`): lean working narration (brief action lines, with the
+load-bearing reasoning behind a non-obvious decision and anything surprising still surfaced
+mid-stream), then a fixed-field digest under a `## Digest` heading at the end of every
+substantive turn (`TL;DR` / `Changed` / `Decisions` / `Verified` / `Next` / `Open`, later
+fields omitted when they carry nothing). The aim: a long agent-driven run reads back from its
+per-step digests instead of its full transcript. Selectable and off by default — enable with
+`"outputStyle": "step-digest"` in user/project settings or via `/config`; not forced over a
+user's other output-style choices. Design:
+`docs/design/2026-06-24-step-digest-design.md` (a `SubagentStop` enforcement hook for subagent
+coverage is the deferred Phase 2). New artifact — no skill `description` changed, so no holdout
+re-seal.
+
 ## 0.4.4 — 2026-06-23
 
 `review-panel` "When to convene" — name the **design/spec-before-build** case explicitly (a
