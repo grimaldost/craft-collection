@@ -40,7 +40,8 @@ hooks for ruff-format and uv enforcement; a `stack.toml`-based freshness loop.
 **session-workflow** — skills `journaling-sessions`, `consolidate-knowledge`,
 `context-handoff`, `review-panel`, `evaluate-skill`, `toolkit-awareness`,
 `tool-feedback`, and `feedback-triage`; a live `scan_toolkit.py` inventory; the
-headless skill-eval engine in `scripts/`; an optional session-start inject hook.
+headless skill-eval engine in `scripts/`; a selectable `step-digest` output style;
+an optional session-start inject hook.
 
 **humblepowers** — skills `choosing-tools`, `skill-authoring`, `brainstorming`,
 `test-driven-development`, `systematic-debugging`,
@@ -59,6 +60,14 @@ plugin's LICENSE for third-party notices.
 | Data pre-shipping checklist nudge on Stop | `DATAENG_CHECKLIST_NUDGE=1` |
 | Allow one pip/poetry command in a uv project | `CLAUDE_ALLOW_PIP=1` |
 | Dispatch protocol injected at session start | `HUMBLEPOWERS_DISPATCH_INJECT=1` |
+
+## Optional output style
+
+`step-digest` (session-workflow) keeps working narration lean and ends each
+substantive turn with a fixed-field digest, so a long agent-driven run reads back
+from its digests instead of its full transcript. Off by default — enable with
+`"outputStyle": "step-digest"` in your user or project settings, or pick it under
+`/config`.
 
 ## Versioning
 
