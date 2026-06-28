@@ -46,6 +46,26 @@ def test_build_index_lists_reports_and_excludes_meta():
     assert 'stale self' not in idx  # the old INDEX.md is never indexed into itself
 
 
+def test_build_index_excludes_consolidated_backlog():
+    # A consolidated BACKLOG.md is a loop OUTPUT (a status digest), not a source
+    # report -- excluded by exact name like INDEX.md / README.md. (Regression: it was
+    # counted as a report, inflating the count and emitting a spurious '## BACKLOG'
+    # section whenever a feedback dir keeps a consolidated backlog beside its reports.)
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-09-real.md').write_text(
+            '# real feedback - z\n## Proposed promotions / changes\n1. **[MED]** x.\n',
+            encoding='utf-8',
+        )
+        (dd / 'BACKLOG.md').write_text(
+            '# pr-pilot backlog -- consolidated status\n## SHIPPED\n', encoding='utf-8'
+        )
+        idx = build_index(dd)
+    assert '## 2026-01-09-real' in idx  # the one real report is indexed
+    assert 'BACKLOG' not in idx  # the consolidated backlog is not a report
+    assert '1 report' in idx  # counted as one report, not two
+
+
 def test_build_index_handles_empty_dir():
     with tempfile.TemporaryDirectory() as d:
         assert '0 report' in build_index(Path(d))
@@ -100,6 +120,7 @@ if __name__ == '__main__':
     test_extract_proposals_pulls_numbered_titles()
     test_extract_proposals_empty_when_no_section()
     test_build_index_lists_reports_and_excludes_meta()
+    test_build_index_excludes_consolidated_backlog()
     test_build_index_handles_empty_dir()
     test_build_index_survives_non_utf8_file()
     test_triage_named_input_report_is_indexed()
