@@ -65,9 +65,10 @@ plugin's LICENSE for third-party notices.
 
 `step-digest` (session-workflow) keeps working narration lean and ends each
 substantive turn with a fixed-field digest, so a long agent-driven run reads back
-from its digests instead of its full transcript. Off by default — enable with
-`"outputStyle": "step-digest"` in your user or project settings, or pick it under
-`/config`.
+from its digests instead of its full transcript. Off by default — pick it under
+`/config`, or set `"outputStyle": "session-workflow:step-digest"` in your user or
+project settings. (The plugin ships it under that namespaced name; the bare
+`step-digest` resolves only for a project-local `.claude/output-styles/` file.)
 
 ## Versioning
 

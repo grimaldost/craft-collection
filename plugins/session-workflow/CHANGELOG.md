@@ -3,6 +3,19 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.5.1 — 2026-06-24
+
+Two fixes from a headless + leak-closed validation pass on the `step-digest` style.
+(1) **Activation value corrected.** The plugin ships the style under its namespaced
+name, so it is selected with `"outputStyle": "session-workflow:step-digest"` (or
+picked in `/config`). The bare `step-digest` resolves only for a project-local
+`.claude/output-styles/` file — the earlier instruction silently did nothing for
+plugin installs. (2) **Doctrine tightened.** When a step produces a deliverable a
+later step will reproduce or finalize (a function body, a snippet, an exact
+message, a value), the digest now carries it verbatim rather than only describing
+the change — a strict digest-only relay (no files crossing between steps) flagged
+this as a major gap. No skill `description` changed, so no holdout re-seal.
+
 ## 0.5.0 — 2026-06-24
 
 New `step-digest` **output style** (`output-styles/step-digest.md`) — the plugin's first
@@ -13,8 +26,8 @@ mid-stream), then a fixed-field digest under a `## Digest` heading at the end of
 substantive turn (`TL;DR` / `Changed` / `Decisions` / `Verified` / `Next` / `Open`, later
 fields omitted when they carry nothing). The aim: a long agent-driven run reads back from its
 per-step digests instead of its full transcript. Selectable and off by default — enable with
-`"outputStyle": "step-digest"` in user/project settings or via `/config`; not forced over a
-user's other output-style choices. Design:
+`"outputStyle": "session-workflow:step-digest"` in user/project settings or via `/config`; not
+forced over a user's other output-style choices. Design:
 `docs/design/2026-06-24-step-digest-design.md` (a `SubagentStop` enforcement hook for subagent
 coverage is the deferred Phase 2). New artifact — no skill `description` changed, so no holdout
 re-seal.
