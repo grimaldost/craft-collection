@@ -1,0 +1,9 @@
+[
+  { "query": "Long unattended migration ahead — keep a durable cursor on disk so a mid-run summarization can't strand us.", "should_trigger": true, "note": "held-out: long unattended run + compaction-as-summarization" },
+  { "query": "Stand up a control anchor I can rely on if the window resets halfway through this batch job.", "should_trigger": true, "note": "held-out: anchor against a window reset" },
+  { "query": "This loop runs for hours across many compactions; make its progress re-readable so it never restarts from scratch.", "should_trigger": true, "note": "held-out: multi-compaction loop, re-readable progress" },
+  { "query": "Persist the goal, the next step, and the last good commit so you can re-orient yourself after an auto-compact.", "should_trigger": true, "note": "held-out: names the anchor's fields + self-re-orient" },
+  { "query": "Draft a handoff doc for the next engineer to continue this cold.", "should_trigger": false, "note": "held-out near-miss: inter-actor handoff => context-handoff" },
+  { "query": "Capture the reasoning and the rejected options from this debugging session before I forget.", "should_trigger": false, "note": "held-out near-miss: post-hoc capture => journaling-sessions" },
+  { "query": "Reduce the memory footprint of this data pipeline.", "should_trigger": false, "note": "held-out near-miss: 'memory/footprint' off-domain, not context state" }
+]

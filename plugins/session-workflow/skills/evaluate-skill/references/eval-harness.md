@@ -141,6 +141,27 @@ work happen" vs "emitted a one-line confirmation."
   does not expand — so slash-command triggers read as misses headless even when they
   fire interactively. Treat slash-trigger misses as artifacts; lean on natural-language
   triggers, and mark the skill `command_first`.
+- **Empty-cwd trigger artifact**: the trigger arm runs in an isolated, empty temp
+  cwd (clean-room isolation). A skill whose trigger inherently references operating
+  on *the files in the working directory* — audit/review a repo, sweep a corpus —
+  cannot fire there: the model sees no files and asks "which repo?" instead of
+  routing, so its recall reads ~0 as an artifact, not a description defect. Measure
+  such a skill with the trigger eval pointed at a *populated* cwd (a fixture
+  corpus), or confirm activation by a manual run in a real tree. (Observed:
+  `corpus-review` scored 0/8 in the empty cwd, yet fired and correctly out-selected
+  its `review-panel` / `code-review` siblings 2/3 on the same positives once the cwd
+  held a real repo.) A compounding limit for a *heavy* orchestration skill: once it
+  does fire in a populated cwd, completing the fan-out needs Task/subagents
+  (disallowed in the trigger arm), so the run flails to the `trigger_max_turns` cap
+  and is scored as errored rather than as a fire (`corpus-review`'s populated-cwd
+  holdout errored 19/21 this way). Such a skill is not cleanly auto-gateable on
+  trigger recall here — confirm activation by direct observation, and gate it via
+  the grading arm or a raised turn cap.
+- **Stale deny-tool names**: `disallowed_tools_trigger` must list only tools the
+  *current* CLI knows. A removed or renamed tool (e.g. `MultiEdit`, now folded into
+  `Edit`) makes the spawn error with "deny rule matches no known tool" — counted as
+  an errored run, silently shrinking the sample. Keep the deny-list current, or have
+  the runner drop unknown names before spawning.
 - **Cost**: a full run is roughly `(trigger prompts × repeats) + (tasks × repeats ×
   5)` spawns. Budget it and show the user before firing. Use `--concurrency` (each
   spawn is subprocess-bound, so threads parallelize well); transient 429/5xx are

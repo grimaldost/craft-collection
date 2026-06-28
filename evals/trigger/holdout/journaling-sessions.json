@@ -1,0 +1,9 @@
+[
+  { "query": "Before I sign off — preserve the architecture calls and the two approaches we ruled out today so a later session doesn't reopen them.", "should_trigger": true, "note": "held-out: implicit closure cue, decisions + rejected options, never says 'journal'" },
+  { "query": "We just worked through the whole OAuth2 RFC end to end. Build retrieval entries for every grant type and flow.", "should_trigger": true, "note": "held-out: reference-ingestion mode" },
+  { "query": "Long day — we nailed the deadlock root cause, picked the queue backend, and dropped the cron idea. Don't let any of it evaporate.", "should_trigger": true, "note": "held-out: implicit, 3+ items ending a substantive session, no literal trigger word" },
+  { "query": "Capture what we figured out about the cache-invalidation strategy and why TTL-only lost, for next time.", "should_trigger": true, "note": "held-out: casual capture with reasoning + rejected alternative" },
+  { "query": "Roll my existing session journals up into recurring themes.", "should_trigger": false, "note": "held-out near-miss: downstream consolidation, NOT raw capture" },
+  { "query": "Summarize this RFC I'm about to paste so I can skim it.", "should_trigger": false, "note": "held-out near-miss: document summarization, not session-knowledge capture" },
+  { "query": "Draft a PR description for the changes I just staged.", "should_trigger": false, "note": "held-out near-miss: summarizing work for VCS, not retrieval memory" }
+]

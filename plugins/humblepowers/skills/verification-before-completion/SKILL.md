@@ -48,6 +48,17 @@ thing that keeps the bug from returning; "the fix is obvious" is how a fixed bug
 comes back a month later. Shipping a fix without one is an unverified durability
 claim, not a smaller scope.
 
+## A verifier is trusted green only after it has been seen red
+
+The regression-test rule above is one case of a principle that governs *any*
+verifier — a gate, a parity diff, a contract check, an eval assertion: a check
+seen only green is indistinguishable from one that tests nothing (a typo'd join
+key, a tolerance so wide nothing trips, a fixture that hits a fallback). Before
+trusting a green, watch it go red — plant a known violation, confirm the catch,
+remove the plant. test-driven-development's "verify red" is this for tests;
+`data-engineering-discipline`'s prove-the-gate-can-fail (its non-vacuity matrix)
+is this for enforcement gates. Same discipline, named here.
+
 ## Delegated work
 
 A subagent's "success" is a claim, not evidence. Inspect the diff, run the
@@ -60,7 +71,10 @@ Before committing, opening a PR, or moving on: the full test command ran this
 session with zero failures; the requirements were re-read and checked off
 individually; the output is pristine — no stray errors or warnings riding
 along. Recurring checks belong in pre-commit or CI rather than in memory —
-mechanism outlasts intention.
+mechanism outlasts intention. When the suite carries irreducible pre-existing
+failures, the honest gate is "zero net regression" against a baseline, not an
+absolute zero — see `data-engineering-discipline`'s parity-recipes
+(differential-baseline: the stash-test and the base-commit set-diff).
 
 ## Wording that signals an unverified claim
 

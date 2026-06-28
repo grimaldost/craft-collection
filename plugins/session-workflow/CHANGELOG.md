@@ -3,6 +3,45 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.6.0 — 2026-06-28
+
+Structural-hardening release (from the 2026-06-28 structural review).
+
+### Added
+
+- **`compaction-survival`** skill (flexible) — maintain a persisted, re-readable
+  control anchor so a long autonomous run survives context compaction: one file
+  with the mission, a plan pointer, a live cursor, invariants, last-known-good
+  state, and resume steps, updated each step and re-read each turn. Intra-actor
+  state recovery, distinct from `context-handoff`'s inter-actor brief. (The
+  blind cross-model panel that reviewed the 2026-06-23 triage re-homed this from
+  a proposed `context-handoff` mode to a dedicated skill.)
+- **`corpus-review`** skill (flexible) — audit a large file corpus by blind
+  fan-out → adversarial-verify → disjoint-partition fix → re-audit to
+  convergence, with an execute-the-artifact lens. Ships no engine of its own
+  (orchestrates on the harness's parallel/workflow primitives; degrades to
+  sequential), deliberately avoiding the bundled-script drift the eval-engine
+  fix below addressed.
+- Each new skill ships a calibrated description + balanced trigger dataset +
+  sealed holdout under `evals/trigger/`, registered in `evals/config.json`. The
+  live `run_triggers` recall/specificity gate is cost-gated; run it with
+  oversight before merge.
+- Sealed trigger holdouts for **`context-handoff`** and **`journaling-sessions`**
+  — both auto-trigger surfaces that had a base trigger dataset but no protected
+  generalization set.
+
+### Fixed
+
+- The bundled `evaluate-skill/scripts/` engine had drifted behind the tested
+  `evals/harness/` source (it is a distribution template users copy into their
+  own `evals/harness/`): `run_triggers` was missing `preflight_auth`,
+  `expected_hard`/`recall_hard`, and error sampling; `aggregate` lacked
+  action-discipline gating; `grade_tasks` / `claude_runner` lagged. Re-synced the
+  four drifted files verbatim and added `evals/harness/test_scripts_in_sync.py`
+  asserting byte-identity so the template cannot silently regress again (wired
+  through `run_tests.py` → pre-push + CI). No existing skill `description`
+  changed.
+
 ## 0.5.1 — 2026-06-24
 
 Two fixes from a headless + leak-closed validation pass on the `step-digest` style.

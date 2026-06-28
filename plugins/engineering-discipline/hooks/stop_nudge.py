@@ -22,6 +22,19 @@ def should_nudge(changed_files: list[str], globs: tuple[str, ...] = DEFAULT_GLOB
     return any(fnmatch.fnmatch(f, g) for f in changed_files for g in globs)
 
 
+def nudge_message() -> str:
+    """The reminder printed when pipeline files changed.
+
+    Names `freshness_check.py` — the runnable cursor-advance checker — explicitly,
+    so an incremental load gets a concrete next step, not just the generic list."""
+    return (
+        'Data-pipeline files changed - run the pre-shipping checklist '
+        '(schema, row count, group cardinality, null rates, sums, replay) '
+        'before declaring done. For an incremental load, run freshness_check.py '
+        'to assert the cursor actually advanced.'
+    )
+
+
 def _changed_files() -> list[str]:
     try:
         out = subprocess.run(
@@ -44,12 +57,7 @@ def main() -> int:
         return 0
     env_globs = tuple(g for g in os.environ.get('DATAENG_PIPELINE_GLOBS', '').split(',') if g)
     if should_nudge(_changed_files(), env_globs or DEFAULT_GLOBS):
-        print(
-            'Data-pipeline files changed - run the pre-shipping checklist '
-            '(schema, row count, group cardinality, null rates, sums, replay) '
-            'before declaring done.',
-            file=sys.stderr,
-        )
+        print(nudge_message(), file=sys.stderr)
     return 0
 
 

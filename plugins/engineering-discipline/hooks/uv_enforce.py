@@ -15,9 +15,17 @@ import re
 import sys
 from pathlib import Path
 
-# Commands redirected to uv when inside a uv project.
+# Commands redirected to uv when inside a uv project. Word boundaries keep
+# `pip`/`conda`/`pipenv` from matching as substrings of unrelated words.
 _BLOCKED = re.compile(
-    r'\b(pip3?\s+install|poetry\s+(?:add|install)|virtualenv\b|python3?\s+-m\s+venv)\b'
+    r'\b(?:'
+    r'pip3?\s+install'
+    r'|poetry\s+(?:add|install|update)'
+    r'|pipenv\b'
+    r'|conda\s+install'
+    r'|virtualenv\b'
+    r'|python3?\s+-m\s+venv'
+    r')\b'
 )
 
 

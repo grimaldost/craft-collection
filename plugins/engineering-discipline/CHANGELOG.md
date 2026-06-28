@@ -3,6 +3,40 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.9 — 2026-06-28
+
+From the 2026-06-28 structural review. No skill `description` changed (body /
+references / scripts only), so no holdout re-seal.
+
+### Changed
+
+- `data-engineering-discipline`: a consolidated "a producer can look verified and
+  still mislead" table under Axiom 2 (wrong layer/version · build on a behavior
+  the code doesn't deliver · read the reasons not the verdict · measure a
+  paper-defined subgroup on real data) with a decline-on-recurrence cap — the
+  last prose increment for this judgment-bound axiom. New `parity-recipes.md`
+  Recipe 15 (differential-baseline: the stash-test and the base-commit set-diff)
+  for proving net-zero regression in a noisy suite. Recipe 13 / Scenario 8.2 now
+  cross-link `verification-before-completion`'s red-before-green. (The Axiom-2
+  re-elaborations across `principles.md` / `llm-failure-modes.md` were assessed
+  for consolidation and left — each carries a distinct anti-pattern/corrective,
+  so they are layering, not redundancy.)
+- `python-engineering`: SKILL.md trimmed 459 → 396 lines — the inlined
+  `[dependency-groups]` TOML moved to its home in `project_templates.md`, the
+  duplicated uv-command list de-duped, the `Settings` example and ruff-migration
+  notes compressed, the Reference Files list collapsed to a compact index. No
+  rule lost.
+
+### Added (mechanize)
+
+- `scaffold.py` emits a `uv run ty check src` CI step (ty has no pre-commit hook).
+- `stop_nudge.py` names `freshness_check.py` for incremental-load changes.
+- `uv_enforce.py` also blocks `poetry update` / `pipenv` / `conda install`
+  (word-bounded; the `CLAUDE_ALLOW_PIP` escape hatch is intact).
+- `doctor.py` recognizes GitLab CI and CircleCI alongside GitHub Actions.
+- Deferred follow-up: `doctor.py` `@override`-on-structural-Protocol and
+  `from __future__ import annotations`-on-3.14 checks (hard static analysis).
+
 ## 0.1.8 — 2026-06-19
 
 (0.1.7 is the concurrent hooks/pre-commit `python`-portability fix; this N17a

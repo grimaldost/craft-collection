@@ -1,0 +1,16 @@
+[
+  { "query": "Review all ~200 docs in this release before we push, checking each against the real code.", "should_trigger": true, "note": "canonical: large doc corpus vs ground truth" },
+  { "query": "Audit the whole repo's documentation for accuracy and drift.", "should_trigger": true, "note": "whole-repo doc audit" },
+  { "query": "Do a blind review across every file in these two plugins — skills, references, hooks, and examples.", "should_trigger": true, "note": "blind fan-out across a large mixed file set" },
+  { "query": "Pre-push review of everything: ~150 markdown files plus the configs they describe.", "should_trigger": true, "note": "pre-push, large corpus" },
+  { "query": "Check that the docs still match the code across the entire project.", "should_trigger": true, "note": "doc-vs-code drift at project scale" },
+  { "query": "We have hundreds of files to QA before the cut — partition it and review in parallel, verifying the serious findings.", "should_trigger": true, "note": "partition + parallel + adversarial-verify" },
+  { "query": "Sweep the entire monorepo's READMEs and runbooks for staleness against current behavior.", "should_trigger": true, "note": "corpus sweep against current behavior" },
+  { "query": "Audit every example script and hook in the plugin by actually running them, not just reading.", "should_trigger": true, "note": "execution-audit lens on an executable corpus" },
+  { "query": "Give me fresh eyes on this one design doc I've been iterating on.", "should_trigger": false, "note": "near-miss: single artifact => review-panel" },
+  { "query": "Review this PR's diff for bugs before I merge.", "should_trigger": false, "note": "near-miss: single diff => code-review" },
+  { "query": "Does my skill actually trigger on the prompts it should?", "should_trigger": false, "note": "near-miss: behavioral skill measurement => evaluate-skill" },
+  { "query": "Red-team this single architecture proposal.", "should_trigger": false, "note": "near-miss: one artifact, fresh eyes => review-panel" },
+  { "query": "Explain what this one config file does.", "should_trigger": false, "note": "trivial, single file" },
+  { "query": "Find the N+1 query in the file I just changed.", "should_trigger": false, "note": "near-miss: single change => code-review" }
+]

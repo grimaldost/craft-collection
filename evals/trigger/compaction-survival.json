@@ -1,0 +1,16 @@
+[
+  { "query": "This is going to be a multi-hour autonomous build — set things up so an automatic compaction doesn't make us lose the plot.", "should_trigger": true, "note": "canonical: long autonomous run + compaction threat" },
+  { "query": "We'll cross several auto-compactions before this finishes. Persist the current state so a reset doesn't disrupt the work.", "should_trigger": true, "note": "explicit persist-across-compaction" },
+  { "query": "I'm kicking off a self-driving loop that runs unattended overnight; keep its state recoverable.", "should_trigger": true, "note": "self-driving unattended loop" },
+  { "query": "Keep a running control file so if the context gets summarized mid-task you can pick up exactly where you left off.", "should_trigger": true, "note": "the anchor described in plain terms" },
+  { "query": "Before you go heads-down on this 12-step refactor, write down the mission and a cursor you can re-read each turn.", "should_trigger": true, "note": "multi-phase + re-readable cursor" },
+  { "query": "Make sure the plan survives /compact — I don't want to re-explain everything after it compacts.", "should_trigger": true, "note": "survive /compact" },
+  { "query": "Set it up so you can resume cleanly after a context reset, from disk, without me re-priming you.", "should_trigger": true, "note": "resume-after-reset, idempotent" },
+  { "query": "This autonomous run will outlast the context window; persist what you need to continue across the gap.", "should_trigger": true, "note": "outlast the window" },
+  { "query": "Write a self-contained brief so a fresh session can take this sub-task and hand the result back.", "should_trigger": false, "note": "near-miss: inter-actor handoff => context-handoff" },
+  { "query": "We're done for today — journal what we decided and the dead ends we hit.", "should_trigger": false, "note": "near-miss: post-hoc capture => journaling-sessions" },
+  { "query": "Summarize the current state of the refactor for my notes.", "should_trigger": false, "note": "near-miss: a recap for the user, not a live re-readable anchor" },
+  { "query": "Fix the failing assertion on line 40 of test_parser.py.", "should_trigger": false, "note": "short task, fits one context, no run to anchor" },
+  { "query": "Compact this verbose helper into something smaller.", "should_trigger": false, "note": "near-miss: 'compact' homonym => code, not context compaction" },
+  { "query": "Hand this incident investigation off to a teammate with full context.", "should_trigger": false, "note": "near-miss: cross-actor handoff => context-handoff" }
+]

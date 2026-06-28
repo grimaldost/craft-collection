@@ -1,0 +1,9 @@
+[
+  { "query": "Package up the rate-limiter work as a standalone brief I can drop into a fresh session and get a finished patch back.", "should_trigger": true, "note": "held-out: SUBTASK mode, novel wording, artifact returns" },
+  { "query": "This thread has gotten too big — peel the migration discussion off into its own session to carry on by itself.", "should_trigger": true, "note": "held-out: FORK, 'peel off' an independent thread" },
+  { "query": "Write a self-contained handoff so the on-call engineer can take the incident investigation cold.", "should_trigger": true, "note": "held-out: handoff across a human boundary, paste-ready" },
+  { "query": "Bundle the failing-export bug into something a fresh agent can pick up with zero memory of this chat and report the fix.", "should_trigger": true, "note": "held-out: SUBTASK, bounded + result returns" },
+  { "query": "Kick off three subagents to refactor these modules at once and merge their results back here.", "should_trigger": false, "note": "held-out near-miss: in-session parallel work => Task tool, not a handoff" },
+  { "query": "Cut a release branch for v2.", "should_trigger": false, "note": "held-out near-miss: 'branch' is version control, not a context fork" },
+  { "query": "Recap the decisions from this call for my own notes.", "should_trigger": false, "note": "held-out near-miss: recap for me, not a paste-ready brief for a fresh context" }
+]

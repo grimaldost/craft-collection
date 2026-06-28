@@ -859,7 +859,8 @@ That proves it isn't a false positive; it does not prove it can fail.
 
 **Why.** A gate that cannot demonstrate a failure is indistinguishable
 from `return PASS`. The plant-fires fixture is the single most important
-test of an enforcement gate.
+test of an enforcement gate — the gate form of `verification-before-completion`'s
+red-before-green (a verifier is trusted green only after it has been seen red).
 
 **How.** Encode each as a CI unit test: plant-fires asserts a non-empty
 violation list; empty-allow-list asserts failure when the list is cleared;

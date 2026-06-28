@@ -221,43 +221,13 @@ When generating a project for a user:
 ## Dependency Management (PEP 735)
 
 Use `[dependency-groups]` (PEP 735) for development dependencies — **not**
-`[project.optional-dependencies]`. Dev deps are local-only and must not ship
-with the package.
+`[project.optional-dependencies]`, which is for end-user feature extras
+(`pip install mylib[cli]`). Dev deps are local-only and must not ship with the
+package. Group into `lint` / `test` / `security`, plus a `dev` group that
+includes them.
 
-```toml
-[dependency-groups]
-dev = [
-    { include-group = "lint" },
-    { include-group = "test" },
-    { include-group = "security" },
-    "pre-commit",
-]
-lint = [
-    "ruff>=0.15",
-    "ty",
-]
-test = [
-    "pytest>=8.0",
-    "pytest-cov",
-    "pytest-asyncio>=0.24",
-    "hypothesis",
-]
-security = [
-    "pip-audit",
-]
-```
-
-Reserve `[project.optional-dependencies]` for **feature extras** that end users
-install (e.g., `pip install mylib[cli]`).
-
-Key commands:
-```bash
-uv add --dev pytest              # Adds to [dependency-groups] dev
-uv add --group lint ruff         # Adds to [dependency-groups] lint
-uv sync                          # Installs all default groups
-uv sync --group test             # Installs specific group
-uv run pytest                    # Runs in project venv
-```
+→ The authoritative `[dependency-groups]` block:
+**Read `references/project_templates.md`**
 
 ---
 
@@ -275,46 +245,34 @@ docstring-quotes = "double"
 multiline-quotes = "double"
 ```
 
-### Ruff 0.8+ Migration Notes
-
-- The `TCH` rule category was renamed to **`TC`**. Use `"TC"` in `select`.
-- `ANN101` / `ANN102` were **removed** — do not list them in `ignore`.
-- Block suppression comments are now supported:
-  `# ruff: disable[N803]` / `# ruff: enable[N803]` to suppress rules for a
-  block of code without per-line `# noqa`.
+Ruff 0.8+ deltas: the `TCH` category is now `TC` (use `"TC"` in `select`);
+`ANN101` / `ANN102` were removed (don't list them in `ignore`); block
+suppression via `# ruff: disable[RULE]` / `# ruff: enable[RULE]` avoids per-line
+`# noqa`.
 
 ---
 
 ## Configuration Management Pattern
 
-Never use `os.getenv()` directly. Always use `pydantic-settings`:
+Never read `os.getenv()` directly. Use a typed `Settings(BaseSettings)` from
+`pydantic-settings`, with `SecretStr` for secrets (masked in logs). Keep `.env`
+gitignored and commit `.env.template` to document required keys.
 
 ```python
-# src/my_package/core/config.py
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application configuration — loaded from .env."""
-
-    DEBUG: bool = False
-    APP_NAME: str = 'My App'
-    API_KEY: SecretStr  # Masked in logs automatically
-
-    model_config = SettingsConfigDict(
-        env_file='.env',
-        env_file_encoding='utf-8',
-        case_sensitive=True,
-        extra='ignore',
-    )
+    API_KEY: SecretStr
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 
 settings = Settings()
 ```
 
-Use `.env` (gitignored) for secrets and `.env.template` (committed) to
-document required keys.
+→ Why typed config (fail-fast at startup, validation): **Read
+`references/ecosystem_rationale.md`**
 
 ---
 
@@ -402,37 +360,16 @@ via `uv lock`.
 
 ## Reference Files
 
-For exhaustive templates and patterns, read these as needed:
+Exhaustive templates and patterns — read on demand:
 
-- **`references/project_templates.md`** — Full `pyproject.toml` template
-  (Build, Ruff, ty, Mypy, Pytest), both directory layouts, GitHub Actions CI
-  workflow. Read this when scaffolding any project or generating config files.
-
-- **`references/ecosystem_rationale.md`** — Rationale for each tool choice,
-  Protocol vs ABC philosophy, architecture patterns (functional core /
-  imperative shell, dependency injection). Read when explaining *why*.
-
-- **`references/observability.md`** — Full structlog + OpenTelemetry setup:
-  stdlib bridge, trace ID correlation, FastAPI middleware, metrics, and
-  pytest integration. Read when setting up logging or observability.
-
-- **`references/testing_and_qa.md`** — Pytest patterns, Hypothesis for
-  property-based testing, mutation testing (test *strength* vs. presence), the
-  economics of shift-left, snapshot testing, testcontainers, unit vs
-  integration split, async testing. Read when generating tests or QA strategy.
-
-- **`references/docker_patterns.md`** — Multi-stage Dockerfile with uv, CI/CD
-  Docker caching. Read when containerizing a Python project.
-
-- **`references/security.md`** — Supply-chain security: Trusted Publishers,
-  Sigstore attestations, pip-audit, dependency pinning, CI pipeline.
-  Read when hardening a project's security posture.
-
-- **`references/ai_config.md`** — Templates for CLAUDE.md, Cursor rules,
-  and Copilot instructions. Read when setting up AI-assistant configuration.
-
-- **`references/currency_review.md`** — Quarterly review protocol and
-  checklist for keeping the skill up-to-date with the Python ecosystem.
+- **`project_templates.md`** — `pyproject.toml` master config, both directory layouts, GitHub Actions CI.
+- **`ecosystem_rationale.md`** — why each tool, Protocol vs ABC, functional core / imperative shell, DI.
+- **`observability.md`** — structlog + OpenTelemetry setup, trace correlation, FastAPI middleware.
+- **`testing_and_qa.md`** — pytest, Hypothesis, mutation/snapshot testing, testcontainers, unit/integration split.
+- **`docker_patterns.md`** — multi-stage Dockerfile with uv, CI/CD Docker caching.
+- **`security.md`** — Trusted Publishers, Sigstore, pip-audit, dependency pinning.
+- **`ai_config.md`** — CLAUDE.md, Cursor rules, Copilot instructions.
+- **`currency_review.md`** — quarterly review protocol for keeping the skill current.
 
 ---
 
