@@ -87,6 +87,15 @@ def _mean(xs) -> float:
     return sum(xs) / len(xs) if xs else 0.0
 
 
+def resolve_plugin_dir(cfg: dict, skill: str, override: str | None) -> str:
+    """The WITH arm's plugin dir: the skill's own repo plugin unless an explicit
+    override points elsewhere — the ablation hook (run the same tasks with a
+    different plugin that ships a same-named skill, e.g. a superpowers checkout)."""
+    if override:
+        return override
+    return str(REPO / 'plugins' / cfg['plugin_of_skill'][skill])
+
+
 def build_task_prompt(skill: str, task: dict) -> str:
     parts = []
     fixture = task.get('fixture')
@@ -94,6 +103,21 @@ def build_task_prompt(skill: str, task: dict) -> str:
         parts.append((TASKS_DIR / skill / fixture).read_text(encoding='utf-8'))
     parts.append(task['prompt'])
     return '\n\n-----\n\n'.join(parts)
+
+
+def resolve_task_rubric(skill: str, task: dict, default_rubric: list) -> list:
+    """A task's rubric: its own inline `rubric` list if present, else a
+    `tasks/<skill>/rubric.<task_id>.json` file if one exists, else the skill's
+    shared `rubric.json`. Lets one bank grade differently-shaped tasks (a feature
+    vs a bug-fix, a relay vs a red-green) without a single shared rubric distorting
+    the ones it doesn't fit."""
+    inline = task.get('rubric')
+    if isinstance(inline, list) and inline:
+        return inline
+    per_task = TASKS_DIR / skill / f'rubric.{task["id"]}.json'
+    if per_task.exists():
+        return json.loads(per_task.read_text(encoding='utf-8'))
+    return default_rubric
 
 
 def _read_created_files(cwd: str, cap: int = 20000) -> str:
@@ -183,8 +207,9 @@ def grade_skill(
         without_run, without_out = run_arm(
             prompt, plugin_dir=None, cfg=cfg, config_dir=config_without
         )
+        task_rubric = resolve_task_rubric(skill, task, rubric)
         pw = judge_point(
-            prompt, with_out, rubric, model=cfg['judge_model'], repeats=cfg['judge_repeats']
+            prompt, with_out, task_rubric, model=cfg['judge_model'], repeats=cfg['judge_repeats']
         )
         pair = judge_pair(
             prompt, with_out, without_out, pairwise_criterion, model=cfg['judge_model']
@@ -284,6 +309,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--repeats', type=int, default=None, help='override agent_repeats')
     ap.add_argument('--concurrency', type=int, default=4)
     ap.add_argument('--dry-run', action='store_true')
+    ap.add_argument(
+        '--plugin-dir-override',
+        default=None,
+        help='WITH-arm plugin dir (ablation: another plugin shipping a same-named skill)',
+    )
+    ap.add_argument(
+        '--report-key',
+        default=None,
+        help='key for report/grading.json (default: the skill name; set on ablation '
+        'arms so they do not overwrite the canonical entry)',
+    )
     args = ap.parse_args(argv)
     if args.repeats:
         cfg['agent_repeats'] = args.repeats
@@ -295,18 +331,25 @@ def main(argv: list[str] | None = None) -> int:
         tasks = tasks[: args.limit]
     n_units = len(tasks) * cfg['agent_repeats']
     n_spawn = n_units * SPAWNS_PER_UNIT
-    plugin = cfg['plugin_of_skill'][skill]
+    plugin_dir = resolve_plugin_dir(cfg, skill, args.plugin_dir_override)
+    report_key = args.report_key or skill
     print(
-        f'skill={skill} plugin={plugin} tasks={len(tasks)} repeats={cfg["agent_repeats"]} '
+        f'skill={skill} plugin_dir={plugin_dir} tasks={len(tasks)} '
+        f'repeats={cfg["agent_repeats"]} '
         f'-> {n_units} units x {SPAWNS_PER_UNIT} = {n_spawn} spawns '
         f'(<= ${n_spawn * cfg["max_budget_usd"]:.2f} ceiling)'
     )
+    if args.plugin_dir_override:
+        print(f'ablation arm: WITH arm loads the override plugin; report key "{report_key}"')
     if args.dry_run:
         for t in tasks:
             print(f'  task {t["id"]}: {t["prompt"][:70]}')
         return 0
-
-    plugin_dir = str(REPO / 'plugins' / plugin)
+    if (args.limit or args.repeats) and not args.report_key:
+        print(
+            f'NOTE: partial run — overwrites any full "{skill}" entry in '
+            f'report/grading.json; re-run full (or restore a backup) before aggregating'
+        )
     config_with = make_isolated_config()  # --plugin-dir runs cache the plugin here
     config_without = make_isolated_config()  # never sees --plugin-dir -> stays skill-free
     try:
@@ -325,7 +368,9 @@ def main(argv: list[str] | None = None) -> int:
         cleanup_dir(config_with)
         cleanup_dir(config_without)
 
-    write_report(skill, blob)
+    if args.plugin_dir_override:
+        blob['arm_plugin_dir'] = plugin_dir  # provenance for ablation entries
+    write_report(report_key, blob)
     s = blob['summary']
     gate = cfg['gates']['correct_usage']
     clo, chi = s['correct_usage_ci']

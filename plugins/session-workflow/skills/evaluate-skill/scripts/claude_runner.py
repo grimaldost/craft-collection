@@ -51,19 +51,28 @@ class AgentRun:
         return any(target in s for s in self.activated_skills)
 
 
+# Auth needs exactly the credential file. Everything else at the top level of
+# ~/.claude leaks user context into the supposedly clean arms: CLAUDE.md carries
+# real repo paths and discipline text (it once steered a trigger-arm spawn into
+# writing inside a real repo), settings.json carries permission grants, and
+# history.jsonl carries past prompts.
+_CONFIG_COPY_ALLOWLIST = frozenset({'.credentials.json'})
+
+
 def make_isolated_config(real_config: str | None = None) -> str:
-    """Create a temp CLAUDE_CONFIG_DIR with the real config's top-level files
-    (auth + settings) copied in, but NO plugins/ dir — an authenticated yet
-    skill-free baseline. Caller cleans up with `cleanup_dir`.
+    """Create a temp CLAUDE_CONFIG_DIR that is authenticated and nothing else:
+    only the credential file is copied — no CLAUDE.md, no settings.json, no
+    history, no plugins/ dir. Caller cleans up with `cleanup_dir`.
     """
     real = Path(real_config or (Path.home() / '.claude'))
     dest = Path(tempfile.mkdtemp(prefix='eval_cfg_'))
-    for entry in real.iterdir():
-        if entry.is_file():
+    for name in _CONFIG_COPY_ALLOWLIST:
+        src = real / name
+        if src.is_file():
             try:
-                shutil.copy2(entry, dest / entry.name)
+                shutil.copy2(src, dest / name)
             except OSError:
-                pass  # skip unreadable/locked files; auth file is what matters
+                pass  # locked/unreadable; the smoke gate catches a dead config
     return str(dest)
 
 
@@ -195,14 +204,19 @@ def build_command(
     max_turns: int,
     max_budget_usd: float,
     stream: bool,
+    disallowed_tools: str = '',
+    append_system_prompt: str = '',
 ) -> list[str]:
     """Assemble the `claude -p` argv. Pure — no I/O. No --bare (it strips login);
-    isolation comes from a clean CLAUDE_CONFIG_DIR passed to run_agent."""
+    isolation comes from a clean CLAUDE_CONFIG_DIR passed to run_agent. No
+    --permission-mode bypassPermissions either: bypass auto-approves EVERY tool
+    and turns --allowed-tools into decoration (a trigger-arm spawn once wrote
+    into a real repo through it); headless default-deny plus the explicit
+    allowlist is the actual boundary, with --disallowed-tools as belt-and-braces
+    on arms that must never write."""
     cmd = [
         'claude',
         '-p',
-        '--permission-mode',
-        'bypassPermissions',
         '--no-session-persistence',
         '--model',
         model,
@@ -211,6 +225,10 @@ def build_command(
         '--allowed-tools',
         allowed_tools,
     ]
+    if disallowed_tools:
+        cmd += ['--disallowed-tools', disallowed_tools]
+    if append_system_prompt:
+        cmd += ['--append-system-prompt', append_system_prompt]
     if max_budget_usd:
         cmd += ['--max-budget-usd', str(max_budget_usd)]
     cmd += (
@@ -241,6 +259,8 @@ def run_agent(
     *,
     plugin_dir: str | None = None,
     allowed_tools: str = '',
+    disallowed_tools: str = '',
+    append_system_prompt: str = '',
     model: str = 'claude-sonnet-4-6',
     max_turns: int = 8,
     max_budget_usd: float = 0.5,
@@ -257,6 +277,8 @@ def run_agent(
     cmd = build_command(
         plugin_dir=plugin_dir,
         allowed_tools=allowed_tools,
+        disallowed_tools=disallowed_tools,
+        append_system_prompt=append_system_prompt,
         model=model,
         max_turns=max_turns,
         max_budget_usd=max_budget_usd,
@@ -278,8 +300,16 @@ def run_agent(
                 env=env,
                 cwd=cwd,
             )
-        except subprocess.TimeoutExpired:
-            return AgentRun(is_error=True, result_text=f'TIMEOUT after {timeout}s')
+        except subprocess.TimeoutExpired as exc:
+            # Parse whatever streamed before the kill: an activation that happened
+            # pre-timeout must still count, or recall silently undercounts.
+            out = exc.stdout or ''
+            if isinstance(out, bytes):
+                out = out.decode('utf-8', errors='replace')
+            run = _parse_proc(out, stream) if out.strip() else AgentRun()
+            run.is_error = True
+            run.result_text = (run.result_text + f'\n[TIMEOUT after {timeout}s]').strip()
+            return run
         except FileNotFoundError:
             return AgentRun(is_error=True, result_text='claude CLI not found on PATH')
         if proc.returncode == 0:
