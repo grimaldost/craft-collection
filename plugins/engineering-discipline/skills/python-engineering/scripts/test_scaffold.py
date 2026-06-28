@@ -5,7 +5,7 @@ Runnable with pytest OR directly: `python test_scaffold.py`.
 
 from __future__ import annotations
 
-from scaffold import name_error, render_pyproject, resolve_names
+from scaffold import name_error, render_ci, render_pyproject, resolve_names
 
 
 def test_resolve_names():
@@ -38,9 +38,16 @@ def test_name_error_rejects_unimportable_package():
     assert name_error(resolve_names('3d-tool')) is not None
 
 
+def test_render_ci_wires_ty_check():
+    # ty has no pre-commit hook yet, so the generated CI must run it explicitly.
+    out = render_ci('my-cool-tool')
+    assert 'uv run ty check src' in out
+
+
 if __name__ == '__main__':
     test_resolve_names()
     test_resolve_names_messy_input()
     test_render_pyproject_substitutions()
     test_name_error_rejects_unimportable_package()
+    test_render_ci_wires_ty_check()
     print('ok: all scaffold tests passed')

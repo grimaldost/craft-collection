@@ -23,6 +23,13 @@ def _read(p: Path) -> str:
         return ''
 
 
+def _ci_files(d: Path) -> list[Path]:
+    """CI config files present in the project: GitHub Actions, GitLab, CircleCI."""
+    files = list(d.glob('.github/workflows/*.yml')) + list(d.glob('.github/workflows/*.yaml'))
+    files += [p for p in (d / '.gitlab-ci.yml', d / '.circleci' / 'config.yml') if p.is_file()]
+    return files
+
+
 def audit(project_dir: Path) -> list[tuple[str, bool, str]]:
     """Return [(check_id, ok, detail)] for project_dir. Pure read-only."""
     d = Path(project_dir)
@@ -83,9 +90,8 @@ def audit(project_dir: Path) -> list[tuple[str, bool, str]]:
         )
     )
 
-    # pip-audit wired in deps or a CI workflow.
-    ci_files = list(d.glob('.github/workflows/*.yml')) + list(d.glob('.github/workflows/*.yaml'))
-    ci = ' '.join(_read(p) for p in ci_files)
+    # pip-audit wired in deps or a CI workflow (GitHub Actions, GitLab, or CircleCI).
+    ci = ' '.join(_read(p) for p in _ci_files(d))
     has_audit = 'pip-audit' in pyproject or 'pip-audit' in ci
     checks.append(
         ('pip-audit', has_audit, 'pip-audit present' if has_audit else 'no pip-audit in deps or CI')

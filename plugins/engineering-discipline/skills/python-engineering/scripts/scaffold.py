@@ -106,10 +106,68 @@ repos:
       - id: ruff-format
 """
 
+# ty has no pre-commit hook yet (see SKILL.md), so CI runs `uv run ty check src`
+# explicitly alongside lint/format/test/audit. No project-name substitution.
+CI = """\
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Format check
+        run: uv run ruff format --check src tests
+
+      - name: Type check (ty)
+        run: uv run ty check src
+
+      - name: Tests
+        run: uv run pytest --cov-report=xml
+
+      - name: Security audit
+        run: uv run pip-audit
+"""
+
 
 def render_pyproject(project: str) -> str:
     """Render a canonical pyproject.toml for `project`. Pure; no I/O."""
     return PYPROJECT_TEMPLATE.format(**resolve_names(project))
+
+
+def render_ci(project: str) -> str:
+    """Render the GitHub Actions CI workflow. Pure; no I/O.
+
+    Wires `uv run ty check src` as an explicit step because ty has no pre-commit
+    hook yet. The workflow is project-independent, so `project` is unused."""
+    return CI
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -143,9 +201,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f'error: uv init failed ({e.returncode})', file=sys.stderr)
         return 1
 
-    # 2. Overwrite pyproject with the canonical template; 3. add pre-commit config.
+    # 2. Overwrite pyproject with the canonical template; 3. add pre-commit config;
+    # 4. add the CI workflow (carries the ty check pre-commit can't run yet).
     (target / 'pyproject.toml').write_text(render_pyproject(args.project), encoding='utf-8')
     (target / '.pre-commit-config.yaml').write_text(PRECOMMIT, encoding='utf-8')
+    workflows = target / '.github' / 'workflows'
+    workflows.mkdir(parents=True, exist_ok=True)
+    (workflows / 'ci.yml').write_text(render_ci(args.project), encoding='utf-8')
 
     print(f'\nScaffolded {names["pypi"]} at {target}')
     print(f'Next: cd {names["pypi"]} && uv sync && uv run pre-commit install')
