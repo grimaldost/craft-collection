@@ -25,6 +25,8 @@
     "consolidate-knowledge": "session-workflow",
     "tool-feedback": "session-workflow",
     "feedback-triage": "session-workflow",
+    "compaction-survival": "session-workflow",
+    "corpus-review": "session-workflow",
     "choosing-tools": "humblepowers",
     "skill-authoring": "humblepowers",
     "test-driven-development": "humblepowers",

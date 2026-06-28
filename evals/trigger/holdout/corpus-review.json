@@ -1,0 +1,9 @@
+[
+  { "query": "Before the release, audit the entire docs/ tree against the modules it documents and fix what has drifted.", "should_trigger": true, "note": "held-out: whole-tree audit vs source + fix" },
+  { "query": "Blind-review all the example programs and hooks in this package by running them, not only reading.", "should_trigger": true, "note": "held-out: execution-audit lens at corpus scale" },
+  { "query": "We have around 300 mixed code-and-doc files to vet; orchestrate a parallel review that converges.", "should_trigger": true, "note": "held-out: large mixed corpus, convergence" },
+  { "query": "Sweep every runbook in the repo and verify each against what the service actually does now.", "should_trigger": true, "note": "held-out: corpus sweep against ground truth" },
+  { "query": "Convene a panel on my single migration spec.", "should_trigger": false, "note": "held-out near-miss: one artifact => review-panel" },
+  { "query": "Review the diff I just staged.", "should_trigger": false, "note": "held-out near-miss: one diff => code-review" },
+  { "query": "Measure whether my new skill over-triggers on near-misses.", "should_trigger": false, "note": "held-out near-miss: behavioral measurement => evaluate-skill" }
+]
