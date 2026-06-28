@@ -9,7 +9,7 @@
   "trigger_max_turns": 3,
   "trigger_routing_frame": "",
   "allowed_tools_trigger": "Skill,Read,Glob,Grep",
-  "disallowed_tools_trigger": "Write,Edit,MultiEdit,NotebookEdit,Bash,WebFetch,WebSearch,Task",
+  "disallowed_tools_trigger": "Write,Edit,NotebookEdit,Bash,WebFetch,WebSearch,Task",
   "allowed_tools_task": "Skill,Read,Glob,Grep,Write,Edit,Bash",
   "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
   "command_first_skills": ["review-panel"],
