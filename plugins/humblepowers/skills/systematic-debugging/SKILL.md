@@ -64,7 +64,8 @@ protocol exactly where it's needed.
 1. **Failing test that reproduces the bug** — test-driven-development owns
    the cycle from here.
 2. **One fix, addressing the proven cause.** No bundled refactoring, no
-   "while I'm here."
+   "while I'm here" — the scope-bounding rule `data-engineering-discipline`
+   Principle 17 states canonically: an edit's diff is its scope.
 3. **Verify**: the new test passes, nothing else broke, and the original
    symptom is actually gone. Hand the claim to verification-before-completion
    before reporting it fixed.

@@ -607,7 +607,9 @@ the unit under test — each yields a passing check that verifies nothing. The
 discipline that separates a real gate from a green light is the same one
 Scenario 8 applies to enforcement gates: **prove it red first.** Plant a
 known divergence, watch the check catch it, then remove the plant and trust
-the green.
+the green. This is `verification-before-completion`'s red-before-green — *a
+verifier is trusted green only after it has been seen red* — applied to a data
+gate; the general statement lives there.
 
 ```python
 def test_parity_check_is_not_vacuous():
