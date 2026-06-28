@@ -5,6 +5,26 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.4 — 2026-06-28
+
+From the 2026-06-28 structural review. Body / doc only — no `description`
+changed, so no holdout re-seal.
+
+### Changed
+
+- `verification-before-completion`: names the general principle **a verifier is
+  trusted green only after it has been seen red** (plant a violation, watch the
+  check catch it, remove the plant) — the form that `test-driven-development`'s
+  "verify red" and `data-engineering-discipline`'s prove-the-gate-can-fail are
+  both instances of, unifying a principle that had been maintained as two
+  uncross-linked lineages across two plugins. Also gains a pointer to
+  `data-engineering-discipline`'s differential-baseline recipe for proving
+  net-zero regression in a suite with pre-existing failures.
+- `test-driven-development`: a one-line cross-link from its "verify red" step to
+  the general form above.
+- `systematic-debugging`: Phase 4's "no while-I'm-here" now cross-links
+  `data-engineering-discipline` Principle 17 as the canonical scope-bounding rule.
+
 ## 0.4.3 — 2026-06-19
 
 Hook `python`-invocation portability: the SessionStart dispatch hook
