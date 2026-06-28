@@ -1,3 +1,5 @@
 # Generated eval outputs are not committed
 report/
+consolidate/
+*.log
 __pycache__/
