@@ -696,6 +696,40 @@ source max — never a silent pass.
 
 ---
 
+## Recipe 15 — Differential-baseline: prove net-zero regression in a noisy suite
+
+When a suite has irreducible pre-existing failures — a flaky offline
+environment, a large repo where an absolute "0 failed" is unattainable — green
+is the wrong gate. Prove *your change's* net effect by differencing against a
+baseline: the same pin-the-baseline discipline, applied to a test run instead of
+a dataset.
+
+**Mid-change triage — the stash-test.** A failure appears and you suspect it
+predates your change: revert the change, re-run *only the failing subset*, and
+read the result. Still red → pre-existing, not yours; green → your change owns
+it. More conclusive than reading the failure and guessing.
+
+```bash
+git stash && pytest tests/the_failing_subset -q ; git stash pop
+# still failing on the stash => pre-existing, not introduced by your change
+```
+
+**Integration gate — the base-commit set-diff.** Run the *identical* suite on
+the unchanged base and on your head; diff the FAILED/ERROR *sets*. The head-only
+set is the true regression signal; the shared set is pre-existing noise.
+
+```bash
+git stash && pytest -q | grep -E '^(FAILED|ERROR)' | sort > /tmp/base.txt ; git stash pop
+pytest -q | grep -E '^(FAILED|ERROR)' | sort > /tmp/head.txt
+comm -13 /tmp/base.txt /tmp/head.txt   # only in head = introduced; empty = net-zero
+```
+
+Strip run-varying noise (timestamps, durations, memory addresses) before sorting
+so the set-diff compares test identities, not formatting. "Zero net regression"
+is then provable even where an absolute "0 failed" is not.
+
+---
+
 ## Choosing the right strictness
 
 | Scenario | Recommended recipes |
@@ -710,6 +744,7 @@ source max — never a silent pass.
 | Investigating downstream breakage | 1, 4, 5 across the change window |
 | Contract repair to shipped reality (Scenario 9) | 1, 4, 11 (pin the repaired surface) |
 | Release cut / multi-wave assembly (Scenario 10) | 1, 4, 6, 11 (re-seal in a clean room) |
+| Change landing in a suite with pre-existing / flaky failures | 15 (differential-baseline) |
 
 ---
 

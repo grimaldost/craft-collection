@@ -106,6 +106,19 @@ Concretely, this means:
 - For a long session: re-read the primary sources at each phase.
   Don't trust the session summary.
 
+**A producer can look verified and still mislead** — four sharper sub-cases,
+consolidated here so other files point to this set rather than re-stating it:
+
+| The trap | The check |
+|----------|-----------|
+| A reused producer is public, tested, and correctly called — yet reads the **wrong layer/version** of state (a pre-overlay config where the merged one was meant). | Verify *which* layer/version it returns, not just that it exists and is called. |
+| You build on a producer **behavior the code doesn't deliver** — a read path bypasses the layer you assume. | Run it and observe the behavior; don't infer it from the call site. |
+| A classifier/heuristic's **verdict** is wrong while its **reasons** are diagnostic. | Read the reasons, not the boolean. |
+| A design is frozen on a **paper-defined subgroup/corpus** whose real size or purity was never measured. | Measure it on the real data before committing the design to it. |
+
+If this set recurs *after* this consolidation, it is judgment-bound with no
+mechanical reach — sharpen an example or decline it; do not add a sixth row.
+
 This axiom replaces the migration-specific framing of "legacy is the
 source of truth" with the universal observation that an LLM (or a
 hurried human) will reach for inference when verification is available

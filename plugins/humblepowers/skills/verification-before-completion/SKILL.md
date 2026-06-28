@@ -71,7 +71,10 @@ Before committing, opening a PR, or moving on: the full test command ran this
 session with zero failures; the requirements were re-read and checked off
 individually; the output is pristine — no stray errors or warnings riding
 along. Recurring checks belong in pre-commit or CI rather than in memory —
-mechanism outlasts intention.
+mechanism outlasts intention. When the suite carries irreducible pre-existing
+failures, the honest gate is "zero net regression" against a baseline, not an
+absolute zero — see `data-engineering-discipline`'s parity-recipes
+(differential-baseline: the stash-test and the base-commit set-diff).
 
 ## Wording that signals an unverified claim
 
