@@ -3,6 +3,17 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.6.1 — 2026-07-01
+
+### Fixed
+
+- **`feedback-triage` / `build_feedback_index.py`** — a consolidated `BACKLOG.md`
+  kept beside a feedback dir's reports is a loop OUTPUT (a status digest), not a
+  source report; it is now excluded from the generated index by exact name, like
+  `INDEX.md` and `README.md`. Previously it was counted as a report, inflating
+  the report count and emitting a spurious `## BACKLOG` section. Regression test
+  added.
+
 ## 0.6.0 — 2026-06-28
 
 Structural-hardening release (from the 2026-06-28 structural review).

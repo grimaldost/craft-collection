@@ -64,14 +64,15 @@ def _is_triage_doc(p: Path) -> bool:
 
 
 def _is_report(p: Path) -> bool:
-    """A source report — not the index/readme, not a digest, and not a triage doc
-    (those are OUTPUTS of the loop, not inputs to index). Triage docs are detected by
-    their `# Triage` H1 (see `_is_triage_doc`), so a legitimate report whose slug
-    contains 'triage' is still indexed."""
+    """A source report — not the index/readme/backlog, not a digest, and not a triage
+    doc (those are OUTPUTS of the loop, not inputs to index). The index, readme, and a
+    consolidated `BACKLOG.md` status doc are excluded by exact name; triage docs are
+    detected by their `# Triage` H1 (see `_is_triage_doc`), so a legitimate report whose
+    slug contains 'triage' is still indexed."""
     name = p.name.lower()
     return (
         p.suffix == '.md'
-        and name not in ('index.md', 'readme.md')
+        and name not in ('index.md', 'readme.md', 'backlog.md')
         and 'digest' not in name
         and not _is_triage_doc(p)
     )
