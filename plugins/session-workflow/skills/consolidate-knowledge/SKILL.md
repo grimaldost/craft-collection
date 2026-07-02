@@ -17,21 +17,34 @@ the base model would not have volunteered.*
 ## The pipeline — run in order
 
 1. **Gather** the entries in scope — by area, by date range, or the whole corpus. Read
-   them; do not work from titles.
-2. **Cluster** related entries. Entries about the same mechanism, decision, or failure
+   them; do not work from titles. By default the entries are the journal files
+   `journaling-sessions` writes under `docs/journal/` (or a store's `target_store`
+   `path` when one is set). Also read the **prior promoted guidance** first (the
+   durable layer this pass appends to), so what already exists is known before anything
+   new is synthesized. Record the scope as an explicit **Inputs** line — entry count,
+   sessions, date range — the same way `feedback-triage` records the reports a triage
+   covers.
+2. **Reconcile already-promoted first.** A generalization this corpus supports may
+   already be in the durable layer from an earlier consolidation. Open the output with
+   an **"Already promoted — NOT re-promoted"** reconciliation listing those, and do not
+   re-emit them; a cluster that sharpens or extends an existing entry says so (and takes
+   the supersession path in step 6 if it overrides it). Without this step, an
+   overlapping re-run re-promotes the same guidance every time — the durable-layer
+   pollution this skill exists to prevent.
+3. **Cluster** related entries. Entries about the same mechanism, decision, or failure
    mode across different sessions belong together. The cluster is the unit of
    consolidation; a singleton is usually not yet promotable (see the gate).
-3. **Synthesize one generalization per cluster.** What durable pattern do these entries
+4. **Synthesize one generalization per cluster.** What durable pattern do these entries
    jointly support that none states alone? Name it concretely, cite the entries it
    rests on, and keep the specificity that made them valuable — a generalization that
    drops the names and numbers is a platitude.
-4. **Apply the promotion gate** (below). Promote only what has earned it; leave the
+5. **Apply the promotion gate** (below). Promote only what has earned it; leave the
    rest as raw entries to revisit when more evidence arrives.
-5. **Reconcile supersession.** If a cluster contradicts already-promoted guidance, the
+6. **Reconcile supersession.** If a cluster contradicts already-promoted guidance, the
    newer evidence wins: write the updated guidance, mark it as superseding the prior,
    and state what changed and why. Never leave two equally-confident contradictory
    claims in the store.
-6. **Emit** the promoted guidance entries (format below), each linking back to the
+7. **Emit** the promoted guidance entries (format below), each linking back to the
    source entries it generalizes — so the chain from raw capture to durable guidance
    stays traceable.
 
