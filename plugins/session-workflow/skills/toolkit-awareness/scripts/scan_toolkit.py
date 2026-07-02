@@ -61,9 +61,28 @@ def _read_frontmatter(md: Path) -> dict[str, str]:
                     out[key] = val
                 continue
             if key and key not in out:  # first occurrence wins
-                out[key] = val
+                out[key] = _unquote(val)
         i += 1
     return out
+
+
+def _unquote(val: str) -> str:
+    """Strip one matched pair of surrounding YAML quotes so a quoted frontmatter
+    value does not render with literal quotes in the inventory. Double-quoted
+    style unescapes \\" and \\\\; single-quoted style unescapes doubled ''."""
+    if len(val) >= 2 and val[0] == val[-1] == '"':
+        inner, chars, i = val[1:-1], [], 0
+        while i < len(inner):
+            if inner[i] == '\\' and i + 1 < len(inner) and inner[i + 1] in '"\\':
+                chars.append(inner[i + 1])
+                i += 2
+            else:
+                chars.append(inner[i])
+                i += 1
+        return ''.join(chars)
+    if len(val) >= 2 and val[0] == val[-1] == "'":
+        return val[1:-1].replace("''", "'")
+    return val
 
 
 def _preview(text: str, limit: int = _DESC_LIMIT) -> str:

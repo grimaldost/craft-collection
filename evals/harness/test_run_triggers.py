@@ -355,9 +355,32 @@ def test_query_level_ci_is_wider_than_pooled():
     assert r['recall_ci_query'][0] < r['recall_ci'][0]  # query-level lower bound is lower (wider)
 
 
+def test_query_level_point_estimates_match_their_cis():
+    # The report carries recall_ci_query but no matching POINT estimate, so a
+    # downstream consumer (holdout_check) paired the POOLED point with the
+    # query-level interval — the point could sit outside its own CI. The same
+    # majority-fire unit must be reported as recall_query / specificity_query.
+    def counter(q, repeats):
+        return 3 if 'always' in q else 1
+
+    queries = [
+        {'query': 'always fires', 'should_trigger': True},
+        {'query': 'barely fires', 'should_trigger': True},
+        {'query': "what's 2+2", 'should_trigger': False},
+    ]
+    r = score_skill(queries, repeats=3, trigger_counter=counter)
+    assert abs(r['recall'] - 4 / 6) < 1e-9  # pooled: (3+1)/6
+    assert abs(r['recall_query'] - 0.5) < 1e-9  # query-level: 1 of 2 majorities fired
+    lo, hi = r['recall_ci_query']
+    assert lo <= r['recall_query'] <= hi  # the point sits inside its own interval
+    # the negative fired a minority (1/3), so its majority stayed quiet
+    assert abs(r['specificity_query'] - 1.0) < 1e-9
+
+
 if __name__ == '__main__':
     test_scoring_recall_specificity()
     test_query_level_ci_is_wider_than_pooled()
+    test_query_level_point_estimates_match_their_cis()
     test_specificity_failure_when_negative_fires()
     test_partial_recall_pools_across_repeats()
     test_error_counter_decomposes_recall()

@@ -1,6 +1,7 @@
 ---
 name: context-handoff
-description: Author a paste-ready, self-contained brief that hands work to a fresh context — a new Claude Code session, a spawned task, a teammate, or an issue ticket. Use on "/subtask", "/fork", "/spinoff", "spin this off", "hand this off", "branch off", "offload this", "new session for this", or when curating a context slice to continue or delegate work elsewhere. Two modes — SUBTASK (bounded brief, an artifact comes back) and FORK (continues independently). For in-session parallel work, prefer the Task tool / subagents instead.
+description: Author a paste-ready, self-contained brief that hands work to a fresh context — a new Claude Code session, a spawned task, a teammate, or an issue ticket. Use on "subtask", "fork", "spinoff", "spin this off", "hand this off", "branch off", "offload this", "new session for this", when curating a context slice to continue or delegate work elsewhere, or running "/context-handoff". Two modes — SUBTASK (bounded brief, an artifact comes back) and FORK (continues independently). For in-session parallel work, prefer the Task tool / subagents instead.
+user-invocable: true
 ---
 
 # Context Handoff
@@ -42,13 +43,14 @@ scoped more generously and framed as a hand-off.
 
 ## Invocation
 
+The skill itself is invocable as `/context-handoff`; the words below are trigger
+phrases in ordinary requests, not slash commands (none of them ship as one).
+
 | Trigger | Mode |
 |---------|------|
-| `/subtask <description>` | Subtask |
-| `/fork <description>` or `/fork` alone | Fork |
-| `/spinoff <description>` | Ask which mode |
-| "spin off a subtask for…", "I need a subtask that…" | Subtask |
+| "spin off a subtask for…", "I need a subtask that…", "make a subtask brief" | Subtask |
 | "fork this", "branch this off", "continue this in a new session" | Fork |
+| "spin this off" (destination unclear) | Ask which mode |
 
 If invoked without a description, ask one clarifying question: "What should the
 [subtask / forked session] do?" Don't proceed without a clear task statement.
@@ -159,7 +161,7 @@ under-specified. Fix and re-read.
 
 ### Subtask
 
-**Invocation:** `/subtask write a helper that validates scheduled payment dates against a business-day calendar, returning any that fall on a non-business day`
+**Invocation:** "spin off a subtask: write a helper that validates scheduled payment dates against a business-day calendar, returning any that fall on a non-business day"
 
 ```
 You are a fresh Claude instance. You have no prior context from the originating session beyond what's in this message.
@@ -185,7 +187,7 @@ REINTEGRATION_NOTE: The validator plugs into the schedule-generation path we wer
 
 ### Fork
 
-**Invocation:** `/fork continue the architecture discussion, now focused only on the Python↔native-extension boundary`
+**Invocation:** "fork this — continue the architecture discussion, now focused only on the Python↔native-extension boundary"
 
 ```
 You are continuing a prior Claude session. The previous session's relevant state is below. Pick up from here — the user will direct next steps after you acknowledge the hand-off.

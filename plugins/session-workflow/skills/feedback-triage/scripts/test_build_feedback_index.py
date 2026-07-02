@@ -46,6 +46,34 @@ def test_build_index_lists_reports_and_excludes_meta():
     assert 'stale self' not in idx  # the old INDEX.md is never indexed into itself
 
 
+def test_misses_and_friction_indexed_as_section_stubs():
+    # The capture/triage skills sanction `extends <stem> §Misses` as a recurrence
+    # target — the index must surface Misses/Friction bullets, or that affordance
+    # points at nothing greppable. Flush-left bullets only; fences ignored.
+    text = (
+        '# report\n'
+        '## Friction\n'
+        '- Setup took three tries.\n'
+        '## Misses\n'
+        '- **[MED]** The gate never fired on X.\n'
+        '  - indented sub-bullet ignored\n'
+        '```\n'
+        '- fenced bullet ignored\n'
+        '```\n'
+        '## Proposed promotions / changes\n'
+        '1. **[MED]** Fix the gate.\n'
+    )
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-05-z.md').write_text(text, encoding='utf-8')
+        idx = build_index(dd)
+    assert '`2026-01-05-z#1` — Fix the gate.' in idx
+    assert '`2026-01-05-z §Misses` — The gate never fired on X.' in idx
+    assert '`2026-01-05-z §Friction` — Setup took three tries.' in idx
+    assert 'indented sub-bullet' not in idx
+    assert 'fenced bullet' not in idx
+
+
 def test_build_index_excludes_consolidated_backlog():
     # A consolidated BACKLOG.md is a loop OUTPUT (a status digest), not a source
     # report -- excluded by exact name like INDEX.md / README.md. (Regression: it was
@@ -161,6 +189,7 @@ if __name__ == '__main__':
     test_extract_proposals_pulls_numbered_titles()
     test_extract_proposals_empty_when_no_section()
     test_build_index_lists_reports_and_excludes_meta()
+    test_misses_and_friction_indexed_as_section_stubs()
     test_build_index_excludes_consolidated_backlog()
     test_build_index_handles_empty_dir()
     test_build_index_survives_non_utf8_file()
