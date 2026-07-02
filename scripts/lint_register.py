@@ -39,7 +39,24 @@ DENY: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r'\bABSOLUTELY\b'), 'all-caps intensifier'),
     (re.compile(r'\bNO EXCEPTIONS?\b'), 'all-caps absolute'),
     (re.compile(r'\bIRON LAW\b'), 'importance banner'),
+    # Salience/priority phrasings that read the same in any case — a skill that has
+    # to claim precedence or demand invocation is compensating for a description that
+    # does not earn selection on fit.
+    (re.compile(r'\btakes priority over\b', re.IGNORECASE), 'priority claim'),
+    (
+        re.compile(r'\b(?:always|must) use this skill\b', re.IGNORECASE),
+        'imperative-obedience phrase',
+    ),
+    (re.compile(r'\byou do not have a choice\b', re.IGNORECASE), 'imperative-obedience phrase'),
 ]
+
+# Single-word importance banners at the start of a line (optionally behind list/quote
+# markers or bold), followed by ':' or '!'. `IMPORTANT: …` buys salience the same way
+# an all-caps run does, below the 3-word run threshold.
+BANNER_WORDS = ('IMPORTANT', 'CRITICAL', 'MANDATORY', 'FORBIDDEN', 'COMPULSORY', 'PROHIBITED')
+BANNER_LINE = re.compile(
+    r'^\s*(?:[-*>#]+\s*)*(?:\*\*)?(' + '|'.join(BANNER_WORDS) + r')(?:\*\*)?\s*[:!]'
+)
 
 # Tokens that legitimately appear in caps and never count toward a banner run.
 ACRONYMS = {
@@ -73,9 +90,7 @@ ACRONYMS = {
     'PDF',
     'PR',
     'PRS',
-    'README',
     'SDK',
-    'SKILL',
     'SQL',
     'TDD',
     'TOML',
@@ -89,7 +104,7 @@ ACRONYMS = {
 }
 CAPS_WORD = re.compile(r'^[A-Z][A-Z0-9-]+$')
 INLINE_CODE = re.compile(r'`[^`]*`')
-FENCE = re.compile(r'^\s*(```|~~~)')
+FENCE = re.compile(r'^\s*(`{3,}|~{3,})')
 CAPS_RUN_THRESHOLD = 3
 
 
@@ -113,14 +128,24 @@ def _caps_run_findings(line: str) -> list[str]:
 def lint_file(path: Path) -> list[str]:
     """Lint one markdown file; return findings as 'path:line: label: excerpt'."""
     findings: list[str] = []
-    in_fence = False
+    fence: tuple[str, int] | None = None  # (marker char, run length) of the OPEN fence
     for lineno, line in enumerate(path.read_text(encoding='utf-8').splitlines(), start=1):
-        if FENCE.match(line):
-            in_fence = not in_fence
+        m = FENCE.match(line)
+        if m:
+            marker = m.group(1)
+            char, length = marker[0], len(marker)
+            if fence is None:
+                fence = (char, length)  # open a fence
+            elif char == fence[0] and length >= fence[1]:
+                fence = None  # CommonMark: only a same-char run >= the opener closes it
+            # a different marker char, or a shorter run, is content inside the block
             continue
-        if in_fence:
+        if fence is not None:
             continue
         prose = INLINE_CODE.sub('', line)
+        banner = BANNER_LINE.match(prose)
+        if banner:
+            findings.append(f'{path}:{lineno}: importance banner: {banner.group(1)!r}')
         for pattern, label in DENY:
             match = pattern.search(prose)
             if match:

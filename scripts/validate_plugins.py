@@ -21,6 +21,17 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 DESC_CAP = 1536
 SKILL_LINE_CAP = 500
+KNOWN_HOOK_EVENTS = {
+    'PreToolUse',
+    'PostToolUse',
+    'Notification',
+    'UserPromptSubmit',
+    'Stop',
+    'SubagentStop',
+    'SessionStart',
+    'SessionEnd',
+    'PreCompact',
+}
 
 
 def validate() -> list[str]:
@@ -57,6 +68,32 @@ def validate() -> list[str]:
                 except json.JSONDecodeError as e:
                     errors.append(f'{hp}: invalid JSON: {e}')
 
+    # Validate every hooks.json Claude Code auto-discovers (plugins/<name>/hooks/hooks.json),
+    # not just manifest-declared ones — no plugin.json declares a `hooks` field, so the
+    # block above never fires and a broken hooks.json would otherwise ship silently.
+    for hooks_file in sorted(ROOT.glob('plugins/*/hooks/hooks.json')):
+        try:
+            hdata = json.loads(hooks_file.read_text(encoding='utf-8'))
+        except json.JSONDecodeError as e:
+            errors.append(f'{hooks_file}: invalid JSON: {e}')
+            continue
+        plugin_root = hooks_file.parent.parent
+        events = (hdata.get('hooks') or {}) if isinstance(hdata, dict) else {}
+        for event, groups in events.items():
+            if event not in KNOWN_HOOK_EVENTS:
+                errors.append(f'{hooks_file}: unknown hook event "{event}"')
+            for group in groups or []:
+                for hook in (group or {}).get('hooks') or []:
+                    tokens = [hook.get('command') or ''] + [
+                        a for a in (hook.get('args') or []) if isinstance(a, str)
+                    ]
+                    for tok in tokens:
+                        ref = re.search(r'\$\{CLAUDE_PLUGIN_ROOT\}/([^\s"\']+)', tok)
+                        if ref and not (plugin_root / ref.group(1)).is_file():
+                            errors.append(
+                                f'{hooks_file}: referenced script missing: {ref.group(1)}'
+                            )
+
     for skill_md in ROOT.glob('plugins/*/skills/*/SKILL.md'):
         text = skill_md.read_text(encoding='utf-8')
         if not text.startswith('---'):
@@ -77,9 +114,17 @@ def validate() -> list[str]:
         n_lines = text.count('\n') + 1
         if n_lines > SKILL_LINE_CAP:
             errors.append(f'{skill_md}: {n_lines} lines > {SKILL_LINE_CAP}')
-        for ref in re.findall(r'references/([A-Za-z0-9_\-]+\.md)', text):
+        # references/<name>.md, including nested references/sub/deep.md (the old regex
+        # allowed no '/', so a dangling nested reference passed silently).
+        for ref in re.findall(r'references/([A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*\.md)', text):
             if not (skill_md.parent / 'references' / ref).is_file():
                 errors.append(f'{skill_md}: missing reference references/{ref}')
+        # ${CLAUDE_PLUGIN_ROOT}/<path> resolves against the plugin root — a skill that
+        # points Claude at a renamed/moved script (e.g. a scan_toolkit.py) is caught here.
+        plugin_root = skill_md.parents[2]
+        for ref in re.findall(r'\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9_\-./]+\.[A-Za-z0-9]+)', text):
+            if not (plugin_root / ref).is_file():
+                errors.append(f'{skill_md}: missing ${{CLAUDE_PLUGIN_ROOT}} reference {ref}')
 
     return errors
 
