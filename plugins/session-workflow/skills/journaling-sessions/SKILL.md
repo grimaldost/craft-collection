@@ -157,6 +157,11 @@ visibility, language, and the optional `validated` boolean), entry types, the
 ANTI_PATTERN template, area/domains, refs, confidence, multi-user privacy, and the
 VALIDATED marker.
 
+**Where the journal goes.** Write the file to `docs/journal/<YYYY-MM-DD>-<session>.md`
+by default, so `consolidate-knowledge` has a defined place to gather from. A
+`target_store` profile with a `path` overrides that location; use it when the store
+lives elsewhere.
+
 **Binding to a specific store (optional).** By default the envelope is generic — a
 placeholder `author` and example `area` values — and any structured store can ingest
 it. But `area` and `author` are scope/partition keys in a typical store (retrieval

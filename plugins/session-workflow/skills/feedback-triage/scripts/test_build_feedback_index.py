@@ -116,6 +116,47 @@ def test_triage_doc_detected_by_h1_not_filename():
     assert '## 2026-01-08-real' in idx
 
 
+def test_extract_proposals_ignores_nested_and_fenced_numbers():
+    # A proposal body may contain an indented numbered sub-list and a fenced code
+    # block with numbered lines; neither may mint a phantom finding ID. Only the two
+    # flush-left `1.`/`2.` top-level proposals are real. (Regression: `^\s*` matched
+    # any indented number, and the parser was fence-unaware, so `foo#1` mapped to two
+    # titles and `foo#3`/`foo#4` phantoms appeared.)
+    text = (
+        '# report\n'
+        '## Proposed promotions / changes\n'
+        '1. **[MED]** First real proposal.\n'
+        '   Sub-steps for the first:\n'
+        '   1. an indented sub-item (not a proposal)\n'
+        '   2. another indented sub-item\n'
+        '   ```python\n'
+        '   1. this looks numbered but is inside a fence\n'
+        '   ```\n'
+        '2. **[LOW]** Second real proposal.\n'
+        '## Cost\n'
+    )
+    assert extract_proposals(text) == [
+        ('1', 'First real proposal.'),
+        ('2', 'Second real proposal.'),
+    ]
+
+
+def test_extract_proposals_strips_digit_hyphen_severity_tag():
+    # The severity tag charset must strip digit/hyphen forms like **[P1]** and
+    # **[P2-HIGH]**, not only alpha ones like **[MED]**. (Regression: `[A-Za-z/]+`
+    # left the whole `**[P1]**` glued to the title.)
+    text = (
+        '# report\n'
+        '## Proposed promotions\n'
+        '1. **[P1]** Priority-one fix.\n'
+        '2. **[P2-HIGH]** Another tagged fix.\n'
+    )
+    assert extract_proposals(text) == [
+        ('1', 'Priority-one fix.'),
+        ('2', 'Another tagged fix.'),
+    ]
+
+
 if __name__ == '__main__':
     test_extract_proposals_pulls_numbered_titles()
     test_extract_proposals_empty_when_no_section()
@@ -125,4 +166,6 @@ if __name__ == '__main__':
     test_build_index_survives_non_utf8_file()
     test_triage_named_input_report_is_indexed()
     test_triage_doc_detected_by_h1_not_filename()
+    test_extract_proposals_ignores_nested_and_fenced_numbers()
+    test_extract_proposals_strips_digit_hyphen_severity_tag()
     print('ok: all build_feedback_index tests passed')

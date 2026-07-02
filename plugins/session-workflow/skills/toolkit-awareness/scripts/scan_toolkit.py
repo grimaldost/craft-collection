@@ -138,6 +138,50 @@ def _scan_hooks(hooks_dir: Path, claude_dir: Path) -> list[dict]:
     return out
 
 
+def _hooks_file_events(hooks_json: Path) -> list[dict]:
+    """Enumerate the hook EVENTS declared in a plugin's `hooks/hooks.json` — the
+    file `claude plugin list` points at via installPath but never expands. Shape
+    mirrors settings: a top-level `hooks` dict keyed by event → list of matcher
+    groups. On any read/parse error, [] (never raised)."""
+    out: list[dict] = []
+    try:
+        data = json.loads(hooks_json.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return out
+    hooks = data.get('hooks') if isinstance(data, dict) else None
+    if isinstance(hooks, dict):
+        for event, entries in hooks.items():
+            n = len(entries) if isinstance(entries, list) else 1
+            out.append({'name': f'{event} x{n}', 'path': str(hooks_json)})
+    return out
+
+
+def _enumerate_plugin_components(name: str, install_path) -> dict[str, list[dict]]:
+    """Walk one installed plugin's on-disk layout and enumerate the components it
+    provides — `skills/*/SKILL.md`, `commands/*.md`, `agents/*.md`, and the events in
+    `hooks/hooks.json`. `claude plugin list` yields each plugin's installPath but not
+    the components under it, so this closes that gap. Each returned item is tagged with
+    its owning `plugin` so the caller can merge it into the per-kind sections. A missing
+    or unresolvable install_path yields empty lists, never raises — pure and unit-
+    testable against a fixture tree, no `claude` CLI required."""
+    empty: dict[str, list[dict]] = {'skills': [], 'commands': [], 'agents': [], 'hooks': []}
+    if not install_path:
+        return empty
+    base = Path(install_path)
+    if not base.is_dir():
+        return empty
+    comps = {
+        'skills': _scan_skills(base / 'skills'),
+        'commands': _scan_markdown_dir(base / 'commands'),
+        'agents': _scan_markdown_dir(base / 'agents'),
+        'hooks': _hooks_file_events(base / 'hooks' / 'hooks.json'),
+    }
+    for items in comps.values():
+        for it in items:
+            it['plugin'] = name
+    return comps
+
+
 def _plugin_description(install_path) -> str:
     """Best-effort plugin description from its manifest — `claude plugin list`
     omits it, so read .claude-plugin/plugin.json under the install path."""
@@ -162,7 +206,7 @@ def _plugins_from_json(data: object) -> list[dict]:
     out: list[dict] = []
     for p in plugins:
         if isinstance(p, str):
-            out.append({'name': p, 'description': ''})
+            out.append({'name': p, 'description': '', 'plugin': p, 'installPath': None})
         elif isinstance(p, dict):
             ident = str(p.get('name') or p.get('id') or '?')
             label = ident.split('@', 1)[0]  # plugin@marketplace -> plugin
@@ -174,7 +218,16 @@ def _plugins_from_json(data: object) -> list[dict]:
                 if p.get('description')
                 else _plugin_description(p.get('installPath'))
             )
-            out.append({'name': label + suffix, 'description': desc})
+            # `name` carries the version/disabled suffix for the plugins section; the
+            # bare `plugin` label + `installPath` let scan() walk the components under it.
+            out.append(
+                {
+                    'name': label + suffix,
+                    'description': desc,
+                    'plugin': label,
+                    'installPath': p.get('installPath'),
+                }
+            )
     return out
 
 
@@ -201,8 +254,12 @@ def _scan_plugins() -> list[dict]:
 
 def scan(roots: list[Path]) -> dict[str, list[dict]]:
     """Enumerate skills/commands/agents/hooks across each root's `.claude` dir, plus
-    plugin-provided components via the CLI. Missing dirs are skipped, never raised."""
+    plugin-provided components (walked under each plugin's installPath). Missing dirs
+    are skipped, never raised. `_caveats` carries a note when plugin-provided components
+    could not be enumerated, so the human output degrades to an explicit caveat instead
+    of a misleading bare `HOOKS (0)`."""
     result: dict[str, list[dict]] = {k: [] for k in DISPLAY_ORDER}
+    result['_caveats'] = []
     for root in roots:
         claude = Path(root) / '.claude'
         if not claude.is_dir():
@@ -211,7 +268,31 @@ def scan(roots: list[Path]) -> dict[str, list[dict]]:
         result['commands'].extend(_scan_markdown_dir(claude / 'commands'))
         result['agents'].extend(_scan_markdown_dir(claude / 'agents'))
         result['hooks'].extend(_scan_hooks(claude / 'hooks', claude))
-    result['plugins'] = _scan_plugins()
+
+    plugins = _scan_plugins()
+    result['plugins'] = plugins
+    # Walk each installed plugin's installPath and merge its components (tagged by owning
+    # plugin) into the per-kind sections — the .claude scan alone is blind to them.
+    walked = False
+    for p in plugins:
+        comps = _enumerate_plugin_components(
+            p.get('plugin') or p.get('name', ''), p.get('installPath')
+        )
+        for kind in DIR_KINDS:
+            if comps[kind]:
+                walked = True
+            result[kind].extend(comps[kind])
+    if plugins and not walked:
+        # Plugins are installed but none resolved to on-disk components (installPath
+        # absent or unreadable) — say so rather than imply the per-kind counts are whole.
+        result['_caveats'].append(
+            'plugin-provided components not enumerated (installPath unavailable)'
+        )
+    elif not plugins:
+        # The CLI is absent/failed, so plugin components are invisible to this scan.
+        result['_caveats'].append(
+            'plugin-provided components not enumerated (claude CLI unavailable)'
+        )
     return result
 
 
@@ -224,7 +305,10 @@ def _print_table(inv: dict[str, list[dict]]) -> None:
             continue
         for it in items:
             desc = it.get('description', '')
-            print(f'    {it["name"]:<28} {desc}'.rstrip())
+            owner = f'[{it["plugin"]}] ' if it.get('plugin') else ''  # tag plugin-owned items
+            print(f'    {it["name"]:<28} {owner}{desc}'.rstrip())
+    for caveat in inv.get('_caveats', []):
+        print(f'\n  note: {caveat}')
     print()
 
 
@@ -236,6 +320,8 @@ def _print_compact(inv: dict[str, list[dict]]) -> None:
             parts.append(f'{kind}: ' + ', '.join(names))
     if parts:
         print('Installed toolkit: ' + ' | '.join(parts))
+    for caveat in inv.get('_caveats', []):
+        print(f'note: {caveat}')
 
 
 def _default_roots() -> list[Path]:

@@ -18,9 +18,10 @@ tool-dogfooding feedback loop (capture + triage).
   higher-level guidance: cluster related entries → synthesize one generalization
   each → a strict promotion gate (reinforced · specific · non-reconstructable ·
   actionable) → reconcile supersession. Under-promotes by design.
-- **context-handoff** (`/subtask`, `/fork`) — author a paste-ready, self-contained
-  brief for a fresh context: a new Claude Code session, a spawned task, a teammate,
-  or an issue. SUBTASK mode (an artifact comes back) and FORK mode (continues
+- **context-handoff** — author a paste-ready, self-contained brief for a fresh
+  context: a new Claude Code session, a spawned task, a teammate, or an issue.
+  Auto-triggers on phrasing like "spin this off", "hand this off", or "new session
+  for this". SUBTASK mode (an artifact comes back) and FORK mode (continues
   independently). For in-session parallel work, prefer the Task tool / subagents.
 - **review-panel** (`/review-panel`) — convene fresh reviewer subagents that are
   blind to the conversation and to each other, pointed at an artifact you've

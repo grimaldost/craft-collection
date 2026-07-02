@@ -9,7 +9,12 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from scan_toolkit import _plugins_from_json, _read_frontmatter, scan
+from scan_toolkit import (
+    _enumerate_plugin_components,
+    _plugins_from_json,
+    _read_frontmatter,
+    scan,
+)
 
 
 def _make_tree(root: Path) -> None:
@@ -41,8 +46,11 @@ def test_scan_enumerates_components():
 def test_missing_dirs_do_not_raise():
     with tempfile.TemporaryDirectory() as d:
         out = scan([Path(d)])  # no .claude at all
+        # The .claude-dir scan contributes nothing (those items are untagged); any items
+        # present come from installed plugins (tagged with a `plugin` key), which are
+        # CLI-sourced and environment-dependent, so we don't assert on their count.
         for kind in ('skills', 'commands', 'agents', 'hooks'):
-            assert out[kind] == []
+            assert [it for it in out[kind] if 'plugin' not in it] == []
         assert 'plugins' in out  # CLI-sourced, environment-dependent — just present
 
 
@@ -68,6 +76,54 @@ def test_plugins_from_json_uses_id_and_hides_enabled():
     assert all('?' not in r['name'] and 'True' not in r['name'] for r in rows)
 
 
+def _make_plugin(install_path: Path) -> None:
+    """A fake installed plugin's on-disk layout under its installPath: a skill, a
+    command, an agent, and a hooks.json — the components `claude plugin list` points
+    at via installPath but never enumerates itself."""
+    (install_path / 'skills/foo').mkdir(parents=True)
+    (install_path / 'skills/foo/SKILL.md').write_text(
+        '---\nname: foo\ndescription: The plugin foo skill.\n---\nbody\n',
+        encoding='utf-8',
+    )
+    (install_path / 'commands').mkdir(parents=True)
+    (install_path / 'commands/pcmd.md').write_text('# pcmd\n', encoding='utf-8')
+    (install_path / 'agents').mkdir(parents=True)
+    (install_path / 'agents/pagent.md').write_text('---\nname: pagent\n---\n', encoding='utf-8')
+    (install_path / 'hooks').mkdir(parents=True)
+    (install_path / 'hooks/hooks.json').write_text(
+        '{"hooks": {"SessionStart": [{"hooks": [{"type": "command"}]}]}}',
+        encoding='utf-8',
+    )
+
+
+def test_enumerate_plugin_components_walks_install_path():
+    # The core regression: a plugin's installPath must be walked so its skills,
+    # commands, agents, and hooks are surfaced (not the blind SKILLS(2)/HOOKS(0)).
+    with tempfile.TemporaryDirectory() as d:
+        ip = Path(d) / 'plug'
+        _make_plugin(ip)
+        comps = _enumerate_plugin_components('myplugin', str(ip))
+        assert 'foo' in {s['name'] for s in comps['skills']}
+        assert all(s['plugin'] == 'myplugin' for s in comps['skills'])
+        assert 'pcmd' in {c['name'] for c in comps['commands']}
+        assert 'pagent' in {a['name'] for a in comps['agents']}
+        # hooks.json events are enumerated (SessionStart), not left at 0
+        assert any('SessionStart' in h['name'] for h in comps['hooks'])
+        assert all(h['plugin'] == 'myplugin' for h in comps['hooks'])
+
+
+def test_enumerate_plugin_components_missing_path_is_empty():
+    # An installPath that does not resolve yields empty lists, never raises.
+    comps = _enumerate_plugin_components('gone', str(Path('does') / 'not' / 'exist'))
+    assert comps == {'skills': [], 'commands': [], 'agents': [], 'hooks': []}
+    assert _enumerate_plugin_components('none', None) == {
+        'skills': [],
+        'commands': [],
+        'agents': [],
+        'hooks': [],
+    }
+
+
 def test_read_frontmatter_handles_folded_scalar():
     # A `description: >` folded block must be captured in full, not truncated to ">".
     with tempfile.TemporaryDirectory() as d:
@@ -87,5 +143,7 @@ if __name__ == '__main__':
     test_scan_enumerates_components()
     test_missing_dirs_do_not_raise()
     test_plugins_from_json_uses_id_and_hides_enabled()
+    test_enumerate_plugin_components_walks_install_path()
+    test_enumerate_plugin_components_missing_path_is_empty()
     test_read_frontmatter_handles_folded_scalar()
     print('ok: all scan_toolkit tests passed')

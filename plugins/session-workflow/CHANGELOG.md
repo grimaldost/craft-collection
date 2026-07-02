@@ -3,6 +3,55 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.6.3 — 2026-07-02
+
+Five fixes from the #52 stress-review panel. No skill
+`description` (the eval-gated trigger surface) changed, so no holdout re-seal.
+
+### Fixed
+
+- **`toolkit-awareness` / `scan_toolkit.py`** — the scan was blind to
+  plugin-provided components: `_scan_plugins` parsed `claude plugin list --json`
+  for each plugin's `installPath` but never walked the components under it, so a
+  machine with ~40 plugin skills and 4 active plugin hooks still reported
+  `SKILLS (2)` / `HOOKS (0)`. A new pure `_enumerate_plugin_components(name,
+  install_path)` walks each plugin's `skills/*/SKILL.md`, `commands/*.md`,
+  `agents/*.md`, and `hooks/hooks.json` events, tags each item with its owning
+  plugin, and merges them into the per-kind sections; the table now annotates
+  plugin-owned rows `[plugin]`. When the CLI or an `installPath` is unavailable,
+  the output degrades to an explicit caveat ("plugin-provided components not
+  enumerated") instead of a misleading bare `HOOKS (0)`. Unit-tested against a
+  fixture plugin tree (no `claude` CLI required).
+- **`feedback-triage` / `build_feedback_index.py`** — two parser defects minted
+  phantom finding IDs. `_PROPOSAL` matched any indented numbered line and was
+  fence-unaware, so a proposal's nested numbered sub-list and numbered lines
+  inside fenced code blocks became extra/duplicate IDs (`stem#1` mapping to two
+  titles); it now tracks fenced-code state and accepts a proposal only flush-left
+  (`^\d+\.`, no leading whitespace — where the template writes them). And the
+  `_SEVERITY` charset widened to `[A-Za-z0-9/-]+` so digit/hyphen tags like
+  `**[P1]**` / `**[P2-HIGH]**` are stripped, not left glued to the title.
+  Regression tests added.
+
+### Changed
+
+- **`consolidate-knowledge`** — the pipeline gains an input ledger and an
+  already-promoted reconciliation, mirroring its sibling `feedback-triage`: Gather
+  now reads prior promoted guidance first and records an **Inputs** scope (entry
+  count / sessions / date range), and a new step 2 opens the output with an
+  **"Already promoted — NOT re-promoted"** reconciliation so an overlapping re-run
+  no longer re-promotes the same guidance (the durable-layer pollution the skill
+  warns against).
+- **`journaling-sessions` + `consolidate-knowledge`** — closed the storage
+  contract between the pair: journaling now names a default journal location
+  (`docs/journal/<YYYY-MM-DD>-<session>.md`, overridable by a `target_store`
+  `path`), and consolidate's Gather step states it reads from there by default —
+  previously journaling never said where the file went and consolidate had no
+  defined place to gather from.
+- **README** — the `context-handoff` line dropped the `/subtask` and `/fork`
+  slash-command formatting (no such command files exist — they are only trigger
+  phrases in the skill's description, so a cold user typing `/subtask` got an
+  unknown-command failure) in favor of naming the trigger phrasing ("spin this
+  off", "hand this off", "new session for this").
 ## 0.6.2 — 2026-07-02
 
 Eval-harness correctness (from the 2026-07-02 adversarial stress panel). Fixes the

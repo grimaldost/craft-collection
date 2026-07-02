@@ -19,17 +19,32 @@ import re
 import sys
 from pathlib import Path
 
-_PROPOSAL = re.compile(r'^\s*(\d+)\.\s+(.+?)\s*$')
-_SEVERITY = re.compile(r'\*\*\[[A-Za-z/]+\]\*\*\s*')  # a leading **[MED]** / **[HIGH]** tag
+# A top-level numbered proposal is flush-left (`^\d+\.`, no leading whitespace) — the
+# template writes proposals at indent 0. An indented number is a sub-list item, and a
+# numbered line inside a fenced code block is a code sample; neither is a proposal, so
+# neither may mint a (duplicate or phantom) finding ID.
+_PROPOSAL = re.compile(r'^(\d+)\.\s+(.+?)\s*$')
+_FENCE = re.compile(r'^\s*(```|~~~)')
+# A leading severity tag — **[MED]** / **[HIGH]** / **[P1]** / **[P2-HIGH]** — including
+# digit and hyphen forms, not only alpha ones (`[A-Za-z/]+` left `**[P1]**` glued on).
+_SEVERITY = re.compile(r'\*\*\[[A-Za-z0-9/-]+\]\*\*\s*')
 
 
 def extract_proposals(text: str) -> list[tuple[str, str]]:
     """Return [(number, title)] from the report's "## Proposed promotions" section.
-    The title is stripped of a leading severity tag and capped; parsing stops at the
-    next `## ` heading. Best-effort: a report without the section yields []."""
+    Only flush-left numbered lines outside fenced code blocks count; indented sub-lists
+    and fenced numbered lines are ignored. The title is stripped of a leading severity
+    tag and capped; parsing stops at the next `## ` heading. Best-effort: a report
+    without the section yields []."""
     out: list[tuple[str, str]] = []
     in_section = False
+    in_fence = False
     for line in text.splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         stripped = line.strip()
         if stripped.startswith('## '):
             in_section = stripped[3:].strip().lower().startswith('proposed')
