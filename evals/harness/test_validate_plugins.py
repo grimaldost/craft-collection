@@ -89,6 +89,28 @@ def test_dangling_nested_reference_flagged():
     assert any('missing reference references/sub/deep.md' in e for e in errs), errs
 
 
+def test_hooks_json_top_level_array_flagged():
+    # A top-level ARRAY used to coerce to {} and skip hook validation entirely.
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        _make_plugin(base, hooks_json='[{"hooks": {"Stop": []}}]')
+        errs = _run(base)
+    assert any('top-level' in e for e in errs), errs
+
+
+def test_hooks_json_bare_event_map_flagged():
+    # Events at the top level (missing the "hooks" wrapper) also skipped silently
+    # — the misconfiguration most likely to happen by hand.
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        _make_plugin(
+            base,
+            hooks_json='{"Stop":[{"hooks":[{"type":"command","command":"x"}]}]}',
+        )
+        errs = _run(base)
+    assert any('top-level' in e for e in errs), errs
+
+
 def test_valid_plugin_has_no_errors():
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
@@ -110,6 +132,8 @@ def main() -> int:
     test_unknown_event_and_missing_hook_script_flagged()
     test_dangling_plugin_root_reference_flagged()
     test_dangling_nested_reference_flagged()
+    test_hooks_json_top_level_array_flagged()
+    test_hooks_json_bare_event_map_flagged()
     test_valid_plugin_has_no_errors()
     print('ok: validate_plugins')
     return 0

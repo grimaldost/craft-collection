@@ -46,4 +46,6 @@ workflow; or insecure handling of credentials. Guidance and documentation conten
 (the prose a skill teaches) is out of scope for this policy.
 
 These plugins run locally with the same privileges as your shell — review any hook
-or script before enabling it, exactly as you would any third-party tooling.
+or script before installing or enabling it, exactly as you would any third-party
+tooling. Note that engineering-discipline's ruff-format and uv-enforce hooks are
+active as soon as that plugin is installed (the rest are env-gated, off by default).

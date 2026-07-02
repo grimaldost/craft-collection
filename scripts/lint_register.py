@@ -51,11 +51,17 @@ DENY: list[tuple[re.Pattern[str], str]] = [
 ]
 
 # Single-word importance banners at the start of a line (optionally behind list/quote
-# markers or bold), followed by ':' or '!'. `IMPORTANT: …` buys salience the same way
-# an all-caps run does, below the 3-word run threshold.
+# markers or */_ emphasis of any weight), terminated by punctuation or end-of-line.
+# `IMPORTANT: …`, `IMPORTANT —`, `_CRITICAL_:` and a bare `**MANDATORY**` all buy
+# salience the same way an all-caps run does, below the 3-word run threshold. A
+# terminator is required so a capitalized word merely starting a sentence
+# ('CRITICAL failures need…') does not match.
 BANNER_WORDS = ('IMPORTANT', 'CRITICAL', 'MANDATORY', 'FORBIDDEN', 'COMPULSORY', 'PROHIBITED')
 BANNER_LINE = re.compile(
-    r'^\s*(?:[-*>#]+\s*)*(?:\*\*)?(' + '|'.join(BANNER_WORDS) + r')(?:\*\*)?\s*[:!]'
+    r'^\s*(?:[-*>#]+\s*)*(?:[*_]{1,3})?('
+    + '|'.join(BANNER_WORDS)
+    # terminators: :!,.; em dash (U+2014), en dash (U+2013), hyphen, end-of-line
+    + r')(?:[*_]{1,3})?\s*(?:[:!,.;\u2014\u2013-]|$)'
 )
 
 # Tokens that legitimately appear in caps and never count toward a banner run.

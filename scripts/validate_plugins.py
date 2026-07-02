@@ -78,7 +78,17 @@ def validate() -> list[str]:
             errors.append(f'{hooks_file}: invalid JSON: {e}')
             continue
         plugin_root = hooks_file.parent.parent
-        events = (hdata.get('hooks') or {}) if isinstance(hdata, dict) else {}
+        # The only shape Claude Code reads is {"hooks": {<Event>: [...]}}. A
+        # top-level array, or events sitting at the top level without the
+        # "hooks" wrapper, used to coerce to {} here — the file skipped every
+        # check below and shipped broken. Wrong shape is itself the error.
+        events = hdata.get('hooks') if isinstance(hdata, dict) else None
+        if not isinstance(events, dict):
+            errors.append(
+                f'{hooks_file}: top-level shape must be an object with a "hooks" '
+                'mapping (events nest under "hooks")'
+            )
+            continue
         for event, groups in events.items():
             if event not in KNOWN_HOOK_EVENTS:
                 errors.append(f'{hooks_file}: unknown hook event "{event}"')

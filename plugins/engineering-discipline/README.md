@@ -27,6 +27,10 @@ All scripts ship with stdlib-runnable tests (`python test_<name>.py`).
 
 ## Hooks
 
+The PostToolUse and PreToolUse hooks are **active as soon as the plugin is
+installed** (no env gate — they are the mechanical layer); only the Stop nudge
+is opt-in.
+
 - **PostToolUse** — `ruff format` + `ruff check --fix` on `.py` edits via `uvx`.
   Non-blocking.
 - **PreToolUse** — blocks `pip install` / `poetry` / `virtualenv` / `venv` inside
