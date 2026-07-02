@@ -78,8 +78,9 @@ skill `description` changed (hooks / scripts only), so no holdout re-seal.
   uv / ruff-single-quote / dependency-groups / pip-audit checks.
 - **`check_versions.py` failed open.** Any fetch error set `behind=False`, so a total
   network failure reported `behind_count=0` ("no drift"). The `--json` output gains an
-  `errors` count and the tool exits 2 when any fetch failed — an unknown result is no
-  longer mistaken for a clean stack.
+  `errors` count and the tool exits 2 when any fetch failed — an unknown result is
+  distinguishable from a clean stack *for consumers that read `errors` or the exit
+  code* (a caller that only reads `behind_count` still sees "no drift").
 
 ## 0.1.9 — 2026-06-28
 
