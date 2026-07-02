@@ -31,7 +31,8 @@ To try the plugins locally without publishing a marketplace:
 
 ```bash
 claude --plugin-dir ./plugins/engineering-discipline \
-       --plugin-dir ./plugins/session-workflow
+       --plugin-dir ./plugins/session-workflow \
+       --plugin-dir ./plugins/humblepowers
 ```
 
 See the [README](README.md) for the full layout.
@@ -43,8 +44,8 @@ avoids round-trips:
 
 ```bash
 uv tool run pre-commit run --all-files   # ruff lint + format, JSON/YAML, validator
-python scripts/run_tests.py              # every test_*.py (no pytest needed)
-python scripts/validate_plugins.py       # structural marketplace checks (needs pyyaml)
+uv run --no-project python scripts/run_tests.py                 # every test_*.py (no pytest needed)
+uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # structural marketplace checks (PyYAML catches the frontmatter colon-space trap)
 ```
 
 The `validate` workflow re-runs all of these on every PR; it must be green to merge.
