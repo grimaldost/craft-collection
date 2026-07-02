@@ -5,6 +5,36 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.5 — 2026-07-02
+
+Reference-doctrine correctness from a stress-review pass. The only `description`
+edit is a factual scope correction to `skill-authoring`'s trailing linter clause
+(no trigger phrasing or negative space changed), so no holdout re-seal.
+
+### Changed
+
+- `skill-authoring`: the "References between tools" section now states the
+  missing tier explicitly — a reference to a **different plugin in the same
+  marketplace is a cross-tool reference (rule 2 applies)**, because plugins
+  install individually (`/plugin install humblepowers@craft-collection`) and a
+  sibling plugin is therefore not guaranteed present. Rule 1's "same-plugin is
+  free" scope is bounded to the same *plugin*, not the same marketplace.
+- `skill-authoring`: the register-linter claim is made honest. Body and the
+  description's trailing clause no longer say the linter "enforces the register
+  rules" (which reads as all of them); both now say it enforces the detectable
+  subset — banners, all-caps runs, and a fixed obedience/priority phrase list —
+  with review holding obedience framing that dodges those literal patterns.
+- `systematic-debugging`, `verification-before-completion`: the four
+  unconditional references to the separately-installed `data-engineering-discipline`
+  sibling are rewritten into rule-2 form. Each canonical rule is now **stated
+  inline** so the skill stands alone on a humblepowers-only install (module
+  `__file__`/version resolution; an edit's diff is its scope; prove a gate can
+  fail before trusting it green; diff the failure set against a stashed or
+  base-commit baseline), and the sibling pointer is made conditional and
+  role-generic ("a data-engineering skill, when one is installed — e.g.
+  `data-engineering-discipline` …"). Closes the plugin's own degradation-test
+  failure (dead pointers on a solo install).
+
 ## 0.4.4 — 2026-06-28
 
 From the 2026-06-28 structural review. Body / doc only — no `description`
