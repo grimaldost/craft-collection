@@ -20,6 +20,8 @@ jobs:
         run: ruff check .
       - name: Format check (ruff)
         run: ruff format --check .
+      - name: Register linter (humblepowers doctrine)
+        run: python scripts/lint_register.py
       - name: Validate plugins (structural)
         run: python scripts/validate_plugins.py
       - name: Run tests

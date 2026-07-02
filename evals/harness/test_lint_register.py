@@ -37,6 +37,22 @@ def main() -> int:
     assert not _lint_text('```\nYOU MUST USE CAPS IN CODE\n```\n'), 'fenced code not exempt'
     assert not _lint_text('Set `YOU MUST` in the config.'), 'inline code not exempt'
 
+    # Line-start importance banners (below the caps-run threshold) are flagged;
+    # a lowercase word mid-sentence is not.
+    assert _lint_text('IMPORTANT: Always read this first.'), 'IMPORTANT banner not flagged'
+    assert _lint_text('**CRITICAL:** do the thing.'), 'CRITICAL banner not flagged'
+    assert not _lint_text('It is important to test edge cases.'), 'lowercase word wrongly flagged'
+
+    # Salience/priority phrasings are flagged case-insensitively.
+    assert _lint_text('This skill takes priority over the others.'), 'priority claim not flagged'
+    assert _lint_text('Always use this skill before any other.'), 'obedience phrase not flagged'
+
+    # Fence desync: an unpaired inner marker (a ~~~ line inside a ``` block) must NOT
+    # disable linting for the rest of the file — the CommonMark rule closes a fence
+    # only on the same marker char with length >= the opener.
+    desync = '```text\n~~~\n```\nYOU MUST USE this skill.\n'
+    assert _lint_text(desync), 'deny pattern after a desyncing inner fence marker not flagged'
+
     # The shipped plugin passes its own linter.
     findings = lint_register.lint_paths([ROOT / 'plugins' / 'humblepowers'])
     assert not findings, f'humblepowers fails its own register linter: {findings}'
