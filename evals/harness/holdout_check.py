@@ -140,7 +140,12 @@ def main(argv: list[str] | None = None) -> int:
     if triggers_path.exists():
         try:
             dev = json.loads(triggers_path.read_text(encoding='utf-8')).get(skill) or {}
-            dev_recall, dev_ci = dev.get('recall'), dev.get('recall_ci')
+            # Prefer the query-level CI: the pooled recall_ci treats correlated
+            # repeats as independent trials, so its lower bound is too high and a
+            # held-out recall that merely reflects sampling noise trips a false
+            # "overfit" verdict. Fall back to the pooled CI for older reports.
+            dev_recall = dev.get('recall')
+            dev_ci = dev.get('recall_ci_query') or dev.get('recall_ci')
         except (json.JSONDecodeError, ValueError):
             pass
     print('\n' + holdout_comparison(dev_recall, dev_ci, score['recall']))

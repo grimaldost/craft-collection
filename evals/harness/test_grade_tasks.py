@@ -28,11 +28,11 @@ def fake_arm(prompt, *, plugin_dir, cfg, config_dir):
     return run, run.result_text
 
 
-def fake_point(task, output, rubric, *, model, repeats):
+def fake_point(task, output, rubric, *, model, repeats, config_dir=None):
     return {'pass': True, 'score': 0.85, 'agreement': 1.0, 'n': repeats, 'verdicts': []}
 
 
-def fake_pair(task, a, b, criterion, *, model):
+def fake_pair(task, a, b, criterion, *, model, config_dir=None):
     return {'winner': 'A', 'order1': 'A', 'order2': 'A', 'agreement': True}
 
 
@@ -69,7 +69,7 @@ def test_grade_skill_counts_without_wins_and_ties():
     tasks = [{'id': 't1', 'prompt': 'p', 'fixture': None}]
     rubric = [{'id': 'r1', 'weight': 1, 'text': '...'}]
 
-    def mixed_pair(task, a, b, criterion, *, model):
+    def mixed_pair(task, a, b, criterion, *, model, config_dir=None):
         mixed_pair.calls += 1
         return {'winner': ['A', 'B', 'tie'][mixed_pair.calls % 3]}
 
@@ -116,10 +116,59 @@ def test_resolve_plugin_dir_default_and_override():
     assert override == r'C:\cache\superpowers\5.1.0'
 
 
+def test_errored_with_arm_excluded_from_scoring():
+    # A WITH arm that errored produced no output; grading it would score a spurious 0
+    # (a discipline "failure" that is really an infra failure). It must be excluded
+    # from correct_usage, and an all-errored run leaves nothing valid to score.
+    def erroring_arm(prompt, *, plugin_dir, cfg, config_dir):
+        is_err = plugin_dir is not None  # WITH arm errors; WITHOUT arm is fine
+        run = AgentRun(activated_skills=set(), result_text='', is_error=is_err, cost_usd=0.0)
+        return run, ''
+
+    tasks = [{'id': 't1', 'prompt': 'p', 'fixture': None}]
+    rubric = [{'id': 'r1', 'weight': 1, 'text': '...'}]
+    blob = grade_skill(
+        'journaling-sessions',
+        tasks,
+        rubric,
+        CFG,
+        plugin_dir='p',
+        config_with=None,
+        config_without=None,
+        pairwise_criterion='c',
+        concurrency=1,
+        run_arm=erroring_arm,
+        judge_point=fake_point,
+        judge_pair=fake_pair,
+    )
+    s = blob['summary']
+    assert s['n_records'] == 3 and s['error_runs'] == 3
+    assert s['n_usage_valid'] == 0  # every WITH arm errored -> nothing valid to score
+
+
+def test_main_skips_skill_without_tasks_suite():
+    import json
+
+    import grade_tasks
+
+    # A configured skill with no evals/tasks/ suite (e.g. brainstorming) must skip
+    # cleanly (return 0), not crash the whole run_all grading loop. Pick one
+    # dynamically so the test never hits the real-spawn path if the premise changes.
+    cfg = json.loads((grade_tasks.REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
+    skill = next(
+        s
+        for s in sorted(cfg['plugin_of_skill'])
+        if not (grade_tasks.TASKS_DIR / s / 'tasks.json').exists()
+    )
+    assert grade_tasks.main([skill]) == 0
+
+
 if __name__ == '__main__':
     test_grade_skill_shape_over_repeats()
     test_grade_skill_counts_without_wins_and_ties()
     test_resolve_task_rubric_inline_wins()
     test_resolve_task_rubric_falls_back_to_default()
     test_resolve_plugin_dir_default_and_override()
+    test_errored_with_arm_excluded_from_scoring()
+    test_main_skips_skill_without_tasks_suite()
     print('ok: all grade_tasks tests passed')

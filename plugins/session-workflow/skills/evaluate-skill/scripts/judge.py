@@ -1,4 +1,6 @@
-"""LLM-as-judge for the eval harness, via `claude -p` (no plugin, isolated config).
+"""LLM-as-judge for the eval harness, via `claude -p` (no plugin; the caller passes
+an isolated, skill-free `config_dir` — without it the judge spawn inherits the user's
+real ~/.claude and its verdicts are contaminated and non-reproducible).
 
 Layers:
 - `extract_verdict` — pure: pull a JSON verdict out of messy judge text.
@@ -126,9 +128,15 @@ def judge_pointwise(
     max_budget_usd: float = 0.25,
     timeout: int = 180,
     threshold: float = JUDGE_THRESHOLD,
+    config_dir: str | None = None,
 ) -> dict:
     """Grade one output against the rubric `repeats` times; recompute each score
-    from weights, then aggregate (mean score, majority pass, agreement)."""
+    from weights, then aggregate (mean score, majority pass, agreement).
+
+    `config_dir` MUST be an isolated, skill-free config: with `config_dir=None` the
+    judge spawn inherits the user's real `~/.claude` (global CLAUDE.md, hooks, and
+    every installed plugin — including the skill under evaluation), contaminating
+    the verdict and making it non-reproducible across machines."""
     prompt = _render_pointwise(task, output, rubric)
     verdicts = []
     for _ in range(repeats):
@@ -141,6 +149,7 @@ def judge_pointwise(
             max_budget_usd=max_budget_usd,
             timeout=timeout,
             stream=False,
+            config_dir=config_dir,
         )
         v = extract_verdict(r.result_text)
         if v:
@@ -161,7 +170,9 @@ def _render_pairwise(task: str, first: str, second: str, criterion: str) -> str:
     )
 
 
-def _ask_pairwise(task, first, second, criterion, *, model, runner, max_budget_usd, timeout) -> str:
+def _ask_pairwise(
+    task, first, second, criterion, *, model, runner, max_budget_usd, timeout, config_dir=None
+) -> str:
     prompt = _render_pairwise(task, first, second, criterion)
     r = runner(
         prompt,
@@ -172,6 +183,7 @@ def _ask_pairwise(task, first, second, criterion, *, model, runner, max_budget_u
         max_budget_usd=max_budget_usd,
         timeout=timeout,
         stream=False,
+        config_dir=config_dir,
     )
     v = extract_verdict(r.result_text) or {}
     w = str(v.get('winner', 'tie')).strip().lower()
@@ -188,9 +200,11 @@ def judge_pairwise(
     runner=run_agent,
     max_budget_usd: float = 0.25,
     timeout: int = 180,
+    config_dir: str | None = None,
 ) -> dict:
     """Ask the judge twice with A/B swapped; A is the WITH-skill output, B WITHOUT.
-    Returns a winner only if both orderings agree (else 'tie')."""
+    Returns a winner only if both orderings agree (else 'tie'). `config_dir` MUST be
+    an isolated, skill-free config (see `judge_pointwise`)."""
     v1 = _ask_pairwise(
         task,
         out_a,
@@ -200,6 +214,7 @@ def judge_pairwise(
         runner=runner,
         max_budget_usd=max_budget_usd,
         timeout=timeout,
+        config_dir=config_dir,
     )
     w1 = {'first': 'A', 'second': 'B', 'tie': 'tie'}[v1]
     v2 = _ask_pairwise(
@@ -211,6 +226,7 @@ def judge_pairwise(
         runner=runner,
         max_budget_usd=max_budget_usd,
         timeout=timeout,
+        config_dir=config_dir,
     )
     w2 = {'first': 'B', 'second': 'A', 'tie': 'tie'}[v2]
     decision = decide_pairwise(w1, w2)

@@ -337,8 +337,27 @@ def test_run_skill_collects_error_samples():
     assert score['error_samples'][0]['count'] == 2  # both errored runs grouped
 
 
+def test_query_level_ci_is_wider_than_pooled():
+    # Two positives: one fires every repeat, one fires a minority (1/3). Pooled recall
+    # = 4/6 over 6 "trials"; query-level = 1 of 2 queries passes (majority-fire). The
+    # query-level CI must be honestly WIDER (lower bound below the pooled one), because
+    # repeats of one query are correlated, not independent Bernoulli trials.
+    def counter(q, repeats):
+        return 3 if 'always' in q else 1
+
+    queries = [
+        {'query': 'always fires', 'should_trigger': True},
+        {'query': 'barely fires', 'should_trigger': True},
+        {'query': "what's 2+2", 'should_trigger': False},
+    ]
+    r = score_skill(queries, repeats=3, trigger_counter=counter)
+    assert r['recall_ci_query'] is not None and r['specificity_ci_query'] is not None
+    assert r['recall_ci_query'][0] < r['recall_ci'][0]  # query-level lower bound is lower (wider)
+
+
 if __name__ == '__main__':
     test_scoring_recall_specificity()
+    test_query_level_ci_is_wider_than_pooled()
     test_specificity_failure_when_negative_fires()
     test_partial_recall_pools_across_repeats()
     test_error_counter_decomposes_recall()

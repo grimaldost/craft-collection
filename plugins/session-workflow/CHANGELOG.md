@@ -3,6 +3,34 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.6.2 — 2026-07-02
+
+Eval-harness correctness (from the 2026-07-02 adversarial stress panel). Fixes the
+bundled `evaluate-skill` engine and `evals/harness/` in lockstep (`#49`).
+
+### Fixed
+
+- **`judge.py` — the LLM judge no longer inherits the user's real `~/.claude`.**
+  `judge_pointwise` / `judge_pairwise` now take an isolated, skill-free `config_dir`
+  (threaded from `grade_tasks` via a dedicated `config_judge`); without it the judge
+  spawn loaded the user's CLAUDE.md, hooks, and installed plugins — including the
+  skill under evaluation — contaminating verdicts and making them non-reproducible.
+- **`grade_tasks.py` — an infrastructure failure no longer persists a fake score.**
+  `main` now runs the `preflight_auth` probe before the fan-out and refuses to write
+  a report when every WITH arm errored; `_summarize` excludes errored units from
+  `correct_usage` and the pairwise tallies (adds `n_usage_valid` / `n_pairwise_valid`),
+  so a 401/timeout no longer overwrites a real `grading.json` entry with `0.00`.
+- **`grade_tasks.py` / `run_all.py` — a skill with no `evals/tasks/` suite is skipped,
+  not crashed on.** `config.json` maps more skills than have grading suites; the
+  grading stage now skips the missing ones cleanly instead of dying with an unhandled
+  `FileNotFoundError` after the trigger stage already spent its spawn budget.
+- **`run_triggers.py` / `holdout_check.py` — honest, query-level confidence intervals.**
+  The pooled `recall_ci` treated correlated `query × repeat` outcomes as independent
+  trials (intervals too narrow); `score_skill` now also reports `recall_ci_query` /
+  `specificity_ci_query` (unit = the query, majority-fire = pass), and `holdout_check`
+  consumes the query-level bound so a within-noise held-out recall no longer trips a
+  spurious "overfit" verdict.
+
 ## 0.6.1 — 2026-07-01
 
 ### Fixed
