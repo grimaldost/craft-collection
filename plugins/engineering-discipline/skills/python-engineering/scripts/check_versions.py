@@ -3,8 +3,9 @@
 
 Reads pinned versions from stack.toml (the single source of truth) and compares
 them to the latest on PyPI, flagging any tool whose pinned floor is behind a
-newer major/minor release. Exits non-zero when anything is behind, so CI can
-detect drift.
+newer major/minor release. Exit code: 0 clean, 1 something is behind, 2 a fetch
+FAILED (status unknown, not "current") — so CI never mistakes a dead network for
+a drift-free stack.
 
 Usage:
     python check_versions.py            # pretty table
@@ -123,6 +124,10 @@ def main(argv: list[str] | None = None) -> int:
     precommit = load_precommit(args.stack)
     results = [fetch_pypi_version(pkg, pinned) for pkg, pinned in tools.items()]
     behind = [r for r in results if r['behind']]
+    # A fetch that failed is UNKNOWN, not 'current'. Counting errors separately (and
+    # exiting 2) stops a dead network from reading as behind_count=0 'no drift' —
+    # the caller can treat any error as red rather than a clean pass.
+    errors = [r for r in results if r['status'] != 'ok']
 
     if args.json:
         print(
@@ -132,11 +137,12 @@ def main(argv: list[str] | None = None) -> int:
                     'tools': results,
                     'precommit': precommit,
                     'behind_count': len(behind),
+                    'errors': len(errors),
                 },
                 indent=2,
             )
         )
-        return 1 if behind else 0
+        return 2 if errors else (1 if behind else 0)
 
     print(f'\n  python-engineering stack - version check ({now})')
     print(f'  {"-" * 64}')
@@ -161,8 +167,13 @@ def main(argv: list[str] | None = None) -> int:
             f'\n  {len(behind)} tool(s) behind a newer minor/major. Run /refresh-stack '
             'to review changelogs and update.'
         )
+    if errors:
+        print(
+            f'\n  {len(errors)} tool(s) could NOT be checked (fetch failed) - status UNKNOWN, '
+            'not "current". Treat this run as inconclusive (exit 2).'
+        )
     print()
-    return 1 if behind else 0
+    return 2 if errors else (1 if behind else 0)
 
 
 if __name__ == '__main__':

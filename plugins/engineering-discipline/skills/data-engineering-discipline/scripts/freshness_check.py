@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 
 def _classify(v: object) -> str | None:
@@ -65,7 +65,9 @@ def check_freshness(
     `ok` is True (fresh), False (stale/uncomparable), or None (unassessable —
     never treat as a pass). `require_advance` asserts curr > prev (default on,
     so a frozen cursor fails closed); pass a `source_max` to also assert curr is
-    not behind source by more than `max_lag` (default: curr >= source).
+    not behind source by more than `max_lag` (default: curr >= source). `max_lag`
+    may be a `timedelta`, or a plain number — interpreted as a raw delta for a
+    numeric cursor and as a number of DAYS for a date/datetime cursor.
     """
     report: dict = {
         'prev': prev_max,
@@ -93,6 +95,25 @@ def check_freshness(
         report['reason'] = f'uncomparable: mixed cursor types {sorted(tags)}'
         return report
 
+    # For a temporal cursor, source - curr is a timedelta, so a bare-number
+    # max_lag (the CLI passes a float) is not directly comparable — interpret it
+    # as a number of DAYS. For a numeric cursor it stays a number. Done before the
+    # comparison so a temporal max_lag never trips the TypeError path below with a
+    # misleading tz message.
+    lag_bound = max_lag
+    if max_lag is not None and not isinstance(max_lag, timedelta):
+        cursor_tag = _classify(curr_max)
+        if cursor_tag in ('date', 'datetime'):
+            try:
+                lag_bound = timedelta(days=float(max_lag))  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                report['ok'] = False
+                report['reason'] = (
+                    f'uncomparable: max_lag {max_lag!r} is not a number of days for a '
+                    'temporal cursor'
+                )
+                return report
+
     within = None
     try:
         if prev_max is not None:
@@ -100,11 +121,13 @@ def check_freshness(
         if source_max is not None:
             report['lag'] = source_max - curr_max
             within = (
-                (curr_max >= source_max) if max_lag is None else (source_max - curr_max <= max_lag)
+                (curr_max >= source_max)
+                if max_lag is None
+                else (source_max - curr_max <= lag_bound)
             )
     except TypeError as exc:
         report['ok'] = False
-        report['reason'] = f'uncomparable: {exc} (tz-aware vs naive, or a bad max_lag type?)'
+        report['reason'] = f'uncomparable: {exc} (mixed tz-aware/naive datetimes?)'
         return report
 
     checks: list[tuple[str, bool]] = []
@@ -182,7 +205,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument('--source', type=_parse_cursor, default=None, help='source max(cursor)')
     parser.add_argument(
-        '--max-lag', type=float, default=None, help='allowed numeric lag behind source'
+        '--max-lag',
+        type=float,
+        default=None,
+        help='allowed lag behind source: a raw number for numeric cursors, '
+        'or a number of DAYS for a date/datetime cursor',
     )
     parser.add_argument(
         '--no-require-advance', action='store_true', help='skip the curr>prev assertion'

@@ -2,12 +2,18 @@
 """Diff two dataset schemas (columns + dtypes).
 
 Pure core `diff(schema_a, schema_b)` works on {column: dtype} dicts. The CLI
-compares two CSV files (dtypes via pandas if installed, else column presence).
+compares two CSV files: real dtypes via pandas when installed (a full read by
+default; cap with --nrows), else COLUMN NAMES ONLY. Without pandas the tool does
+NOT claim a dtype-level match it never checked — it exits non-zero with a loud
+"dtype comparison SKIPPED" notice, because an int->str retype is invisible to a
+header-only read and a false "schemas match" is the failure this guards.
 
 Usage:
     python schema_diff.py baseline.csv candidate.csv
+    python schema_diff.py baseline.csv candidate.csv --nrows 5000
 
-Exit 1 if schemas differ. Stdlib-first; pandas optional.
+Exit 1 if schemas differ; exit 2 if columns match but dtypes were unchecked
+(no pandas). Stdlib-first; pandas optional.
 """
 
 from __future__ import annotations
@@ -28,33 +34,72 @@ def diff(schema_a: dict[str, str], schema_b: dict[str, str]) -> dict:
     }
 
 
-def _csv_schema(path: Path) -> dict[str, str]:
-    """Infer {column: dtype} from a CSV. dtype is 'unknown' without pandas."""
+def _csv_schema(path: Path, nrows: int | None = None) -> tuple[dict[str, str], bool]:
+    """Infer ({column: dtype}, dtypes_checked) from a CSV.
+
+    With pandas: real dtypes over `nrows` rows (None = the full file) and
+    dtypes_checked=True. Without pandas: column names only, every dtype 'unknown'
+    and dtypes_checked=False — so the caller must NOT report a dtype-level match
+    it never verified (an int->str retype is invisible to a header-only read).
+    """
     try:
         import pandas as pd  # optional dependency
     except ImportError:
         with Path(path).open(newline='', encoding='utf-8') as fh:
-            return dict.fromkeys(next(csv.reader(fh), []), 'unknown')
-    frame = pd.read_csv(path, nrows=1000)
-    return {str(c): str(t) for c, t in frame.dtypes.items()}
+            return dict.fromkeys(next(csv.reader(fh), []), 'unknown'), False
+    frame = pd.read_csv(path, nrows=nrows)
+    return {str(c): str(t) for c, t in frame.dtypes.items()}, True
+
+
+def verdict(d: dict, dtypes_checked: bool) -> tuple[list[str], int]:
+    """Summary lines + exit code for a diff result.
+
+    Columns changed -> 'schemas differ' (exit 1). Columns match AND dtypes were
+    verified -> 'schemas match' (exit 0). Columns match but dtypes were NOT
+    verified (no pandas) -> a loud SKIPPED notice and a NON-ZERO exit, never a
+    silent 'schemas match' — the retype the tool couldn't see must not read clean.
+    """
+    if any(d.values()):
+        return (['', 'schemas differ'], 1)
+    if dtypes_checked:
+        return (['', 'schemas match'], 0)
+    return (
+        [
+            '',
+            'dtype comparison SKIPPED (pandas not installed) - column-presence only.',
+            'Columns match, but a retype (e.g. int -> str) cannot be seen without pandas.',
+            'Install pandas (uv add --group dev pandas) for a real dtype diff.',
+        ],
+        2,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Diff two dataset schemas.')
     parser.add_argument('baseline')
     parser.add_argument('candidate')
+    parser.add_argument(
+        '--nrows',
+        type=int,
+        default=None,
+        help='rows to scan for dtype inference (pandas only); default: full file. '
+        'A cap can hide a retype that only appears in later rows.',
+    )
     args = parser.parse_args(argv)
 
-    d = diff(_csv_schema(Path(args.baseline)), _csv_schema(Path(args.candidate)))
+    schema_a, checked_a = _csv_schema(Path(args.baseline), args.nrows)
+    schema_b, checked_b = _csv_schema(Path(args.candidate), args.nrows)
+    d = diff(schema_a, schema_b)
     for col in d['added']:
         print(f'+ added   {col}')
     for col in d['removed']:
         print(f'- removed {col}')
     for col, old, new in d['retyped']:
         print(f'~ retyped {col}: {old} -> {new}')
-    changed = any(d.values())
-    print('\nschemas differ' if changed else '\nschemas match')
-    return 1 if changed else 0
+    lines, code = verdict(d, checked_a and checked_b)
+    for line in lines:
+        print(line)
+    return code
 
 
 if __name__ == '__main__':

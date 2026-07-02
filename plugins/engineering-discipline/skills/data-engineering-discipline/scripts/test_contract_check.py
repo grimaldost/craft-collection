@@ -27,7 +27,19 @@ def test_violations_detected():
     assert any('unique' in x for x in v)  # duplicate id '1'
 
 
+def test_numeric_enum_matches_string_csv_values():
+    # A JSON contract enum of ints ([1, 2, 3]) vs. CSV values (always strings:
+    # '1', '2', '3') must MATCH — comparison is normalized on both sides. The
+    # raw `'1' in [1, 2, 3]` membership test wrongly flagged every valid row.
+    contract = {'priority': {'enum': [1, 2, 3]}}
+    rows = [{'priority': '1'}, {'priority': '2'}, {'priority': '3'}]
+    assert validate(rows, contract) == []
+    # A genuinely out-of-enum value is still caught.
+    assert validate([{'priority': '4'}], contract) != []
+
+
 if __name__ == '__main__':
     test_clean_passes()
     test_violations_detected()
+    test_numeric_enum_matches_string_csv_values()
     print('ok: all contract_check tests passed')

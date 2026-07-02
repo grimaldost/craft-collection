@@ -60,7 +60,11 @@ def validate(rows: list[dict], contract: dict) -> list[str]:
 
         enum = rule.get('enum')
         if enum is not None:
-            bad = sorted({str(v) for v in values if not _blank(v) and v not in enum})
+            # Normalize both sides to str: CSV values are always strings ('1'),
+            # while a JSON contract enum may hold ints/floats ([1, 2, 3]). A raw
+            # `'1' not in [1, 2, 3]` membership test cried wolf on every valid row.
+            allowed = {str(e) for e in enum}
+            bad = sorted({str(v) for v in values if not _blank(v) and str(v) not in allowed})
             if bad:
                 violations.append(f'{col}: values outside enum: {bad[:5]}')
 
