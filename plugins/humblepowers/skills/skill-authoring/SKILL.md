@@ -1,6 +1,6 @@
 ---
 name: skill-authoring
-description: Author and revise Claude Code skills with calibrated trigger descriptions and eval-gated quality — the description is a trigger surface that competes on fit, not an advertisement that competes on volume. Use when creating a new skill, when an existing skill over- or under-triggers and the description needs rework, when adding negative space ("not for X — that is Y") or example trigger phrasings, when deciding whether a skill body is rigid (bright-line constraints) or flexible (judgment-delegating guidance), or when porting a skill from an imperative register to a neutral one. Covers the calibration doctrine — dense concrete triggers, explicit non-triggers naming the owning sibling, plain-declarative bright lines, descriptive failure-mode catalogs without identity pressure, and the shipping requirement of a trigger dataset with sealed holdout plus a correct-usage rubric for rigid skills. The register linter mechanically enforces the register rules. Not for measuring an existing skill's behavior (that is evaluate-skill) and not for deciding which installed skill to use on a task (that is choosing-tools).
+description: Author and revise Claude Code skills with calibrated trigger descriptions and eval-gated quality — the description is a trigger surface that competes on fit, not an advertisement that competes on volume. Use when creating a new skill, when an existing skill over- or under-triggers and the description needs rework, when adding negative space ("not for X — that is Y") or example trigger phrasings, when deciding whether a skill body is rigid (bright-line constraints) or flexible (judgment-delegating guidance), or when porting a skill from an imperative register to a neutral one. Covers the calibration doctrine — dense concrete triggers, explicit non-triggers naming the owning sibling, plain-declarative bright lines, descriptive failure-mode catalogs without identity pressure, and the shipping requirement of a trigger dataset with sealed holdout plus a correct-usage rubric for rigid skills. The register linter mechanically enforces the detectable subset of the register rules (banners, caps runs, a fixed phrase list); review holds the rest. Not for measuring an existing skill's behavior (that is evaluate-skill) and not for deciding which installed skill to use on a task (that is choosing-tools).
 ---
 
 # Skill Authoring
@@ -76,10 +76,12 @@ three or more consecutive all-caps words outside code — the patterns that buy
 salience instead of fit. Emphasis budget inside a body: bold the one
 load-bearing sentence of a section, sparingly. If a constraint feels like it
 needs caps to hold, it needs a verification step or a gate instead — move the
-enforcement to mechanism. Enforce the deny-list mechanically where you can:
-craft-collection wires a register linter (`scripts/lint_register.py`) into
-pre-commit; a standalone install applies the same rules by review until it
-wires its own gate.
+enforcement to mechanism. Enforce what you can mechanically: craft-collection
+wires a register linter (`scripts/lint_register.py`) into pre-commit, but it
+catches only the detectable subset — importance banners, all-caps runs, and a
+fixed list of obedience/priority phrases. Obedience framing that dodges those
+literal patterns is not caught, so review holds the rest. A standalone install
+applies the whole deny-list by review until it wires its own gate.
 
 ## Shipping requirement
 
@@ -104,7 +106,12 @@ A skill ships when all of these exist, not before:
 
 Skills reference other tools without depending on them. Four rules and a test:
 
-1. **Same-plugin references are free** — the plugin installs as a unit.
+1. **Same-plugin references are free** — the plugin installs as a unit, so a
+   sibling skill in the same plugin is guaranteed present. A different plugin
+   is not, even one in the same marketplace: plugins install individually
+   (`/plugin install humblepowers@craft-collection`), so a sibling plugin
+   under the same marketplace is a cross-tool reference and rule 2 applies —
+   role-generic, with a working fallback.
 2. **Cross-tool references are role-generic with a named example and a
    working fallback**: "when a registered model-tier policy is installed
    (e.g. pr-pilot's model-tiers), its thresholds win — otherwise these

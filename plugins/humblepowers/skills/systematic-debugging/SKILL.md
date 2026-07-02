@@ -28,8 +28,9 @@ like any other.
    don't trigger a payment or drop a table to "observe" it.) And **confirm the
    code that ran is the code you read** — resolve the imported module's
    `__file__` and installed version; an editable checkout and an installed
-   release of the same library diverge silently (the data form is
-   `data-engineering-discipline` Axiom 2).
+   release of the same library diverge silently. (A data-engineering skill,
+   when one is installed, states this canonically as an axiom — e.g.
+   `data-engineering-discipline` Axiom 2.)
 3. **Check recent changes.** Diff, recent commits, new dependencies, config
    and environment differences.
 4. **Instrument boundaries in multi-component systems.** Before theorizing
@@ -64,8 +65,9 @@ protocol exactly where it's needed.
 1. **Failing test that reproduces the bug** — test-driven-development owns
    the cycle from here.
 2. **One fix, addressing the proven cause.** No bundled refactoring, no
-   "while I'm here" — the scope-bounding rule `data-engineering-discipline`
-   Principle 17 states canonically: an edit's diff is its scope.
+   "while I'm here": an edit's diff is its scope. (This is the scope-bounding
+   rule a data-engineering skill states canonically when one is installed —
+   e.g. `data-engineering-discipline` Principle 17.)
 3. **Verify**: the new test passes, nothing else broke, and the original
    symptom is actually gone. Hand the claim to verification-before-completion
    before reporting it fixed.

@@ -55,9 +55,11 @@ verifier — a gate, a parity diff, a contract check, an eval assertion: a check
 seen only green is indistinguishable from one that tests nothing (a typo'd join
 key, a tolerance so wide nothing trips, a fixture that hits a fallback). Before
 trusting a green, watch it go red — plant a known violation, confirm the catch,
-remove the plant. test-driven-development's "verify red" is this for tests;
-`data-engineering-discipline`'s prove-the-gate-can-fail (its non-vacuity matrix)
-is this for enforcement gates. Same discipline, named here.
+remove the plant. test-driven-development's "verify red" is this for tests; for
+an enforcement gate, prove it can fail before trusting it green. (A
+data-engineering skill states this canonically for gates when one is installed —
+e.g. `data-engineering-discipline`'s prove-the-gate-can-fail, its non-vacuity
+matrix.) Same discipline, named here.
 
 ## Delegated work
 
@@ -73,8 +75,12 @@ individually; the output is pristine — no stray errors or warnings riding
 along. Recurring checks belong in pre-commit or CI rather than in memory —
 mechanism outlasts intention. When the suite carries irreducible pre-existing
 failures, the honest gate is "zero net regression" against a baseline, not an
-absolute zero — see `data-engineering-discipline`'s parity-recipes
-(differential-baseline: the stash-test and the base-commit set-diff).
+absolute zero: diff this run's failure set against the baseline's and require
+the difference to be empty — capture the baseline by stashing the change and
+running the suite, or by running it at the base commit. (A data-engineering
+skill, when one is installed, carries these as concrete parity recipes — e.g.
+`data-engineering-discipline`'s differential-baseline: the stash-test and the
+base-commit set-diff.)
 
 ## Wording that signals an unverified claim
 
