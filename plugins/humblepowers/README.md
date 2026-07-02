@@ -65,9 +65,15 @@ hands off to it the moment work wants gates and dependency DAGs.
 `scripts/lint_register.py` (repo root) gates this plugin's markdown in
 pre-commit and CI: imperative-obedience phrases, importance banners, and runs
 of three or more consecutive all-caps words outside code fail the commit. The
-linter is the mechanical enforcement of the skill-authoring doctrine.
+linter mechanically enforces the *detectable subset* of the skill-authoring
+register rules; the rest of the doctrine (calibration, negative space,
+evidence requirements) remains judgment the linter cannot check.
 
 ## Measured behavior (0.2.0–0.3.0 — 2026-06-10/11, claude-sonnet-4-6, dispatch inject enabled)
+
+Numbers come from local eval runs; the raw per-run records (`evals/report/`,
+gitignored) are not committed, so the tables below are the surviving record —
+re-measure with the session-workflow `evaluate-skill` engine to reproduce.
 
 | skill | recall dev → holdout | specificity dev → holdout | correct-usage | WITH vs WITHOUT |
 |---|---|---|---|---|
@@ -80,8 +86,13 @@ linter is the mechanical enforcement of the skill-authoring doctrine.
 | verification-before-completion | 0.00 → 0.00 ¹ | 1.00 → 1.00 | **1.00 pass** | WITH 0.33 / tie 0.50 |
 | planned-execution | 0.25 → 0.12 ¹ | 1.00 → 1.00 | 0.67 (n=3) | **WITH 1.00 sweep** ³ |
 
-No skill shows a dev→holdout collapse — descriptions were never tuned against
-the dev sets, and unseen-prompt behavior matches measured behavior.
+No skill shows a wholesale dev→holdout collapse, though three cells do drop
+(choosing-tools specificity 1.00 → 0.75, skill-authoring recall 0.38 → 0.25,
+planned-execution recall 0.25 → 0.12) — drops within the wide confidence
+intervals these small sets carry (dev n = 8 per side; holdout n = 4 positives
+/ 2 negatives, so a single held-out query moves recall by 0.25). Descriptions
+were never tuned against the dev sets; treat the direction, not the point
+values, as the signal.
 
 ¹ The trigger arm allows no Write/Edit/Bash tools, so disciplines that
 activate *during real work* under-measure there (and Write-less runs that spin
@@ -110,8 +121,10 @@ verification-before-completion is 1.00 on both, and systematic-debugging's
 rubric score is *lower* under superpowers (0.29 vs 0.75–0.79) with elevated
 error runs (heavier context: 14 skills + banner inject). Verdict per axis:
 selection pressure — register works; discipline adherence — register does
-nothing the content didn't already do. Full per-arm records:
-`report/grading.json` keys `<skill>@superpowers`.
+nothing the content didn't already do. The per-arm records were local eval
+output (`evals/report/grading.json`, gitignored) and have since been
+overwritten by later runs — the summary above is the surviving record; to
+reproduce, re-run the grading arm against a superpowers 5.1.0 install.
 
 ## Attribution and license
 
