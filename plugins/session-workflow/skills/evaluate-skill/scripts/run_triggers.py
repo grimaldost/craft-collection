@@ -38,10 +38,25 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counte
     not a description gap — is scored into `recall_hard` and EXCLUDED from the
     gated `recall`, so tuning stops re-spending on immovable queries while a
     regression stays visible. Pure: inject fake counters in tests, the real ones
-    in the CLI."""
+    in the CLI.
+
+    Two CIs are reported per rate. The pooled one (`recall_ci`) treats every
+    query x repeat as an independent Bernoulli trial; but repeats of one query are
+    near-perfectly correlated (a query almost always fires all-or-nothing), so the
+    effective sample size is the number of QUERIES, not queries x repeats, and the
+    pooled interval is too narrow. `recall_ci_query` / `specificity_ci_query` are
+    the honest intervals: the unit is the query (it 'passes' if it fired on a
+    majority of repeats), n = number of queries. Downstream overfit checks should
+    consume the query-level bound."""
     pos_succ = pos_tri = pos_err = 0  # gated recall: non-hard positives
     hard_succ = hard_tri = 0  # reported separately: expected-hard positives
     neg_succ = neg_tri = 0
+    pos_q_succ = pos_q_n = (
+        0  # query-level recall: a query passes if it fired on a majority of repeats
+    )
+    neg_q_succ = neg_q_n = (
+        0  # query-level specificity: a negative passes if it stayed quiet on a majority
+    )
     per_query = []
     for q in queries:
         k = trigger_counter(q['query'], repeats)
@@ -55,9 +70,15 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counte
                 pos_succ += k
                 pos_tri += repeats
                 pos_err += e
+                pos_q_n += 1
+                if k * 2 > repeats:  # majority of repeats fired (a tie counts as a miss)
+                    pos_q_succ += 1
         else:
             neg_succ += repeats - k  # a correct rejection = a NON-fire on a negative
             neg_tri += repeats
+            neg_q_n += 1
+            if (repeats - k) * 2 > repeats:  # majority stayed quiet
+                neg_q_succ += 1
         per_query.append(
             {
                 'query': q['query'],
@@ -75,6 +96,8 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counte
         'specificity': pass_rate(neg_succ, neg_tri),
         'recall_ci': (list(wilson_interval(pos_succ, pos_tri)) if pos_tri else None),
         'specificity_ci': list(wilson_interval(neg_succ, neg_tri)),
+        'recall_ci_query': (list(wilson_interval(pos_q_succ, pos_q_n)) if pos_q_n else None),
+        'specificity_ci_query': (list(wilson_interval(neg_q_succ, neg_q_n)) if neg_q_n else None),
         'recall_excl_errors': (pass_rate(pos_succ, pos_valid) if pos_valid > 0 else None),
         'recall_excl_errors_ci': (
             list(wilson_interval(pos_succ, pos_valid)) if pos_valid > 0 else None

@@ -23,6 +23,7 @@ from pathlib import Path
 
 from claude_runner import cleanup_dir, make_isolated_config, map_concurrent, run_agent
 from judge import judge_pairwise, judge_pointwise
+from run_triggers import preflight_auth
 from stats import pass_rate, wilson_interval
 
 REPO = Path(__file__).resolve().parents[2]
@@ -184,6 +185,7 @@ def grade_skill(
     plugin_dir: str | None,
     config_with: str | None,
     config_without: str | None,
+    config_judge: str | None = None,
     pairwise_criterion: str,
     concurrency: int = 4,
     run_arm=_run_arm_real,
@@ -209,10 +211,20 @@ def grade_skill(
         )
         task_rubric = resolve_task_rubric(skill, task, rubric)
         pw = judge_point(
-            prompt, with_out, task_rubric, model=cfg['judge_model'], repeats=cfg['judge_repeats']
+            prompt,
+            with_out,
+            task_rubric,
+            model=cfg['judge_model'],
+            repeats=cfg['judge_repeats'],
+            config_dir=config_judge,
         )
         pair = judge_pair(
-            prompt, with_out, without_out, pairwise_criterion, model=cfg['judge_model']
+            prompt,
+            with_out,
+            without_out,
+            pairwise_criterion,
+            model=cfg['judge_model'],
+            config_dir=config_judge,
         )
         return {
             'task_id': task['id'],
@@ -264,21 +276,30 @@ def _summarize(skill: str, records: list[dict]) -> dict:
         )
 
     n = len(records)
-    passes = sum(1 for x in records if x['with_pass'])
-    a = sum(1 for x in records if x['pairwise_winner'] == 'A')
-    b = sum(1 for x in records if x['pairwise_winner'] == 'B')
-    ties = sum(1 for x in records if x['pairwise_winner'] == 'tie')
+    # A run that errored (timeout/budget/auth) produced no output, so grading it is
+    # grading nothing — an empty WITH output scores 0 (looks like a discipline
+    # failure) and an empty WITHOUT arm hands the pairwise trivially to WITH. Score
+    # only the units that actually ran; report the error count separately.
+    usage_valid = [x for x in records if not x['with_error']]
+    pair_valid = [x for x in records if not (x['with_error'] or x['without_error'])]
+    nv, npv = len(usage_valid), len(pair_valid)
+    passes = sum(1 for x in usage_valid if x['with_pass'])
+    a = sum(1 for x in pair_valid if x['pairwise_winner'] == 'A')
+    b = sum(1 for x in pair_valid if x['pairwise_winner'] == 'B')
+    ties = sum(1 for x in pair_valid if x['pairwise_winner'] == 'tie')
     cost = sum((x['with_cost'] + x['without_cost']) for x in records)
     summary = {
         'n_records': n,
-        'correct_usage_rate': pass_rate(passes, n),
-        'correct_usage_ci': list(wilson_interval(passes, n)),
-        'mean_score': _mean(x['with_score'] for x in records),
-        'mean_agreement': _mean(x['with_agreement'] for x in records),
-        'with_activation_rate': pass_rate(sum(1 for x in records if x['with_activated']), n),
-        'with_win_rate': pass_rate(a, n),
-        'without_win_rate': pass_rate(b, n),
-        'tie_rate': pass_rate(ties, n),
+        'n_usage_valid': nv,  # WITH arm actually ran; errored runs excluded from scoring
+        'n_pairwise_valid': npv,
+        'correct_usage_rate': pass_rate(passes, nv),
+        'correct_usage_ci': list(wilson_interval(passes, nv)),
+        'mean_score': _mean(x['with_score'] for x in usage_valid),
+        'mean_agreement': _mean(x['with_agreement'] for x in usage_valid),
+        'with_activation_rate': pass_rate(sum(1 for x in usage_valid if x['with_activated']), nv),
+        'with_win_rate': pass_rate(a, npv),
+        'without_win_rate': pass_rate(b, npv),
+        'tie_rate': pass_rate(ties, npv),
         'error_runs': sum(1 for x in records if x['with_error'] or x['without_error']),
         'cost_usd': round(cost, 4),
     }
@@ -325,7 +346,14 @@ def main(argv: list[str] | None = None) -> int:
         cfg['agent_repeats'] = args.repeats
 
     skill = args.skill
-    tasks = json.loads((TASKS_DIR / skill / 'tasks.json').read_text(encoding='utf-8'))
+    tasks_path = TASKS_DIR / skill / 'tasks.json'
+    if not tasks_path.exists():
+        # config.json can list a skill that has no grading suite yet (run_all iterates
+        # every configured skill). Skip cleanly instead of crashing the whole run with
+        # an unhandled FileNotFoundError after the trigger stage already spent its budget.
+        print(f'SKIP: no grading suite for {skill} (no evals/tasks/{skill}/tasks.json).')
+        return 0
+    tasks = json.loads(tasks_path.read_text(encoding='utf-8'))
     rubric = json.loads((TASKS_DIR / skill / 'rubric.json').read_text(encoding='utf-8'))
     if args.limit:
         tasks = tasks[: args.limit]
@@ -352,7 +380,16 @@ def main(argv: list[str] | None = None) -> int:
         )
     config_with = make_isolated_config()  # --plugin-dir runs cache the plugin here
     config_without = make_isolated_config()  # never sees --plugin-dir -> stays skill-free
+    config_judge = make_isolated_config()  # neutral, skill-free config for the LLM judge
+    probe_cwd = tempfile.mkdtemp(prefix='eval_task_preflight_')
     try:
+        ok, detail = preflight_auth(cfg, config_with, probe_cwd)
+        if not ok:
+            print(
+                f'\nPRE-FLIGHT FAILED: the auth/CLI probe errored ({detail}). '
+                f'Re-login (claude /login) and retry — not spending the {n_spawn} run spawns.'
+            )
+            return 2
         blob = grade_skill(
             skill,
             tasks,
@@ -361,17 +398,36 @@ def main(argv: list[str] | None = None) -> int:
             plugin_dir=plugin_dir,
             config_with=config_with,
             config_without=config_without,
+            config_judge=config_judge,
             pairwise_criterion=_pairwise_criterion(skill),
             concurrency=args.concurrency,
         )
     finally:
+        cleanup_dir(probe_cwd)
         cleanup_dir(config_with)
         cleanup_dir(config_without)
+        cleanup_dir(config_judge)
+
+    s = blob['summary']
+    if s['n_records'] > 0 and s['n_usage_valid'] == 0:
+        # Every WITH arm errored — an infrastructure failure, not a measurement. The
+        # correct_usage/pairwise it would print are artifacts of nothing running, so
+        # refuse to persist it (it would overwrite a real grading.json entry with 0.00).
+        hint = (
+            'A $0 cost points to auth: claude /login.'
+            if not s['cost_usd']
+            else 'Likely network/CLI — re-run.'
+        )
+        print(
+            f'\nINVALID: all {s["n_records"]} grading runs errored (cost=${s["cost_usd"]}). '
+            f'Infrastructure failure, NOT a measurement — result discarded (not written to '
+            f'report/grading.json). {hint}'
+        )
+        return 2
 
     if args.plugin_dir_override:
         blob['arm_plugin_dir'] = plugin_dir  # provenance for ablation entries
     write_report(report_key, blob)
-    s = blob['summary']
     gate = cfg['gates']['correct_usage']
     clo, chi = s['correct_usage_ci']
     usage_ok = 'PASS' if s['correct_usage_rate'] >= gate else 'FAIL'

@@ -8,6 +8,7 @@ from judge import (
     decide_pairwise,
     extract_verdict,
     judge_pairwise,
+    judge_pointwise,
     score_from_criteria,
 )
 
@@ -84,6 +85,37 @@ def test_judge_pairwise_position_biased_judge_yields_tie():
     assert d['winner'] == 'tie'
 
 
+def test_judge_pointwise_threads_config_dir():
+    # Without an isolated config_dir the judge spawn inherits the user's real
+    # ~/.claude (contaminating the verdict); the dir must reach the runner.
+    seen = {}
+
+    def fake(prompt, **kw):
+        seen.update(kw)
+        return AgentRun(result_text='{"criteria":[],"reason":"ok"}')
+
+    judge_pointwise(
+        't',
+        'o',
+        [{'id': 'a', 'text': 'x', 'weight': 1}],
+        model='m',
+        runner=fake,
+        config_dir='JUDGECFG',
+    )
+    assert seen.get('config_dir') == 'JUDGECFG'
+
+
+def test_judge_pairwise_threads_config_dir():
+    seen = []
+
+    def fake(prompt, **kw):
+        seen.append(kw.get('config_dir'))
+        return AgentRun(result_text='{"winner":"first"}')
+
+    judge_pairwise('t', 'A', 'B', 'crit', model='m', runner=fake, config_dir='JUDGECFG')
+    assert seen and all(c == 'JUDGECFG' for c in seen)
+
+
 if __name__ == '__main__':
     test_extracts_fenced_json()
     test_extracts_bare_json_object()
@@ -94,4 +126,6 @@ if __name__ == '__main__':
     test_decide_pairwise_requires_order_agreement()
     test_judge_pairwise_maps_positions_and_agrees()
     test_judge_pairwise_position_biased_judge_yields_tie()
+    test_judge_pointwise_threads_config_dir()
+    test_judge_pairwise_threads_config_dir()
     print('ok: all judge tests passed')
