@@ -96,6 +96,46 @@ def test_pip_audit_found_in_gitlab_ci():
         assert results['pip-audit'] is True
 
 
+def test_comments_do_not_satisfy_checks():
+    # A raw substring scan lets a project score points for tools it explicitly
+    # does NOT use, as long as the words appear in a comment. Parsing with tomllib
+    # ignores comments, so these mentions must NOT satisfy the checks.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _make_project(
+            root,
+            '[build-system]\n'
+            'requires = ["uv_build"]\n'
+            '\n'
+            '# we deliberately do NOT use pip-audit here (policy exception)\n'
+            '# a future [tool.ruff.format] quote-style = "single" is a TODO\n'
+            '# [dependency-groups] are also on the backlog\n',
+        )
+        results = {cid: ok for cid, ok, _ in audit(root)}
+        assert results['pip-audit'] is False, 'pip-audit mentioned only in a comment must not pass'
+        assert results['ruff-single-quote'] is False, 'quote-style only in a comment must not pass'
+        assert results['dependency-groups'] is False, (
+            'dependency-groups only in a comment must not pass'
+        )
+
+
+def test_real_config_still_passes_after_tomllib_parse():
+    # Guard against over-correction: genuine tables must still satisfy the checks.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _make_project(
+            root,
+            '[build-system]\nrequires = ["uv_build"]\n\n'
+            '[dependency-groups]\ndev = ["pip-audit"]\n\n'
+            '[tool.ruff.format]\nquote-style = "single"\n',
+        )
+        results = {cid: ok for cid, ok, _ in audit(root)}
+        assert results['pip-audit'] is True
+        assert results['ruff-single-quote'] is True
+        assert results['dependency-groups'] is True
+        assert results['uv'] is True
+
+
 if __name__ == '__main__':
     test_flags_missing_ruff_single_quote_but_passes_src_layout()
     test_passes_full_standard_project()
@@ -105,4 +145,6 @@ if __name__ == '__main__':
     test_detects_circleci_only()
     test_no_ci_when_no_config()
     test_pip_audit_found_in_gitlab_ci()
+    test_comments_do_not_satisfy_checks()
+    test_real_config_still_passes_after_tomllib_parse()
     print('ok: all doctor tests passed')

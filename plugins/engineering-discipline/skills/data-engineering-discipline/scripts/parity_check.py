@@ -35,9 +35,19 @@ def _to_float(v: object) -> float | None:
 
 
 def compare(
-    rows_a: list[dict], rows_b: list[dict], keys: list[str] | None = None, tol: float = 1e-9
+    rows_a: list[dict],
+    rows_b: list[dict],
+    keys: list[str] | None = None,
+    tol: float = 1e-9,
+    null_tol: float = 0.0,
 ) -> dict:
-    """Compare two list[dict] tables. Returns a report dict with an 'ok' flag."""
+    """Compare two list[dict] tables. Returns a report dict with an 'ok' flag.
+
+    `tol` gates the numeric-sum deltas; `null_tol` gates the per-column null-rate
+    deltas SEPARATELY (default 0.0 = no null-rate change tolerated). Keeping them
+    separate is deliberate: a loose sum `tol` must never silence a null-rate jump,
+    or a column going 100% NULL would pass PARITY OK while its sums stay flat.
+    """
     keys = keys or []
     report: dict = {
         'row_count': {'a': len(rows_a), 'b': len(rows_b), 'delta': len(rows_b) - len(rows_a)}
@@ -72,7 +82,7 @@ def compare(
     report['ok'] = (
         report['row_count']['delta'] == 0
         and report['group_cardinality']['a'] == report['group_cardinality']['b']
-        and all(abs(v) <= tol for v in report['null_rate_delta'].values())
+        and all(abs(v) <= null_tol for v in report['null_rate_delta'].values())
         and all(abs(s['delta']) <= tol for s in sums.values())
     )
     return report
@@ -88,11 +98,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('baseline')
     parser.add_argument('candidate')
     parser.add_argument('--keys', default='', help='comma-separated key columns')
-    parser.add_argument('--tol', type=float, default=1e-9)
+    parser.add_argument('--tol', type=float, default=1e-9, help='numeric-sum delta tolerance')
+    parser.add_argument(
+        '--null-tol',
+        type=float,
+        default=0.0,
+        help='per-column null-rate delta tolerance (separate from --tol; default 0.0)',
+    )
     args = parser.parse_args(argv)
 
     keys = [k for k in args.keys.split(',') if k]
-    rep = compare(_read_csv(args.baseline), _read_csv(args.candidate), keys, args.tol)
+    rep = compare(
+        _read_csv(args.baseline), _read_csv(args.candidate), keys, args.tol, args.null_tol
+    )
     rc = rep['row_count']
     print(f'row count: {rc["a"]} -> {rc["b"]} (delta {rc["delta"]})')
     gc = rep['group_cardinality']
@@ -101,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         if abs(s['delta']) > args.tol:
             print(f'  sum {c}: delta {s["delta"]}')
     for c, d in rep['null_rate_delta'].items():
-        if abs(d) > args.tol:
+        if abs(d) > args.null_tol:
             print(f'  null-rate {c}: delta {d:+.4f}')
     ok = rep['ok']
     print('PARITY OK' if ok else 'PARITY FAILED')

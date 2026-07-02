@@ -6,7 +6,7 @@ Read-only: reports pass/fail per check, never modifies the project.
 Usage:
     python doctor.py [path]     # default: current directory
 
-Exit code 1 if any check fails. Requires: Python 3.10+ (stdlib only).
+Exit code 1 if any check fails. Requires: Python 3.11+ (stdlib only: tomllib).
 """
 
 from __future__ import annotations
@@ -15,12 +15,37 @@ import argparse
 import sys
 from pathlib import Path
 
+import tomllib
+
 
 def _read(p: Path) -> str:
     try:
         return p.read_text(encoding='utf-8')
     except (OSError, UnicodeDecodeError):
         return ''
+
+
+def _parse_toml(text: str) -> dict:
+    """Parse pyproject text into a dict; malformed/empty -> {}.
+
+    Parsing (vs. a raw substring scan) is the point: tomllib ignores comments, so
+    a project that only *mentions* pip-audit / quote-style / [dependency-groups]
+    in a comment cannot score points for tools it does not actually configure."""
+    try:
+        return tomllib.loads(text)
+    except (tomllib.TOMLDecodeError, ValueError):
+        return {}
+
+
+def _flatten_strings(obj: object) -> list[str]:
+    """All string leaves in a nested dict/list — for scanning dependency tables."""
+    if isinstance(obj, str):
+        return [obj]
+    if isinstance(obj, dict):
+        return [s for v in obj.values() for s in _flatten_strings(v)]
+    if isinstance(obj, (list, tuple)):
+        return [s for v in obj for s in _flatten_strings(v)]
+    return []
 
 
 def _ci_files(d: Path) -> list[Path]:
@@ -33,7 +58,9 @@ def _ci_files(d: Path) -> list[Path]:
 def audit(project_dir: Path) -> list[tuple[str, bool, str]]:
     """Return [(check_id, ok, detail)] for project_dir. Pure read-only."""
     d = Path(project_dir)
-    pyproject = _read(d / 'pyproject.toml')
+    pyproject_text = _read(d / 'pyproject.toml')
+    pyproject = _parse_toml(pyproject_text)
+    tool = pyproject.get('tool', {}) if isinstance(pyproject.get('tool'), dict) else {}
     checks: list[tuple[str, bool, str]] = []
 
     # src layout: a src/ dir containing at least one package directory.
@@ -60,14 +87,21 @@ def audit(project_dir: Path) -> list[tuple[str, bool, str]]:
         )
     )
 
-    # uv: uv.lock, the uv_build backend, or a [tool.uv] table.
-    uses_uv = (d / 'uv.lock').is_file() or 'uv_build' in pyproject or '[tool.uv]' in pyproject
+    # uv: uv.lock, the uv_build build backend, or a [tool.uv] table.
+    build_system = pyproject.get('build-system', {})
+    build_system = build_system if isinstance(build_system, dict) else {}
+    build_strings = _flatten_strings(build_system)
+    uses_uv = (
+        (d / 'uv.lock').is_file() or any('uv_build' in s for s in build_strings) or 'uv' in tool
+    )
     checks.append(
         ('uv', uses_uv, 'uv detected' if uses_uv else 'no uv.lock / uv_build / [tool.uv]')
     )
 
-    # ruff single-quote formatting configured.
-    ruff_sq = 'quote-style = "single"' in pyproject or "quote-style = 'single'" in pyproject
+    # ruff single-quote formatting configured (parsed, so a commented example
+    # quote-style does not count).
+    ruff_fmt = tool.get('ruff', {}).get('format', {}) if isinstance(tool.get('ruff'), dict) else {}
+    ruff_sq = isinstance(ruff_fmt, dict) and ruff_fmt.get('quote-style') == 'single'
     checks.append(
         (
             'ruff-single-quote',
@@ -78,8 +112,8 @@ def audit(project_dir: Path) -> list[tuple[str, bool, str]]:
         )
     )
 
-    # dev deps via PEP 735 dependency-groups.
-    has_groups = '[dependency-groups]' in pyproject
+    # dev deps via PEP 735 dependency-groups (a real table, not a comment).
+    has_groups = isinstance(pyproject.get('dependency-groups'), dict)
     checks.append(
         (
             'dependency-groups',
@@ -91,8 +125,16 @@ def audit(project_dir: Path) -> list[tuple[str, bool, str]]:
     )
 
     # pip-audit wired in deps or a CI workflow (GitHub Actions, GitLab, or CircleCI).
+    # pyproject side is scanned over parsed dependency string leaves (project deps,
+    # optional-deps, dependency-groups, tool tables) so a commented mention does not
+    # count; CI files are still scanned as raw text.
+    pyproject_deps = (
+        _flatten_strings(pyproject.get('project', {}))
+        + _flatten_strings(pyproject.get('dependency-groups', {}))
+        + _flatten_strings(tool)
+    )
     ci = ' '.join(_read(p) for p in _ci_files(d))
-    has_audit = 'pip-audit' in pyproject or 'pip-audit' in ci
+    has_audit = any('pip-audit' in s for s in pyproject_deps) or 'pip-audit' in ci
     checks.append(
         ('pip-audit', has_audit, 'pip-audit present' if has_audit else 'no pip-audit in deps or CI')
     )

@@ -8,9 +8,9 @@ staleness is detectable.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from freshness_check import check_freshness, check_freshness_groups
+from freshness_check import check_freshness, check_freshness_groups, main
 
 
 def test_advance_ok():
@@ -81,6 +81,37 @@ def test_datetime_advance_ok():
     assert rep['advanced'] is True
 
 
+def test_max_lag_temporal_cursor_within_tolerance_passes():
+    # A date cursor 2 days behind source, allowed lag 7 days. Previously --max-lag
+    # was a bare float, so `timedelta(days=2) <= 7.0` raised TypeError and the run
+    # reported a FALSE "STALE: uncomparable (tz-aware vs naive?)". For a temporal
+    # cursor, max_lag is interpreted as a number of DAYS -> comparable, passes.
+    rep = check_freshness(
+        None, date(2026, 6, 17), date(2026, 6, 19), require_advance=False, max_lag=7
+    )
+    assert rep['ok'] is True
+    assert 'uncomparable' not in rep['reason']
+
+
+def test_max_lag_temporal_cursor_beyond_tolerance_fails_honestly():
+    # 5 days behind, allowed 2 -> genuinely stale, and NOT a bogus tz message.
+    rep = check_freshness(
+        None, datetime(2026, 6, 14), datetime(2026, 6, 19), require_advance=False, max_lag=2
+    )
+    assert rep['ok'] is False
+    assert 'uncomparable' not in rep['reason']
+    assert 'stale' in rep['reason']
+
+
+def test_cli_max_lag_datetime_within_tolerance_passes():
+    # End-to-end through main(): a datetime cursor within the day-lag allowance
+    # must exit 0 (FRESH), not blow up on the float/timedelta mismatch.
+    rc = main(
+        ['--curr', '2026-06-18', '--source', '2026-06-19', '--max-lag', '7', '--no-require-advance']
+    )
+    assert rc == 0
+
+
 def test_per_group_one_stale_fails():
     # Global max would advance (g2 moved), but g1 is frozen -> per-group catches it.
     groups = [
@@ -114,6 +145,9 @@ if __name__ == '__main__':
     test_tz_aware_vs_naive_rejected()
     test_mixed_types_rejected()
     test_datetime_advance_ok()
+    test_max_lag_temporal_cursor_within_tolerance_passes()
+    test_max_lag_temporal_cursor_beyond_tolerance_fails_honestly()
+    test_cli_max_lag_datetime_within_tolerance_passes()
     test_per_group_one_stale_fails()
     test_per_group_all_fresh_ok()
     print('ok: all freshness_check tests passed')

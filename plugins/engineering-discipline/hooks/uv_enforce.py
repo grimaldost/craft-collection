@@ -16,10 +16,16 @@ import sys
 from pathlib import Path
 
 # Commands redirected to uv when inside a uv project. Word boundaries keep
-# `pip`/`conda`/`pipenv` from matching as substrings of unrelated words.
+# `pip`/`conda`/`pipenv` from matching as substrings of unrelated words. Each
+# alternative is anchored at a *command position* (start of string, or right
+# after a shell separator — see `_CMD_POS`) so a mere mention of "pip install"
+# inside an argument (`grep "pip install"`) is not a match. The `pip` arm carries
+# a negative lookbehind for `uv ` so uv's own `uv pip install` interface is left
+# alone (only bare `pip`/`pip3 install` is redirected).
+_CMD_POS = r'(?:^|(?<=[\n;|&])|(?<=\|\|)|(?<=&&)|(?<=\$\())\s*'
 _BLOCKED = re.compile(
-    r'\b(?:'
-    r'pip3?\s+install'
+    _CMD_POS + r'(?:'
+    r'(?<!uv )pip3?\s+install'
     r'|poetry\s+(?:add|install|update)'
     r'|pipenv\b'
     r'|conda\s+install'
@@ -27,6 +33,21 @@ _BLOCKED = re.compile(
     r'|python3?\s+-m\s+venv'
     r')\b'
 )
+
+# Strip quoted regions (their contents are data, not a command) and trailing
+# `#`-comments before scanning, so a documented or logged "pip install" mention
+# cannot trip the matcher. This is a deliberately coarse shell approximation:
+# it neutralizes the false-positive surface without pretending to be a real
+# parser. A quoted span becomes a single space so it can still act as a
+# separator (`echo "x" && pip install` keeps the `&&`).
+_QUOTED_OR_COMMENT = re.compile(
+    r""""[^"]*"|'[^']*'|\#[^\n]*""",
+)
+
+
+def _strip_noncommand(command: str) -> str:
+    """Blank out quoted spans and `#`-comments so only real command text remains."""
+    return _QUOTED_OR_COMMENT.sub(' ', command)
 
 
 def cwd_is_uv_project(cwd: str | None) -> bool:
@@ -44,7 +65,8 @@ def verdict(command: str, cwd_has_uv: bool, allow_env: bool) -> str:
     """Return 'block' or 'allow' for a Bash command."""
     if allow_env or not cwd_has_uv:
         return 'allow'
-    return 'block' if _BLOCKED.search(command or '') else 'allow'
+    scannable = _strip_noncommand(command or '')
+    return 'block' if _BLOCKED.search(scannable) else 'allow'
 
 
 def main() -> int:

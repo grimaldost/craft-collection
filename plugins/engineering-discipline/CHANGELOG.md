@@ -3,6 +3,54 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.10 — 2026-07-02
+
+Mechanical-layer bug fixes from the GitHub issue #51 stress-review panel — nine
+confirmed false-pass / false-block defects in the hooks and runnable scripts, each
+fixed test-first (a reproducing test added and watched fail before the fix). No
+skill `description` changed (hooks / scripts only), so no holdout re-seal.
+
+### Fixed
+
+- **`uv_enforce.py` false positives.** A mere *mention* of `pip install` — inside a
+  quoted string (`grep -rn "pip install" docs/`), a commit message, a heredoc, or a
+  `#`-comment — was exit-2 blocked. Blocked installers now match only at a plausible
+  command position (start of string, or after `&&` / `||` / `;` / `|` / `$(` / a
+  newline), and quoted regions and `#`-comments are stripped before matching.
+- **`uv_enforce.py` false-blocked `uv pip install`.** uv's own pip interface was
+  caught by the bare-`pip install` rule; a negative lookbehind for `uv ` now allows it.
+- **`stop_nudge.py` never reached Claude.** It printed the nudge to stderr on exit 0,
+  which the Stop-hook contract discards. It now emits `{"decision":"block","reason":…}`
+  as JSON on stdout (exit 0) and guards against re-triggering itself by honoring
+  `stop_hook_active` in the payload. Still inert unless `DATAENG_CHECKLIST_NUDGE=1`.
+- **`parity_check.py` null-rate false pass.** A single `--tol` gated both sum and
+  null-rate deltas, so `--tol 1.0` made null-rate checking inert (a column going 100%
+  NULL passed PARITY OK). A separate `--null-tol` (default 0.0) now gates null-rate
+  independently of the sum tolerance.
+- **`schema_diff.py` false "schemas match".** (a) Without pandas it inferred no dtypes
+  yet still printed "schemas match", hiding an int→str retype; it now prints a loud
+  "dtype comparison SKIPPED (pandas not installed)" and exits 2 when columns match but
+  dtypes were unchecked. (b) The hardcoded `nrows=1000` sample is replaced by a full
+  read by default, with an explicit `--nrows` cap — a retype that only appears in later
+  rows is no longer missed.
+- **`contract_check.py` numeric-enum false fail.** An integer enum (`[1, 2, 3]`) flagged
+  every valid CSV value because the raw string `'1'` was tested against int members.
+  Both sides are now normalized to `str` before the membership test.
+- **`freshness_check.py` `--max-lag` broken for temporal cursors.** `--max-lag` was
+  `type=float`, so a date/datetime cursor computed `timedelta <= float` → TypeError →
+  a false "STALE: uncomparable (tz-aware vs naive?)". A numeric `--max-lag` is now
+  interpreted as a number of DAYS for a temporal cursor, and the misleading tz reason
+  string is corrected.
+- **`doctor.py` comment-scan false pass.** Checks were raw substring scans over the whole
+  `pyproject.toml`, so a project documenting "we do NOT use pip-audit; quote-style is a
+  TODO" in comments scored 6/6. `pyproject.toml` is now parsed with `tomllib` (raising
+  doctor's floor to 3.11, matching `check_versions.py`) so comments no longer satisfy the
+  uv / ruff-single-quote / dependency-groups / pip-audit checks.
+- **`check_versions.py` failed open.** Any fetch error set `behind=False`, so a total
+  network failure reported `behind_count=0` ("no drift"). The `--json` output gains an
+  `errors` count and the tool exits 2 when any fetch failed — an unknown result is no
+  longer mistaken for a clean stack.
+
 ## 0.1.9 — 2026-06-28
 
 From the 2026-06-28 structural review. No skill `description` changed (body /
