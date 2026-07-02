@@ -17,6 +17,10 @@ A Claude Code plugin marketplace with three plugins:
 
 ## Install
 
+**Prerequisites:** [`uv`](https://docs.astral.sh/uv/) must be on your `PATH`. The
+plugins' hooks launch via `uv run`, so without uv every Write/Edit/Bash/Stop/
+session-start hook fails to spawn.
+
 ```text
 /plugin marketplace add grimaldost/craft-collection
 /plugin install engineering-discipline@craft-collection
@@ -81,8 +85,8 @@ release** — Claude Code only pulls an update when the version changes. Do not 
 ```text
 uv tool run pre-commit install         # enable commit gates: ruff, validator, hygiene
 uv tool run pre-commit run --all-files # run every gate now
-python scripts/run_tests.py            # run every test_*.py (no pytest needed)
-python scripts/validate_plugins.py     # structural marketplace checks (needs pyyaml)
+uv run --no-project python scripts/run_tests.py                 # run every test_*.py (no pytest needed)
+uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # structural marketplace checks (PyYAML catches the frontmatter colon-space trap)
 ```
 
 Formatting and lint are governed by `ruff.toml` (100-column, single quotes). CI
@@ -95,9 +99,11 @@ toolchain drift check.
 ```text
 .claude-plugin/marketplace.json
 plugins/
-  engineering-discipline/   .claude-plugin/  skills/  hooks/  evals/
-  session-workflow/         .claude-plugin/  skills/  hooks/  evals/
-scripts/validate_plugins.py
+  engineering-discipline/   .claude-plugin/  skills/  hooks/
+  session-workflow/         .claude-plugin/  skills/  hooks/  output-styles/
+  humblepowers/             .claude-plugin/  skills/  hooks/
+scripts/                    validate_plugins.py  run_tests.py  lint_register.py
+evals/                      harness/  tasks/  trigger/  config.json
 ```
 
 ## License
