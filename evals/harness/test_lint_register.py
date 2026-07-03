@@ -25,8 +25,30 @@ def main() -> int:
     assert _lint_text('You MUST USE this skill.'), 'MUST USE not flagged'
     assert _lint_text('This is EXTREMELY-IMPORTANT.'), 'importance banner not flagged'
     assert _lint_text('The IRON LAW applies here.'), 'IRON LAW not flagged'
-    assert _lint_text('This rule is non-negotiable.'), 'non-negotiable not flagged'
-    assert _lint_text('It is Not Negotiable.'), 'mixed-case non-negotiable not flagged'
+
+    # `non-negotiable` is a SELECTION-surface rule: flagged in a description
+    # (frontmatter), where it is always a salience buy; allowed in body prose,
+    # where 'the four non-negotiables of a data contract' is domain terminology,
+    # not coercion. (Genuine body coercion is still caught by the always-on
+    # patterns below.)
+    fm = '---\nname: s\ndescription: {desc}\n---\n# S\n'
+    assert _lint_text(fm.format(desc='Using this skill is non-negotiable.')), (
+        'non-negotiable in a description not flagged'
+    )
+    assert _lint_text(fm.format(desc='It is Not Negotiable.')), (
+        'mixed-case non-negotiable in a description not flagged'
+    )
+    assert not _lint_text('# S\n\nThe four non-negotiables of a data contract.\n'), (
+        'non-negotiable in body prose (no frontmatter) wrongly flagged'
+    )
+    assert not _lint_text(
+        '---\nname: s\ndescription: ok.\n---\n\nThese rules are non-negotiable.\n'
+    ), 'non-negotiable in body prose (after frontmatter) wrongly flagged'
+    # Always-on coercion is still caught in the body, so scoping non-negotiable
+    # did not over-widen into "bodies are unlinted".
+    assert _lint_text('---\nname: s\ndescription: ok.\n---\n\nYou MUST USE this.\n'), (
+        'body imperative-obedience no longer flagged (over-scoped)'
+    )
 
     # Caps runs: three consecutive non-acronym caps words flag; acronyms do not.
     assert _lint_text('FOLLOW THESE RULES exactly.'), 'caps banner run not flagged'
@@ -67,9 +89,10 @@ def main() -> int:
     desync = '```text\n~~~\n```\nYOU MUST USE this skill.\n'
     assert _lint_text(desync), 'deny pattern after a desyncing inner fence marker not flagged'
 
-    # The shipped plugin passes its own linter.
-    findings = lint_register.lint_paths([ROOT / 'plugins' / 'humblepowers'])
-    assert not findings, f'humblepowers fails its own register linter: {findings}'
+    # The ENTIRE plugins tree passes under the repo-wide default scope — the
+    # register doctrine governs the shared selection pool, not just humblepowers.
+    tree = lint_register.lint_paths([ROOT / 'plugins'])
+    assert not tree, f'plugins tree fails the register linter: {tree}'
 
     print('ok: lint_register')
     return 0

@@ -5,6 +5,20 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.7 — 2026-07-03
+
+Doc accuracy: the register linter went marketplace-wide (repo-tooling change,
+`scripts/lint_register.py`), so the README's "gates this plugin's markdown"
+became an understatement.
+
+### Changed
+
+- README register-linter section: the linter now gates **every plugin's**
+  markdown (the register doctrine governs the shared selection pool — a coercive
+  description distorts selection whichever plugin ships it), not only
+  humblepowers. Notes the one scoped exception: `non-negotiable` is flagged only
+  in a frontmatter description, allowed as domain terminology in body prose.
+
 ## 0.4.6 — 2026-07-02
 
 README-honesty fixes from the second (post-fix) stress-review panel. Docs only —

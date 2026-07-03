@@ -62,12 +62,18 @@ hands off to it the moment work wants gates and dependency DAGs.
 
 ## Register linter
 
-`scripts/lint_register.py` (repo root) gates this plugin's markdown in
+`scripts/lint_register.py` (repo root) gates **every plugin's** markdown in
 pre-commit and CI: imperative-obedience phrases, importance banners, and runs
 of three or more consecutive all-caps words outside code fail the commit. The
-linter mechanically enforces the *detectable subset* of the skill-authoring
-register rules; the rest of the doctrine (calibration, negative space,
-evidence requirements) remains judgment the linter cannot check.
+register doctrine governs the shared selection pool — a coercive description
+distorts selection whichever plugin ships it — so the linter runs marketplace-
+wide, not only over humblepowers. One rule is narrower: `non-negotiable` is
+flagged only in a skill's frontmatter description (where it is a salience buy);
+in body prose it is legitimate domain terminology (data-engineering-discipline's
+"four non-negotiables"), so it is allowed there. The linter mechanically enforces
+the *detectable subset* of the skill-authoring register rules; the rest of the
+doctrine (calibration, negative space, evidence requirements) remains judgment
+the linter cannot check.
 
 ## Measured behavior (0.2.0–0.3.0 — 2026-06-10/11, claude-sonnet-4-6, dispatch inject enabled)
 

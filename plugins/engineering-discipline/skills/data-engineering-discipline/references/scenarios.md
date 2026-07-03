@@ -256,7 +256,7 @@ retyping, or semantic-shift.
 
 ### Step 2.2 — Determine compatibility direction
 
-**What.** BACKWARD, FORWARD, FULL, or NONE — pick one per producer.
+**What.** `BACKWARD`, `FORWARD`, `FULL`, or `NONE` — pick one per producer.
 
 **Why.** Compatibility mode determines whether you can add fields,
 remove fields, or both, and in what order producers and consumers
