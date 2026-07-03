@@ -3,6 +3,15 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.12 — 2026-07-03
+
+### Changed
+
+- `data-engineering-discipline` reference (`scenarios.md`): the schema-compatibility
+  mode values are now code-formatted (`` `BACKWARD` ``, `` `FORWARD` ``, `` `FULL` ``,
+  `` `NONE` ``) — correct markdown for literal enum values, and it clears the
+  register linter's all-caps-run check now that the linter runs marketplace-wide.
+
 ## 0.1.11 — 2026-07-02
 
 Seam fixes from the second (post-fix) stress-review panel: five confirmed defects
