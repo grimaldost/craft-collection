@@ -5,6 +5,32 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.6 — 2026-07-02
+
+README-honesty fixes from the second (post-fix) stress-review panel. Docs only —
+no skill `description` changed, no holdout re-seal.
+
+### Fixed
+
+- **Dead evidence citation.** The register-ablation section cited
+  `report/grading.json` keys `<skill>@superpowers` — that file is gitignored
+  local eval output and has since been overwritten by later runs, so the
+  citation pointed at data that no longer exists anywhere. The README now says
+  exactly that: the summary tables are the surviving record, with re-run
+  instructions instead of a dead pointer. The Measured-behavior section gained
+  the same provenance note.
+- **Register-linter overclaim.** "The linter is the mechanical enforcement of
+  the skill-authoring doctrine" promised more than a regex linter can deliver
+  (0.4.5 had already fixed the same claim inside skill-authoring but missed the
+  README). It now claims the *detectable subset* of the register rules, with
+  the rest named as judgment.
+- **"No dev→holdout collapse" contradicted the adjacent table.** Three cells
+  drop (choosing-tools specificity 1.00 → 0.75, skill-authoring recall
+  0.38 → 0.25, planned-execution recall 0.25 → 0.12). The claim is now
+  qualified with the drops, the small-n context (holdout n = 4 positives / 2
+  negatives — one query moves recall by 0.25), and a direction-not-points
+  reading.
+
 ## 0.4.5 — 2026-07-02
 
 Reference-doctrine correctness from a stress-review pass. The only `description`
