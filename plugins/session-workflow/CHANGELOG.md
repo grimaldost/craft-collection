@@ -3,6 +3,45 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.6.5 — 2026-07-02
+
+context-handoff trigger-surface retune, closing the 0.6.4 holdout re-validation
+flag. **The skill `description` changed again**; the spent 2026-06 holdout is
+folded into the dev set and a fresh holdout ships **with a baseline measured at
+seal time** — no holdout is "sealed" without a birth number again (a sealed-but-
+never-run holdout hid this skill's overfit for four days).
+
+### Changed
+
+- **context-handoff description (v2 of the retune):** names the intent category
+  ("packaged so a receiver with zero shared context can take it cold") and adds
+  packaging vocabulary ("package this up…", "bundle this…", "standalone brief /
+  self-contained handoff") alongside the existing trigger phrases; SUBTASK/FORK
+  glosses tightened; the redundant `user-invocable: true` dropped (docs: menu-only,
+  default true — an ablation run confirmed no trigger effect).
+- **Dev trigger set 8+/8− → 12+/11−:** the spent holdout's 7 queries folded in.
+  Two folded positives are marked `expected_hard` on semantic grounds (recorded in
+  their notes): "offload… to a **background task**… paste the result back" and
+  "carve… into a bounded **sub-task**… hand the result back" carry legitimate
+  Task-tool readings in today's Claude Code, and flickered 0–2/3 across four
+  same-day runs regardless of description wording. They are reported separately
+  (`recall_hard`), not hidden.
+- **Fresh holdout sealed with baseline** (4 intent-level positives avoiding all
+  description vocabulary + 3 near-misses): dev gated recall **0.80** CI[0.63,0.90],
+  specificity **1.00**; held-out baseline **0.08** (1/12 fires) / specificity 1.00.
+  Recorded, deliberately NOT tuned against.
+
+### Finding (recorded, not fixable by description tuning)
+
+- Same-day control runs show the June dev number (0.95, r5) does not replicate:
+  the pre-0.6.4 description scores 0.69 on today's folded dev set, and four
+  description variants land 0.64–0.80 inside overlapping CIs. Combined with the
+  0.08 fresh-holdout baseline, the evidence says **auto-triggering is dominated
+  by lexical proximity to the description; pure intent-level paraphrases rarely
+  trigger under any wording measured.** Routed to the mechanism-level eval
+  backlog (competition arm / trigger-mechanics, issue #54) rather than another
+  rewording round.
+
 ## 0.6.4 — 2026-07-02
 
 Nine fixes from the second (post-fix) stress-review panel — seams of the 0.6.3/

@@ -1,7 +1,6 @@
 ---
 name: context-handoff
-description: Author a paste-ready, self-contained brief that hands work to a fresh context — a new Claude Code session, a spawned task, a teammate, or an issue ticket. Use on "subtask", "fork", "spinoff", "spin this off", "hand this off", "branch off", "offload this", "new session for this", when curating a context slice to continue or delegate work elsewhere, or running "/context-handoff". Two modes — SUBTASK (bounded brief, an artifact comes back) and FORK (continues independently). For in-session parallel work, prefer the Task tool / subagents instead.
-user-invocable: true
+description: Author a paste-ready, self-contained brief that hands work to a fresh context — a new Claude Code session, a spawned task, a teammate, or an issue ticket. Use whenever current work must be packaged so a receiver with zero shared context can take it cold — "package this up for a fresh session", "bundle this for another agent", "write a standalone brief / a self-contained handoff", "spin this off", "hand this off", "offload this", "branch off", "new session for this", "subtask", "fork", "spinoff" — when curating a context slice to continue or delegate work elsewhere, or running "/context-handoff". Two modes — SUBTASK (bounded brief, an artifact comes back) and FORK (continues independently, nothing returns). For in-session parallel work where results flow back automatically, prefer the Task tool / subagents — this skill is for handoffs that cross a boundary the harness won't bridge (a fresh session, a human, a ticket).
 ---
 
 # Context Handoff
@@ -48,8 +47,9 @@ phrases in ordinary requests, not slash commands (none of them ship as one).
 
 | Trigger | Mode |
 |---------|------|
-| "spin off a subtask for…", "I need a subtask that…", "make a subtask brief" | Subtask |
+| "spin off a subtask for…", "package this up for a fresh session and get the result back", "bundle this for another agent" | Subtask |
 | "fork this", "branch this off", "continue this in a new session" | Fork |
+| "write a self-contained handoff someone can take cold" | Subtask or Fork by destination — ask if unclear |
 | "spin this off" (destination unclear) | Ask which mode |
 
 If invoked without a description, ask one clarifying question: "What should the
