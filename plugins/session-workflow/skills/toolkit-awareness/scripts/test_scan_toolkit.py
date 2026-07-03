@@ -43,6 +43,31 @@ def test_scan_enumerates_components():
         assert 'hook.py' in {h['name'] for h in out['hooks']}
 
 
+def test_frontmatter_quotes_stripped():
+    # A YAML-quoted name/description must not render with literal quotes in the
+    # inventory. A matched surrounding pair is stripped and \" unescaped; the
+    # single-quoted style unescapes '' to '.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        sk = root / '.claude/skills/q'
+        sk.mkdir(parents=True)
+        (sk / 'SKILL.md').write_text(
+            '---\nname: "q"\ndescription: "Says \\"hi\\" politely."\n---\nbody\n',
+            encoding='utf-8',
+        )
+        sk2 = root / '.claude/skills/r'
+        sk2.mkdir(parents=True)
+        (sk2 / 'SKILL.md').write_text(
+            "---\nname: 'r'\ndescription: 'It''s quoted.'\n---\nbody\n",
+            encoding='utf-8',
+        )
+        out = scan([root])
+    skills = {s['name']: s for s in out['skills'] if 'plugin' not in s}
+    assert 'q' in skills and 'r' in skills, sorted(skills)
+    assert skills['q']['description'] == 'Says "hi" politely.'
+    assert skills['r']['description'] == "It's quoted."
+
+
 def test_missing_dirs_do_not_raise():
     with tempfile.TemporaryDirectory() as d:
         out = scan([Path(d)])  # no .claude at all
@@ -141,6 +166,7 @@ def test_read_frontmatter_handles_folded_scalar():
 
 if __name__ == '__main__':
     test_scan_enumerates_components()
+    test_frontmatter_quotes_stripped()
     test_missing_dirs_do_not_raise()
     test_plugins_from_json_uses_id_and_hides_enabled()
     test_enumerate_plugin_components_walks_install_path()

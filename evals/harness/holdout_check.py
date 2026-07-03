@@ -25,6 +25,16 @@ from claude_runner import cleanup_dir, make_isolated_config
 REPO = Path(__file__).resolve().parents[2]
 
 
+def dev_recall_pair(dev: dict) -> tuple[float | None, list | None, str]:
+    """Pick the dev (point, CI, units) from ONE estimator family: query-level when
+    the report carries both, else the pooled pair. Mixing families (the pooled
+    point against the query-level interval) let the point sit outside its own CI
+    and tripped false DROP/overfit verdicts."""
+    if dev.get('recall_query') is not None and dev.get('recall_ci_query'):
+        return dev['recall_query'], dev['recall_ci_query'], 'query'
+    return dev.get('recall'), dev.get('recall_ci'), 'pooled'
+
+
 def holdout_comparison(dev_recall, dev_ci, holdout_recall) -> str:
     """One-line dev-vs-held-out recall verdict. Warns when held-out recall drops
     below the dev recall's lower Wilson bound — the overfit-to-the-dev-prompts
@@ -137,18 +147,22 @@ def main(argv: list[str] | None = None) -> int:
 
     triggers_path = REPO / 'evals' / 'report' / 'triggers.json'
     dev_recall = dev_ci = None
+    dev_units = 'pooled'
     if triggers_path.exists():
         try:
             dev = json.loads(triggers_path.read_text(encoding='utf-8')).get(skill) or {}
-            # Prefer the query-level CI: the pooled recall_ci treats correlated
-            # repeats as independent trials, so its lower bound is too high and a
-            # held-out recall that merely reflects sampling noise trips a false
-            # "overfit" verdict. Fall back to the pooled CI for older reports.
-            dev_recall = dev.get('recall')
-            dev_ci = dev.get('recall_ci_query') or dev.get('recall_ci')
+            # Prefer the query-level pair: the pooled CI treats correlated repeats
+            # as independent trials, so its lower bound is too high. Point and CI
+            # must come from the SAME estimator (dev_recall_pair), and the held-out
+            # point below is chosen in the same unit — a mixed pairing let a point
+            # sit outside its own interval and tripped false "overfit" verdicts.
+            dev_recall, dev_ci, dev_units = dev_recall_pair(dev)
         except (json.JSONDecodeError, ValueError):
             pass
-    print('\n' + holdout_comparison(dev_recall, dev_ci, score['recall']))
+    holdout_point = score['recall']
+    if dev_units == 'query' and score.get('recall_query') is not None:
+        holdout_point = score['recall_query']
+    print('\n' + holdout_comparison(dev_recall, dev_ci, holdout_point))
     return 0
 
 

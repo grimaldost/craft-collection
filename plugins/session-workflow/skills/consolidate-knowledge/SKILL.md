@@ -19,11 +19,12 @@ the base model would not have volunteered.*
 1. **Gather** the entries in scope — by area, by date range, or the whole corpus. Read
    them; do not work from titles. By default the entries are the journal files
    `journaling-sessions` writes under `docs/journal/` (or a store's `target_store`
-   `path` when one is set). Also read the **prior promoted guidance** first (the
-   durable layer this pass appends to), so what already exists is known before anything
-   new is synthesized. Record the scope as an explicit **Inputs** line — entry count,
-   sessions, date range — the same way `feedback-triage` records the reports a triage
-   covers.
+   `path` when one is set). Also read the **prior promoted guidance** first — the
+   durable layer this pass appends to, by default `docs/journal/guidance.md` (a
+   store's configured guidance path wins when one is set) — so what already exists
+   is known before anything new is synthesized. Record the scope as an explicit
+   **Inputs** line — entry count, sessions, date range — the same way
+   `feedback-triage` records the reports a triage covers.
 2. **Reconcile already-promoted first.** A generalization this corpus supports may
    already be in the durable layer from an earlier consolidation. Open the output with
    an **"Already promoted — NOT re-promoted"** reconciliation listing those, and do not
@@ -44,9 +45,12 @@ the base model would not have volunteered.*
    newer evidence wins: write the updated guidance, mark it as superseding the prior,
    and state what changed and why. Never leave two equally-confident contradictory
    claims in the store.
-7. **Emit** the promoted guidance entries (format below), each linking back to the
-   source entries it generalizes — so the chain from raw capture to durable guidance
-   stays traceable.
+7. **Emit** the promoted guidance entries (format below) and append them to the same
+   durable layer read in step 1 — `docs/journal/guidance.md` by default, the store's
+   configured path when one is set — each linking back to the source entries it
+   generalizes, so the chain from raw capture to durable guidance stays traceable.
+   Without a pinned destination, step 1 of the next run has nothing to reconcile
+   against and re-promotes the same clusters.
 
 ## The promotion gate — what earns "durable"
 
@@ -93,9 +97,9 @@ it applies. One durable idea.>
 --- GUIDANCE_END ---
 ```
 
-No downstream store? Emit the CONTENT prose and skip the envelope — keep the discipline
-(one anchored, derived generalization per entry, supersession marked); drop only the
-ceremony.
+No downstream store? Write the CONTENT prose to the default durable layer
+(`docs/journal/guidance.md`) and skip the envelope — keep the discipline (one anchored,
+derived generalization per entry, supersession marked); drop only the ceremony.
 
 ## Relationship to journaling-sessions
 

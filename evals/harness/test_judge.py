@@ -38,6 +38,24 @@ def test_score_from_criteria_uses_weights():
     assert out['pass'] is True
 
 
+def test_score_from_criteria_dedups_repeated_ids_and_clamps():
+    # A judge that repeats a criterion id must not double-count its weight — the
+    # score could exceed 1.0 and flip a fail into a pass. Unknown ids score 0.
+    rubric = [{'id': 'a', 'weight': 2}, {'id': 'b', 'weight': 2}]
+    verdict = {
+        'criteria': [
+            {'id': 'a', 'met': True},
+            {'id': 'a', 'met': True},  # duplicate of a met criterion
+            {'id': 'b', 'met': False},
+            {'id': 'zz', 'met': True},  # not in the rubric
+        ]
+    }
+    out = score_from_criteria(verdict, rubric, threshold=0.7)
+    assert abs(out['score'] - 0.5) < 1e-9, out  # 2/4, not (2+2)/4
+    assert out['pass'] is False
+    assert out['score'] <= 1.0
+
+
 def test_aggregate_pointwise_majority_and_agreement():
     verdicts = [
         {'score': 0.8, 'pass': True},
@@ -121,6 +139,7 @@ if __name__ == '__main__':
     test_extracts_bare_json_object()
     test_returns_none_on_no_json()
     test_score_from_criteria_uses_weights()
+    test_score_from_criteria_dedups_repeated_ids_and_clamps()
     test_aggregate_pointwise_majority_and_agreement()
     test_aggregate_pointwise_empty()
     test_decide_pairwise_requires_order_agreement()

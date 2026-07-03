@@ -98,6 +98,10 @@ def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counte
         'specificity_ci': list(wilson_interval(neg_succ, neg_tri)),
         'recall_ci_query': (list(wilson_interval(pos_q_succ, pos_q_n)) if pos_q_n else None),
         'specificity_ci_query': (list(wilson_interval(neg_q_succ, neg_q_n)) if neg_q_n else None),
+        # the POINT estimates in the same query-level unit, so a downstream
+        # consumer never pairs the pooled point with the query-level interval
+        'recall_query': (pass_rate(pos_q_succ, pos_q_n) if pos_q_n else None),
+        'specificity_query': (pass_rate(neg_q_succ, neg_q_n) if neg_q_n else None),
         'recall_excl_errors': (pass_rate(pos_succ, pos_valid) if pos_valid > 0 else None),
         'recall_excl_errors_ci': (
             list(wilson_interval(pos_succ, pos_valid)) if pos_valid > 0 else None

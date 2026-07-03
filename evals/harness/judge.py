@@ -66,9 +66,13 @@ def score_from_criteria(
         return verdict
     weight = {c['id']: c.get('weight', 1) for c in rubric}
     total = sum(weight.values()) or 1
-    got = sum(weight.get(c.get('id'), 0) for c in crits if c.get('met'))
+    # Dedup on criterion id: a judge that repeats an id must not double-count its
+    # weight (the score could exceed 1.0 and flip a fail into a pass). Ids not in
+    # the rubric score 0. The clamp keeps any residual pathology inside [0, 1].
+    met_ids = {c.get('id') for c in crits if c.get('met')}
+    got = sum(w for i, w in weight.items() if i in met_ids)
     out = dict(verdict)
-    out['score'] = got / total
+    out['score'] = min(1.0, got / total)
     out['pass'] = out['score'] >= threshold
     return out
 

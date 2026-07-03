@@ -3,6 +3,65 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.6.4 — 2026-07-02
+
+Nine fixes from the second (post-fix) stress-review panel — seams of the 0.6.3/
+eval-harness fixes plus loop-closing gaps. Code fixes test-first. **One skill
+`description` changed (context-handoff — the fake slash-command triggers were
+demoted to plain words): its trigger holdout
+(`evals/trigger/holdout/context-handoff.json`) must be re-validated, and treated
+as spent for the next description-tuning round.**
+
+### Fixed
+
+- **`judge.py` double-counted repeated criterion ids.** A judge verdict repeating
+  a criterion id summed its weight twice — the recomputed score could exceed 1.0
+  and flip a fail into a pass. Met ids are now deduped before weighing, unknown
+  ids score 0, and the score is clamped to [0, 1]. (Synced to the bundled
+  evaluate-skill engine.)
+- **`run_triggers.py` reported query-level CIs with no matching point estimates.**
+  `recall_ci_query` shipped without `recall_query`, so a downstream consumer
+  paired the POOLED point with the query-level interval — the point could sit
+  outside its own CI. The report now carries `recall_query` /
+  `specificity_query` (majority-fire per query, same unit as the CIs). (Synced.)
+- **`holdout_check.py` mixed estimator families.** The dev pooled recall point was
+  compared against the query-level interval's lower bound, tripping false
+  "DROP/overfit" verdicts. `dev_recall_pair()` now picks point + CI from one
+  family (query-level when the report has both, pooled otherwise), and the
+  held-out point is chosen in the same unit.
+- **`scan_toolkit.py` rendered YAML quotes literally.** A quoted frontmatter
+  `name`/`description` kept its surrounding quotes in the inventory (6 installed
+  skills rendered with a leading `"`). Matched quote pairs are stripped, `\"`
+  and doubled `''` unescaped.
+- **`build_feedback_index.py` was blind to §Misses/§Friction.** tool-feedback and
+  feedback-triage sanction `extends <stem> §Misses` as a recurrence target, but
+  the index only listed `## Proposed` items — the affordance pointed at nothing
+  greppable. Flush-left bullets under `## Misses` / `## Friction` are now indexed
+  as `§`-stub entries (fence-aware, severity tags stripped).
+- **tool-feedback / feedback-triage invoked the index builder by a cwd-relative
+  path** (`skills/feedback-triage/scripts/…`), which resolves nowhere on an
+  installed plugin. Both now use the
+  `"${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py"` form.
+- **feedback-triage's triage-doc rule contradicted its script.** The skill said
+  H1 `# Triage —` *or* a `triage` filename; `build_feedback_index.py`
+  deliberately uses H1-only (a filename test misclassifies input reports about
+  the triage tool itself). The doctrine now states the H1-only rule and why.
+- **context-handoff advertised `/subtask` `/fork` `/spinoff`** — none ship as
+  commands, so following the skill's own invocation table dead-ends. The
+  description, invocation table, and examples now use plain trigger phrases;
+  `user-invocable: true` added (the skill itself is `/context-handoff`). This is
+  the description change flagged above.
+- **consolidate-knowledge had no default write location** — step 1 read "prior
+  promoted guidance" and step 7 emitted entries, but no path existed, so each
+  run re-promoted the same clusters. The durable layer is now pinned to
+  `docs/journal/guidance.md` by default (a store's configured path wins),
+  referenced by both steps and the no-store fallback.
+
+### Docs
+
+- Plugin README: added the two shipped-but-unlisted skills
+  (`compaction-survival`, `corpus-review`).
+
 ## 0.6.3 — 2026-07-02
 
 Five fixes from the #52 stress-review panel. No skill

@@ -35,16 +35,20 @@ and writing CHANGELOGs belong to the tool's own release process.
    directory listing, not a glob, which a non-cwd path or a house naming
    convention can silently miss. Un-triaged reports = reports in its feedback dir
    not listed in the **Inputs** section of any existing triage doc there —
-   detection is by input lists, not dates. A doc counts as a triage doc if its
-   first heading is `# Triage —` or its filename contains `triage`; this catches
-   house variants like keel's `<date>-backlog-triage.md` that a bare
-   `*-triage-*.md` glob skips. First run (no triage doc exists yet): the whole
+   detection is by input lists, not dates. A doc counts as a triage doc only if
+   its first heading starts with `# Triage` — the same rule
+   `build_feedback_index.py` applies. The filename is deliberately NOT a signal:
+   a filename test would misclassify legitimate INPUT reports whose slug mentions
+   triage (a report about the `feedback-triage` tool itself, a
+   `<date>-triage-round-<tool>` wave slug), while house variants like keel's
+   `<date>-backlog-triage.md` still count because their H1 opens `# Triage —`.
+   First run (no triage doc exists yet): the whole
    corpus is un-triaged. If the invocation names a different count or set than the
    directory holds, the directory is authoritative — triage what is on disk and
    note the discrepancy under **Inputs**. If another session may be triaging the
    same corpus, note any triage doc already dated today before you start, and
    re-check at emit (step 6) so two sessions don't write competing docs. Rebuild the
-   dir's `INDEX.md` at scope (run `uv run --no-project python scripts/build_feedback_index.py <dir>`) so the
+   dir's `INDEX.md` at scope (run `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`) so the
    `extends`-lookup in steps 2–3 is one Read of a current index, not N
    phrasing-fragile greps.
 2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
