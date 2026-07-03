@@ -3,6 +3,36 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.11 — 2026-07-02
+
+Seam fixes from the second (post-fix) stress-review panel: five confirmed defects
+sitting at the edges of the 0.1.10 fixes, each fixed test-first. Hooks / scripts
+only — no skill `description` changed, so no holdout re-seal.
+
+### Fixed
+
+- **`uv_enforce.py` regression: `python -m pip install` no longer blocked.** The
+  0.1.10 command-position anchoring left the module form unmatched (the interpreter,
+  not `pip`, sits at the command position). A dedicated `python -m pip install` arm
+  restores the block; `python -m pipx install` stays allowed.
+- **`uv_enforce.py` comment stripping ate real commands.** Any `#` started a
+  "comment", so `curl url#frag && pip install z` had its tail stripped and escaped.
+  A `#` now starts a comment only at the start of a word (input start or after
+  whitespace), matching bash; `url#frag` stays scannable.
+- **`contract_check.py` enum⇄dtype contradiction.** The 0.1.10 str-normalized enum
+  rejected `'1.0'` on a column whose `dtype: 'int'` accepts it (integer-valued
+  rendering). Enum membership now compares on a canonical numeric form (`'1.0'` ==
+  `'1'` == `1`; exact-int path preserves big-int precision); non-numerics and bools
+  still compare as plain strings.
+- **`parity_check.py` non-finite poisoning.** Literal `nan`/`inf` cells pass
+  `float()` and poison sums (`nan - nan = nan` fails every tolerance), so identical
+  tables FAILED. Non-finite values are now treated as non-numeric (excluded from
+  sums), and the `ok` verdict explicitly requires finite deltas.
+- **`parity_check.py` typo'd `--keys` neutered cardinality.** A key column absent
+  from both tables made every row key `(None,)`, collapsing both sides to
+  cardinality 1 == 1 — the check vacuously passed. `compare()` now raises
+  `ValueError`, and the CLI exits 2 (usage error, distinct from parity-fail 1).
+
 ## 0.1.10 — 2026-07-02
 
 Mechanical-layer bug fixes from the GitHub issue #51 stress-review panel — nine
@@ -48,8 +78,9 @@ skill `description` changed (hooks / scripts only), so no holdout re-seal.
   uv / ruff-single-quote / dependency-groups / pip-audit checks.
 - **`check_versions.py` failed open.** Any fetch error set `behind=False`, so a total
   network failure reported `behind_count=0` ("no drift"). The `--json` output gains an
-  `errors` count and the tool exits 2 when any fetch failed — an unknown result is no
-  longer mistaken for a clean stack.
+  `errors` count and the tool exits 2 when any fetch failed — an unknown result is
+  distinguishable from a clean stack *for consumers that read `errors` or the exit
+  code* (a caller that only reads `behind_count` still sees "no drift").
 
 ## 0.1.9 — 2026-06-28
 

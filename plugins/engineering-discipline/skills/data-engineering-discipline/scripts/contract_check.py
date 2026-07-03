@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import sys
 
 
@@ -44,6 +45,29 @@ def _typed_ok(v: object, dtype: str) -> bool:
     return True
 
 
+def _canon(v: object) -> str:
+    """Canonical enum-comparison form: numeric spellings collapse ('1.0' == '1' == 1)
+    so an enum can never contradict an int/float dtype rule on the same column.
+    Bools and non-numerics (including nan/inf) compare as plain strings. Exact
+    integers go through int() to keep arbitrary precision; only decimal forms
+    take the float path.
+    """
+    if isinstance(v, bool):
+        return str(v)
+    s = str(v)
+    try:
+        return str(int(s))
+    except ValueError:
+        pass
+    try:
+        f = float(s)
+    except ValueError:
+        return s
+    if not math.isfinite(f):
+        return s
+    return str(int(f)) if f.is_integer() else str(f)
+
+
 def validate(rows: list[dict], contract: dict) -> list[str]:
     """Return a list of contract violation strings (empty == valid)."""
     violations: list[str] = []
@@ -60,11 +84,12 @@ def validate(rows: list[dict], contract: dict) -> list[str]:
 
         enum = rule.get('enum')
         if enum is not None:
-            # Normalize both sides to str: CSV values are always strings ('1'),
-            # while a JSON contract enum may hold ints/floats ([1, 2, 3]). A raw
-            # `'1' not in [1, 2, 3]` membership test cried wolf on every valid row.
-            allowed = {str(e) for e in enum}
-            bad = sorted({str(v) for v in values if not _blank(v) and str(v) not in allowed})
+            # Normalize both sides via _canon: CSV values are always strings
+            # ('1'), a JSON contract enum may hold ints/floats ([1, 2, 3]), and
+            # a warehouse render of an int can carry a decimal point ('1.0') —
+            # which dtype:'int' accepts, so the enum must accept it too.
+            allowed = {_canon(e) for e in enum}
+            bad = sorted({str(v) for v in values if not _blank(v) and _canon(v) not in allowed})
             if bad:
                 violations.append(f'{col}: values outside enum: {bad[:5]}')
 

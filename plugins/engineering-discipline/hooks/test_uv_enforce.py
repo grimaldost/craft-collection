@@ -88,6 +88,32 @@ def test_does_not_block_on_mere_mention():
     )
 
 
+def test_blocks_python_m_pip_install():
+    # `python -m pip install` is the same act as `pip install` — the module form
+    # must not slip past the command-position anchor (it did, once).
+    assert verdict('python -m pip install requests', cwd_has_uv=True, allow_env=False) == 'block'
+    assert verdict('python3 -m pip install requests', cwd_has_uv=True, allow_env=False) == 'block'
+    assert (
+        verdict('echo hi && python -m pip install requests', cwd_has_uv=True, allow_env=False)
+        == 'block'
+    )
+    # `-m pipx` and `-m pytest` share the prefix but are not pip installs.
+    assert verdict('python -m pipx install foo', cwd_has_uv=True, allow_env=False) == 'allow'
+
+
+def test_hash_inside_a_word_is_not_a_comment():
+    # bash starts a comment only at the start of a word; `url#frag` is literal,
+    # so everything after it — including a real install — must still be scanned.
+    assert (
+        verdict('curl http://x.com/a#frag && pip install z', cwd_has_uv=True, allow_env=False)
+        == 'block'
+    )
+    assert (
+        verdict('wget file#1.txt; python3 -m pip install z', cwd_has_uv=True, allow_env=False)
+        == 'block'
+    )
+
+
 def test_blocks_real_install_at_command_positions():
     # A genuine install at a plausible command position IS still blocked.
     assert verdict('pip install requests', cwd_has_uv=True, allow_env=False) == 'block'

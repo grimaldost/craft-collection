@@ -38,8 +38,25 @@ def test_numeric_enum_matches_string_csv_values():
     assert validate([{'priority': '4'}], contract) != []
 
 
+def test_numeric_enum_consistent_with_int_dtype():
+    # dtype:'int' accepts the warehouse rendering '1.0'; a numeric enum [1, 2]
+    # on the same column must accept it too — the two rules must not contradict
+    # each other on the same value.
+    contract = {'n': {'enum': [1, 2], 'dtype': 'int'}}
+    assert validate([{'n': '1.0'}], contract) == []
+    # float enums match their string renderings, including trailing zeros
+    assert validate([{'x': '1.5'}, {'x': '2.50'}], {'x': {'enum': [1.5, 2.5]}}) == []
+    # genuinely out-of-enum numerics and non-numerics are still caught
+    assert validate([{'n': '3.0'}], contract) != []
+    assert validate([{'n': 'abc'}], contract) != []
+    # non-numeric enums still compare as plain strings
+    assert validate([{'s': 'open'}], {'s': {'enum': ['open']}}) == []
+    assert validate([{'s': 'openx'}], {'s': {'enum': ['open']}}) != []
+
+
 if __name__ == '__main__':
     test_clean_passes()
     test_violations_detected()
     test_numeric_enum_matches_string_csv_values()
+    test_numeric_enum_consistent_with_int_dtype()
     print('ok: all contract_check tests passed')

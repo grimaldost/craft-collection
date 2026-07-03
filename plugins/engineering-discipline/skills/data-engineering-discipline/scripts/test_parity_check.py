@@ -49,10 +49,36 @@ def test_null_tol_gates_null_rate_independently():
     assert compare(a, b, keys=['id'], null_tol=0.5)['ok'] is True
 
 
+def test_literal_nan_inf_cells_do_not_poison_sums():
+    # 'nan'/'inf' strings pass float() but poison every sum they touch (nan-nan
+    # = nan fails every tolerance). Identical tables must compare PARITY OK:
+    # non-finite cells are ignored as non-numeric, like text.
+    rows = [{'id': '1', 'amt': 'nan'}, {'id': '2', 'amt': 'inf'}, {'id': '3', 'amt': '10'}]
+    rep = compare(rows, rows, keys=['id'])
+    assert rep['ok'] is True
+    # a real numeric difference alongside them is still caught
+    b = [{'id': '1', 'amt': 'nan'}, {'id': '2', 'amt': 'inf'}, {'id': '3', 'amt': '11'}]
+    assert compare(rows, b, keys=['id'])['ok'] is False
+
+
+def test_unknown_key_raises_instead_of_vacuous_parity():
+    # A typo'd --keys column made every row key (None,), collapsing both sides
+    # to cardinality 1 == 1 — a silent false PARITY OK. It must raise instead.
+    rows = [{'id': '1', 'amt': '10'}]
+    try:
+        compare(rows, rows, keys=['idd'])
+    except ValueError as e:
+        assert 'idd' in str(e)
+    else:
+        raise AssertionError('expected ValueError for unknown key column')
+
+
 if __name__ == '__main__':
     test_identical_tables_ok()
     test_row_count_mismatch_fails()
     test_sum_delta_detected()
     test_all_null_column_fails_even_at_loose_sum_tol()
     test_null_tol_gates_null_rate_independently()
+    test_literal_nan_inf_cells_do_not_poison_sums()
+    test_unknown_key_raises_instead_of_vacuous_parity()
     print('ok: all parity_check tests passed')

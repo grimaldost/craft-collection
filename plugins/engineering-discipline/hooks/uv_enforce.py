@@ -21,11 +21,14 @@ from pathlib import Path
 # after a shell separator — see `_CMD_POS`) so a mere mention of "pip install"
 # inside an argument (`grep "pip install"`) is not a match. The `pip` arm carries
 # a negative lookbehind for `uv ` so uv's own `uv pip install` interface is left
-# alone (only bare `pip`/`pip3 install` is redirected).
+# alone (only bare `pip`/`pip3 install` is redirected). `python -m pip install`
+# is the same act in module form and needs its own arm: there the *interpreter*
+# sits at the command position, so the bare-pip arm cannot see it.
 _CMD_POS = r'(?:^|(?<=[\n;|&])|(?<=\|\|)|(?<=&&)|(?<=\$\())\s*'
 _BLOCKED = re.compile(
     _CMD_POS + r'(?:'
     r'(?<!uv )pip3?\s+install'
+    r'|python3?\s+-m\s+pip\s+install'
     r'|poetry\s+(?:add|install|update)'
     r'|pipenv\b'
     r'|conda\s+install'
@@ -39,9 +42,11 @@ _BLOCKED = re.compile(
 # cannot trip the matcher. This is a deliberately coarse shell approximation:
 # it neutralizes the false-positive surface without pretending to be a real
 # parser. A quoted span becomes a single space so it can still act as a
-# separator (`echo "x" && pip install` keeps the `&&`).
+# separator (`echo "x" && pip install` keeps the `&&`). A `#` starts a comment
+# only at the start of a word (input start or after whitespace), matching bash:
+# `url#frag` is literal data, and what follows it must stay scannable.
 _QUOTED_OR_COMMENT = re.compile(
-    r""""[^"]*"|'[^']*'|\#[^\n]*""",
+    r""""[^"]*"|'[^']*'|(?:^|(?<=\s))\#[^\n]*""",
 )
 
 

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import sys
 
 
@@ -28,10 +29,14 @@ def _is_blank(v: object) -> bool:
 
 
 def _to_float(v: object) -> float | None:
+    # Literal 'nan'/'inf' cells pass float() but poison every sum they touch
+    # (nan - nan = nan fails all tolerances, so identical tables would FAIL).
+    # Treat non-finite values as non-numeric, like text: excluded from sums.
     try:
-        return float(v)  # type: ignore[arg-type]
+        f = float(v)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
+    return f if math.isfinite(f) else None
 
 
 def compare(
@@ -53,14 +58,21 @@ def compare(
         'row_count': {'a': len(rows_a), 'b': len(rows_b), 'delta': len(rows_b) - len(rows_a)}
     }
 
+    cols: set[str] = set()
+    for r in (*rows_a, *rows_b):
+        cols.update(r)
+
+    # A key column absent from BOTH tables would make every row key (None,),
+    # collapsing both sides to cardinality 1 and vacuously passing the check —
+    # a typo'd --keys must be an error, never a silent PARITY OK.
+    missing = [k for k in keys if k not in cols]
+    if missing and cols:
+        raise ValueError(f'key column(s) not found in either table: {missing}')
+
     def card(rows: list[dict]) -> int | None:
         return len({tuple(r.get(k) for k in keys) for r in rows}) if keys else None
 
     report['group_cardinality'] = {'a': card(rows_a), 'b': card(rows_b)}
-
-    cols: set[str] = set()
-    for r in (*rows_a, *rows_b):
-        cols.update(r)
 
     def null_rate(rows: list[dict], c: str) -> float:
         return sum(_is_blank(r.get(c)) for r in rows) / len(rows) if rows else 0.0
@@ -79,11 +91,14 @@ def compare(
             sums[c] = {'a': sa, 'b': sb, 'delta': sb - sa}
     report['sum_delta'] = sums
 
+    # The explicit isfinite guard keeps a non-finite delta (sum overflow to inf,
+    # inf - inf = nan) a FAILURE even if a refactor ever inverts the comparison —
+    # nan compares False both ways, so `not (abs > tol)` would silently pass it.
     report['ok'] = (
         report['row_count']['delta'] == 0
         and report['group_cardinality']['a'] == report['group_cardinality']['b']
         and all(abs(v) <= null_tol for v in report['null_rate_delta'].values())
-        and all(abs(s['delta']) <= tol for s in sums.values())
+        and all(math.isfinite(s['delta']) and abs(s['delta']) <= tol for s in sums.values())
     )
     return report
 
@@ -108,9 +123,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     keys = [k for k in args.keys.split(',') if k]
-    rep = compare(
-        _read_csv(args.baseline), _read_csv(args.candidate), keys, args.tol, args.null_tol
-    )
+    try:
+        rep = compare(
+            _read_csv(args.baseline), _read_csv(args.candidate), keys, args.tol, args.null_tol
+        )
+    except ValueError as e:
+        # usage error (e.g. typo'd --keys), distinct from a parity failure (1)
+        print(f'error: {e}', file=sys.stderr)
+        return 2
     rc = rep['row_count']
     print(f'row count: {rc["a"]} -> {rc["b"]} (delta {rc["delta"]})')
     gc = rep['group_cardinality']
