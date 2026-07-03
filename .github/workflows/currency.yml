@@ -23,9 +23,14 @@ jobs:
       - name: Check stack drift
         id: check
         run: |
+          # `|| true` keeps the step alive on exit 2 (fetch errors) so the JSON can
+          # be read — but the errors count is then consumed below, not swallowed: a
+          # month where nothing could be fetched is INCONCLUSIVE, not "no drift".
           python plugins/engineering-discipline/skills/python-engineering/scripts/check_versions.py --json > drift.json || true
           behind=$(python -c "import json; print(json.load(open('drift.json'))['behind_count'])")
+          errors=$(python -c "import json; print(json.load(open('drift.json')).get('errors', 0))")
           echo "behind=$behind" >> "$GITHUB_OUTPUT"
+          echo "errors=$errors" >> "$GITHUB_OUTPUT"
       - name: Open or update drift issue
         if: steps.check.outputs.behind != '0'
         env:
@@ -48,4 +53,27 @@ jobs:
             gh issue comment "$num" --body-file body.md
           else
             gh issue create --title "Toolchain drift: python-engineering stack" --label stack-drift --body-file body.md
+          fi
+      - name: Open or update inconclusive-check issue
+        if: steps.check.outputs.errors != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY' > inconclusive.md
+          import json
+          d = json.load(open('drift.json'))
+          failed = [t for t in d['tools'] if t.get('status') != 'ok']
+          print(f"check_versions could not reach PyPI for {len(failed)} package(s), so this month's drift check is inconclusive — an unknown result is not \"no drift\".")
+          print()
+          for t in failed:
+              print(f"- **{t['package']}**: {t.get('status')}")
+          print()
+          print('Re-run the `currency` workflow (workflow_dispatch) once the fetch issue clears.')
+          PY
+          gh label create stack-check-inconclusive --color D93F0B --description "Drift check could not complete" --force || true
+          num=$(gh issue list --label stack-check-inconclusive --state open --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body-file inconclusive.md
+          else
+            gh issue create --title "Stack drift check inconclusive (fetch errors)" --label stack-check-inconclusive --body-file inconclusive.md
           fi

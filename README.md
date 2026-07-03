@@ -43,9 +43,9 @@ hooks for ruff-format and uv enforcement; a `stack.toml`-based freshness loop.
 
 **session-workflow** — skills `journaling-sessions`, `consolidate-knowledge`,
 `context-handoff`, `review-panel`, `evaluate-skill`, `toolkit-awareness`,
-`tool-feedback`, and `feedback-triage`; a live `scan_toolkit.py` inventory; the
-headless skill-eval engine in `scripts/`; a selectable `step-digest` output style;
-an optional session-start inject hook.
+`tool-feedback`, `feedback-triage`, `compaction-survival`, and `corpus-review`;
+a live `scan_toolkit.py` inventory; the headless skill-eval engine in `scripts/`;
+a selectable `step-digest` output style; an optional session-start inject hook.
 
 **humblepowers** — skills `choosing-tools`, `skill-authoring`, `brainstorming`,
 `test-driven-development`, `systematic-debugging`,
@@ -56,13 +56,19 @@ an optional dispatch-protocol inject hook. Derived from
 [obra/superpowers](https://github.com/obra/superpowers) (MIT) — see the
 plugin's LICENSE for third-party notices.
 
-## Optional hooks (all off by default)
+## Hooks
+
+Two engineering-discipline hooks are **always on** once that plugin is installed —
+they are its mechanical layer, not options: `ruff_format` re-formats a `.py` file
+after every edit (PostToolUse, non-blocking), and `uv_enforce` blocks
+pip/poetry/virtualenv inside uv-managed projects (PreToolUse; override one command
+with `CLAUDE_ALLOW_PIP=1`). Everything else is **off by default**, each behind an
+env var:
 
 | Behaviour | Enable with |
 |-----------|-------------|
 | Toolkit inventory injected at session start | `TOOLKIT_AWARENESS_INJECT=1` |
 | Data pre-shipping checklist nudge on Stop | `DATAENG_CHECKLIST_NUDGE=1` |
-| Allow one pip/poetry command in a uv project | `CLAUDE_ALLOW_PIP=1` |
 | Dispatch protocol injected at session start | `HUMBLEPOWERS_DISPATCH_INJECT=1` |
 
 ## Optional output style
