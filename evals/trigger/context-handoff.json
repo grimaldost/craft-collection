@@ -7,6 +7,10 @@
   { "query": "This session is getting huge. Branch the performance investigation off into its own dedicated session.", "should_trigger": true, "note": "'branch off' an independent thread => fork mode" },
   { "query": "Turn the current state of this refactor into a ticket someone else can pick up cold.", "should_trigger": true, "note": "handoff to an issue/ticket, portable self-contained text" },
   { "query": "The caching-layer design deserves its own focused session — set it up to continue independently from here.", "should_trigger": true, "note": "FORK/spinoff mode in NL (replaced /spinoff: slash text cannot auto-fire headless)" },
+  { "query": "Package up the rate-limiter work as a standalone brief I can drop into a fresh session and get a finished patch back.", "should_trigger": true, "note": "ex-holdout (spent 2026-07-02): packaging verb + standalone brief + artifact returns; missed by both pre/post-0.6.4 descriptions" },
+  { "query": "This thread has gotten too big — peel the migration discussion off into its own session to carry on by itself.", "should_trigger": true, "note": "ex-holdout (spent 2026-07-02): 'peel off' an independent thread; passed both arms" },
+  { "query": "Write a self-contained handoff so the on-call engineer can take the incident investigation cold.", "should_trigger": true, "note": "ex-holdout (spent 2026-07-02): human handoff taken cold; 3/3 pre-0.6.4, 0/3 post — the flip that motivated the retune" },
+  { "query": "Bundle the failing-export bug into something a fresh agent can pick up with zero memory of this chat and report the fix.", "should_trigger": true, "note": "ex-holdout (spent 2026-07-02): bundle + zero-memory receiver + result returns; missed by both arms" },
 
   { "query": "Run these two independent refactors in parallel right now.", "should_trigger": false, "note": "in-session parallel work => Task tool / subagents, not a handoff" },
   { "query": "Delegate the test-writing to a subagent and bring the results straight back into this session.", "should_trigger": false, "note": "near-miss: in-session subagent delegation, explicitly the Task tool's job" },
@@ -15,5 +19,8 @@
   { "query": "Create a new git branch for this feature.", "should_trigger": false, "note": "near-miss: 'branch' homonym, version control not context fork" },
   { "query": "Summarize what we've done so far in this session.", "should_trigger": false, "note": "near-miss: recap for me, not a paste-ready brief for a fresh context" },
   { "query": "Continue working on the parser where we left off.", "should_trigger": false, "note": "'continue' in the SAME session, no new context" },
-  { "query": "Open a new terminal tab so I can run the server.", "should_trigger": false, "note": "off-domain 'new'/'open', nothing to hand off" }
+  { "query": "Open a new terminal tab so I can run the server.", "should_trigger": false, "note": "off-domain 'new'/'open', nothing to hand off" },
+  { "query": "Kick off three subagents to refactor these modules at once and merge their results back here.", "should_trigger": false, "note": "ex-holdout (spent 2026-07-02): in-session parallel work => Task tool, not a handoff" },
+  { "query": "Cut a release branch for v2.", "should_trigger": false, "note": "ex-holdout (spent 2026-07-02): 'branch' is version control, not a context fork" },
+  { "query": "Recap the decisions from this call for my own notes.", "should_trigger": false, "note": "ex-holdout (spent 2026-07-02): recap for me, not a paste-ready brief for a fresh context" }
 ]
