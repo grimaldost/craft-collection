@@ -203,3 +203,16 @@ Five rules carry most of the value; the full craft is in
    If training already covers it, don't draft it.
 5. **Front-load the distinctive concept** and use specific names — the first
    sentence does the heaviest retrieval work.
+
+## Boundaries
+
+- **Live run state is not journal material.** The plan, current cursor,
+  invariants, and mid-run decisions of a run still in flight belong to
+  **compaction-survival**'s control anchor — rewritten continuously by the same
+  run so a compaction or reset cannot erase them. Journal entries capture what a
+  *finished* stretch of work taught, after the fact; "persist the state so a
+  reset doesn't lose it" is an anchor ask, not a journaling ask.
+- **Handing work to a fresh session or teammate** is **context-handoff**'s brief,
+  not a journal.
+- **Consolidating prior journals into higher-level guidance** is the downstream
+  pass (**consolidate-knowledge**), not this skill.
