@@ -90,6 +90,12 @@ An anchor that cannot be found is no anchor.
   checkpoint before a manual `/compact`. It replaces asking in prose for the
   state to be persisted; it does not replace the cadence, which is what
   protects against *automatic* compactions that arrive unannounced.
+- **Automatic re-injection** (env-gated, off by default): with
+  `SESSION_WORKFLOW_ANCHOR_HOOKS=1`, a SessionStart hook on `compact` and
+  `resume` re-injects the newest non-closed anchor into fresh context
+  mechanically — the re-read step stops depending on the model remembering
+  the protocol. Stale anchors are injected with an explicit warning, never
+  silently trusted; anchor-less sessions pay nothing.
 
 ## Common failure modes
 
