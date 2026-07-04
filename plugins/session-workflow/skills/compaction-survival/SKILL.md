@@ -80,6 +80,17 @@ environment surfaces it on the next turn — a session handoff file, a pinned
 note, the run's opening instruction — so the re-read step has somewhere to look.
 An anchor that cannot be found is no anchor.
 
+## Explicit surfaces
+
+- Invoked directly (`/compaction-survival`), arm the protocol now: create or
+  refresh the anchor immediately from the current conversation state, then
+  follow the update-and-re-read cadence for the rest of the run.
+- **`/anchor`** (session-workflow command) is the one-off backstop: a single
+  snapshot on demand, with or without this protocol armed — the deliberate
+  checkpoint before a manual `/compact`. It replaces asking in prose for the
+  state to be persisted; it does not replace the cadence, which is what
+  protects against *automatic* compactions that arrive unannounced.
+
 ## Common failure modes
 
 | Pattern | What it costs |

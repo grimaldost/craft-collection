@@ -3,6 +3,31 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.7.0 — 2026-07-04
+
+The anchor gains an explicit command surface. No skill `description` changed —
+no holdout implications; the new command has no auto-trigger surface at all
+(explicit invocation only).
+
+### Added
+
+- **`/anchor` command** (`commands/anchor.md`): one-off control-anchor snapshot
+  on demand — the manual backstop before a deliberate `/compact`, usable with
+  or without the compaction-survival protocol armed. Writes the six anchor
+  categories to `.claude/anchors/<run>.md` (identity frontmatter with a step
+  counter), drops a self-ignoring `.claude/anchors/.gitignore` (`*`), appends
+  an `anchor-write` NDJSON telemetry line per use, and supports `/anchor close`
+  to archive a finished run's anchor. Telemetry doubles as the measurement
+  seed for the dogfood-telemetry path named in the memory-suite v2 design.
+
+### Changed
+
+- **compaction-survival body** gains an "Explicit surfaces" section: direct
+  invocation arms the protocol immediately (create/refresh the anchor now, then
+  keep the cadence); `/anchor` is named as the one-off backstop and the
+  boundary between the two is stated — the backstop replaces the prose ask,
+  not the cadence. Body-only edit; the trigger description is untouched.
+
 ## 0.6.5 — 2026-07-02
 
 context-handoff trigger-surface retune, closing the 0.6.4 holdout re-validation
