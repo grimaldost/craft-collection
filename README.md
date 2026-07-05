@@ -70,6 +70,7 @@ env var:
 | Toolkit inventory injected at session start | `TOOLKIT_AWARENESS_INJECT=1` |
 | Data pre-shipping checklist nudge on Stop | `DATAENG_CHECKLIST_NUDGE=1` |
 | Dispatch protocol injected at session start | `HUMBLEPOWERS_DISPATCH_INJECT=1` |
+| Control-anchor re-injection on compact/resume | `SESSION_WORKFLOW_ANCHOR_HOOKS=1` |
 
 ## Optional output style
 
@@ -96,9 +97,9 @@ uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # struc
 ```
 
 Formatting and lint are governed by `ruff.toml` (100-column, single quotes). CI
-(`.github/workflows/validate.yml`) enforces ruff lint + format, the structural
-validator, and the full test suite on push/PR; `currency.yml` runs a monthly
-toolchain drift check.
+(`.github/workflows/validate.yml`) enforces ruff lint + format, the register
+linter, the structural validator, and the full test suite on push/PR;
+`currency.yml` runs a monthly toolchain drift check.
 
 ## Layout
 

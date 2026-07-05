@@ -5,11 +5,14 @@
 This collection is actively maintained on `main`. Security fixes are applied to the
 latest released line of each plugin; older tags are not patched.
 
-| Plugin                 | Version | Supported |
-| ---------------------- | ------- | --------- |
-| engineering-discipline | 0.1.x   | ✅        |
-| session-workflow       | 0.6.x   | ✅        |
-| humblepowers           | 0.4.x   | ✅        |
+| Plugin                 | Supported                  |
+| ---------------------- | -------------------------- |
+| engineering-discipline | ✅ latest release on `main` |
+| session-workflow       | ✅ latest release on `main` |
+| humblepowers           | ✅ latest release on `main` |
+
+Each plugin's current version is in its `plugin.json`; the table intentionally
+carries no version numbers so it cannot drift out of date.
 
 ## Reporting a vulnerability
 
