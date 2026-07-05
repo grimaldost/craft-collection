@@ -22,11 +22,10 @@ user-invocable: true
 # Tool Feedback
 
 Tools in active development improve only if every session that uses them reports
-back. This skill writes that report — one per tool, into the tool's own repo — in a
-format the downstream `feedback-triage` pass can cluster: severity-tagged findings,
-stable IDs, the phase that should have caught each miss, and explicit links when a
-finding repeats an earlier one. The report is raw material for the tool's backlog;
-the quality bar is "can a maintainer act on this cold."
+back. This skill writes that report — one per tool, into the tool's own repo — in
+a format the downstream `feedback-triage` pass can cluster: severity-tagged
+findings, stable IDs, the phase that missed, explicit links for repeats. The
+quality bar: a maintainer can act on it cold.
 
 ## Registered tools — the feedback-targets binding
 
@@ -41,72 +40,61 @@ the user's CLAUDE.md) or the user points you at one. Shape:
   filesystem** for candidate repos.
 - `extras` carries per-tool obligations — a format README that stays authoritative
   for that directory, a registered triage template, "include cost table for engine
-  runs". Read and honor it. If `extras` cites a format README that does not exist
-  in the tree, fall back to this skill's template and note the missing README in
-  the report (a gap for the tool's maintainer).
+  runs". Read and honor it; if it cites a README that does not exist, fall back to
+  this skill's template and note the gap in the report.
 - The session **used** a tool if it invoked any of its skills/agents/commands, ran
   its engine or CLI, or substantively applied its templates/doctrine.
-  **Design-only and authoring-only use counts — and so does maintaining the tool's
-  own repo** (editing its skills, scripts, or docs is exercising it).
+  **Design-only use, authoring-only use, and maintaining the tool's own repo all
+  count.**
 - When the tool is a skill in a repo you are also developing, its authoritative
-  body is the working-tree `SKILL.md` — the copy the `Skill` loader serves is the
-  installed/cached version and can lag *or lead* the repo. Read the working-tree
-  file before reporting on, or reconciling against, the skill's current behavior,
-  and **record which copy you actually exercised**: the cache can run *behind* the
-  working tree (a stale install) or *ahead* of it (a newer install over an older
-  manifest), so the manifest version and the executed version can disagree in either
-  direction — note the copy you ran and flag the skew.
+  body is the working-tree `SKILL.md` — the installed cache can run *behind* or
+  *ahead* of it. Read the working-tree file before reporting on the skill's
+  current behavior, and **record which copy you actually exercised**, flagging
+  any skew (`references/mechanics.md` has the two directions).
 
 ## Were you asked, or did you notice?
 
 - **Asked** ("write the feedback reports", "tooling feedback", "dogfood report") —
-  write now, no confirmation step. A **standing per-session directive** (e.g. a
-  CLAUDE.md "run tool-feedback at session close" mandate) is the asked branch for an
-  autonomous session: treat it as asked and write now — offer-first has no one
-  present to accept, so it would only deadlock.
+  write now, no confirmation step. A **standing per-session directive** (a
+  CLAUDE.md "run tool-feedback at session close" mandate) is the asked branch:
+  treat it as asked and write — in an autonomous session, offer-first deadlocks.
 - **You noticed** the session winding down after exercising registered tools —
   do not auto-write. Emit a **single one-line offer** naming the tools: *"This
-  session exercised keel and pr-pilot — want the two feedback reports?"* One offer,
-  not a nag; if declined or ignored, drop it for the session.
+  session exercised keel and pr-pilot — want the two feedback reports?"* If
+  declined or ignored, drop it for the session.
 - Can't tell which? Offer.
 
 ## Workflow
 
 1. **Resolve targets and destination.** From the bindings table (or an inline
    ask), list every registered tool the session **used** (per the binding
-   section's definition); one report per tool. A tool the user *named* but the
-   session never exercised gets a one-line "named but not exercised → no report"
-   back to the user — not an empty file. Each report's **destination**, in
-   precedence, is: a dir the user named *this session* ("save them in `<dir>`"; a
-   consolidated sink with per-tool subdirs ⇒ `<sink>/<tool>/`) → the registered
-   feedback dir → the tool's own repo. Resolve only a **named or registered** dir,
-   never an inferred one. A redirected destination moves the *write* only: when a
-   registered binding exists, the recurrence check still reads **its** index
-   (step 2), so a one-off sink can't sever the recurrence baseline — state which
-   baseline you used.
-2. **Check recurrence before drafting.** Read the recurrence dir's `INDEX.md` (one
-   entry per prior report + its numbered proposals) and scan it for a finding your
-   candidate repeats — one Read of a current index instead of N phrasing-fragile
-   greps. If that dir holds reports but no `INDEX.md`, **build it first**
+   section's definition); one report per tool. A tool named but never exercised
+   gets a one-line "no report" back to the user — not an empty file. Destination
+   precedence: a dir the user named *this session* → the registered feedback dir
+   → the tool's own repo — **named or registered only, never inferred**. A
+   redirected destination moves the *write* only; the recurrence check (step 2)
+   still reads the registered dir's index — state which baseline you used (fine
+   print: `references/mechanics.md`).
+2. **Check recurrence before drafting.** Read the recurrence dir's `INDEX.md` and
+   scan it for a finding your candidate repeats. If the dir holds reports but no
+   `INDEX.md`, **build it first**
    (`uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`)
-   rather than degrading to a grep. A repeat is
-   written as **"extends `<prior-file-stem>#<n>`"** (or "extends
-   `<prior-file-stem>` §Misses" for a narrative finding) plus only the *new*
-   evidence — never restated fresh.
+   rather than degrading to a grep. A repeat is written as **"extends
+   `<prior-file-stem>#<n>`"** (or "extends `<prior-file-stem>` §Misses" for a
+   narrative finding) plus only the *new* evidence — never restated fresh.
 3. **Route by ownership.** Engine/execution findings go to the engine tool's
    report; method/gate findings to the method tool's; skill findings to the skill
    collection's. If ownership is genuinely ambiguous, report it where it surfaced
    and say so — triage's ROUTE OUT is the backstop.
 4. **Draft one report per tool** using the template below. Read the tool's version
-   from its manifest (`plugin.json`, `pyproject.toml`, `__version__`) — never guess;
-   if the executed copy may differ from the working-tree manifest (cache skew,
-   above), record the version you actually ran and note the discrepancy.
+   from its manifest (`plugin.json`, `pyproject.toml`, `__version__`) — never
+   guess; under cache skew (above), record the version you actually ran and note
+   the discrepancy.
 5. **Self-check, then write** each report to
    `<resolved destination>/<YYYY-MM-DD>-<source-slug>.md` (step 1), slug distinct
    per wave/phase so reports never clobber earlier ones. Then **rebuild that
-   destination's `INDEX.md`** (so the next session's recurrence check at step 2 is
-   one Read, not N greps) by running the session-workflow plugin's
-   `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <destination>`.
+   destination's `INDEX.md`** (step 2's command, pointed at the destination) so
+   the next session's recurrence check is one Read.
 
 ## Report template
 
@@ -144,21 +132,17 @@ should have caught it ("phase: DoR", "phase: pre-mortem", "phase: gate",
 
 The numbered proposals are the report's **stable finding IDs** — `<file-stem>#1`,
 `#2`, … — what triage docs and changelogs cite. Number proposals only; cite
-friction/misses by file stem + section. Finding IDs are one of two namespaces in
-the loop: a triage doc cites them as evidence but mints its own **promotion IDs**
-(`T1a` — cluster + row) for its table; don't conflate the two. Your `extends`
-refs are load-bearing downstream — triage follows the chain to cluster a lineage
-under one cause and to count its recurrence — so point them at the exact
-finding, not just the file.
+friction/misses by file stem + section. (Triage mints its own `T1a` promotion IDs
+— two namespaces, don't conflate them.) Your `extends` refs are load-bearing
+downstream — triage follows the chain to cluster a lineage and count its
+recurrence — so point them at the exact finding, not just the file.
 
 A proposal opens with its **suspected cause** — the reporter holds the richest
-evidence and triage clusters by cause, so a symptom-only proposal makes the cold
-triager re-derive what the session already knew. It also carries its
-**resolution and referents**, not just its question. If it asks to *clarify*
-something the session already settled, record the clarification it validated (or
-name the deciding precedent) — otherwise the downstream lander re-derives it and
-can land the wrong one. If it counts objects ("two holdout positives"), name
-them, so a reader isn't sent hunting.
+evidence and triage clusters by cause; a symptom-only proposal makes the cold
+triager re-derive what the session knew. It also carries its **resolution and
+referents**: record a clarification the session already settled (or name the
+deciding precedent), and name counted objects ("two holdout positives") —
+otherwise the downstream lander re-derives them and can land the wrong one.
 
 ## Self-check before writing
 
