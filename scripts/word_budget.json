@@ -1,6 +1,6 @@
 {
   "plugins/engineering-discipline/skills/data-engineering-discipline/SKILL.md": 2544,
-  "plugins/engineering-discipline/skills/python-engineering/SKILL.md": 2246,
+  "plugins/engineering-discipline/skills/python-engineering/SKILL.md": 2261,
   "plugins/engineering-discipline/skills/refresh-stack/SKILL.md": 484,
   "plugins/humblepowers/skills/brainstorming/SKILL.md": 560,
   "plugins/humblepowers/skills/choosing-tools/SKILL.md": 762,
@@ -14,10 +14,10 @@
   "plugins/session-workflow/skills/consolidate-knowledge/SKILL.md": 932,
   "plugins/session-workflow/skills/context-handoff/SKILL.md": 1560,
   "plugins/session-workflow/skills/corpus-review/SKILL.md": 632,
-  "plugins/session-workflow/skills/evaluate-skill/SKILL.md": 824,
+  "plugins/session-workflow/skills/evaluate-skill/SKILL.md": 825,
   "plugins/session-workflow/skills/feedback-triage/SKILL.md": 1402,
   "plugins/session-workflow/skills/journaling-sessions/SKILL.md": 1761,
-  "plugins/session-workflow/skills/review-panel/SKILL.md": 1030,
+  "plugins/session-workflow/skills/review-panel/SKILL.md": 1062,
   "plugins/session-workflow/skills/tool-feedback/SKILL.md": 1117,
-  "plugins/session-workflow/skills/toolkit-awareness/SKILL.md": 441
+  "plugins/session-workflow/skills/toolkit-awareness/SKILL.md": 449
 }
