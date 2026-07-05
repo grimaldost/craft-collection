@@ -3,6 +3,42 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.10.0 — 2026-07-05
+
+First build round of the 2026-07-05 triage (`docs/feedback/2026-07-05-triage-craft-collection.md`,
+clusters N25–N32). Body, reference, and script work only — no skill `description`
+changed, no holdout implications.
+
+### Changed
+
+- **review-panel** (N25b + N26a): one firing-mechanics rework absorbing five open
+  rows instead of five appends — launch/publish trigger in "When to convene"
+  (before an irreversible outward step; fresh eyes found launch-blockers on
+  self-verified trees twice); Level-3 Workflow execution variant (per-lens
+  reasoning-effort + schema-forced comparable output, which the Agent tool lacks);
+  a persist-raw-before-synthesis step with the destination named at plan time (a
+  truncated notification or dead orchestrator otherwise loses the corpus);
+  durable pre-authorization counts as the go-ahead (autonomous sessions
+  deadlocked on the mandatory fresh ask); corpus-audit negative space →
+  `corpus-review` (N24b, open since 06-28); copy-skew guard-rail. Cost guard-rail
+  tightened to offset.
+- **toolkit-awareness / `scan_toolkit.py`** (N27a): flags installed-vs-source
+  version skew per plugin — compares each installed version against its
+  marketplace source manifest (live working tree for `directory` marketplaces,
+  local clone for git), annotates rows with `source_version` + a visible suffix,
+  and emits one scan caveat. Third-arc promotion (a stale 0.2.2 cache once hid an
+  entire skill); graduates the N18b watch row. Six new fixture tests, no CLI
+  required; unresolvable sources are skipped — absence of evidence is not skew.
+- **tool-feedback + feedback-triage** (N32a/b): first consolidation pass under
+  the 0.9.0 shrink doctrine — eager bodies 1541→1309 (−15%) and 1808→1578 (−13%)
+  words, edge-case mechanics folded into each skill's new
+  `references/mechanics.md` (copy-skew directions, destination fine print,
+  H1-only triage-doc detection rationale, concurrent-session choreography,
+  fan-out owner taxonomy). No rule lost; the duplicated index-build command
+  deduped. Short of the rows' ≥20% aspiration — the remaining prose is layered
+  (contracts, worked examples, fresh doctrine), per the verify-redundancy-first
+  contingency the rows carry.
+
 ## 0.9.0 — 2026-07-05
 
 The digestion side of the feedback loop gains a structural-fix preference and a
