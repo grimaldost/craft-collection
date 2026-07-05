@@ -106,6 +106,7 @@ through its findings.
 | Security audit   | `pip-audit`           | CVE scanning against OSV database in CI    |
 | CLI (if needed)  | `typer`               | Type-hint-driven argument parsing          |
 | Web (if needed)  | `fastapi`             | Interface layer only — keep logic in core/ |
+| HTTP client      | `httpx`               | Sync + async, HTTP/2; default for new code |
 
 ### A note on type checkers
 

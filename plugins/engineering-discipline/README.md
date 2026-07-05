@@ -21,7 +21,8 @@ discipline, with mechanical enforcement and a self-refreshing toolchain.
   `doctor.py` (audit an existing project), `check_versions.py` (compare pins to
   PyPI; `--json` for CI).
 - `skills/data-engineering-discipline/scripts/` — `schema_diff.py`,
-  `parity_check.py`, `contract_check.py` (stdlib-first, pandas optional).
+  `parity_check.py`, `contract_check.py`, `freshness_check.py` (stdlib-first,
+  pandas optional).
 
 All scripts ship with stdlib-runnable tests (`python test_<name>.py`).
 
