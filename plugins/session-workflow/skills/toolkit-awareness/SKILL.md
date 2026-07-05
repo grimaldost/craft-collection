@@ -28,6 +28,10 @@ The scan also lists **plugin-provided** components (it shells out to
 Prefer the scan over recalling from memory: installed capabilities change, and a
 remembered list is wrong the moment one does.
 
+The same script is also wired as an automatic SessionStart hook
+(`scan_toolkit.py --session-start`) — inert unless `TOOLKIT_AWARENESS_INJECT=1`,
+which injects a compact inventory at the start of every session.
+
 ## How to reference the toolkit in prompts and specs
 
 When writing a task prompt or a definition-of-done that another Claude Code
