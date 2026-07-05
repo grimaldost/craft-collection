@@ -33,10 +33,12 @@ evals/
   "trigger_max_turns": 3,
   "trigger_routing_frame": "",
   "allowed_tools_trigger": "Skill,Read,Glob,Grep",
+  "disallowed_tools_trigger": "Write,Edit,NotebookEdit,Bash,WebFetch,WebSearch,Task",
   "allowed_tools_task": "Skill,Read,Glob,Grep,Write,Edit,Bash",
   "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
   "command_first_skills": ["review-panel"],
   "action_discipline_skills": ["my-action-skill"],
+  "cwd_fixture_of_skill": { "my-cwd-skill": "evals/trigger/fixtures/corpus" },
   "plugin_of_skill": { "my-skill": "my-plugin" }
 }
 ```
@@ -59,6 +61,14 @@ evals/
   task with no tools. **Default empty (off): it changes spawn behavior, so validate it
   with a live re-run — error-run rate drops while recall/specificity hold — before
   making it a default.**
+- `cwd_fixture_of_skill` maps a skill to a repo-relative *populated* directory the
+  trigger arm runs in instead of the default empty temp cwd (which is never deleted).
+  For a cwd-dependent skill — one that fires over the files in front of it, like a
+  corpus auditor — an empty cwd reads a false 0.00 recall; see the empty-cwd gotcha
+  below. Unmapped skills keep the throwaway empty cwd.
+- `disallowed_tools_trigger` is the trigger arm's belt-and-braces deny-list; the
+  runner validates its names against the current CLI tool set at preflight (see the
+  stale deny-tool gotcha below).
 - Exclude a `disable-model-invocation: true` skill from `plugin_of_skill` entirely —
   it cannot auto-activate by design, so the trigger axis does not apply.
 
@@ -164,8 +174,9 @@ work happen" vs "emitted a one-line confirmation."
   on *the files in the working directory* — audit/review a repo, sweep a corpus —
   cannot fire there: the model sees no files and asks "which repo?" instead of
   routing, so its recall reads ~0 as an artifact, not a description defect. Measure
-  such a skill with the trigger eval pointed at a *populated* cwd (a fixture
-  corpus), or confirm activation by a manual run in a real tree. (Observed:
+  such a skill with the trigger eval pointed at a *populated* cwd — map it in
+  `cwd_fixture_of_skill` (the config key that implements exactly this) — or confirm
+  activation by a manual run in a real tree. (Observed:
   `corpus-review` scored 0/8 in the empty cwd, yet fired and correctly out-selected
   its `review-panel` / `code-review` siblings 2/3 on the same positives once the cwd
   held a real repo.) A compounding limit for a *heavy* orchestration skill: once it
@@ -178,8 +189,14 @@ work happen" vs "emitted a one-line confirmation."
 - **Stale deny-tool names**: `disallowed_tools_trigger` must list only tools the
   *current* CLI knows. A removed or renamed tool (e.g. `MultiEdit`, now folded into
   `Edit`) makes the spawn error with "deny rule matches no known tool" — counted as
-  an errored run, silently shrinking the sample. Keep the deny-list current, or have
-  the runner drop unknown names before spawning.
+  an errored run, silently shrinking the sample. `run_triggers.py` validates the
+  deny-list against its known-tool set at preflight and fails fast with the
+  offending names; when the CLI adds a tool, extend `KNOWN_CLI_TOOLS` there.
+- **Auth preflight**: before the fan-out, one cheap probe spawn fails fast on dead
+  auth ("PRE-FLIGHT FAILED … not spending the N run spawns") and warms the token
+  once, so concurrent spawns don't race to refresh a single-use token (the race
+  that once 401'd an entire run mid-burst). If it fails, re-login and re-run —
+  nothing was spent.
 - **Cost**: a full run is roughly `(trigger prompts × repeats) + (tasks × repeats ×
   5)` spawns. Budget it and show the user before firing. Use `--concurrency` (each
   spawn is subprocess-bound, so threads parallelize well); transient 429/5xx are

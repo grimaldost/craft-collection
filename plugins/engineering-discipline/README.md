@@ -32,8 +32,10 @@ The PostToolUse and PreToolUse hooks are **active as soon as the plugin is
 installed** (no env gate — they are the mechanical layer); only the Stop nudge
 is opt-in.
 
-- **PostToolUse** — `ruff format` + `ruff check --fix` on `.py` edits via `uvx`.
-  Non-blocking.
+- **PostToolUse** — `ruff format` only on `.py` edits via `uvx`. Non-blocking.
+  `ruff check --fix` is deliberately excluded per-edit (it strips an import added
+  in one edit before a later edit uses it) and runs at the pre-commit/CI gate
+  instead, where the file is complete; `test_ruff_format.py` guards the exclusion.
 - **PreToolUse** — blocks `pip install` / `poetry` / `virtualenv` / `venv` inside
   a uv project (`uv.lock` or `[tool.uv]`/`uv_build`). Override one command with
   `CLAUDE_ALLOW_PIP=1`; never fires outside a uv project.

@@ -3,6 +3,35 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.14 — 2026-07-05
+
+Corpus-review doc-accuracy round (PR #74) plus the post-merge consistency pass
+(2026-07-05 polish session: blind audit + fresh-eyes round 2). Docs only; no
+skill `description` changed.
+
+### Fixed
+
+- README: `freshness_check.py` added to the data-engineering scripts list
+  (shipped 0.1.6, never listed), and the PostToolUse hook entry corrected to
+  **format-only** — it still claimed `ruff format` + `ruff check --fix`, but the
+  `--fix` half was deliberately removed per-edit (it strips an import added in
+  one edit before a later edit uses it); hooks.json, `ruff_format.py`, its test
+  guard, and CONTRIBUTING already said so — the README was the lone outlier.
+- python-engineering SKILL: `httpx` row added to the Canonical Stack table
+  (pinned in `stack.toml`, endorsed in `ecosystem_rationale.md`, absent from
+  the table).
+- references/security.md: pip-audit installs into the `security` dependency
+  group (was `dev`), matching `scaffold.py` and `project_templates.md`.
+- references/currency_review.md: After-the-Review checklist rewritten for the
+  `stack.toml` era — pins live in `stack.toml` (SKILL.md carries none), and
+  `check_versions.py` reads its tool list via `load_tools()` (the "TOOLS dict"
+  it told reviewers to update does not exist).
+- references/project_templates.md: `uv_build` unpinned in the build-system
+  template, matching `scaffold.py`'s output and the template's own
+  "`uv init --lib` default" prose.
+- marketplace.json (repo-level): description synced to plugin.json
+  ("toolchain manifest").
+
 ## 0.1.13 — 2026-07-05
 
 Triage row N31a (2026-07-05 craft triage): the schema-evolution guidance is

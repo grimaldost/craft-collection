@@ -3,6 +3,63 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.11.0 — 2026-07-05
+
+Corpus-review round from the 2026-07-05 polish session (PRs #76–#78, #80, #81 +
+the post-merge consistency pass): a vacuous-gate fix, two new trigger-harness
+capabilities, doc-drift fixes, and one reseal-gated description edit. Minor bump:
+the bundled eval-engine scripts gained capability.
+
+### Fixed
+
+- **The anchor hook's tests actually run now (#77).** `test_anchor_inject.py`
+  used pytest `tmp_path` fixtures, but `run_tests.py` (the pre-push and CI
+  runner) executes each module with bare `python` — the module collected zero
+  tests, printed nothing, and exited 0, so the suite reported PASS while running
+  none of the anchor re-injection hook's 8 tests. A vacuous gate on a shipped,
+  load-bearing feature (since 0.8.0). Converted to the stdlib-runnable pattern
+  every sibling uses; bare `python` now runs all 8 and prints `ok:`.
+  `build_feedback_index.py` also gained `-h`/`--help` (the flag was swallowed as
+  a directory arg → "not a directory: --help", exit 1); regression tests added
+  for both.
+- Doc drift (#76): the README documents both SessionStart hooks — the anchor
+  re-injection hook (`SESSION_WORKFLOW_ANCHOR_HOOKS=1`, shipped 0.8.0) was
+  missing and the section header read "Hook" singular; toolkit-awareness's
+  example invocation uses the Store-stub-safe `uv run --no-project -- python`
+  form its own hooks.json already used; `/anchor` documents all seven anchor
+  categories (Decisions log was missing, and it said "all six"); review-panel's
+  Level-3 firing step gains a fallback to the Levels-1–2 Agent-tool mechanism
+  when the Workflow tool is unavailable, and drops the undefined "max-effort"
+  tier conflation.
+- Eval docs (#78 + this pass): `action_discipline_skills`, the sealed-holdout
+  mechanism (`holdout_check.py` + seal-with-baseline), `pairwise.txt`,
+  `disallowed_tools_trigger`, `cwd_fixture_of_skill`, and the auth preflight are
+  all documented in `eval-harness.md`'s config sample/prose/gotchas;
+  `evals/README.md`'s spawn/cost figure (5× stale) replaced with a
+  self-correcting formula; evaluate-skill's outcome-eval pointer names fathom
+  instead of the retired dyno; toolkit-awareness's body names its own
+  SessionStart hook (doc parity with compaction-survival).
+
+### Added
+
+- **Trigger harness (#80, N28a):** per-skill `cwd_fixture_of_skill` — a
+  cwd-dependent skill (corpus-review: fires over the files in front of it) is
+  measured in a committed populated fixture (`evals/trigger/fixtures/corpus/`)
+  instead of reading a false 0.00 recall in the empty temp cwd — and a deny-list
+  preflight (`unknown_deny_tools` vs `KNOWN_CLI_TOOLS`): a stale name like
+  `MultiEdit` now fails fast with the offender named instead of silently
+  erroring every spawn (~20% sample shrink, 2026-06-28). A regression test locks
+  in that a fired-then-errored run still counts as an activation. The bundled
+  engine copy under evaluate-skill/scripts/ is re-synced.
+
+### Changed
+
+- **Description edit (#81) — reseal note:** tool-feedback's `description`
+  trigger example "keel / pr-pilot" → "keel / convoy" (with the matching body
+  offer-prompt example). Made with maintainer sign-off; the skill's sealed
+  holdout predates the edit and should be re-baselined before the next
+  description-tuning round.
+
 ## 0.10.0 — 2026-07-05
 
 First build round of the 2026-07-05 triage (`docs/feedback/2026-07-05-triage-craft-collection.md`,
