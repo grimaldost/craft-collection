@@ -68,6 +68,10 @@ evals/
     aggregate.py         merge -> report/scorecard.md
     stats.py             wilson_interval / pass_rate / majority
     run_all.py           drive the whole focused run end to end
+    holdout_check.py     held-out overfit check vs trigger/holdout/<skill>.json
+    smoke.py             isolation/assumption gate — run before a first paid run
+    offer_probe.py       journaling offer-vs-write behavioral probe
+    token_probe.py       autonomous-journaling token-cost probe
     test_*.py            stdlib-runnable unit tests for the pure logic
   report/                generated triggers.json / grading.json / scorecard.md (gitignored)
 ```
@@ -79,6 +83,9 @@ evals/
 # the modules import their siblings by top-level name (e.g. `from claude_runner import …`),
 # which pytest's rootdir import mode breaks with ModuleNotFoundError. Use python, from here.
 cd evals/harness && for t in test_*.py; do python "$t"; done
+
+# smoke gate — verify isolation and load-bearing assumptions before any paid run
+python evals/harness/smoke.py
 
 # cheap previews (no spawns)
 python evals/harness/run_triggers.py journaling-sessions --dry-run
@@ -100,10 +107,13 @@ artifacts.
 
 Every spawn carries `--max-budget-usd` and `--max-turns` (see `config.json`).
 Each runner prints an upfront spawn count and a ceiling, and supports `--dry-run`
-(plan only) and `--limit` (cap). The full focused run is ~250 `claude -p` spawns
-(~144 trigger + ~105 grading); empirically ~$15–25 and ~30 min wall at
-`--concurrency 6`. Lower `--repeats`, `--limit` the set, or drop `--concurrency`
-to trim. `trigger_max_turns` (config) caps the trigger arm; `trigger_routing_frame`
+(plan only) and `--limit` (cap). The full focused run scales with the config, so
+treat any fixed total as stale — get today's number from `--dry-run`. Roughly
+`trigger-queries × agent_repeats` trigger spawns plus `tasks × agent_repeats × 5`
+grading spawns; at the current config (20 skills in `plugin_of_skill`, ~330 trigger
+queries, 23 grading tasks, `agent_repeats` 3) that is ~1300 `claude -p` spawns.
+Each runner prints its exact spawn count and `--max-budget-usd` ceiling before
+spending. Lower `--repeats`, `--limit` the set, or drop `--concurrency` to trim. `trigger_max_turns` (config) caps the trigger arm; `trigger_routing_frame`
 (config, default off) is an opt-in flail-damping lever — an `--append-system-prompt`
 that frames each trigger run as a routing check, so a non-firing positive answers
 briefly instead of burning turns with no tools. It changes spawn behavior, so
@@ -130,7 +140,8 @@ before running) — re-run full or restore a backup before aggregating.
   **recall (expected-hard)**, so tuning stops re-spending on immovable queries while
   a regression on them stays visible.
 - **Action-discipline skills** (`action_discipline_skills` in `config.json` —
-  TDD, systematic-debugging, verification-before-completion, skill-authoring):
+  TDD, systematic-debugging, verification-before-completion, skill-authoring,
+  planned-execution; always the exact array in `config.json`):
   the trigger arm deliberately denies Write/Edit/Bash, so skills that activate
   *during real work* are structurally unmeasurable there — an agent asked to
   "implement X" with no working tools answers in prose and consults nothing.

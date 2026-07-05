@@ -108,4 +108,5 @@ the other half of the picture.
 It also evaluates **one skill** — its triggering and its per-skill output — not a
 whole *plugin's* end-task outcomes. "Does plugin A produce better task results than
 plugin B" is an outcome question for an end-to-end task-bank harness scored on the
-deliverable (a dyno-style eval), not this single-skill behavioral one.
+deliverable (fathom's scenario-blind tool-effectiveness eval), not this
+single-skill behavioral one.
