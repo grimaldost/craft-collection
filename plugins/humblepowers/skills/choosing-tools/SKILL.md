@@ -33,19 +33,27 @@ not selection.
    from memory — an inventory skill when one is installed (e.g.
    session-workflow's toolkit-awareness), else the skill listing already in
    context.
-3. **Check positive and negative triggers.** A candidate that matches the
+3. **Read the target tool's own record.** When the task will exercise a tool
+   that has a registered dogfooding-feedback intake (e.g. a `feedback-targets`
+   binding, where session-workflow's loop is installed), read the newest
+   report's Misses/Friction from that intake — one Read — before settling the
+   shortlist. Dispatch is where a recorded miss must resurface: the same
+   under-dispatch recurred across six arcs, once the day after being written
+   down, because nothing read the record back at this step. No registered
+   intake → skip; the step costs nothing.
+4. **Check positive and negative triggers.** A candidate that matches the
    phrase but sits in another skill's declared territory ("not for X — that
    is Y") loses to the owner. Negative space decides ties.
-4. **Load when the bar is met.** Load the best fit when its expected benefit —
+5. **Load when the bar is met.** Load the best fit when its expected benefit —
    risk averted, rework avoided, discipline the task genuinely needs — clearly
    exceeds its cost: the context it occupies and the way a loaded skill
    anchors the plan. When a process discipline and an implementation skill
    both apply, load the process discipline first; it shapes how the
    implementation runs.
-5. **Exit in one line when nothing clears the bar.** "No installed skill owns
+6. **Exit in one line when nothing clears the bar.** "No installed skill owns
    this; proceeding directly" is a complete, correct outcome. Record it and
    move on.
-6. **Set aside misfires plainly.** A loaded skill that turns out not to fit is
+7. **Set aside misfires plainly.** A loaded skill that turns out not to fit is
    abandoned explicitly — "loaded X; it assumes Y, which doesn't hold here;
    continuing without it." Following a misfit skill to completion because it
    was loaded is anchoring, not diligence.
