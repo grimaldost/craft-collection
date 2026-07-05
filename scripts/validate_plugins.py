@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import yaml
+from word_budget import check_budgets, current_counts, load_baselines
 
 ROOT = Path(__file__).resolve().parent.parent
 DESC_CAP = 1536
@@ -135,6 +136,10 @@ def validate() -> list[str]:
         for ref in re.findall(r'\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9_\-./]+\.[A-Za-z0-9]+)', text):
             if not (plugin_root / ref).is_file():
                 errors.append(f'{skill_md}: missing ${{CLAUDE_PLUGIN_ROOT}} reference {ref}')
+
+    # Word-budget ratchet (issue #54): a skill body may not grow past its recorded
+    # baseline without a reviewed baseline bump that names what the growth displaces.
+    errors += check_budgets(current_counts(), load_baselines())
 
     return errors
 
