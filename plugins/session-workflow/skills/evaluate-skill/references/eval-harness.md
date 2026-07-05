@@ -10,8 +10,10 @@ and judges output with an LLM. This file is the authoring + mechanism reference.
 evals/
   config.json
   trigger/<skill>.json
+  trigger/holdout/<skill>.json     # optional: sealed held-out queries for the overfit check
   tasks/<skill>/tasks.json
   tasks/<skill>/rubric.json
+  tasks/<skill>/pairwise.txt       # optional: overrides the with/without judge criterion
   tasks/<skill>/fixtures/*.md      # optional
   harness/*.py                     # this skill's scripts/, copied here
   report/                          # generated: triggers.json, grading.json, scorecard.md
@@ -34,6 +36,7 @@ evals/
   "allowed_tools_task": "Skill,Read,Glob,Grep,Write,Edit,Bash",
   "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
   "command_first_skills": ["review-panel"],
+  "action_discipline_skills": ["my-action-skill"],
   "plugin_of_skill": { "my-skill": "my-plugin" }
 }
 ```
@@ -44,6 +47,11 @@ evals/
   higher tightens the CIs). `gates` are the pass/fail thresholds.
 - `command_first_skills` are slash-invoked skills whose auto-recall is reported as
   informational, not gated (they are meant to be invoked, not to auto-fire).
+- `action_discipline_skills` activate *during real work* (TDD, debugging,
+  verification) rather than off a describable trigger prompt, so the trigger arm
+  (which denies Write/Edit/Bash) cannot measure them. Their trigger-arm recall is
+  ungated (reported as info); the gated proxy is `task_arm_recall` — the grading
+  arm's WITH-activation rate — held to the same `gates.trigger_recall` threshold.
 - `trigger_max_turns` caps the trigger arm (default 3 — enough for a skill to fire,
   cheap). `trigger_routing_frame`, when non-empty, is passed as `--append-system-prompt`
   to every trigger spawn: a flail-damping lever that frames the run as a routing check,
@@ -75,6 +83,16 @@ EXCLUDED from the gated recall, so tuning rounds stop re-spending on immovable q
 while a regression on them stays visible. `run_triggers.py` validates the dataset
 before running — well-formedness, `expected_hard` only on a noted positive, no
 duplicate queries — and fails fast on a malformed file.
+
+### trigger/holdout/<skill>.json — the sealed overfit check
+
+Same schema as `trigger/<skill>.json`, but a **held-out** set the description was
+never tuned against. `python harness/holdout_check.py <skill> [--repeats R]
+[--concurrency K]` runs the dev and holdout sets and flags a holdout recall that
+drops beyond the dev set's Wilson interval — the signal that a description is
+overfit to its dev queries rather than genuinely calibrated. Seal a holdout **with
+a baseline run recorded at seal time**: a sealed-but-never-run holdout is false
+confidence with a shelf life. Once sealed, a holdout is data — don't tune against it.
 
 ### tasks/<skill>/tasks.json and rubric.json
 
