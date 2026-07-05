@@ -11,8 +11,10 @@ from pathlib import Path
 
 from scan_toolkit import (
     _enumerate_plugin_components,
+    _merge_skew,
     _plugins_from_json,
     _read_frontmatter,
+    _source_manifest_version,
     scan,
 )
 
@@ -149,6 +151,85 @@ def test_enumerate_plugin_components_missing_path_is_empty():
     }
 
 
+def _make_marketplace(root: Path, plugin: str, version: str) -> Path:
+    """A fake marketplace source tree: `.claude-plugin/marketplace.json` declaring
+    one plugin whose manifest carries `version` — the shape `claude plugin
+    marketplace list` points at via installLocation."""
+    import json
+
+    mp = root / 'market'
+    (mp / '.claude-plugin').mkdir(parents=True)
+    (mp / '.claude-plugin' / 'marketplace.json').write_text(
+        json.dumps(
+            {'name': 'market', 'plugins': [{'name': plugin, 'source': f'./plugins/{plugin}'}]}
+        ),
+        encoding='utf-8',
+    )
+    man = mp / 'plugins' / plugin / '.claude-plugin'
+    man.mkdir(parents=True)
+    (man / 'plugin.json').write_text(
+        json.dumps({'name': plugin, 'version': version}), encoding='utf-8'
+    )
+    return mp
+
+
+def test_plugins_from_json_exposes_version_and_marketplace():
+    # The skew check needs the raw version and the marketplace half of the id as
+    # structured fields, not just baked into the display name.
+    rows = _plugins_from_json([{'id': 'plug@market', 'version': '0.1.0', 'enabled': True}])
+    assert rows[0]['version'] == '0.1.0'
+    assert rows[0]['marketplace'] == 'market'
+
+
+def test_source_manifest_version_via_marketplace_json():
+    with tempfile.TemporaryDirectory() as d:
+        mp = _make_marketplace(Path(d), 'plug', '0.2.0')
+        assert _source_manifest_version(mp, 'plug') == '0.2.0'
+
+
+def test_source_manifest_version_fallback_layout():
+    # Without a marketplace.json, the conventional plugins/<name>/ layout still resolves.
+    with tempfile.TemporaryDirectory() as d:
+        mp = _make_marketplace(Path(d), 'plug', '0.3.0')
+        (mp / '.claude-plugin' / 'marketplace.json').unlink()
+        assert _source_manifest_version(mp, 'plug') == '0.3.0'
+
+
+def test_source_manifest_version_missing_is_none():
+    with tempfile.TemporaryDirectory() as d:
+        assert _source_manifest_version(Path(d) / 'nope', 'plug') is None
+
+
+def test_merge_skew_annotates_stale_install():
+    # Installed 0.1.0 vs marketplace source 0.2.0: the row gains a structured
+    # source_version, a visible name suffix, and the scan a caveat line — the
+    # invisible-skew footgun (a stale install once hid an entire skill).
+    rows = _plugins_from_json([{'id': 'plug@market', 'version': '0.1.0', 'enabled': True}])
+    with tempfile.TemporaryDirectory() as d:
+        mp = _make_marketplace(Path(d), 'plug', '0.2.0')
+        caveats = _merge_skew(rows, {'market': str(mp)})
+    assert rows[0]['source_version'] == '0.2.0'
+    assert 'source 0.2.0' in rows[0]['name']
+    assert caveats and 'plug' in caveats[0] and '0.2.0' in caveats[0]
+
+
+def test_merge_skew_equal_or_unknown_is_silent():
+    # A matching version or an unresolvable marketplace produces no annotation and
+    # no caveat — absence of evidence is not skew.
+    rows = _plugins_from_json(
+        [
+            {'id': 'same@market', 'version': '0.2.0', 'enabled': True},
+            {'id': 'ghost@nowhere', 'version': '0.1.0', 'enabled': True},
+        ]
+    )
+    with tempfile.TemporaryDirectory() as d:
+        mp = _make_marketplace(Path(d), 'same', '0.2.0')
+        caveats = _merge_skew(rows, {'market': str(mp)})
+    assert caveats == []
+    assert all('source_version' not in r for r in rows)
+    assert 'source' not in rows[0]['name']
+
+
 def test_read_frontmatter_handles_folded_scalar():
     # A `description: >` folded block must be captured in full, not truncated to ">".
     with tempfile.TemporaryDirectory() as d:
@@ -169,6 +250,12 @@ if __name__ == '__main__':
     test_frontmatter_quotes_stripped()
     test_missing_dirs_do_not_raise()
     test_plugins_from_json_uses_id_and_hides_enabled()
+    test_plugins_from_json_exposes_version_and_marketplace()
+    test_source_manifest_version_via_marketplace_json()
+    test_source_manifest_version_fallback_layout()
+    test_source_manifest_version_missing_is_none()
+    test_merge_skew_annotates_stale_install()
+    test_merge_skew_equal_or_unknown_is_silent()
     test_enumerate_plugin_components_walks_install_path()
     test_enumerate_plugin_components_missing_path_is_empty()
     test_read_frontmatter_handles_folded_scalar()

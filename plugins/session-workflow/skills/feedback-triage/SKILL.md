@@ -32,32 +32,22 @@ and writing CHANGELOGs belong to the tool's own release process.
 
 1. **Scope.** Resolve the tool from the `feedback-targets` table in loaded context
    (ask once if absent; never hunt). List the feedback dir directly — a plain
-   directory listing, not a glob, which a non-cwd path or a house naming
-   convention can silently miss. Un-triaged reports = reports in its feedback dir
-   not listed in the **Inputs** section of any existing triage doc there —
-   detection is by input lists, not dates. A doc counts as a triage doc only if
-   its first heading starts with `# Triage` — the same rule
-   `build_feedback_index.py` applies. The filename is deliberately NOT a signal:
-   a filename test would misclassify legitimate INPUT reports whose slug mentions
-   triage (a report about the `feedback-triage` tool itself, a
-   `<date>-triage-round-<tool>` wave slug), while house variants like keel's
-   `<date>-backlog-triage.md` still count because their H1 opens `# Triage —`.
-   First run (no triage doc exists yet): the whole
-   corpus is un-triaged. If the invocation names a different count or set than the
-   directory holds, the directory is authoritative — triage what is on disk and
-   note the discrepancy under **Inputs**. If another session may be triaging the
-   same corpus, note any triage doc already dated today before you start, and
-   re-check at emit (step 7) so two sessions don't write competing docs. Rebuild the
+   directory listing, not a glob. Un-triaged reports = reports not listed in the
+   **Inputs** section of any existing triage doc there — detection is by input
+   lists, not dates; on a first run the whole corpus is un-triaged. A doc counts
+   as a triage doc only if its first heading starts with `# Triage` — the same
+   rule `build_feedback_index.py` applies; the filename is deliberately NOT a
+   signal (`references/mechanics.md` has the misclassification cases, both ways).
+   If the invocation names a different count or set than the directory holds, the
+   directory is authoritative — note the discrepancy under **Inputs**. Note any
+   triage doc already dated today and re-check at emit (step 7). Rebuild the
    dir's `INDEX.md` at scope (run `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`) so the
-   `extends`-lookup in steps 2–3 is one Read of a current index, not N
-   phrasing-fragile greps.
+   `extends`-lookup in steps 2–3 is one Read of a current index.
 2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
-   on a first run, the window is the whole CHANGELOG to date. For a component that
-   ships without its own CHANGELOG (an eval harness, a scripts dir, a doc set),
-   also read `git log` over that window and check the current source: its
-   increments land as commits, so a CHANGELOG-only reconciliation reads
-   already-shipped work as still-open. Map each finding to the version or commit
-   that resolved it. Open the doc with **"Already shipped — NOT re-proposed"**; a
+   on a first run, the whole CHANGELOG to date. For a component without its own
+   CHANGELOG (a harness, a scripts dir, a doc set), also read `git log` over the
+   window — its increments land as commits, invisible to a CHANGELOG-only
+   reconciliation. Map each finding to the version or commit that resolved it. Open the doc with **"Already shipped — NOT re-proposed"**; a
    cluster that goes further than a shipped change is marked as *extending* it.
    Each triage sharpens the backlog; it never repeats it.
 3. **Cluster by underlying cause, not symptom.** Three reports saying "the cited
@@ -66,12 +56,10 @@ and writing CHANGELOGs belong to the tool's own release process.
    dual — **split** one super-cause into separate clusters when its corollaries
    have distinct homes *and* distinct concrete fixes; each piece must be
    promotable on its own. Follow `extends` chains while clustering: a finding
-   marked "extends `<stem>#<n>`" belongs with its ancestors, and the chain's
-   length is recurrence evidence. Cite every cluster's evidence as
-   `<file-stem>#<n>` finding IDs (or stem + section for narrative findings),
-   with counts. For a same-wave `-execution`/`-authoring` report pair, read the
-   `-execution` report first — it holds the evidence; the `-authoring` report
-   explains the causes and the folds.
+   belongs with its ancestors, and chain length is recurrence evidence. Cite each
+   cluster's evidence as finding IDs (or stem + section for narrative findings),
+   with counts. For a same-wave `-execution`/`-authoring` pair, read `-execution`
+   first — it holds the evidence.
 4. **Assign a disposition per cluster:**
    - **ATTACK** — a real increment to this tool; name the home (template / gate /
      skill / doc / ADR) **and the fix shape, derived from the cause, not the
@@ -93,20 +81,17 @@ and writing CHANGELOGs belong to the tool's own release process.
    - **DECLINE** — project-specific or out of charter; record why.
 
    Tie-breaker when this tool's artifact participates in behavior another tool
-   owns: route by **where the fix lands**, not where the artifact lives. When you
-   fan out per-tool digest subagents over a multi-tool corpus, enumerate **each
-   registered tool's own skills/components** in the brief's owner taxonomy — a
-   finding about tool X's own skill is otherwise misrouted to whichever tool the
-   brief described in most detail (e.g. a pr-pilot skill mistagged as craft's).
+   owns: route by **where the fix lands**, not where the artifact lives. Fanning
+   out per-tool digest subagents? The brief's owner taxonomy must enumerate each
+   tool's own components — the misrouting case is in `references/mechanics.md`.
 5. **Apply the promotion gate.** Promote only clusters that are **reinforced**
    (≥2 reports, ideally across arcs — a single-report **BLOCKER** is exempt),
    **specific** (a concrete change with a home), and **actionable**. The
-   exemption's scope is the BLOCKER's own row: sibling rows from the same
-   report need their own explicit justification in the ledger, or take `watch`.
-   `watch` is also the middle disposition for an anchored singleton — keep the
-   row, hold the build, wait for a second report. Under-promote rather than
-   pollute; unpromoted clusters stay listed as raw, and the **Promotion-gate
-   ledger** section shows the gate's work either way.
+   exemption's scope is the BLOCKER's own row — siblings from the same report
+   justify themselves in the ledger or take `watch` (the middle disposition:
+   keep the row, hold the build, wait for a second report). Under-promote rather
+   than pollute; unpromoted clusters stay listed as raw, and the **Promotion-gate
+   ledger** shows the gate's work either way.
 6. **Consolidate before you grow.** A standing debt check on every pass: a home
    that takes an appending promotion this round, carries clauses no report has
    exercised across recent rounds, or nears the validator's size cap gets a
@@ -115,18 +100,16 @@ and writing CHANGELOGs belong to the tool's own release process.
    table and statuses as any other promotion; a loop that can only add converges
    on bodies too dense to execute.
 7. **Emit the triage doc** (template below) into the tool's feedback dir as
-   `<YYYY-MM-DD>-triage-<scope>.md` — a name a later `triage`-detecting scope step
-   will find — clusters leverage-ordered. Before writing, re-list the dir: if a
-   triage doc covering this same corpus appeared since step 1 (a concurrent
-   session), reconcile with it instead of emitting a duplicate.
+   `<YYYY-MM-DD>-triage-<scope>.md`, clusters leverage-ordered. Before writing,
+   re-list the dir: a same-corpus triage doc that appeared since step 1 is
+   reconciled with, not duplicated (`references/mechanics.md`).
 8. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
-   if `extras` is empty or registers none, the template below is authoritative —
-   don't hunt for one. When the ask is to triage "everything" across tools and one
-   of them owns its triage flow, that tool's slice is a **digest-for-handoff** —
-   extracted, clustered, and owner-tagged (per step 4) findings written as INPUT to
-   its flow (a `<date>-new-findings-digest.md`), not a competing generic triage and
-   not skipped.
+   otherwise the template below is authoritative — don't hunt for one. Triaging
+   "everything" when one tool owns its own flow? That tool's slice is a
+   **digest-for-handoff**: extracted, clustered, owner-tagged (per step 4)
+   findings written as INPUT to its flow (a `<date>-new-findings-digest.md`) —
+   not a competing triage, not skipped.
 
 ## Triage doc template
 
@@ -168,13 +151,9 @@ displacement.>
 
 Status vocabulary: `proposed` / `watch` / `accepted` / `shipped(<version>)` /
 `declined` — `watch` parks an anchored-but-singleton row until a second report
-corroborates it. A fresh triage emits rows as `proposed` (or `watch`); later
-passes update statuses.
-
-Two ID namespaces are in play; don't conflate them. **Report finding IDs**
-(`<file-stem>#<n>`, minted by `tool-feedback`) are what evidence and CHANGELOG
-credits cite; **promotion IDs** (`T1a` — cluster number + row letter, minted
-here) are what statuses track across triage passes.
+corroborates it; later passes update statuses. (Report finding IDs `<stem>#<n>`
+are minted by `tool-feedback`; promotion IDs `T1a` are minted here — two
+namespaces, don't conflate them.)
 
 ## Anti-patterns — hunt these
 
@@ -182,8 +161,7 @@ here) are what statuses track across triage passes.
 - **Symptom clusters** — grouping by where it hurt instead of why it happened
   produces ten shallow clusters where two deep ones exist.
 - **Over-promotion** — a singleton observation promoted as if reinforced; the
-  gate (≥2 reports, BLOCKER exempt) exists to kill this, and `watch` exists so
-  the anchored singleton isn't lost instead.
+  gate exists to kill this, and `watch` keeps the anchored singleton.
 - **Absorbing what should be routed** — an engine defect "fixed" with a method
   doc; honor each tool's ledger and route out.
 - **Re-prosing a recurrence** — a finding that recurred past a shipped prose fix
@@ -193,9 +171,8 @@ here) are what statuses track across triage passes.
 
 `tool-feedback` captures (per session, recall); this consolidates (per corpus,
 precision) — the same shape as `journaling-sessions` → `consolidate-knowledge`,
-specialized to tool dogfooding. For a keel *series'* reflections, keel's own
-triage flow owns the job; this skill defers to registered templates when triaging
-keel's feedback dir.
+specialized to tool dogfooding. (A governed series' own reflections belong to the
+owning tool's triage flow — see step 8.)
 
 ## What this skill does NOT do
 
