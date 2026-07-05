@@ -13,6 +13,8 @@ Usage:
 
 Stdlib only (Python 3.10+). Plugin discovery shells out to `claude plugin list`
 and degrades gracefully if the CLI is absent or changes its output format.
+Installed plugin versions are compared against each marketplace source's manifest
+and any skew is flagged — a stale install can silently hide newer skills.
 """
 
 from __future__ import annotations
@@ -225,10 +227,20 @@ def _plugins_from_json(data: object) -> list[dict]:
     out: list[dict] = []
     for p in plugins:
         if isinstance(p, str):
-            out.append({'name': p, 'description': '', 'plugin': p, 'installPath': None})
+            out.append(
+                {
+                    'name': p,
+                    'description': '',
+                    'plugin': p,
+                    'installPath': None,
+                    'version': None,
+                    'marketplace': None,
+                }
+            )
         elif isinstance(p, dict):
             ident = str(p.get('name') or p.get('id') or '?')
             label = ident.split('@', 1)[0]  # plugin@marketplace -> plugin
+            marketplace = ident.split('@', 1)[1] if '@' in ident else None
             ver = str(p.get('version', '')).strip()
             tags = [t for t in (ver, 'disabled' if p.get('enabled') is False else '') if t]
             suffix = f' ({", ".join(tags)})' if tags else ''
@@ -245,9 +257,101 @@ def _plugins_from_json(data: object) -> list[dict]:
                     'description': desc,
                     'plugin': label,
                     'installPath': p.get('installPath'),
+                    'version': ver or None,
+                    'marketplace': marketplace,
                 }
             )
     return out
+
+
+def _source_manifest_version(marketplace_dir: Path, plugin_label: str) -> str | None:
+    """Version of `plugin_label` in a marketplace's on-disk source tree — resolved
+    via the `.claude-plugin/marketplace.json` entry's source path, falling back to
+    the conventional `plugins/<label>/` layout. None on any failure: best-effort,
+    and the caller treats unknown as no-comparison, never as skew."""
+    base = Path(marketplace_dir)
+    declared = None
+    try:
+        mp = json.loads((base / '.claude-plugin' / 'marketplace.json').read_text(encoding='utf-8'))
+        entries = mp.get('plugins', []) if isinstance(mp, dict) else []
+        for entry in entries:
+            if isinstance(entry, dict) and entry.get('name') == plugin_label:
+                src = str(entry.get('source', ''))
+                if src:
+                    declared = base / src
+                break
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass
+    for candidate in (declared, base / 'plugins' / plugin_label):
+        if not candidate:
+            continue
+        try:
+            data = json.loads(
+                (candidate / '.claude-plugin' / 'plugin.json').read_text(encoding='utf-8')
+            )
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(data, dict) and data.get('version'):
+            return str(data['version'])
+    return None
+
+
+def _marketplace_locations() -> dict[str, str]:
+    """{marketplace name: on-disk installLocation} via `claude plugin marketplace
+    list --json`. For a `directory` marketplace the location IS the live source
+    tree; for git/github sources it is the local marketplace clone. {} when the
+    CLI is absent or the shape drifts — same tolerance as `_scan_plugins`."""
+    try:
+        proc = subprocess.run(
+            ['claude', 'plugin', 'marketplace', 'list', '--json'],  # noqa: S607 - PATH-resolved
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return {}
+    if proc.returncode != 0 or not (proc.stdout or '').strip():
+        return {}
+    try:
+        data = json.loads(proc.stdout)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    out: dict[str, str] = {}
+    if isinstance(data, list):
+        for m in data:
+            if isinstance(m, dict) and m.get('name') and m.get('installLocation'):
+                out[str(m['name'])] = str(m['installLocation'])
+    return out
+
+
+def _merge_skew(rows: list[dict], locations: dict[str, str]) -> list[str]:
+    """Annotate installed-plugin rows whose version differs from their marketplace
+    source's manifest — the invisible-skew footgun (a stale install once hid an
+    entire skill from a session). Mutates matching rows in place (`source_version`
+    plus a visible name suffix) and returns caveat lines for the scan output.
+    Unresolvable sources are skipped: absence of evidence is not skew."""
+    stale: list[str] = []
+    for r in rows:
+        market, ver = r.get('marketplace'), r.get('version')
+        loc = locations.get(market) if market else None
+        if not (loc and ver):
+            continue
+        src = _source_manifest_version(Path(loc), r.get('plugin') or '')
+        if not src or src == ver:
+            continue
+        r['source_version'] = src
+        if f'({ver}' in r['name']:
+            r['name'] = r['name'].replace(f'({ver}', f'({ver}, source {src}', 1)
+        else:
+            r['name'] += f' (source {src})'
+        stale.append(f'{r.get("plugin")} installed {ver} vs source {src}')
+    if stale:
+        return [
+            'installed plugin version differs from marketplace source: '
+            + '; '.join(stale)
+            + ' -- consider `claude plugin update <plugin>`'
+        ]
+    return []
 
 
 def _scan_plugins() -> list[dict]:
@@ -312,6 +416,10 @@ def scan(roots: list[Path]) -> dict[str, list[dict]]:
         result['_caveats'].append(
             'plugin-provided components not enumerated (claude CLI unavailable)'
         )
+    if plugins:
+        # Flag installed-vs-source version skew per plugin (stale installs are
+        # otherwise invisible in-session and have hidden whole skills).
+        result['_caveats'].extend(_merge_skew(plugins, _marketplace_locations()))
     return result
 
 
