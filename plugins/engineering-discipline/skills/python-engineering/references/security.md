@@ -9,8 +9,8 @@ Trusted Publishers, Sigstore attestations, and CI pipeline integration.
 Vulnerabilities) database for known CVEs.
 
 ```bash
-# Install as a dev dependency
-uv add --group dev pip-audit
+# Install into the security dependency group (transitively included in dev)
+uv add --group security pip-audit
 
 # Scan the current environment
 uv run pip-audit

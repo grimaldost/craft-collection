@@ -104,7 +104,7 @@ and PEP 735 dependency groups.
 ```toml
 # ── Build System ──────────────────────────────────────────────
 [build-system]
-requires = ["uv_build>=0.11,<1"]
+requires = ["uv_build"]
 build-backend = "uv_build"
 
 # ── Project Metadata ─────────────────────────────────────────

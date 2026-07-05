@@ -160,10 +160,14 @@ Check each tool in the canonical stack for new releases:
 
 ## After the Review
 
-1. Update version pins in `SKILL.md`, `references/project_templates.md`, and
-   the pre-commit config template.
-2. Update `scripts/check_versions.py` TOOLS dict if packages were added or
-   removed from the stack.
+1. Update the `pinned_min` values in `stack.toml` — the single source of truth —
+   plus any literal version numbers still carried in
+   `references/project_templates.md` and the pre-commit config template. `SKILL.md`
+   cites `stack.toml` and holds no version numbers of its own, so there is nothing
+   to edit there. (For a guided pass, `/refresh-stack` walks these updates.)
+2. Add or remove the package's `[tools.*]` entry in `stack.toml` if it entered or
+   left the stack — `scripts/check_versions.py` reads its tool list from there via
+   `load_tools()`, so there is no separate list in the script to update.
 3. Update the skill title if the naming convention has changed.
 4. Re-package the `.skill` file if distributing via claude.ai.
 5. Commit changes with a message like:
