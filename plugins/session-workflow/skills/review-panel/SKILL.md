@@ -57,10 +57,12 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    scores + reasons) so results sit side by side. See `references/prompt-template.md`.
 5. **Fire them — mechanism by ladder level.** Levels 1–2: spawn one subagent per
    lens, concurrently (one message, multiple Agent calls; Opus for high stakes).
-   Level 3 / max-effort panels: drive the lenses through the Workflow tool —
-   `agent(prompt, {effort, schema})` per lens — which buys what the Agent tool
-   does not expose: reasoning-effort control and schema-forced, mechanically
-   comparable output. **Show the plan first** — lenses, agent count, rough cost —
+   Level 3, or any panel that needs per-lens reasoning-effort control: drive the
+   lenses through the Workflow tool — `agent(prompt, {effort, schema})` per lens
+   — which buys what the Agent tool does not expose: reasoning-effort control and
+   schema-forced, mechanically comparable output. If the Workflow tool is not
+   available in the session, fall back to the Levels 1–2 mechanism (concurrent
+   Agent calls), accepting the loss of per-lens effort control. **Show the plan first** — lenses, agent count, rough cost —
    and get a go-ahead; never fire silently. A **durable pre-authorization**
    counts as the go-ahead: show the plan, cite the grant, and fire — an
    autonomous session that insists on a fresh ask deadlocks the panel.

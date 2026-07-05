@@ -3,7 +3,16 @@ pytest or `python test_run_triggers.py`."""
 
 from __future__ import annotations
 
-from run_triggers import all_runs_errored, merge_report, score_skill, validate_queries
+from pathlib import Path
+
+from run_triggers import (
+    all_runs_errored,
+    merge_report,
+    resolve_trigger_cwd,
+    score_skill,
+    unknown_deny_tools,
+    validate_queries,
+)
 
 
 def fake_run(query, repeats):  # fires only on queries containing "journal"
@@ -377,6 +386,81 @@ def test_query_level_point_estimates_match_their_cis():
     assert abs(r['specificity_query'] - 1.0) < 1e-9
 
 
+def test_unknown_deny_tools_flags_removed_tool():
+    # N28a pt3: a deny-list naming a tool the CLI no longer has (MultiEdit, folded into
+    # Edit) makes every spawn error "deny rule matches no known tool" and shrinks the
+    # sample silently (~20% of runs, 2026-06-28). Preflight must surface it.
+    assert unknown_deny_tools('Write,Edit,MultiEdit,Bash') == ['MultiEdit']
+    assert unknown_deny_tools('Write,Edit,NotebookEdit,Bash,WebFetch,WebSearch,Task') == []
+    assert unknown_deny_tools('') == []
+    assert unknown_deny_tools('  Write , Bogus ') == ['Bogus']  # whitespace-tolerant
+
+
+def test_resolve_trigger_cwd_uses_fixture_when_mapped():
+    # N28a pt1: a cwd-dependent skill (corpus-review: "audit the repo's docs") reads
+    # 0.00 recall in an EMPTY temp cwd — it fires only over real files. A per-skill
+    # cwd_fixture points the trigger arm at a populated dir the caller must not delete.
+    cfg = {'cwd_fixture_of_skill': {'corpus-review': 'evals/trigger/fixtures/corpus'}}
+    cwd, is_temp = resolve_trigger_cwd('corpus-review', cfg, Path('/repo'))
+    assert is_temp is False  # a real fixture dir; caller must NOT rmtree it
+    assert Path(cwd) == (Path('/repo') / 'evals/trigger/fixtures/corpus').resolve()
+
+
+def test_resolve_trigger_cwd_defaults_to_temp_when_unmapped():
+    # An unmapped skill (the common case) still gets a throwaway empty cwd.
+    cfg = {'cwd_fixture_of_skill': {'corpus-review': 'x'}}
+    cwd, is_temp = resolve_trigger_cwd('journaling-sessions', cfg, Path('/repo'))
+    assert cwd is None and is_temp is True
+    # a config without the key at all also defaults cleanly
+    cwd2, is_temp2 = resolve_trigger_cwd('anything', {}, Path('/repo'))
+    assert cwd2 is None and is_temp2 is True
+
+
+def test_run_skill_credits_activation_even_when_errored():
+    # N28a pt2: a run where the Skill tool FIRED is an activation even if the run later
+    # errors on the turn cap — heavy orchestration skills fire, then flail to the cap
+    # spawning disallowed subagents (corpus-review 19/21 errored). Scoring a
+    # fired-then-errored run as a non-fire would make the class un-gateable. Lock in
+    # that the tally credits the fire regardless of is_error.
+    import run_triggers as rt
+
+    class _FiredButErrored:
+        cost_usd = 0.0
+        is_error = True
+        result_text = '[TIMEOUT after 300s]'
+
+        def activated(self, _skill):
+            return True  # the Skill tool fired before the cap
+
+    cfg = {
+        'allowed_tools_trigger': 'Skill',
+        'disallowed_tools_trigger': '',
+        'trigger_routing_frame': '',
+        'trigger_max_turns': 3,
+        'agent_model': 'm',
+        'max_budget_usd': 0.5,
+        'timeout_seconds': 300,
+    }
+    orig = rt.run_agent
+    rt.run_agent = lambda *a, **k: _FiredButErrored()
+    try:
+        score = rt.run_skill(
+            'corpus-review',
+            [{'query': 'audit the repo docs', 'should_trigger': True}],
+            plugin_dir='p',
+            cfg=cfg,
+            repeats=2,
+            concurrency=1,
+            config_dir='c',
+            cwd='w',
+        )
+    finally:
+        rt.run_agent = orig
+    assert score['recall'] == 1.0  # both fired-then-errored runs credited as fires
+    assert score['error_runs'] == 2  # still counted as errored (for diagnostics)
+    assert score['errors_no_activation_positive'] == 0  # a fire is not a no-activation error
+
+
 if __name__ == '__main__':
     test_scoring_recall_specificity()
     test_query_level_ci_is_wider_than_pooled()
@@ -403,4 +487,8 @@ if __name__ == '__main__':
     test_distinct_error_samples_truncates_to_width()
     test_format_error_samples_renders_lines_or_empty()
     test_run_skill_collects_error_samples()
+    test_unknown_deny_tools_flags_removed_tool()
+    test_resolve_trigger_cwd_uses_fixture_when_mapped()
+    test_resolve_trigger_cwd_defaults_to_temp_when_unmapped()
+    test_run_skill_credits_activation_even_when_errored()
     print('ok: all run_triggers tests passed')

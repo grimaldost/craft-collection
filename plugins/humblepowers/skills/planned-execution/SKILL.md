@@ -1,6 +1,6 @@
 ---
 name: planned-execution
-description: "Turn an agreed design or spec into a complete implementation plan and execute it task by task with fresh subagents and two-stage review — the midweight lane between direct implementation and a governed PR series. Use when a feature needs a multi-step plan with review checkpoints but not series machinery: 'write the implementation plan for this spec', 'execute this plan task by task', 'plan then build this', 'run docs/plans/<file>', or when work has outgrown a single TDD loop but doesn't warrant keel or pr-pilot. The plan contract is firm: bite-sized steps with exact paths, complete code, exact commands with expected output, and no placeholders — a zero-context engineer could execute it cold. The loop is firm too: per task, a fresh implementer subagent, then spec-compliance review, then code-quality review, re-reviewing after each fix. Not for deciding what to build (brainstorming comes first), not for governed multi-PR series with gates and dependency DAGs (keel and pr-pilot own that), and not for small single-loop fixes (test-driven-development directly)."
+description: "Turn an agreed design or spec into a complete implementation plan and execute it task by task with fresh subagents and two-stage review — the midweight lane between direct implementation and a governed PR series. Use when a feature needs a multi-step plan with review checkpoints but not series machinery: 'write the implementation plan for this spec', 'execute this plan task by task', 'plan then build this', 'run docs/plans/<file>', or when work has outgrown a single TDD loop but doesn't warrant keel or convoy. The plan contract is firm: bite-sized steps with exact paths, complete code, exact commands with expected output, and no placeholders — a zero-context engineer could execute it cold. The loop is firm too: per task, a fresh implementer subagent, then spec-compliance review, then code-quality review, re-reviewing after each fix. Not for deciding what to build (brainstorming comes first), not for governed multi-PR series with gates and dependency DAGs (keel and convoy own that), and not for small single-loop fixes (test-driven-development directly)."
 ---
 
 # Planned Execution
@@ -9,7 +9,7 @@ The midweight lane: a spec becomes a plan an engineer with zero context could
 execute cold, and the plan becomes working software through a loop of fresh
 implementer subagents and two-stage review. Below this lane, implement
 directly with test-driven-development; above it, a governed series (keel,
-pr-pilot) owns the work.
+convoy) owns the work.
 
 This is a **rigid** skill: the plan contract and the review-loop order are
 bright lines, because the failure mode of plan-then-execute work is
@@ -110,7 +110,7 @@ Batch by responsibility, never to skip a review.
 Mechanical implementation with a complete spec → the cheapest capable model;
 multi-file integration → a standard model; design judgment and review → the
 most capable available. When a registered model-tier policy is installed
-(e.g. pr-pilot's model-tiers), its thresholds win over these heuristics.
+(e.g. convoy's model-tiers), its thresholds win over these heuristics.
 
 ## Without subagents
 
@@ -129,7 +129,7 @@ status protocol.
 
 - **brainstorming** owns the step before this one — if what to build isn't
   agreed yet, no plan contract can fix that.
-- **keel / pr-pilot** own governed work: multi-PR series, dependency DAGs,
+- **keel / convoy** own governed work: multi-PR series, dependency DAGs,
   Definition-of-Ready gates, deterministic quality gates. The moment the
   work wants those, hand it off — this skill is deliberately lighter.
 - **test-driven-development** alone covers a single-loop change; a plan

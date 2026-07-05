@@ -156,6 +156,9 @@ def build_index(feedback_dir: Path) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] in ('-h', '--help'):
+        print(__doc__)
+        return 0
     if not argv:
         print('usage: build_feedback_index.py <feedback-dir>')
         return 2
