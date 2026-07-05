@@ -3,6 +3,35 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.9.0 — 2026-07-05
+
+The digestion side of the feedback loop gains a structural-fix preference and a
+standing shrink path — the direct response to the stress panel's accretion
+finding (loop bodies grew one clause per promoted finding, 806→1621 and 907→1491
+words in 19 days, with no disposition that ever removes prose; see
+`2026-07-02-stress-panel-repo-infra-and-meta` §Misses + proposal #9, plus a user
+directive to digest cause-first and prefer structural fixes over appends).
+Body-only — no skill `description` changed, no holdout implications.
+
+### Changed
+
+- **feedback-triage**: ATTACK now names a **fix shape derived from the cause**,
+  with an explicit preference order — remove/simplify → restructure → mechanize
+  → append prose (last, and only naming what it displaces). The promotion table
+  gains a `fix shape` column so the choice is visible and auditable per row. New
+  pipeline step 6, **"Consolidate before you grow"**: every pass emits shrink
+  rows for homes that took appends, carry unexercised clauses, or near the size
+  cap — the loop can now shrink a tool, not only grow it. The promotion-gate
+  ledger's closing assertion adds "no prose append shipped without a named
+  displacement". Offset: the re-prosing anti-pattern tightened to one sentence
+  (it duplicated the escalation ladder).
+- **tool-feedback**: proposals open with the suspected cause
+  (`<cause> → <the change that removes it>`) — the reporter holds the richest
+  evidence and triage clusters by cause, so capture now hands the cluster step a
+  warm hypothesis instead of a cold symptom. Friction/misses quantify when cheap
+  (minutes, $, retries — the corpus's strongest findings are the quantified
+  ones), and the self-check verifies cause-before-symptom.
+
 ## 0.8.0 — 2026-07-04
 
 The anchor gains its mechanical layer: automatic re-injection after compaction

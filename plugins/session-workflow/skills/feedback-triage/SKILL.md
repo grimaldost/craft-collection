@@ -47,7 +47,7 @@ and writing CHANGELOGs belong to the tool's own release process.
    directory holds, the directory is authoritative — triage what is on disk and
    note the discrepancy under **Inputs**. If another session may be triaging the
    same corpus, note any triage doc already dated today before you start, and
-   re-check at emit (step 6) so two sessions don't write competing docs. Rebuild the
+   re-check at emit (step 7) so two sessions don't write competing docs. Rebuild the
    dir's `INDEX.md` at scope (run `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`) so the
    `extends`-lookup in steps 2–3 is one Read of a current index, not N
    phrasing-fragile greps.
@@ -74,15 +74,21 @@ and writing CHANGELOGs belong to the tool's own release process.
    explains the causes and the folds.
 4. **Assign a disposition per cluster:**
    - **ATTACK** — a real increment to this tool; name the home (template / gate /
-     skill / doc / ADR). **Escalate the layer on a recurrence:** when a finding
-     recurred *after* a fix already shipped at the same enforcement layer (≥2
-     post-fix reports) and its cause is **mechanically reachable** at the next
-     layer, attack one rung down — advisory prose → required structure →
+     skill / doc / ADR) **and the fix shape, derived from the cause, not the
+     symptom**. Prefer shapes in this order: **remove/simplify** what produces the
+     failure; **restructure** the section or mechanism so the class can't recur;
+     **mechanize** (test / script / gate / hook); **append prose** — last, and
+     only naming what it displaces (a clause folded, tightened, or retired) —
+     loop bodies measurably grow one clause per promoted finding until a cold
+     reader drops load-bearing ones. **Escalate the layer on a recurrence:** when
+     a finding recurred *after* a fix already shipped at the same enforcement
+     layer (≥2 post-fix reports) and its cause is **mechanically reachable** at
+     the next layer, attack one rung down — advisory prose → required structure →
      script/gate → hook → linter/CI — instead of re-prosing the same advice. A
      judgment-bound recurrence no mechanism can reach (a dispatch-timing nudge, a
-     naming call) takes sharper prose or DECLINE, not a forced rung. This is the
-     loop-side of the rule `skill-authoring` states for a skill: a constraint that
-     needs caps to hold needs a gate, not louder prose.
+     naming call) takes sharper prose or DECLINE, not a forced rung — the
+     loop-side of `skill-authoring`'s rule: a constraint that needs caps to hold
+     needs a gate, not louder prose.
    - **ROUTE OUT** — it belongs to another registered tool; record the target.
    - **DECLINE** — project-specific or out of charter; record why.
 
@@ -101,12 +107,19 @@ and writing CHANGELOGs belong to the tool's own release process.
    row, hold the build, wait for a second report. Under-promote rather than
    pollute; unpromoted clusters stay listed as raw, and the **Promotion-gate
    ledger** section shows the gate's work either way.
-6. **Emit the triage doc** (template below) into the tool's feedback dir as
+6. **Consolidate before you grow.** A standing debt check on every pass: a home
+   that takes an appending promotion this round, carries clauses no report has
+   exercised across recent rounds, or nears the validator's size cap gets a
+   consolidation row of its own — fold accumulated sub-cases into a reference
+   file, merge overlapping clauses, retire dead ones. Shrink rows ride the same
+   table and statuses as any other promotion; a loop that can only add converges
+   on bodies too dense to execute.
+7. **Emit the triage doc** (template below) into the tool's feedback dir as
    `<YYYY-MM-DD>-triage-<scope>.md` — a name a later `triage`-detecting scope step
    will find — clusters leverage-ordered. Before writing, re-list the dir: if a
    triage doc covering this same corpus appeared since step 1 (a concurrent
    session), reconcile with it instead of emitting a duplicate.
-7. **Defer to a tool-owned template.** If the binding's `extras` registers a
+8. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
    if `extras` is empty or registers none, the template below is authoritative —
    don't hunt for one. When the ask is to triage "everything" across tools and one
@@ -133,9 +146,9 @@ and writing CHANGELOGs belong to the tool's own release process.
 ### T1 — <underlying cause> (<disposition>; <recurrence count>)
 <evidence: cited finding IDs / report stems>
 
-| # | proposed promotion | home | status |
-|---|--------------------|------|--------|
-| T1a | <the concrete change> | <template/gate/skill/doc/ADR> | proposed |
+| # | proposed promotion | fix shape | home | status |
+|---|--------------------|-----------|------|--------|
+| T1a | <the concrete change> | <remove / restructure / mechanize / prose (displaces: …) / new artifact> | <template/gate/skill/doc/ADR> | proposed |
 
 ### T2 — …
 
@@ -148,8 +161,9 @@ and writing CHANGELOGs belong to the tool's own release process.
 ## Promotion-gate ledger
 <the gate's work, auditable per cluster: which cleared on reinforcement, which
 promoted via the BLOCKER exemption (name the exempting finding), which sit at
-`watch`, which stayed raw — and why. Close with the assertion that no singleton
-non-BLOCKER was promoted.>
+`watch`, which stayed raw — and why. Close with two assertions: no singleton
+non-BLOCKER was promoted, and no prose append shipped without a named
+displacement.>
 ```
 
 Status vocabulary: `proposed` / `watch` / `accepted` / `shipped(<version>)` /
@@ -173,9 +187,7 @@ here) are what statuses track across triage passes.
 - **Absorbing what should be routed** — an engine defect "fixed" with a method
   doc; honor each tool's ledger and route out.
 - **Re-prosing a recurrence** — a finding that recurred past a shipped prose fix
-  needs a stronger enforcement layer (a structure, script, gate, hook, or linter),
-  not a fourth sentence of the same advice; more prose symptom-patches the cause
-  the prose layer already failed to bind.
+  needs a stronger enforcement layer, not a fourth sentence of the same advice.
 
 ## Relationship to neighbors
 
