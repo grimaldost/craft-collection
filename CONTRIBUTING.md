@@ -19,7 +19,9 @@ your contributions are licensed under the project's [MIT License](LICENSE).
 ## Getting set up
 
 Prerequisites: **Python 3.13+** and **[uv](https://docs.astral.sh/uv/)** (used to
-run the pinned tooling without polluting your environment).
+run the pinned tooling without polluting your environment). 3.13 is the CI and uv
+baseline; the scripts are stdlib-first and `ruff` targets 3.10, so they also run on
+older interpreters.
 
 ```bash
 git clone https://github.com/grimaldost/craft-collection
@@ -54,6 +56,13 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
 
 - **Python style** is governed by [`ruff.toml`](ruff.toml): 100-column lines, single
   quotes. `ruff format` + `ruff check --fix` run automatically on commit.
+- **Register discipline (all markdown).** `scripts/lint_register.py` gates every
+  plugin's markdown in pre-commit and CI. It flags coercive phrasing — commands
+  ordering the reader to invoke a skill, importance banners, and runs of three or
+  more consecutive all-caps words outside code. One counter-intuitive rule: the word
+  "non-negotiable" is flagged only inside a skill's frontmatter `description` (where
+  it buys salience), and is fine in body prose. Full doctrine in
+  [`skill-authoring`](plugins/humblepowers/skills/skill-authoring/SKILL.md).
 - **The per-edit format hook is format-only and won't remove your imports.**
   `engineering-discipline`'s PostToolUse hook runs `ruff format` only; the
   import-removing autofix (`ruff check --fix`) runs at the pre-commit/CI gate, where
@@ -85,14 +94,13 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
   - `build:` / `ci:` / `chore:` for tooling, CI, and housekeeping.
 - **Open a PR** and fill in the template. Keep changes focused; unrelated cleanups
   belong in their own PR.
-- PRs are **squash-merged**, so the PR title becomes the commit — make it a good
-  Conventional Commit line.
-- **Stacked PRs and squash-merge don't mix well — prefer independent branches off
-  `main`.** If you must stack, push the base branch *before* `gh pr create --base <base>`
-  (an unpushed base gives `Base sha can't be blank`); and once the base **squash**-merges,
-  its commits never land on `main` as authored, so the stacked PR shows the base's whole
-  diff until you `git rebase --onto main <old-base> <stacked-branch>` to drop the now-
-  orphaned base commits.
+- PRs land via a **merge commit**, so your branch's own commits are preserved on
+  `main` as authored — write each commit as a clean Conventional Commit line, not
+  just the PR title.
+- **Stacked PRs:** push the base branch *before* `gh pr create --base <base>` (an
+  unpushed base gives `Base sha can't be blank`). Once the base merges, GitHub
+  retargets the stacked PR to `main` and its diff narrows to its own commits — no
+  rebase dance needed under merge-commit merges.
 
 ## Releasing
 
