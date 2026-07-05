@@ -6,7 +6,7 @@ description: >
   should have caught them, vacuous gates, and severity-tagged proposed changes with
   stable finding IDs — saved into that tool's own feedback directory. Use when the
   user asks for feedback on their tools ("write the feedback reports", "tooling
-  feedback", "dogfood report", "capture the friction with keel / pr-pilot") — a
+  feedback", "dogfood report", "capture the friction with keel / convoy") — a
   direct imperative naming one tool ("write a dogfooding feedback report for keel")
   is this skill too, since writing that report IS the skill; route it here rather
   than drafting the report freehand — and offer once, unprompted, when a session
@@ -60,7 +60,7 @@ the user's CLAUDE.md) or the user points you at one. Shape:
   treat it as asked and write — in an autonomous session, offer-first deadlocks.
 - **You noticed** the session winding down after exercising registered tools —
   do not auto-write. Emit a **single one-line offer** naming the tools: *"This
-  session exercised keel and pr-pilot — want the two feedback reports?"* If
+  session exercised keel and convoy — want the two feedback reports?"* If
   declined or ignored, drop it for the session.
 - Can't tell which? Offer.
 
