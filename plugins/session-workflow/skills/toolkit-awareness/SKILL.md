@@ -16,8 +16,8 @@ user-level (`~/.claude`) and project-level (`<repo>/.claude`) configuration:
 
 ```bash
 # A skill runs with cwd = the user's project, not the skill dir — use the absolute path.
-python "${CLAUDE_PLUGIN_ROOT}/skills/toolkit-awareness/scripts/scan_toolkit.py"          # grouped table
-python "${CLAUDE_PLUGIN_ROOT}/skills/toolkit-awareness/scripts/scan_toolkit.py" --json   # machine-readable
+uv run --no-project -- python "${CLAUDE_PLUGIN_ROOT}/skills/toolkit-awareness/scripts/scan_toolkit.py"          # grouped table
+uv run --no-project -- python "${CLAUDE_PLUGIN_ROOT}/skills/toolkit-awareness/scripts/scan_toolkit.py" --json   # machine-readable
 ```
 
 The scan also lists **plugin-provided** components (it shells out to
