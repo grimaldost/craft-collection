@@ -34,12 +34,11 @@ neighbors — high when the task is the skill's, low when it is not.
    description that needs to demand attention is compensating for triggers
    that fail to earn it.
 
-A plain-scalar `description` must not contain `: ` (a colon followed by a space):
-YAML reads it as a nested mapping and the frontmatter silently breaks — the skill
-never loads and its recall collapses to zero, caught only by `validate_plugins`, not
-by anything as you write. Quote the whole scalar, use a `>` folded block (colons are
-safe inside one), or replace the `: ` with an em-dash. `evaluate-skill` documents the
-same trap from the measurement side: it surfaces as an instant, total recall collapse.
+A plain-scalar `description` must not contain `: ` (colon + space): YAML reads
+it as a nested mapping, the frontmatter silently breaks, and the skill never
+loads — caught only by `validate_plugins`, not by anything as you write. Quote
+the whole scalar, use a `>` folded block, or replace the `: ` with an em-dash.
+(`evaluate-skill` sees the same trap as an instant, total recall collapse.)
 
 ## Selection and execution are different layers
 
@@ -89,9 +88,12 @@ A skill ships when all of these exist, not before:
 
 1. **Trigger dataset** — balanced positives and negatives; the negatives
    include near-misses that sit in named siblings' territory.
-2. **Sealed holdout** — authored at the same sitting as the dev set and never
-   consulted while tuning the description. A holdout that informed tuning is
-   dev data, not a holdout.
+2. **Sealed holdout, with a birth baseline** — authored at the same sitting as
+   the dev set, never consulted while tuning the description, and **run once at
+   seal time with the result recorded next to the seal**. A holdout that
+   informed tuning is dev data, not a holdout; a holdout that has never been
+   run is false confidence (one sat four days hiding a dev-0.95/holdout-0.33
+   overfit).
 3. **Correct-usage rubric** (rigid skills) — tasks plus checks that the output
    actually followed the discipline, deterministic where possible.
 4. **Gates pass** — recall, specificity, and correct-usage thresholds, run by
@@ -101,6 +103,16 @@ A skill ships when all of these exist, not before:
    installs keep requirements 1–3 as authored artifacts and run them with
    whatever harness they have — the discipline is the contract, the harness
    is one implementation.
+
+Two skill classes are **harness-ungateable** at trigger time: a skill whose
+trigger inherently depends on the cwd corpus (an empty eval cwd cannot fire
+it), and a heavy orchestration skill that fires and then exceeds the eval's
+turn cap (scored as an error, not an activation). For those, requirement 4
+becomes **manual-observation activation evidence** — it fires and correctly
+out-selects its named siblings in a populated, real context — plus clean
+specificity, with the harness-fixture follow-up recorded. Precedent:
+`corpus-review` shipped exactly this way; don't re-block the class on a 0.00
+recall artifact.
 
 ## References between tools
 
@@ -147,5 +159,6 @@ otherwise.
 - [ ] Rigid or flexible declared; bright lines plain; catalogs descriptive
 - [ ] Register deny-list clean (lint-enforced where a gate is wired)
 - [ ] Cross-tool references are role-generic with fallback (degradation test)
-- [ ] Dev dataset and sealed holdout authored together, before any tuning
+- [ ] Dev dataset and sealed holdout authored together, before any tuning;
+      holdout baseline run and recorded at seal time
 - [ ] Correct-usage rubric for rigid skills
