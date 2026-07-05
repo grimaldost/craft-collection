@@ -88,8 +88,15 @@ verification-before-completion — its evidence rules govern the "done".
 unused imports or symbols, author each import in the *same* step that first
 references it. An "add the import now, use it later" sequence breaks: the hook
 removes the still-unused import the instant it lands, and the later step hits
-an undefined name. It bites fresh implementers and the controller identically —
-sequence the edit so the symbol is introduced and used together.
+an undefined name — sequence the edit so the symbol is introduced and used
+together.
+
+**Per-phase commits in a multi-phase worktree.** Stage a phase's full file set
+and commit with no unrelated tracked-dirty files: pre-commit stashes whatever
+is unstaged, a format hook may auto-fix a staged file, and the stash-pop then
+conflicts — the commit aborts, the file left `MM` (staged + unstaged auto-fix).
+Recover by re-`git add`-ing the auto-fixed file; prevent it by committing each
+phase from an otherwise-clean tree.
 
 **Task granularity vs dispatch economics.** "Bite-sized" means one clear action
 per step, not one subagent per step. When several small steps form one

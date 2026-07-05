@@ -5,6 +5,38 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.8 — 2026-07-05
+
+First humblepowers round of the 2026-07-05 craft triage (rows N25a, N28b, N29a,
+N30a). Body/script edits only — no skill `description` changed, no holdout
+implications.
+
+### Changed
+
+- **choosing-tools**: the dispatch procedure gains a required step — before
+  settling the shortlist, read the newest feedback report's Misses/Friction for
+  a tool the task will exercise (when a dogfooding intake is registered; skip
+  otherwise, the step costs nothing). The escalation-ladder response to the
+  review-panel under-dispatch recurring across six arcs, twice past shipped
+  prose fixes and once the day after being written down: a recorded miss must
+  resurface at dispatch time, not at the next feedback pass. The inert
+  SessionStart frame (`inject_dispatch.py`) carries the same step.
+- **skill-authoring** (Shipping requirement): a sealed holdout now requires a
+  **birth baseline** — run once at seal time, result recorded next to the seal;
+  a sealed-but-never-run holdout hid a dev-0.95/holdout-0.33 overfit for four
+  days (the 0.6.5 context-handoff retune practiced this; now doctrine). And a
+  **harness-ungateable branch**: cwd-dependent and heavy orchestration skills
+  gate on manual-observation activation evidence + clean specificity, with the
+  harness-fixture follow-up recorded (the corpus-review precedent) — not
+  blocked on a 0.00 recall artifact. Offset: the YAML colon-trap paragraph
+  tightened.
+- **planned-execution** (authoring/dispatch notes): per-phase commits in a
+  multi-phase worktree stage the phase's full file set and commit with no
+  unrelated tracked-dirty files — pre-commit's stash of unstaged changes
+  collides with a format hook's auto-fix of a staged file and aborts the
+  commit (file left `MM`); recovery is re-`git add`. Second arc of the
+  strip-on-save family.
+
 ## 0.4.7 — 2026-07-03
 
 Doc accuracy: the register linter went marketplace-wide (repo-tooling change,
