@@ -3,10 +3,12 @@ Runnable with pytest or `python test_build_feedback_index.py`."""
 
 from __future__ import annotations
 
+import contextlib
+import io
 import tempfile
 from pathlib import Path
 
-from build_feedback_index import build_index, extract_proposals
+from build_feedback_index import build_index, extract_proposals, main
 
 
 def test_extract_proposals_pulls_numbered_titles():
@@ -185,6 +187,18 @@ def test_extract_proposals_strips_digit_hyphen_severity_tag():
     ]
 
 
+def test_help_flag_returns_zero_not_swallowed_as_dir():
+    # --help / -h must print usage and exit 0, not be read as a positional dir arg
+    # (regression: `--help` -> `Path('--help')` -> "not a directory: --help", exit 1).
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert main(['--help']) == 0
+        assert main(['-h']) == 0
+    assert 'build_feedback_index' in buf.getvalue()  # the docstring was printed
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert main([]) == 2  # no args still prints usage and returns 2
+
+
 if __name__ == '__main__':
     test_extract_proposals_pulls_numbered_titles()
     test_extract_proposals_empty_when_no_section()
@@ -197,4 +211,5 @@ if __name__ == '__main__':
     test_triage_doc_detected_by_h1_not_filename()
     test_extract_proposals_ignores_nested_and_fenced_numbers()
     test_extract_proposals_strips_digit_hyphen_severity_tag()
+    test_help_flag_returns_zero_not_swallowed_as_dir()
     print('ok: all build_feedback_index tests passed')
