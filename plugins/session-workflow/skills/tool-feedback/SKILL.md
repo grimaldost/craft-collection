@@ -124,7 +124,7 @@ complexity is paying for itself>
 
 ## Friction
 <each item tagged [BLOCKER|HIGH|MED|LOW]; the concrete moment it cost time or
-caused confusion>
+caused confusion — quantified when cheap (minutes lost, $ spent, retries)>
 
 ## Misses
 <defects the tool failed to prevent — each with a severity tag AND the phase that
@@ -135,7 +135,7 @@ should have caught it ("phase: DoR", "phase: pre-mortem", "phase: gate",
 <anything that passed while hollow; "none observed" is a valid entry>
 
 ## Proposed promotions / changes
-1. **[SEVERITY]** <candidate template / gate / doc / skill change, with its home>
+1. **[SEVERITY]** <suspected cause, one clause> → <the change that removes it, with its home>
 2. **[SEVERITY]** extends `<prior-file-stem>#<n>` — <the new evidence only>
 
 ## Cost (optional — when engine or eval runs were involved)
@@ -151,18 +151,22 @@ refs are load-bearing downstream — triage follows the chain to cluster a linea
 under one cause and to count its recurrence — so point them at the exact
 finding, not just the file.
 
-A proposal carries its **resolution and referents**, not just its question. If it
-asks to *clarify* something the session already settled, record the clarification it
-validated (or name the deciding precedent) — otherwise the downstream lander
-re-derives it and can land the wrong one. If it counts objects ("two holdout
-positives"), name them, so a reader isn't sent hunting.
+A proposal opens with its **suspected cause** — the reporter holds the richest
+evidence and triage clusters by cause, so a symptom-only proposal makes the cold
+triager re-derive what the session already knew. It also carries its
+**resolution and referents**, not just its question. If it asks to *clarify*
+something the session already settled, record the clarification it validated (or
+name the deciding precedent) — otherwise the downstream lander re-derives it and
+can land the wrong one. If it counts objects ("two holdout positives"), name
+them, so a reader isn't sent hunting.
 
 ## Self-check before writing
 
 - Every path the report cites exists.
 - Version came from the manifest, not memory.
 - Repeats are `extends` refs, not restatements.
-- Severities present on friction, misses, and proposals; every miss names a phase.
+- Severities present on friction, misses, and proposals; every miss names a phase;
+  every proposal opens with its suspected cause.
 - The report reads cold — a maintainer with zero session context can act on it.
 
 ## What this skill does NOT do
