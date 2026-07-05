@@ -21,6 +21,9 @@ Convene when the cost of being wrong exceeds the cost of the panel:
 - a high-stakes or hard-to-reverse decision (architecture, a launch, a structural choice) —
   **including a design or spec _before_ any build**, where pre-code defects (a wrong interface, a
   missed failure mode, a motivated assumption) are cheapest to fix;
+- **an irreversible outward step is next** — publishing a repo, cutting a release, going
+  public: the artifact is "done" and self-verified, which is exactly when fresh eyes still
+  find what the author's own verification missed (measured twice on launch-ready trees);
 - an explicit ask: "fresh eyes", "second opinion", "red team", "poke holes", "am I anchored", `/review-panel`.
 
 **A design/spec is panel-ready only when it is concrete enough to critique** — explicit interfaces,
@@ -52,11 +55,21 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    — independence over politeness.
 4. **Demand structured, comparable output** — a fixed per-reviewer schema (verdict +
    scores + reasons) so results sit side by side. See `references/prompt-template.md`.
-5. **Fire them.** In Claude Code, spawn one subagent per lens, concurrently (one
-   message, multiple agent calls; Opus for high stakes). **Always show the plan
-   first** — how many agents, which lenses, the rough cost — and get a go-ahead.
-   This is expensive; never fire silently.
-6. **Synthesize — don't average.** Produce a comparison matrix, where they **agree**
+5. **Fire them — mechanism by ladder level.** Levels 1–2: spawn one subagent per
+   lens, concurrently (one message, multiple Agent calls; Opus for high stakes).
+   Level 3 / max-effort panels: drive the lenses through the Workflow tool —
+   `agent(prompt, {effort, schema})` per lens — which buys what the Agent tool
+   does not expose: reasoning-effort control and schema-forced, mechanically
+   comparable output. **Show the plan first** — lenses, agent count, rough cost —
+   and get a go-ahead; never fire silently. A **durable pre-authorization**
+   counts as the go-ahead: show the plan, cite the grant, and fire — an
+   autonomous session that insists on a fresh ask deadlocks the panel.
+6. **Persist raw output before synthesis.** Write each reviewer's structured
+   output to disk as it lands, at a destination named in the plan (the reviewed
+   tool's own feedback intake is often right). A max-effort panel returns more
+   than in-band messages carry — a truncated notification, or a dead
+   orchestrator, loses the corpus; the output file is often the only copy.
+7. **Synthesize — don't average.** Produce a comparison matrix, where they **agree**
    (consensus = high confidence), where they **disagree** (the tension worth
    examining), and — most important for an anchored author — **where the panel
    diverges from the current direction, and what you may be missing.**
@@ -78,9 +91,11 @@ The default quartet works for anything; the packs sharpen it. Mix and match.
 - **Claude Code only.** This spawns subagents; it does not work in web chat (no
   subagent primitive). If asked there, say so and offer the manual fallback: paste
   the neutral artifact brief into N separate fresh chats yourself.
-- **Cost is real.** N agents at Opus is not free. Always present the plan + estimate
-  and get the go-ahead; offer to drop a ladder level if the stakes don't justify a
-  full panel.
+- **Cost is real.** N agents at Opus is not free; offer to drop a ladder level when
+  the stakes don't justify a full panel.
+- **Reviewing a repo whose plugin is also installed?** State which copy the panel
+  reads (working tree vs installed cache) — the two diverge in either direction
+  mid-release.
 - **Independence is the whole point.** Brief reviewers with your conclusion and you
   have wasted the panel. Keep the artifact brief neutral and the reviewers blind.
 - **You synthesize; they don't decide.** The panel informs; the call stays with the
@@ -89,5 +104,7 @@ The default quartet works for anything; the packs sharpen it. Mix and match.
 ## What this does NOT do
 
 - Replace a quick factual check or a single obvious answer — just answer it.
+- Audit a large file corpus — that is a blind fan-out over many files; use
+  `corpus-review`.
 - Auto-fire — it proposes and waits for the go-ahead.
 - Reach consensus by averaging — disagreement is the signal, not noise.
