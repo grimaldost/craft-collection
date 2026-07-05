@@ -14,6 +14,7 @@
   "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
   "command_first_skills": ["review-panel"],
   "action_discipline_skills": ["test-driven-development", "systematic-debugging", "verification-before-completion", "skill-authoring", "planned-execution"],
+  "cwd_fixture_of_skill": { "corpus-review": "evals/trigger/fixtures/corpus" },
   "plugin_of_skill": {
     "journaling-sessions": "session-workflow",
     "context-handoff": "session-workflow",
