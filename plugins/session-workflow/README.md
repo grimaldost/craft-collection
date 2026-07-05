@@ -57,7 +57,10 @@ tool-dogfooding feedback loop (capture + triage).
   high-severity findings, fixing in disjoint partitions, and re-auditing with
   fresh eyes until findings converge.
 
-## Hook (optional, off by default)
+## Hooks (optional, off by default)
 
 - **SessionStart** — inject the live toolkit inventory each session. Ships wired
   but inert; enable with `TOOLKIT_AWARENESS_INJECT=1`.
+- **SessionStart (compact/resume)** — re-inject the newest non-closed control
+  anchor (`.claude/anchors/*.md`) so a run survives compaction and process
+  restarts. Ships wired but inert; enable with `SESSION_WORKFLOW_ANCHOR_HOOKS=1`.

@@ -30,7 +30,7 @@ with a fresher snapshot.
 3. **Locate or create the anchor file.** Reuse the newest non-closed `*.md` in
    `.claude/anchors/` when its task line matches the current work; otherwise
    create `<YYYY-MM-DD>-<short-run-slug>.md`.
-4. **Write the snapshot** — one full-file Write, all six categories, each at
+4. **Write the snapshot** — one full-file Write, all seven categories, each at
    task-appropriate depth:
    - Frontmatter: `format: anchor/v0`, `date`, `task:` (one line), `step:`
      (prior step + 1, or 1), `source: /anchor`.
@@ -45,6 +45,7 @@ with a fresher snapshot.
      the files on disk) rather than recalling it.
    - **Resume steps** — how a cold reader re-orients: read this file, verify
      the real state, continue from the cursor. Keep them idempotent.
+   - **Decisions log** — append-only; why the non-obvious calls were made.
    Keep it bounded: cursor plus pointers, not a transcript. Fold closed phases
    into one-line outcomes pointing at the commit or artifact that carries the
    detail.
