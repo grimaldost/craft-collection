@@ -3,6 +3,42 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.8.0 — 2026-07-04
+
+The anchor gains its mechanical layer: automatic re-injection after compaction
+or resume. Evidence-gated per the memory-suite v2 design — shipped only after
+measurement established prevalence (32 real sessions with compaction events in
+~30 days of local history; two same-day CC restarts wiped in-session state
+while the on-disk anchor survived). No skill `description` changed.
+
+### Added
+
+- **Anchor re-injection hook** (`skills/compaction-survival/scripts/anchor_inject.py`
+  + a second SessionStart entry in `hooks/hooks.json`, matcher `compact|resume`):
+  re-injects the newest non-closed `.claude/anchors/*.md` as `additionalContext`
+  in freshly compacted or resumed sessions. INERT by default — enable with
+  `SESSION_WORKFLOW_ANCHOR_HOOKS=1`. Stale anchors (>24h) inject with an
+  explicit warning rather than being silently trusted or suppressed; oversized
+  anchors truncate at 8K chars; every injection appends an `anchor-inject`
+  NDJSON telemetry line; every failure path exits 0 (a broken hook must never
+  break a session start). Stdlib-only, TDD'd (8 tests, red-first).
+
+### Changed
+
+- **compaction-survival body**: "Explicit surfaces" documents the env-gated
+  re-injection hook alongside `/compaction-survival` and `/anchor`. Body-only;
+  the trigger description is untouched (no holdout implications).
+- **hooks.json description** now names both inert hooks and their env gates.
+
+### Not shipped, deliberately
+
+- **PreCompact freshness gate**: parked. The measured local incident profile
+  justifies re-injection (recovery), not compaction-blocking (gating) — and
+  the gate carries a wedge risk at full context that remains unvalidated.
+- **Synthetic fidelity matrix** (the 20-trial dyno bank): retired unrun. A
+  4/4-unanimous analyst panel scored its value-of-information below cost, and
+  retrospective mining of real session history supersedes it as evidence.
+
 ## 0.7.0 — 2026-07-04
 
 The anchor gains an explicit command surface. No skill `description` changed —
