@@ -253,6 +253,10 @@ retyping, or semantic-shift.
 - *Semantic shift (same name, different meaning)*: this is the worst
   case. Requires explicit rename to a new column with new semantics;
   old column deprecated. Never reuse a name with new meaning.
+- *Library API change (the contract is code, not tables)*: a new symbol or a
+  default-preserving overload is additive; a new raise or guard on a
+  previously-silent path is breaking, whatever the docstring says. Same
+  playbooks as above.
 
 ### Step 2.2 — Determine compatibility direction
 

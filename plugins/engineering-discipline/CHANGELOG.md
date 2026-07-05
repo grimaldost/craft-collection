@@ -3,6 +3,25 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.13 — 2026-07-05
+
+Triage row N31a (2026-07-05 craft triage): the schema-evolution guidance is
+discoverable from the eager body for non-tabular contracts. Two arcs re-derived
+by hand what `scenarios.md` already covered — a library API change (tu-v12) and
+an append-only JSONL event log (convoy telemetry) — because the eager body's
+examples were all columns/dtypes. Body + reference edit; no skill `description`
+changed.
+
+### Changed
+
+- `data-engineering-discipline` SKILL.md: the "Scale to the change" additive
+  example and the `scenarios.md` index row now name the non-tabular shapes
+  (event types, enum values, API fields) alongside columns, so a
+  non-tabular-contract author recognizes the existing playbook applies.
+- `references/scenarios.md` Step 2.1 gains the **library API change** row: a
+  new symbol or default-preserving overload is additive; a new raise/guard on
+  a previously-silent path is breaking, whatever the docstring says.
+
 ## 0.1.12 — 2026-07-03
 
 ### Changed
