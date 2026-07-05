@@ -46,7 +46,7 @@ Deduplicated against craft-collection and the Claude Code harness:
 | upstream capability | owner |
 |---|---|
 | requesting code review | `/code-review`, session-workflow:review-panel |
-| governed series planning / execution | keel, pr-pilot (planned-execution covers the midweight lane in-pack) |
+| governed series planning / execution | keel, convoy (planned-execution covers the midweight lane in-pack) |
 | ad-hoc parallel agent dispatch | harness Agent tool |
 | git worktrees | harness-native worktree isolation |
 | finishing a branch | folded into verification-before-completion |
