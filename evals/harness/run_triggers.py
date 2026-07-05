@@ -26,6 +26,52 @@ TRIGGER_DIR = REPO / 'evals' / 'trigger'
 REPORT_DIR = REPO / 'evals' / 'report'
 MAX_TURNS_TRIGGER = 3  # enough for the skill to fire; keeps per-spawn cost low
 
+# Current Claude Code tool names that may legitimately appear in an allow/deny list.
+# A deny-list naming a tool NOT here (e.g. MultiEdit, folded into Edit) makes every
+# spawn error "deny rule matches no known tool" and shrinks the sample invisibly — the
+# trap that cost ~20% of a run on 2026-06-28. Keep this generous: a missing entry only
+# risks a false preflight flag on a valid tool. Update on CLI tool-set changes.
+KNOWN_CLI_TOOLS = frozenset(
+    {
+        'Bash',
+        'BashOutput',
+        'KillShell',
+        'Edit',
+        'Glob',
+        'Grep',
+        'Read',
+        'Write',
+        'NotebookEdit',
+        'WebFetch',
+        'WebSearch',
+        'Task',
+        'TodoWrite',
+        'Skill',
+        'SlashCommand',
+    }
+)
+
+
+def unknown_deny_tools(disallowed: str, known: frozenset[str] = KNOWN_CLI_TOOLS) -> list[str]:
+    """Return the deny-list tool names not in the known CLI tool set. A name here
+    silently errors every spawn ('deny rule matches no known tool'); catching it at
+    preflight prevents an invisible sample-shrink. Pure; whitespace-tolerant; an empty
+    list means every name is valid."""
+    return [t for t in (n.strip() for n in disallowed.split(',')) if t and t not in known]
+
+
+def resolve_trigger_cwd(skill: str, cfg: dict, repo: Path) -> tuple[str | None, bool]:
+    """Choose the trigger arm's working directory for `skill`, returning (cwd, is_temp).
+    When cfg maps the skill to a `cwd_fixture` (a repo-relative populated dir), returns
+    (abspath, False) — a real fixture the caller must NOT delete — so a cwd-dependent
+    skill (corpus-review: 'audit the repo docs') can fire over real files instead of
+    reading 0.00 recall in an empty cwd. Otherwise (None, True): the caller mkdtemps a
+    throwaway empty cwd and cleans it up. Pure."""
+    fixture = (cfg.get('cwd_fixture_of_skill') or {}).get(skill)
+    if fixture:
+        return str((repo / fixture).resolve()), False
+    return None, True
+
 
 def score_skill(queries: list[dict], repeats: int, trigger_counter, error_counter=None) -> dict:
     """Pooled recall (over positives) and specificity (over negatives) with Wilson
@@ -346,6 +392,15 @@ def main(argv: list[str] | None = None) -> int:
         for p in problems:
             print(f'  - {p}')
         return 1
+    bad_deny = unknown_deny_tools(cfg.get('disallowed_tools_trigger', ''))
+    if bad_deny:
+        print(
+            f'config.json disallowed_tools_trigger names unknown CLI tool(s): '
+            f'{", ".join(bad_deny)} — every spawn would error "deny rule matches no known '
+            f'tool" and silently shrink the sample. Fix the deny-list (or add the tool to '
+            f'KNOWN_CLI_TOOLS in run_triggers.py if the CLI added it) before running.'
+        )
+        return 1
     plugin = cfg['plugin_of_skill'][args.skill]
     plugin_dir = str(REPO / 'plugins' / plugin)
     n_spawn = len(queries) * args.repeats
@@ -365,7 +420,8 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     config_dir = make_isolated_config()
-    cwd = tempfile.mkdtemp(prefix='eval_trig_')
+    fixture_cwd, cwd_is_temp = resolve_trigger_cwd(args.skill, cfg, REPO)
+    cwd = fixture_cwd or tempfile.mkdtemp(prefix='eval_trig_')
     try:
         ok, detail = preflight_auth(cfg, config_dir, cwd)
         if not ok:
@@ -385,7 +441,8 @@ def main(argv: list[str] | None = None) -> int:
             cwd=cwd,
         )
     finally:
-        cleanup_dir(cwd)
+        if cwd_is_temp:  # a mapped cwd_fixture is a real dir — never delete it
+            cleanup_dir(cwd)
         cleanup_dir(config_dir)
 
     if all_runs_errored(score):
