@@ -232,9 +232,11 @@ None of these items are optional. If you find yourself wanting to skip
 one, that's the one you most need to run.
 
 **Scale to the change.** A breaking or semantic change runs the whole list. A
-purely additive change (e.g. a new nullable column nothing depends on yet) runs
-the contract and real-data checks and may skip the parity/replay items. When you
-can't tell whether a change is additive or breaking, treat it as breaking.
+purely additive change (a new nullable column — or, in a non-tabular contract,
+a new event type, enum value, or default-preserving API symbol — nothing
+depends on yet) runs the contract and real-data checks and may skip the
+parity/replay items. When you can't tell whether a change is additive or
+breaking, treat it as breaking.
 
 **Contract checks.**
 
@@ -310,7 +312,7 @@ Wire them into CI or run by hand before declaring done.
 | File | Read when |
 |------|-----------|
 | `references/principles.md` | Drafting a design decision, code review, or stuck on which principle applies. The 21 principles in full, each with anti-pattern, corrective, verification, and the LLM-specific gotcha. Principles are universal; per-scenario applications are noted inline. |
-| `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for new dataset, migration, refactor, schema evolution, backfill, incremental/streaming, and investigating downstream breakage. |
+| `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for new dataset, migration, refactor, schema evolution (columns — and equally event types, enum values, API fields), backfill, incremental/streaming, and investigating downstream breakage. |
 | `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." Fourteen documented failure modes (incl. the fabrication family: telemetry, anchors, verifier-inherited traps; the absence-read-as-state pair: unattended-run silence, fail-open tooling; and traced-the-wrong-copy: editable-vs-installed divergence) with detection patterns and mechanical defenses. |
 | `references/parity-recipes.md` | Implementing a parity check, row-level diff, schema diff, or any verification step. Concrete code/SQL/CLI recipes for SQL warehouses, Polars, PySpark, dbt, and Python. |
 | `references/contract-templates.md` | Designing or reviewing a data contract. Worked templates for the same dataset expressed as a dbt `schema.yml`, an ODCS YAML, a Pydantic model, and a JSON Schema. |
