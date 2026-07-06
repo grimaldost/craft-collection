@@ -45,8 +45,24 @@ def validate() -> list[str]:
         return [f'marketplace.json: {e}']
     root_prefix = (mdata.get('metadata') or {}).get('pluginRoot', '.')
     for p in mdata.get('plugins', []):
-        if not (ROOT / root_prefix / p['source']).is_dir():
+        src_dir = ROOT / root_prefix / p['source']
+        if not src_dir.is_dir():
             errors.append(f'marketplace: plugin source not found: {p.get("source")}')
+            continue
+        # The same fact stated in two surfaces drifts silently: each marketplace
+        # entry's description must equal its plugin.json description — the twin
+        # of the bundled-scripts sync gate, for prose surfaces.
+        try:
+            pdata = json.loads(
+                (src_dir / '.claude-plugin' / 'plugin.json').read_text(encoding='utf-8')
+            )
+        except (OSError, json.JSONDecodeError):
+            continue  # a missing/broken manifest is reported by the manifest loop below
+        if p.get('description') != pdata.get('description'):
+            errors.append(
+                f'marketplace: "{p.get("name")}" description differs from its '
+                'plugin.json — sync the two surfaces'
+            )
 
     for manifest in ROOT.glob('plugins/*/.claude-plugin/plugin.json'):
         plugin_dir = manifest.parent.parent
