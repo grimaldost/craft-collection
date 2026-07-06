@@ -24,7 +24,8 @@ except ImportError:
 def _make_plugin(base: Path, *, hooks_json: str | None = None, skill_body: str = '') -> Path:
     (base / '.claude-plugin').mkdir(parents=True)
     (base / '.claude-plugin' / 'marketplace.json').write_text(
-        '{"name":"m","owner":{"name":"x"},"plugins":[{"name":"p","source":"./plugins/p"}]}',
+        '{"name":"m","owner":{"name":"x"},"plugins":[{"name":"p","source":"./plugins/p",'
+        '"description":"d"}]}',
         encoding='utf-8',
     )
     pdir = base / 'plugins' / 'p'
@@ -124,6 +125,23 @@ def test_valid_plugin_has_no_errors():
     assert errs == [], errs
 
 
+def test_marketplace_description_mismatch_flagged():
+    # The same fact stated in two surfaces drifts silently: each marketplace
+    # entry's description must equal its plugin.json description — the missing
+    # twin of the bundled-scripts sync gate (a marketplace copy once lagged a
+    # whole clause for four minor versions with no gate to notice).
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        _make_plugin(base)
+        (base / '.claude-plugin' / 'marketplace.json').write_text(
+            '{"name":"m","owner":{"name":"x"},"plugins":[{"name":"p",'
+            '"source":"./plugins/p","description":"stale copy"}]}',
+            encoding='utf-8',
+        )
+        errs = _run(base)
+    assert any('description' in e and 'differs' in e for e in errs), errs
+
+
 def main() -> int:
     if validate_plugins is None:
         print('skip: validate_plugins (PyYAML not installed)')
@@ -135,6 +153,7 @@ def main() -> int:
     test_hooks_json_top_level_array_flagged()
     test_hooks_json_bare_event_map_flagged()
     test_valid_plugin_has_no_errors()
+    test_marketplace_description_mismatch_flagged()
     print('ok: validate_plugins')
     return 0
 
