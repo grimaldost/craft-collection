@@ -3,6 +3,72 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.12.0 — 2026-07-06
+
+Build round for the 2026-07-06 triage (the tu-v16 campaign reports + the
+polish-session residuals): the anchor hook's Windows encoding defect with its
+lying telemetry, UTF-8 output across the unicode-printing scripts, the skew
+check one layer below installed-vs-source, compaction-survival's cold-start
+path, and a second production-validated review-panel pack. Minor bump: the
+scripts and the pack library gained capability.
+
+### Fixed
+
+- **`anchor_inject.py` silently no-oped on Windows for any non-ASCII anchor —
+  while telemetry logged success (N33a).** The hook runner hands the script a
+  cp1252 stdout; campaign anchors essentially always carry non-ASCII (arrows,
+  accented prose), so the print raised `UnicodeEncodeError`, the
+  never-break-the-session fail-safe swallowed it, and the harness received 0
+  bytes — after a success-shaped `anchor-inject` record had already been
+  written, so `log.ndjson` pointed the wrong way. The script now forces UTF-8
+  at the seam (`sys.stdout.reconfigure`, in-script so manual registrations
+  inherit it), writes success telemetry only after the payload reached stdout,
+  and emits a distinct `anchor-inject-failed` event (error class included)
+  from the except path — still exit 0, never break a session start, never lie
+  about it. Regression tests pipe a `→ · ⚠` anchor through a forced cp1252
+  stdout and prove a failing emit logs the failure event, not the success.
+- UTF-8 stdout in `scan_toolkit.py` and `build_feedback_index.py` (N33b) —
+  same cause, cosmetic form: em-dashes mojibake through cp1252 pipes and a
+  `→` in a description crashed the scan outright. Both now `reconfigure` to
+  UTF-8 (`errors=replace`), matching `run_triggers.py`'s shipped precedent;
+  cp1252-pipe regression tests added.
+
+### Added
+
+- **`scan_toolkit.py` flags a source checkout behind its fetched upstream
+  (N38a)** — the skew below the 0.10.0 installed-vs-source flag: when the
+  local marketplace checkout itself trails origin, installed==source reads
+  "no skew" while both lag (a 13-commits-behind main nearly re-ran a whole
+  audit). Per marketplace location, `git rev-list --count HEAD..@{u}` now
+  yields a "source N commit(s) behind its fetched upstream" caveat; no
+  network — it sees fetched-but-not-merged; non-repos, missing upstreams,
+  and absent git are silently skipped. Fixture-tested with a real
+  origin/clone pair.
+- **compaction-survival `references/cold-start.md` (N36a)** — arming the
+  protocol without the plugin surface: the anchor file by hand, manual hook
+  registration in `settings.local.json` (with the `${CLAUDE_PLUGIN_ROOT}`
+  caveat), and a verify-by-piping step naming the non-ASCII fixture. Three
+  reports hit this in three distinct degraded contexts (stale plugin
+  snapshot, mid-flight enablement, SDK harness without the skill menu) and
+  each reverse-engineered the same recipe from source. The body gains one
+  pointer bullet, the README's hook section points at the recipe, and the
+  frontmatter description gains a final sentence naming `/anchor` and the
+  recipe — **reseal note:** the sealed trigger holdout predates this
+  description edit and should be re-baselined before the next
+  description-tuning round (additive tail edit after the negative-space
+  clauses, not trigger tuning; recall shift unlikely).
+- **review-panel `references/personas-release.md` (N37a)** — the second
+  production-validated lens set, captured as a pack: consumer-upgrade path /
+  docs coherence / changelog integrity / cross-change interactions, firing on
+  the *assembled* release artifact after per-change review, with the verdict
+  and collate-conditions-into-one-work-list conventions from the validated
+  run (4/4 verdicts changed what shipped). The pack table gains its row, and
+  `personas-design.md` gains a library-vs-service re-grounding line for the
+  ops lens (N37b).
+
+Word budgets re-seeded and named: compaction-survival 908→952 (cold-start
+pointer bullet), review-panel 1062→1082 (pack table row).
+
 ## 0.11.0 — 2026-07-05
 
 Corpus-review round from the 2026-07-05 polish session (PRs #76–#78, #80, #81 +
