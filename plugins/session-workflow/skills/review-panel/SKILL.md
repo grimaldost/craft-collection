@@ -85,6 +85,7 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
 | writing / docs | `references/personas-writing.md` | editor · fact-checker · audience · misreader |
 | plan / decision | `references/personas-plan.md` | premortem · dependencies · cost · stakeholder |
 | research / a claim | `references/personas-research.md` | refuter · methodology · sources · bias |
+| a release (assembled diff + changelog + docs) | `references/personas-release.md` | consumer-upgrade · docs-coherence · changelog · interactions |
 
 The default quartet works for anything; the packs sharpen it. Mix and match.
 

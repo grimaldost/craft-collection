@@ -1,6 +1,8 @@
 # Persona pack — design / spec / architecture
 
 Use with, or in place of, the default quartet; rename to the specific system.
+The lenses are calibrated for *services* — reviewing a library, re-ground the
+ops lens to the operator of a consumer pipeline, not of a deployed service.
 
 - **Architect** — judge the structure. Are boundaries clean, responsibilities
   single, interfaces well-defined? What does this couple that should stay separate?
