@@ -30,11 +30,15 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parent / 'anchor_inject.py'
 
 
-def run_hook(cwd: Path, env_on: bool = True, source: str = 'compact'):
+def run_hook(
+    cwd: Path, env_on: bool = True, source: str = 'compact', extra_env: dict | None = None
+):
     env = dict(os.environ)
     env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
     if env_on:
         env['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '1'
+    if extra_env:
+        env.update(extra_env)
     payload = json.dumps(
         {
             'hook_event_name': 'SessionStart',
@@ -47,7 +51,7 @@ def run_hook(cwd: Path, env_on: bool = True, source: str = 'compact'):
         [sys.executable, str(SCRIPT)],
         input=payload,
         capture_output=True,
-        text=True,
+        encoding='utf-8',  # the hook emits UTF-8 regardless of platform default
         env=env,
         timeout=30,
     )
@@ -154,6 +158,69 @@ def test_newest_non_closed_wins():
         assert 'OLD ANCHOR' not in ctx
 
 
+def test_non_ascii_anchor_survives_cp1252_stdout():
+    # Campaign anchors essentially always carry non-ASCII (arrows, accented
+    # prose). Under Windows hook runners stdout defaults to cp1252; the print
+    # used to raise UnicodeEncodeError, the fail-safe swallowed it, and the
+    # harness received 0 bytes — a silent no-op. PYTHONIOENCODING reproduces
+    # that stdout on any platform.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, body='# Cursor\nnext: → merge · ⚠ não esquecer\n')
+        proc = run_hook(tmp, extra_env={'PYTHONIOENCODING': 'cp1252'})
+        assert proc.returncode == 0
+        assert proc.stdout.strip(), 'hook emitted 0 bytes under cp1252 stdout'
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert '→ merge' in ctx
+        assert '⚠ não esquecer' in ctx
+        log = tmp / '.claude' / 'anchors' / 'log.ndjson'
+        rec = json.loads(log.read_text(encoding='utf-8').strip().splitlines()[-1])
+        assert rec['event'] == 'anchor-inject'
+
+
+def test_emit_failure_logs_failure_event_not_success():
+    # Telemetry must never say "injected" unless the payload actually reached
+    # stdout: the success record is written only after the print, and an emit
+    # failure logs a distinct event (still exit 0 — never break a session).
+    import io
+
+    import anchor_inject
+
+    class BoomStdout:  # no reconfigure attribute, write always raises
+        def write(self, s):
+            raise UnicodeEncodeError('charmap', 'x', 0, 1, 'boom')
+
+        def flush(self):
+            pass
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp)
+        payload = json.dumps(
+            {'hook_event_name': 'SessionStart', 'source': 'compact', 'cwd': str(tmp)}
+        )
+        old_in, old_out = sys.stdin, sys.stdout
+        old_env = os.environ.get('SESSION_WORKFLOW_ANCHOR_HOOKS')
+        os.environ['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '1'
+        sys.stdin, sys.stdout = io.StringIO(payload), BoomStdout()
+        try:
+            rc = anchor_inject.main()
+        finally:
+            sys.stdin, sys.stdout = old_in, old_out
+            if old_env is None:
+                os.environ.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
+            else:
+                os.environ['SESSION_WORKFLOW_ANCHOR_HOOKS'] = old_env
+        assert rc == 0
+        log = tmp / '.claude' / 'anchors' / 'log.ndjson'
+        events = [
+            json.loads(line)['event']
+            for line in log.read_text(encoding='utf-8').strip().splitlines()
+        ]
+        assert 'anchor-inject-failed' in events
+        assert 'anchor-inject' not in events, 'success logged for an injection that never emitted'
+
+
 if __name__ == '__main__':
     test_inert_without_env()
     test_silent_when_no_anchor()
@@ -163,4 +230,6 @@ if __name__ == '__main__':
     test_oversized_anchor_truncated()
     test_telemetry_line_appended()
     test_newest_non_closed_wins()
+    test_non_ascii_anchor_survives_cp1252_stdout()
+    test_emit_failure_logs_failure_event_not_success()
     print('ok: all anchor_inject tests passed')

@@ -78,6 +78,13 @@ def main() -> int:
     if os.environ.get(ENV_GATE) != '1':
         return 0
 
+    # Hook runners on Windows hand this script a cp1252 stdout; campaign anchors
+    # essentially always carry non-ASCII (arrows, accented prose), so the print
+    # below would raise and the fail-safe would swallow the whole injection.
+    # Force UTF-8 at the seam instead of trusting the platform default.
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+
     try:
         payload = json.loads(sys.stdin.read() or '{}')
     except json.JSONDecodeError:
@@ -92,29 +99,36 @@ def main() -> int:
     stale_s = max(0.0, time.time() - anchor.stat().st_mtime)
     context = build_context(anchor, stale_s)
 
-    append_telemetry(
-        anchors_dir,
-        {
-            'event': 'anchor-inject',
-            'source': payload.get('source', 'unknown'),
-            'session': payload.get('session_id', ''),
-            'file': anchor.name,
-            'stale': stale_s > STALE_AFTER_S,
-            'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        },
-    )
-
-    print(
-        json.dumps(
-            {
-                'hookSpecificOutput': {
-                    'hookEventName': 'SessionStart',
-                    'additionalContext': context,
-                }
-            },
-            ensure_ascii=False,
+    record = {
+        'event': 'anchor-inject',
+        'source': payload.get('source', 'unknown'),
+        'session': payload.get('session_id', ''),
+        'file': anchor.name,
+        'stale': stale_s > STALE_AFTER_S,
+        'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+    }
+    try:
+        print(
+            json.dumps(
+                {
+                    'hookSpecificOutput': {
+                        'hookEventName': 'SessionStart',
+                        'additionalContext': context,
+                    }
+                },
+                ensure_ascii=False,
+            )
         )
-    )
+    except Exception as e:
+        # Never break a session start, but never log success for an injection
+        # that emitted nothing: a distinct failure event is the difference
+        # between a 5-minute fix and a state-loss postmortem.
+        append_telemetry(
+            anchors_dir, {**record, 'event': 'anchor-inject-failed', 'error': type(e).__name__}
+        )
+        return 0
+    # Success telemetry only after the payload actually reached stdout.
+    append_telemetry(anchors_dir, record)
     return 0
 
 
