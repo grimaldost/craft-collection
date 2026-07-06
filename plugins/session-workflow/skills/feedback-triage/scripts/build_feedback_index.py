@@ -155,6 +155,12 @@ def build_index(feedback_dir: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Piped Windows stdout defaults to cp1252; the docstring and report excerpts
+    # carry em-dashes, which mojibake in UTF-8 terminals. Emit UTF-8 regardless
+    # of the platform default (in-process callers redirecting stdout to a
+    # StringIO lack `reconfigure` and are left untouched).
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ('-h', '--help'):
         print(__doc__)

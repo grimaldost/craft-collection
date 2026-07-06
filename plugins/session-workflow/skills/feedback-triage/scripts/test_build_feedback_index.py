@@ -199,6 +199,28 @@ def test_help_flag_returns_zero_not_swallowed_as_dir():
         assert main([]) == 2  # no args still prints usage and returns 2
 
 
+def test_help_emits_utf8_bytes_under_cp1252():
+    # The docstring carries em-dashes; a piped Windows stdout defaults to cp1252,
+    # which used to emit them as cp1252 bytes — mojibake in UTF-8 terminals. The
+    # script must emit UTF-8 regardless of the platform default; PYTHONIOENCODING
+    # reproduces the cp1252 pipe on any platform.
+    import os
+    import subprocess
+    import sys
+
+    script = Path(__file__).resolve().parent / 'build_feedback_index.py'
+    env = dict(os.environ)
+    env['PYTHONIOENCODING'] = 'cp1252'
+    proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(script), '--help'],
+        capture_output=True,
+        env=env,
+        timeout=60,
+    )
+    assert proc.returncode == 0
+    assert '—'.encode() in proc.stdout
+
+
 if __name__ == '__main__':
     test_extract_proposals_pulls_numbered_titles()
     test_extract_proposals_empty_when_no_section()
@@ -212,4 +234,5 @@ if __name__ == '__main__':
     test_extract_proposals_ignores_nested_and_fenced_numbers()
     test_extract_proposals_strips_digit_hyphen_severity_tag()
     test_help_flag_returns_zero_not_swallowed_as_dir()
+    test_help_emits_utf8_bytes_under_cp1252()
     print('ok: all build_feedback_index tests passed')

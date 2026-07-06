@@ -16,7 +16,10 @@ description: >
   to a fresh context or a teammate (that is context-handoff's inter-actor
   brief), not for post-hoc capture of what a finished session learned (that is
   journaling-sessions), and not for tracking a short task that fits comfortably
-  in one context window.
+  in one context window. The /anchor command is the one-off snapshot entry
+  point; when the running session lacks the plugin surface entirely (stale
+  snapshot, harness without the skill menu), references/cold-start.md has the
+  by-hand recipe.
 ---
 
 # Compaction Survival
@@ -96,6 +99,10 @@ An anchor that cannot be found is no anchor.
   mechanically — the re-read step stops depending on the model remembering
   the protocol. Stale anchors are injected with an explicit warning, never
   silently trusted; anchor-less sessions pay nothing.
+- **Cold start without the plugin surface** — a session whose plugin snapshot
+  predates the skill, or a harness whose menu omits it, arms everything by
+  hand: `references/cold-start.md` has the recipe (the anchor file by hand,
+  manual hook registration in settings, a verify-by-piping step).
 
 ## Common failure modes
 

@@ -354,6 +354,43 @@ def _merge_skew(rows: list[dict], locations: dict[str, str]) -> list[str]:
     return []
 
 
+def _source_behind_upstream(marketplace_dir: Path) -> int | None:
+    """Commits the marketplace source checkout is behind its fetched upstream
+    (`git rev-list --count HEAD..@{u}`), or None when the location is not a git
+    checkout, has no upstream, or git is unavailable — absence of evidence is
+    not staleness. Reads only the local remote-tracking ref (no network): it
+    sees "fetched but not merged", not commits never fetched."""
+    try:
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            ['git', '-C', str(marketplace_dir), 'rev-list', '--count', 'HEAD..@{u}'],  # noqa: S607 - git resolved from PATH
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        return None
+    out = (proc.stdout or '').strip()
+    if proc.returncode != 0 or not out.isdigit():
+        return None
+    return int(out)
+
+
+def _stale_checkout_caveats(locations: dict[str, str]) -> list[str]:
+    """One caveat per marketplace whose source checkout lags its own fetched
+    upstream — the skew below `_merge_skew`'s reach: installed == source reads
+    "no skew" while BOTH trail the remote (a 13-commits-behind main once nearly
+    re-ran a whole audit against already-fixed findings)."""
+    out: list[str] = []
+    for name, loc in sorted(locations.items()):
+        behind = _source_behind_upstream(Path(loc))
+        if behind:
+            out.append(
+                f"marketplace '{name}' source checkout is {behind} commit(s) behind "
+                f'its fetched upstream -- pull {loc} before trusting installed-vs-source'
+            )
+    return out
+
+
 def _scan_plugins() -> list[dict]:
     """Plugin-provided components live in the plugin cache, not under .claude/ —
     ask the CLI. Tolerates the CLI being absent or failing; on any failure returns
@@ -418,8 +455,12 @@ def scan(roots: list[Path]) -> dict[str, list[dict]]:
         )
     if plugins:
         # Flag installed-vs-source version skew per plugin (stale installs are
-        # otherwise invisible in-session and have hidden whole skills).
-        result['_caveats'].extend(_merge_skew(plugins, _marketplace_locations()))
+        # otherwise invisible in-session and have hidden whole skills), then the
+        # layer below it: a source checkout that itself lags its fetched origin,
+        # where installed==source reads "no skew" while both trail the remote.
+        locations = _marketplace_locations()
+        result['_caveats'].extend(_merge_skew(plugins, locations))
+        result['_caveats'].extend(_stale_checkout_caveats(locations))
     return result
 
 
@@ -470,6 +511,12 @@ def main(argv: list[str] | None = None) -> int:
         help='override scan root (repeatable); defaults to ~ and cwd',
     )
     args = parser.parse_args(argv)
+
+    # Piped Windows stdout defaults to cp1252; skill descriptions carry em-dashes
+    # and arrows, which mojibake in UTF-8 terminals (or raise outright). Emit
+    # UTF-8 regardless of the platform default.
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
     # SessionStart hook entry point: silent unless explicitly opted in, so the hook
     # can ship enabled-but-inert and cost nothing until the user wants it.
