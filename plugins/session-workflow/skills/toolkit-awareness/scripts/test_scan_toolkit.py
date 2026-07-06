@@ -245,6 +245,95 @@ def test_read_frontmatter_handles_folded_scalar():
         assert fm['user-invocable'] == 'true'
 
 
+def test_utf8_stdout_survives_cp1252_pipe():
+    # Piped Windows stdout defaults to cp1252: an em-dash used to come out as a
+    # cp1252 byte (mojibake in UTF-8 terminals) and a '→' crashed the script
+    # outright (uncaught UnicodeEncodeError, exit 1). The script must emit UTF-8
+    # regardless of the platform default; PYTHONIOENCODING reproduces the
+    # cp1252 pipe on any platform.
+    import os
+    import subprocess
+    import sys
+
+    script = Path(__file__).resolve().parent / 'scan_toolkit.py'
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        sk = root / '.claude' / 'skills' / 'uni'
+        sk.mkdir(parents=True)
+        (sk / 'SKILL.md').write_text(
+            '---\nname: uni\ndescription: setas — e → aqui.\n---\nbody\n',
+            encoding='utf-8',
+        )
+        env = dict(os.environ)
+        env['PYTHONIOENCODING'] = 'cp1252'
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, str(script), '--root', str(root)],
+            capture_output=True,
+            env=env,
+            timeout=120,
+        )
+    assert proc.returncode == 0, proc.stderr.decode('utf-8', 'replace')
+    assert '→'.encode() in proc.stdout
+    assert '—'.encode() in proc.stdout
+
+
+def _git(*args: str, cwd: Path) -> None:
+    import subprocess
+
+    subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ['git', *args],  # noqa: S607 - git resolved from PATH
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def test_source_behind_upstream_counts_fetched_not_merged():
+    # The skew below _merge_skew's reach: installed == source reads "no skew"
+    # while BOTH trail the remote (a 13-commits-behind main once nearly re-ran a
+    # whole audit). Build origin + clone, advance origin, fetch in the clone
+    # without merging — the checkout is measurably behind its fetched upstream.
+    import shutil
+
+    from scan_toolkit import _source_behind_upstream, _stale_checkout_caveats
+
+    if not shutil.which('git'):
+        print('skip: git unavailable, behind-upstream test not run')
+        return
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        origin, work, src = base / 'origin.git', base / 'work', base / 'src'
+        ident = ('-c', 'user.email=t@t', '-c', 'user.name=t')
+        _git('init', '--bare', '-b', 'main', str(origin), cwd=base)
+        _git('init', '-b', 'main', str(work), cwd=base)
+        _git(*ident, 'commit', '--allow-empty', '-m', 'c1', cwd=work)
+        _git('remote', 'add', 'origin', str(origin), cwd=work)
+        _git('push', '-q', 'origin', 'main', cwd=work)
+        _git('clone', '-q', str(origin), str(src), cwd=base)
+        assert _source_behind_upstream(src) == 0  # freshly cloned: up to date
+        _git(*ident, 'commit', '--allow-empty', '-m', 'c2', cwd=work)
+        _git(*ident, 'commit', '--allow-empty', '-m', 'c3', cwd=work)
+        _git('push', '-q', 'origin', 'main', cwd=work)
+        _git('fetch', '-q', cwd=src)
+        assert _source_behind_upstream(src) == 2
+        caveats = _stale_checkout_caveats({'market': str(src)})
+        assert len(caveats) == 1
+        assert '2 commit(s) behind' in caveats[0]
+        assert 'market' in caveats[0]
+
+
+def test_source_behind_upstream_none_without_repo_or_upstream():
+    # A non-repo location (or one with no upstream) yields None and no caveat —
+    # absence of evidence is not staleness.
+    from scan_toolkit import _source_behind_upstream, _stale_checkout_caveats
+
+    with tempfile.TemporaryDirectory() as d:
+        assert _source_behind_upstream(Path(d)) is None
+        assert _stale_checkout_caveats({'m': d}) == []
+
+
 if __name__ == '__main__':
     test_scan_enumerates_components()
     test_frontmatter_quotes_stripped()
@@ -259,4 +348,7 @@ if __name__ == '__main__':
     test_enumerate_plugin_components_walks_install_path()
     test_enumerate_plugin_components_missing_path_is_empty()
     test_read_frontmatter_handles_folded_scalar()
+    test_utf8_stdout_survives_cp1252_pipe()
+    test_source_behind_upstream_counts_fetched_not_merged()
+    test_source_behind_upstream_none_without_repo_or_upstream()
     print('ok: all scan_toolkit tests passed')
