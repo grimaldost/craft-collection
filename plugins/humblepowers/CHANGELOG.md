@@ -5,6 +5,27 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.4.10 — 2026-07-09
+
+Two red-shape clarifications in test-driven-development, from the 2026-07-09
+craft triage (T9a/T9b; evidence `convoy-backlog-build#2`,
+`triage-build-round#1` — both live builds where the bright line's letter
+collided with an honest red).
+
+### Changed
+
+- **"Fails rather than errors" names its exception (T9a):** a reproducing test
+  for a crash bug fails by the very exception under repair — that IS the right
+  reason; "errors" means accidental ones (typos, wrong fixtures). Displaces the
+  over-broad reading that pushed reporters to contort exception-shaped repro
+  reds.
+- **Self-discovering runners get a named ordering (T9b),** as a "When stuck"
+  row: behavior-preserving testability seam first, then the watched red on the
+  real defect — a naive red re-runs the runner inside itself (observed as a
+  near fork-bomb red-testing `run_tests.py`).
+- Word budget re-seeded: test-driven-development 927→1005 (the two rows above;
+  no clause retired — both sharpen existing bright-line scope).
+
 ## 0.4.9 — 2026-07-05
 
 pr-pilot → convoy rename completion (PRs #75, #81 from the 2026-07-05 polish
