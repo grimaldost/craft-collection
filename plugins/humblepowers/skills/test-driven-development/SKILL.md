@@ -119,7 +119,7 @@ the code does instead of what it should do.
 | Test setup is huge | Extract helpers; if still complex, the design is too coupled |
 | Must mock everything | Coupling problem — introduce dependency injection |
 | Test too complicated | The interface is too complicated; simplify it |
-| A runner that discovers its own tests | Land a behavior-preserving testability seam (a root/target arg) first, then watch the red on the real defect — a naive red re-runs the runner inside itself |
+| A runner that discovers its own tests | Red against a fixture tree, never the real one — test-first a root/target arg, then red the defect through it |
 
 ## Bug fixes
 

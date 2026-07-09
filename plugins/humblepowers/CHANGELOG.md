@@ -19,11 +19,15 @@ collided with an honest red).
   reason; "errors" means accidental ones (typos, wrong fixtures). Displaces the
   over-broad reading that pushed reporters to contort exception-shaped repro
   reds.
-- **Self-discovering runners get a named ordering (T9b),** as a "When stuck"
-  row: behavior-preserving testability seam first, then the watched red on the
-  real defect — a naive red re-runs the runner inside itself (observed as a
-  near fork-bomb red-testing `run_tests.py`).
-- Word budget re-seeded: test-driven-development 927→1005 (the two rows above;
+- **Self-discovering runners get a named route (T9b),** as a "When stuck" row:
+  red against a fixture tree, never the real one — the root/target seam is
+  itself built test-first, then the defect red runs through it. A naive red
+  re-runs the runner inside itself (observed as a near fork-bomb red-testing
+  `run_tests.py`). The review round reworded an earlier draft that sequenced
+  "seam first, then red" — which self-granted a production-code-before-red
+  exception the skill's own bright line forbids; the fixture-tree route stays
+  inside it.
+- Word budget re-seeded: test-driven-development 927→999 (the two rows above;
   no clause retired — both sharpen existing bright-line scope).
 
 ## 0.4.9 — 2026-07-05
