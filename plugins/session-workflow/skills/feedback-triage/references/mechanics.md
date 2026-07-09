@@ -17,6 +17,23 @@ applies. A filename test misclassifies in both directions:
 - house variants that ARE triage docs without the standard slug: keel's
   `<date>-backlog-triage.md` still counts because its H1 opens `# Triage —`.
 
+## Later passes — the delta form
+
+A pass over a corpus that already has a baseline triage doc emits a NEW doc,
+never an edit of the baseline — two sessions editing one status table clobber
+each other, and an edited baseline erases the audit trail. The delta doc:
+
+- lists only the new reports under **Inputs**;
+- states that it supersedes the prior promotion table as the status of record;
+- carries a consolidated current-backlog table — every open row, its current
+  status, and which pass set it;
+- continues the baseline's cluster-ID namespace (a baseline ending at T4 makes
+  the next new cluster T5), so statuses track across passes.
+
+One new report over a baseline is a valid delta pass — statuses move and watch
+rows get their corroboration. "Nothing to cluster" prohibits only a corpus of
+one with no baseline.
+
 ## Concurrent sessions on one corpus
 
 If another session may be triaging the same corpus: at scope, note any triage

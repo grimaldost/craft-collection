@@ -10,6 +10,11 @@ Contract under test (panel-hardened design, memory-suite v2):
 - closed anchors (*.closed.md) are never injected;
 - oversized anchors are truncated to a bound (the anchor must not become the
   token hog it exists to prevent);
+- an `<!-- anchor:tail -->` marker splits HEAD (injected) from TAIL (on disk
+  only), so the live state is never the part the bound cuts; marker-less
+  anchors keep the whole-file behavior;
+- with >1 open anchor in the dir, the injection warns and names the others
+  (concurrent tracks must not silently follow the wrong cursor);
 - every injection appends one telemetry line to log.ndjson;
 - the hook always exits 0 (a broken hook must never break session start).
 
@@ -178,6 +183,63 @@ def test_non_ascii_anchor_survives_cp1252_stdout():
         assert rec['event'] == 'anchor-inject'
 
 
+def test_tail_marker_injects_head_only():
+    # anchor/v1 two-tier structure: everything above the `<!-- anchor:tail -->`
+    # marker is the live HEAD (mission, cursor, invariants, last-known-good,
+    # resume steps) and is injected; the TAIL below (append-only decisions log,
+    # resolved history) stays on disk. This is what keeps a long run's live
+    # state from being the part an 8K bound cuts.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        body = (
+            '# Mission\nlive mission\n# Cursor\nnext: step 9\n'
+            '<!-- anchor:tail -->\n'
+            '# Decisions log\nOLD DECISION DETAIL\n'
+        )
+        make_anchor(tmp, body=body)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'live mission' in ctx
+        assert 'next: step 9' in ctx
+        assert 'OLD DECISION DETAIL' not in ctx
+        assert 'tail' in ctx.lower()  # the injection names that a tail exists on disk
+
+
+def test_oversized_head_still_bounded():
+    # The marker does not repeal the bound: a HEAD that alone exceeds the budget
+    # still gets the truncation fallback, note included.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        body = '# Cursor\n' + ('x' * 50_000) + '\n<!-- anchor:tail -->\ntail\n'
+        make_anchor(tmp, body=body)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert len(ctx) < 20_000
+        assert 'truncated' in ctx.lower()
+
+
+def test_multi_open_anchor_warning():
+    # Concurrent tracks in one cwd: the hook still injects the newest open
+    # anchor, but it must SAY that other open anchors exist (naming them) so a
+    # resumed session on the other track doesn't silently follow the wrong
+    # cursor. A single open anchor gets no such warning.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='track-a.md', body='TRACK A\n', age_s=3600)
+        make_anchor(tmp, name='track-b.md', body='TRACK B\n')
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'TRACK B' in ctx
+        assert 'track-a.md' in ctx  # named, so the reader can go get it
+        assert 'other open anchor' in ctx.lower()
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='only.md', body='ONLY TRACK\n')
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'other open anchor' not in ctx.lower()
+
+
 def test_emit_failure_logs_failure_event_not_success():
     # Telemetry must never say "injected" unless the payload actually reached
     # stdout: the success record is written only after the print, and an emit
@@ -231,5 +293,8 @@ if __name__ == '__main__':
     test_telemetry_line_appended()
     test_newest_non_closed_wins()
     test_non_ascii_anchor_survives_cp1252_stdout()
+    test_tail_marker_injects_head_only()
+    test_oversized_head_still_bounded()
+    test_multi_open_anchor_warning()
     test_emit_failure_logs_failure_event_not_success()
     print('ok: all anchor_inject tests passed')

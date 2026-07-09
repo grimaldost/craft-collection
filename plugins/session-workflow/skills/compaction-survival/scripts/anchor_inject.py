@@ -26,20 +26,35 @@ from pathlib import Path
 ENV_GATE = 'SESSION_WORKFLOW_ANCHOR_HOOKS'
 MAX_CONTEXT_CHARS = 8_000
 STALE_AFTER_S = 24 * 3600
+# anchor/v1 two-tier structure: content above this marker line is the live HEAD
+# (mission, cursor, invariants, last-known-good, resume steps) and is injected;
+# the TAIL below (append-only decisions log, resolved history) stays on disk.
+# Marker-less anchors keep the whole-file behavior.
+TAIL_MARKER = '<!-- anchor:tail -->'
 
 
-def find_anchor(anchors_dir: Path):
-    """Newest *.md that is not closed and not housekeeping."""
+def find_open_anchors(anchors_dir: Path) -> list[Path]:
+    """All open (not renamed *.closed.md) anchors, newest first. The rename is
+    the only close signal honored here — a prose "status: CLOSED" line does not
+    stop injection."""
     if not anchors_dir.is_dir():
-        return None
+        return []
     candidates = [f for f in anchors_dir.glob('*.md') if not f.name.endswith('.closed.md')]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda f: f.stat().st_mtime)
+    return sorted(candidates, key=lambda f: f.stat().st_mtime, reverse=True)
 
 
-def build_context(anchor: Path, stale_s: float) -> str:
-    text = anchor.read_text(encoding='utf-8', errors='ignore')
+def split_head(text: str) -> tuple[str, bool]:
+    """Return (head, has_tail): the content above the first TAIL_MARKER line,
+    or the whole text when no marker exists."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() == TAIL_MARKER:
+            return '\n'.join(lines[:i]), True
+    return text, False
+
+
+def build_context(anchor: Path, stale_s: float, other_open: list[Path] | None = None) -> str:
+    text, has_tail = split_head(anchor.read_text(encoding='utf-8', errors='ignore'))
     truncated = False
     if len(text) > MAX_CONTEXT_CHARS:
         text = text[:MAX_CONTEXT_CHARS]
@@ -59,7 +74,19 @@ def build_context(anchor: Path, stale_s: float) -> str:
             'Validate it against external reality before trusting the cursor; '
             'the world may have moved on.'
         )
+    if other_open:
+        names = ', '.join(f.name for f in other_open)
+        header.append(
+            f'WARNING - {len(other_open)} other open anchor(s) in this dir: {names}. '
+            'Concurrent tracks share this cwd; if this anchor is not your '
+            "track's, read the right one before acting, and close (rename to "
+            '*.closed.md) any track that already ended.'
+        )
     body = [text]
+    if has_tail:
+        body.append(
+            '[anchor tail (decisions log / resolved history) on disk - read the file if needed]'
+        )
     if truncated:
         body.append('[anchor truncated for injection - read the file for the rest]')
     return '\n'.join(header) + '\n---\n' + '\n'.join(body) + '\n</control-anchor>'
@@ -92,12 +119,13 @@ def main() -> int:
 
     cwd = Path(payload.get('cwd') or os.getcwd())
     anchors_dir = cwd / '.claude' / 'anchors'
-    anchor = find_anchor(anchors_dir)
-    if anchor is None:
+    open_anchors = find_open_anchors(anchors_dir)
+    if not open_anchors:
         return 0
+    anchor, other_open = open_anchors[0], open_anchors[1:]
 
     stale_s = max(0.0, time.time() - anchor.stat().st_mtime)
-    context = build_context(anchor, stale_s)
+    context = build_context(anchor, stale_s, other_open)
 
     record = {
         'event': 'anchor-inject',
@@ -105,6 +133,7 @@ def main() -> int:
         'session': payload.get('session_id', ''),
         'file': anchor.name,
         'stale': stale_s > STALE_AFTER_S,
+        'open_anchors': len(open_anchors),
         'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
     }
     try:

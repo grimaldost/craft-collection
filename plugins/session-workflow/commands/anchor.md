@@ -14,10 +14,14 @@ with a fresher snapshot.
 
 1. Find the current anchor: the newest `*.md` under `.claude/anchors/` whose
    name does not end in `.closed.md`. If none exists, say so in one line; done.
-2. Rename it to `<name>.closed.md`.
-3. Append to `.claude/anchors/log.ndjson`:
+2. Rewrite it as a minimal landed stub — status, a one-line outcome pointing
+   at the commits/PRs that carry the detail, `resume: none`. A full-ledger
+   close overflows the injection budget if the file is ever injected again.
+3. Rename it to `<name>.closed.md` — the rename is what stops re-injection; a
+   prose "status: CLOSED" line alone does not.
+4. Append to `.claude/anchors/log.ndjson`:
    `{"event":"anchor-close","source":"command","date":"<YYYY-MM-DD HH:MM>","file":"<basename>"}`
-4. Report the archived path in one line. Do **not** also snapshot.
+5. Report the archived path in one line. Do **not** also snapshot.
 
 ## Otherwise: snapshot
 
@@ -45,10 +49,12 @@ with a fresher snapshot.
      the files on disk) rather than recalling it.
    - **Resume steps** — how a cold reader re-orients: read this file, verify
      the real state, continue from the cursor. Keep them idempotent.
+   - `<!-- anchor:tail -->` on its own line — the re-injection hook emits only
+     what is above this marker; everything below stays on disk.
    - **Decisions log** — append-only; why the non-obvious calls were made.
-   Keep it bounded: cursor plus pointers, not a transcript. Fold closed phases
-   into one-line outcomes pointing at the commit or artifact that carries the
-   detail.
+   Keep the HEAD bounded: cursor plus pointers, not a transcript. Fold closed
+   phases into one-line outcomes below the marker, pointing at the commit or
+   artifact that carries the detail.
 5. **Append telemetry** to `.claude/anchors/log.ndjson`:
    `{"event":"anchor-write","source":"command","date":"<YYYY-MM-DD HH:MM>","step":<N>,"file":"<basename>"}`
 6. **Confirm in one line:** path, step number, and — when the user is about to

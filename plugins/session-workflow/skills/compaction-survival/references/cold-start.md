@@ -14,8 +14,14 @@ it from the skill body's section list (mission, plan pointer, cursor,
 invariants, last-known-good, resume steps). What matters beyond the sections:
 
 - Path: `<project>/.claude/anchors/<date>-<slug>.md`. One file, overwritten
-  atomically; rename to `<name>.closed.md` when the run ends — closed anchors
-  are never re-injected.
+  atomically.
+- Put `<!-- anchor:tail -->` on its own line between the resume steps and the
+  decisions log: the hook injects only what is above it, so the append-only
+  tail never crowds the live state out of the injection budget.
+- When the run ends, rewrite the anchor to a minimal landed stub (status, a
+  one-line outcome, resume: none), then rename to `<name>.closed.md` — the
+  rename is the only close signal the hook honors; a prose "status: CLOSED"
+  line does not stop re-injection.
 - Add a `source: maintained by hand` line so a later reader knows no command
   wrote it.
 

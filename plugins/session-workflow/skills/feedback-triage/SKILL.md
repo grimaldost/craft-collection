@@ -12,10 +12,12 @@ description: >
   maintenance — never run proactively; it reads a whole corpus. If the tool's
   binding registers its own triage template (e.g. keel's reflection-triage),
   follow that template. Not for consolidating journal entries into guidance (that
-  is consolidate-knowledge), not for a single report (nothing to cluster yet), not
-  for triaging GitHub issues or a PR queue, and not for triaging a governed
-  series' own reflections into durable checks — the owning method tool's triage
-  skill (e.g. keel's keel-triage) does that, not this generic feedback pass.
+  is consolidate-knowledge), not for a corpus of one report with no prior triage
+  (nothing to cluster yet — a 1-report delta over an existing baseline IS a valid
+  later pass), not for triaging GitHub issues or a PR queue, and not for triaging
+  a governed series' own reflections into durable checks — the owning method
+  tool's triage skill (e.g. keel's keel-triage) does that, not this generic
+  feedback pass.
 user-invocable: true
 ---
 
@@ -31,18 +33,20 @@ and writing CHANGELOGs belong to the tool's own release process.
 ## The pipeline — run in order
 
 1. **Scope.** Resolve the tool from the `feedback-targets` table in loaded context
-   (ask once if absent; never hunt). List the feedback dir directly — a plain
-   directory listing, not a glob. Un-triaged reports = reports not listed in the
-   **Inputs** section of any existing triage doc there — detection is by input
-   lists, not dates; on a first run the whole corpus is un-triaged. A doc counts
-   as a triage doc only if its first heading starts with `# Triage` — the same
-   rule `build_feedback_index.py` applies; the filename is deliberately NOT a
-   signal (`references/mechanics.md` has the misclassification cases, both ways).
-   If the invocation names a different count or set than the directory holds, the
-   directory is authoritative — note the discrepancy under **Inputs**. Note any
-   triage doc already dated today and re-check at emit (step 7). Rebuild the
-   dir's `INDEX.md` at scope (run `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`) so the
-   `extends`-lookup in steps 2–3 is one Read of a current index.
+   (ask once if absent; never hunt). Rebuild the dir's `INDEX.md` first (run
+   `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`):
+   its `### Untriaged` section is the input list — reports in no triage doc's
+   **Inputs**, detection by input lists, not dates — and the `extends`-lookup in
+   steps 2–3 is one Read. A doc counts as a triage doc only if its first heading
+   starts with `# Triage` — the same rule the index builder stamps into its
+   header; the filename is deliberately NOT a signal (`references/mechanics.md`
+   has the misclassification cases, both ways). State the count: `N un-triaged
+   reports`. N of 1 with no prior triage doc is too thin — stop with a note
+   (nothing to cluster); 1 new report over an existing baseline is a valid delta
+   pass (step 7). If the invocation names a different count or set than the
+   directory holds, the directory is authoritative — note the discrepancy under
+   **Inputs**. Note any triage doc already dated today and re-check at emit
+   (step 7).
 2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
    on a first run, the whole CHANGELOG to date. For a component without its own
    CHANGELOG (a harness, a scripts dir, a doc set), also read `git log` over the
@@ -84,7 +88,13 @@ and writing CHANGELOGs belong to the tool's own release process.
    owns: route by **where the fix lands**, not where the artifact lives. Fanning
    out per-tool digest subagents? The brief's owner taxonomy must enumerate each
    tool's own components — the misrouting case is in `references/mechanics.md`.
-5. **Apply the promotion gate.** Promote only clusters that are **reinforced**
+5. **Ground, then apply the promotion gate.** Before writing a row, ground it
+   against the tool's **current source**: verify the mechanism it names is
+   actually absent (or present, for an extension), implementable as stated (the
+   API allows it), and truthfully named for the shape it will carry — cite the
+   check in the ledger. A CHANGELOG window cannot see work shipped releases ago;
+   only the source can — ungrounded rows have re-proposed the shipped and
+   proposed the impossible. Then promote only clusters that are **reinforced**
    (≥2 reports, ideally across arcs — a single-report **BLOCKER** is exempt),
    **specific** (a concrete change with a home), and **actionable**. The
    exemption's scope is the BLOCKER's own row — siblings from the same report
@@ -100,9 +110,13 @@ and writing CHANGELOGs belong to the tool's own release process.
    table and statuses as any other promotion; a loop that can only add converges
    on bodies too dense to execute.
 7. **Emit the triage doc** (template below) into the tool's feedback dir as
-   `<YYYY-MM-DD>-triage-<scope>.md`, clusters leverage-ordered. Before writing,
-   re-list the dir: a same-corpus triage doc that appeared since step 1 is
-   reconciled with, not duplicated (`references/mechanics.md`).
+   `<YYYY-MM-DD>-triage-<scope>.md`, clusters leverage-ordered. A later pass
+   over a corpus with a baseline emits a NEW doc in the delta form — Inputs
+   list only the new reports, the new table supersedes the baseline as status
+   of record, a consolidated backlog table carries every open row, cluster IDs
+   continue the baseline's namespace (`references/mechanics.md`). Before
+   writing, re-list the dir: a same-corpus triage doc that appeared since
+   step 1 is reconciled with, not duplicated.
 8. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
    otherwise the template below is authoritative — don't hunt for one. Triaging
@@ -177,5 +191,6 @@ owning tool's triage flow — see step 8.)
 ## What this skill does NOT do
 
 - Build promotions, edit the tool, bump versions, or write CHANGELOG entries.
-- Run proactively or on a single report.
+- Run proactively, or on a corpus of one report with no baseline (a 1-report
+  delta over an existing baseline is a valid later pass).
 - Triage GitHub issues, PR queues, or task backlogs.
