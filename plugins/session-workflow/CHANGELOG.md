@@ -92,7 +92,10 @@ docstring describes the head-aware behavior. `build_feedback_index.py`:
 Inputs-coverage stem matching is boundary-aware (the corpus has
 prefix-colliding stems — `refresh-on-read` vs `refresh-on-read-execution`).
 README's hook bullet describes HEAD-only injection and the multi-track
-warning.
+warning. tool-feedback step 4's flat "one report per tool" (left unedited by
+the T4a pass, contradicting the new granularity) now reads "each report (per
+tool per distinct concern)", and step 2 restates at the point of action that
+the rebuild targets the registered dir (budget 1170→1188).
 
 ## 0.12.0 — 2026-07-06
 

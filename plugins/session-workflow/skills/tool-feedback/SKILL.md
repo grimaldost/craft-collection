@@ -79,7 +79,8 @@ the user's CLAUDE.md) or the user points you at one. Shape:
    still reads the registered dir's index — state which baseline you used (fine
    print: `references/mechanics.md`).
 2. **Check recurrence before drafting.** **Rebuild** the recurrence dir's
-   `INDEX.md` first
+   `INDEX.md` first (the registered dir — step 1, even when the write is
+   redirected)
    (`uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`),
    then scan it for a finding your candidate repeats. An existing index may
    predate recent reports or have been built by an older rule — rebuilding is
@@ -91,7 +92,8 @@ the user's CLAUDE.md) or the user points you at one. Shape:
    report; method/gate findings to the method tool's; skill findings to the skill
    collection's. If ownership is genuinely ambiguous, report it where it surfaced
    and say so — triage's ROUTE OUT is the backstop.
-4. **Draft one report per tool** using the template below. Read the tool's version
+4. **Draft each report** (per tool per distinct concern — step 1) using the
+   template below. Read the tool's version
    from its manifest (`plugin.json`, `pyproject.toml`, `__version__`) — never
    guess; under cache skew (above), record the version you actually ran and note
    the discrepancy.
