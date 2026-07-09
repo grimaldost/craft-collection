@@ -1,10 +1,13 @@
 """SessionStart(compact|resume) anchor re-injection hook — memory-suite v2, C2.
 
-Reads the hook input JSON on stdin, finds the newest non-closed control anchor
-under <cwd>/.claude/anchors/, and emits it as SessionStart additionalContext so
-a freshly compacted or resumed session re-reads its own state mechanically —
-never relying on the compaction summary to carry constraints and decisions
-(evidence base: docs/design/2026-07-04-memory-suite-research.md).
+Reads the hook input JSON on stdin, finds the newest open control anchor under
+<cwd>/.claude/anchors/ (open = not renamed *.closed.md), and emits its HEAD —
+the content above the `<!-- anchor:tail -->` marker; the whole file when
+marker-less — as SessionStart additionalContext, warning when other anchors
+are open in the same directory (concurrent tracks). A freshly compacted or
+resumed session thus re-reads its own live state mechanically — never relying
+on the compaction summary to carry constraints and decisions (evidence base:
+docs/design/2026-07-04-memory-suite-research.md).
 
 Ships INERT: does nothing unless SESSION_WORKFLOW_ANCHOR_HOOKS=1 (house
 precedent — hooks are enabled deliberately, never by install). Hot-path
@@ -16,6 +19,11 @@ compaction events in ~30 days of this user's history, plus two same-day CC
 restarts that wiped in-session state while the on-disk anchor survived.
 """
 
+# Annotations must not be evaluated at import time: this hook can run under any
+# python a hook runner resolves, and a def-time `X | Y` union on 3.9 would fail
+# the import itself — before the exit-0 guard exists.
+from __future__ import annotations
+
 import json
 import os
 import sys
@@ -26,11 +34,21 @@ from pathlib import Path
 ENV_GATE = 'SESSION_WORKFLOW_ANCHOR_HOOKS'
 MAX_CONTEXT_CHARS = 8_000
 STALE_AFTER_S = 24 * 3600
+MAX_NAMED_OPEN = 5  # cap the multi-track warning's name list; count the rest
 # anchor/v1 two-tier structure: content above this marker line is the live HEAD
 # (mission, cursor, invariants, last-known-good, resume steps) and is injected;
 # the TAIL below (append-only decisions log, resolved history) stays on disk.
 # Marker-less anchors keep the whole-file behavior.
 TAIL_MARKER = '<!-- anchor:tail -->'
+
+
+def _mtime(f: Path) -> float:
+    """Race-safe mtime: a file renamed/deleted between glob and stat must not
+    raise on this hot path (it would cost the whole injection)."""
+    try:
+        return f.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def find_open_anchors(anchors_dir: Path) -> list[Path]:
@@ -40,16 +58,21 @@ def find_open_anchors(anchors_dir: Path) -> list[Path]:
     if not anchors_dir.is_dir():
         return []
     candidates = [f for f in anchors_dir.glob('*.md') if not f.name.endswith('.closed.md')]
-    return sorted(candidates, key=lambda f: f.stat().st_mtime, reverse=True)
+    return sorted(candidates, key=_mtime, reverse=True)
 
 
 def split_head(text: str) -> tuple[str, bool]:
     """Return (head, has_tail): the content above the first TAIL_MARKER line,
-    or the whole text when no marker exists."""
+    or the whole text when no marker exists. A marker with an empty HEAD is a
+    malformed v1 anchor — fall back to whole-file rather than inject nothing
+    (0 useful bytes on the recovery path is the protocol's cardinal failure)."""
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if line.strip() == TAIL_MARKER:
-            return '\n'.join(lines[:i]), True
+            head = '\n'.join(lines[:i])
+            if not head.strip():
+                return text, False
+            return head, True
     return text, False
 
 
@@ -75,7 +98,9 @@ def build_context(anchor: Path, stale_s: float, other_open: list[Path] | None = 
             'the world may have moved on.'
         )
     if other_open:
-        names = ', '.join(f.name for f in other_open)
+        names = ', '.join(f.name for f in other_open[:MAX_NAMED_OPEN])
+        if len(other_open) > MAX_NAMED_OPEN:
+            names += f' and {len(other_open) - MAX_NAMED_OPEN} more'
         header.append(
             f'WARNING - {len(other_open)} other open anchor(s) in this dir: {names}. '
             'Concurrent tracks share this cwd; if this anchor is not your '
@@ -124,7 +149,7 @@ def main() -> int:
         return 0
     anchor, other_open = open_anchors[0], open_anchors[1:]
 
-    stale_s = max(0.0, time.time() - anchor.stat().st_mtime)
+    stale_s = max(0.0, time.time() - _mtime(anchor))
     context = build_context(anchor, stale_s, other_open)
 
     record = {

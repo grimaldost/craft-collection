@@ -78,6 +78,22 @@ gained capability.
   procedure), tool-feedback 1117→1170 (rebuild-always displaces the
   conditional-build branch).
 
+### Fixed (review round, same release)
+
+From the adversarial review of this branch: `/anchor` stamps `format:
+anchor/v1` (the structure it now writes) and its `close` gains the multi-track
+guard the snapshot path already had (close the anchor whose `task:` line
+matches; never stub-close another track's). `anchor_inject.py`: annotations no
+longer evaluate at import (`from __future__ import annotations` — a 3.9 hook
+runner would have failed before the exit-0 guard existed), an empty-HEAD
+marker falls back to whole-file injection, the multi-track warning names at
+most 5 anchors and counts the rest, mtimes are race-safe, and the module
+docstring describes the head-aware behavior. `build_feedback_index.py`:
+Inputs-coverage stem matching is boundary-aware (the corpus has
+prefix-colliding stems — `refresh-on-read` vs `refresh-on-read-execution`).
+README's hook bullet describes HEAD-only injection and the multi-track
+warning.
+
 ## 0.12.0 — 2026-07-06
 
 Build round for the 2026-07-06 triage (the tu-v16 campaign reports + the

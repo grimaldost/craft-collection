@@ -14,6 +14,9 @@ with a fresher snapshot.
 
 1. Find the current anchor: the newest `*.md` under `.claude/anchors/` whose
    name does not end in `.closed.md`. If none exists, say so in one line; done.
+   **If more than one is open** (concurrent tracks), close the one whose
+   `task:` line matches this session's work — never stub-close another track's
+   anchor; if none matches, ask which one in one line.
 2. Rewrite it as a minimal landed stub — status, a one-line outcome pointing
    at the commits/PRs that carry the detail, `resume: none`. A full-ledger
    close overflows the injection budget if the file is ever injected again.
@@ -36,7 +39,7 @@ with a fresher snapshot.
    create `<YYYY-MM-DD>-<short-run-slug>.md`.
 4. **Write the snapshot** — one full-file Write, all seven categories, each at
    task-appropriate depth:
-   - Frontmatter: `format: anchor/v0`, `date`, `task:` (one line), `step:`
+   - Frontmatter: `format: anchor/v1`, `date`, `task:` (one line), `step:`
      (prior step + 1, or 1), `source: /anchor`.
    - **Mission** — the goal and its hard constraints, 1–3 sentences.
    - **Plan pointer** — where the full plan lives. Point, don't copy.

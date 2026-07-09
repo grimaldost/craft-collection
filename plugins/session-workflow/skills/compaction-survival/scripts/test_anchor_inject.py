@@ -240,6 +240,38 @@ def test_multi_open_anchor_warning():
         assert 'other open anchor' not in ctx.lower()
 
 
+def test_marker_at_top_falls_back_to_whole_file():
+    # A marker with an EMPTY head (first line of the file) is a malformed v1
+    # anchor; injecting an empty HEAD would be the protocol's cardinal failure
+    # (0 useful bytes on the recovery path). Fall back to whole-file instead.
+    # (A frontmatter-only head is NOT empty — it still injects the path line
+    # and the tail note, which is recoverable.)
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchors = tmp / '.claude' / 'anchors'
+        anchors.mkdir(parents=True)
+        (anchors / 'run.md').write_text(
+            '<!-- anchor:tail -->\n# Cursor\nTAIL ONLY CONTENT\n', encoding='utf-8'
+        )
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'TAIL ONLY CONTENT' in ctx
+
+
+def test_multi_anchor_warning_caps_names():
+    # Pathological dirs (many open anchors) must not blow the injected header:
+    # name at most a handful, count the rest.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        for i in range(8):
+            make_anchor(tmp, name=f'track-{i}.md', body=f'TRACK {i}\n', age_s=(8 - i) * 60)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert '7 other open anchor(s)' in ctx
+        assert 'and 2 more' in ctx  # 5 named, 2 counted
+        assert ctx.count('track-') <= 6  # the injected one may appear in its path line
+
+
 def test_emit_failure_logs_failure_event_not_success():
     # Telemetry must never say "injected" unless the payload actually reached
     # stdout: the success record is written only after the print, and an emit
@@ -296,5 +328,7 @@ if __name__ == '__main__':
     test_tail_marker_injects_head_only()
     test_oversized_head_still_bounded()
     test_multi_open_anchor_warning()
+    test_marker_at_top_falls_back_to_whole_file()
+    test_multi_anchor_warning_caps_names()
     test_emit_failure_logs_failure_event_not_success()
     print('ok: all anchor_inject tests passed')

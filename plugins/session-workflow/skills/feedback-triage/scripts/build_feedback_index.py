@@ -146,14 +146,17 @@ _INPUTS_SECTION = re.compile(r'(?ms)^## Inputs\s*$(.*?)(?=^## |\Z)')
 
 
 def extract_inputs_coverage(text: str, report_stems: list[str]) -> list[str]:
-    """Report stems a triage doc covers: any known stem appearing anywhere in its
-    `## Inputs` section. Substring match against known stems — robust to the
-    section's bullet/numbering/annotation phrasing, which varies across docs."""
+    """Report stems a triage doc covers: any known stem appearing in its
+    `## Inputs` section — matched at a name boundary (not followed by another
+    stem character), because the corpus has prefix-colliding stems
+    (`...-refresh-on-read` vs `...-refresh-on-read-execution`) and a bare
+    substring test would mark the shorter one covered by accident. Otherwise
+    phrasing-robust: bullets, numbering, and annotations all match."""
     m = _INPUTS_SECTION.search(text)
     if not m:
         return []
     section = m.group(1)
-    return [s for s in report_stems if s in section]
+    return [s for s in report_stems if re.search(re.escape(s) + r'(?![A-Za-z0-9_-])', section)]
 
 
 def build_index(feedback_dir: Path) -> str:

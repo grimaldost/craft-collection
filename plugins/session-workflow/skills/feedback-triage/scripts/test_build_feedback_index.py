@@ -233,6 +233,24 @@ def test_triage_coverage_and_untriaged_sections():
     assert '`2026-01-01-covered`' not in untriaged
 
 
+def test_coverage_stem_match_is_boundary_aware():
+    # Real corpus has prefix-colliding stems (2026-06-08-refresh-on-read vs
+    # ...-refresh-on-read-execution). A triage doc listing only the LONGER one
+    # must not mark the shorter one covered by substring accident.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-04-foo.md').write_text('# foo feedback — a\n', encoding='utf-8')
+        (dd / '2026-01-04-foo-execution.md').write_text('# foo feedback — b\n', encoding='utf-8')
+        (dd / '2026-01-05-triage-x.md').write_text(
+            '# Triage — x\n## Inputs\n1. `2026-01-04-foo-execution.md`\n## Headline\n',
+            encoding='utf-8',
+        )
+        idx = build_index(dd)
+    untriaged = idx.split('\n### Untriaged', 1)[1]
+    assert '`2026-01-04-foo`' in untriaged  # NOT covered — only the longer stem was listed
+    assert '- covers: `2026-01-04-foo-execution`' in idx
+
+
 def test_triage_doc_without_inputs_covers_nothing():
     # A triage doc with no parseable ## Inputs section covers nothing — every
     # report stays in the untriaged remainder rather than being silently absorbed.
@@ -296,6 +314,7 @@ if __name__ == '__main__':
     test_extract_proposals_strips_digit_hyphen_severity_tag()
     test_header_stamps_generator_version_and_rule()
     test_triage_coverage_and_untriaged_sections()
+    test_coverage_stem_match_is_boundary_aware()
     test_triage_doc_without_inputs_covers_nothing()
     test_help_flag_returns_zero_not_swallowed_as_dir()
     test_help_emits_utf8_bytes_under_cp1252()
