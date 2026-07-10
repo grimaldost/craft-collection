@@ -47,9 +47,13 @@ Run the test. Confirm three things: it fails rather than errors, the failure
 message is the one you expected, and it fails because the feature is missing
 — not because of a typo. A test that passes here is testing behavior that
 already exists; fix the test. A test that errors is not failing correctly;
-fix the error and re-run until it fails for the right reason. (The same
-red-before-green discipline governs any verifier, not only tests —
-`verification-before-completion` states the general form for gates and checks.)
+fix the error and re-run until it fails for the right reason. One
+exception-shaped red IS the right reason: a reproducing test for a crash bug
+fails by the very exception under repair — "errors" above means accidental
+ones (typos, wrong fixtures), not the crash being reproduced; don't contort
+the test to avoid it. (The same red-before-green discipline governs any
+verifier, not only tests — `verification-before-completion` states the
+general form for gates and checks.)
 
 ### 3. Green — write the least code that passes
 
@@ -115,6 +119,7 @@ the code does instead of what it should do.
 | Test setup is huge | Extract helpers; if still complex, the design is too coupled |
 | Must mock everything | Coupling problem — introduce dependency injection |
 | Test too complicated | The interface is too complicated; simplify it |
+| A runner that discovers its own tests | Red against a fixture tree, never the real one — test-first a root/target arg, then red the defect through it |
 
 ## Bug fixes
 
