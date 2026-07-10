@@ -3,6 +3,100 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.13.0 — 2026-07-09
+
+Build round for the 2026-07-09 triage: the anchor gains machine-readable
+structure the hook can honor (the root cause behind the whole truncation
+lineage), and the feedback loop's scope/recurrence substrate stops depending
+on trust and hand arithmetic. Minor bump: the hook and the index builder
+gained capability.
+
+### Added
+
+- **anchor/v1 two-tier structure (T1a) + head-aware injection (T1b).** The
+  anchor convention gains a literal `<!-- anchor:tail -->` marker: HEAD above
+  (mission, cursor with next-action, invariants, last-known-good, resume
+  steps), append-only TAIL below (decisions log, folded history).
+  `anchor_inject.py` now injects only the HEAD when the marker is present —
+  the live state is never the part the 8K bound cuts — and notes that a tail
+  exists on disk. Marker-less anchors keep the whole-file behavior; the 8K
+  truncation stays as the final bound. Displaces: the blind whole-file slice
+  as the only behavior (5-report truncation lineage:
+  `w4-compaction-anchor#1 → multiwave#1 → restarts#1 → datacontext-v1 §Friction
+  → v18-postcycle#1`).
+- **Multi-track warning in the hook (T5a).** With more than one open anchor in
+  a cwd, the injection warns and names the others, so a resumed session on a
+  concurrent track doesn't silently follow the wrong cursor; telemetry gains
+  `open_anchors`. (`datacontext-v1-session-workflow#1`.)
+- **Close is stub-then-rename (T1c/T5b).** SKILL.md protocol, `/anchor close`,
+  and cold-start.md now state: on close, rewrite the anchor to a minimal
+  landed stub, then rename to `*.closed.md` — the rename is the only close
+  signal the hook honors; a prose "status: CLOSED" line does not stop
+  re-injection. Displaces the full-ledger close format and the ambiguous
+  "newest non-closed" doctrine line (`v18-postcycle#1/#2`).
+- **NEXT-ACTION-ON-RESUME slot + pending-interaction re-ask (T2a/T2b).** The
+  cursor's next action is a named, in-place-rewritten slot (one imperative
+  step + a precondition to verify); an unanswered question/approval is armed
+  there for verbatim re-ask. Displaces the ad-hoc prose "ON RESUME" blocks
+  (`multiwave#2 → restarts#2`).
+- **INDEX provenance stamp (T6a) + triage coverage (T6c).**
+  `build_feedback_index.py` stamps its generator version and detection rule
+  into the header (a stale-cache-built INDEX is visibly stale —
+  `keel-post-0110-triage#1`, HIGH), and emits a `## Triage coverage` section
+  mapping each `# Triage`-H1 doc to the report stems its Inputs cover, plus a
+  computed `### Untriaged` remainder — the scope step becomes one Read
+  (INDEX-minus-INDEX; the by-hand subtraction lost 6 reports across three
+  passes). feedback-triage step 1 consumes it and states the corpus count with
+  a thin-corpus branch (T8b).
+- **Grounding before the promotion gate (T7a).** feedback-triage step 5 now
+  grounds every row against the tool's current source (mechanism absent or
+  present, implementable as stated, truthfully named) before gating — wording
+  co-decided with keel's reflection-triage step 3, which shipped the same
+  discipline (`keel-post-0110-triage#2`, `convoy-backlog-build#1`).
+- **Delta-pass form specified (T8a/T8c).** Later passes emit a NEW doc
+  (Inputs = new reports only; supersedes the baseline as status of record;
+  consolidated backlog table; namespace continuation) — body clause in step 7,
+  detail in `references/mechanics.md`; the "single report" negative trigger is
+  disambiguated (a 1-report delta over a baseline is valid)
+  (`convoy-triage-delta-pass#1/#2`, `v17-reflect-triage-passes#1`).
+
+### Changed
+
+- **tool-feedback step 2 rebuilds the INDEX before the recurrence check
+  (T6b)** — an existing index may predate recent reports or an older detection
+  rule; rebuild-always displaces the build-only-if-missing branch and the
+  false-positive-prone count heuristic (`trs-etl-refactor-session-workflow#2`,
+  `datacontext-v1-session-workflow#2`).
+- **tool-feedback granularity wording (T4a):** one report per tool per
+  distinct concern/surface (a library vs its consumer plugin) — displaces the
+  ambiguous "one report per tool" line (`v16-cycle-disciplines#2`,
+  `trs-etl-refactor-session-workflow#3`).
+- Word budgets re-seeded for the growth these mechanisms brought:
+  compaction-survival 952→1143 (two-tier anchor + close protocol displace the
+  flat section list and its "keep it bounded" clause), feedback-triage
+  1402→1556 (grounding + delta form displace the hand-subtraction scope
+  procedure), tool-feedback 1117→1170 (rebuild-always displaces the
+  conditional-build branch).
+
+### Fixed (review round, same release)
+
+From the adversarial review of this branch: `/anchor` stamps `format:
+anchor/v1` (the structure it now writes) and its `close` gains the multi-track
+guard the snapshot path already had (close the anchor whose `task:` line
+matches; never stub-close another track's). `anchor_inject.py`: annotations no
+longer evaluate at import (`from __future__ import annotations` — a 3.9 hook
+runner would have failed before the exit-0 guard existed), an empty-HEAD
+marker falls back to whole-file injection, the multi-track warning names at
+most 5 anchors and counts the rest, mtimes are race-safe, and the module
+docstring describes the head-aware behavior. `build_feedback_index.py`:
+Inputs-coverage stem matching is boundary-aware (the corpus has
+prefix-colliding stems — `refresh-on-read` vs `refresh-on-read-execution`).
+README's hook bullet describes HEAD-only injection and the multi-track
+warning. tool-feedback step 4's flat "one report per tool" (left unedited by
+the T4a pass, contradicting the new granularity) now reads "each report (per
+tool per distinct concern)", and step 2 restates at the point of action that
+the rebuild targets the registered dir (budget 1170→1188).
+
 ## 0.12.0 — 2026-07-06
 
 Build round for the 2026-07-06 triage (the tu-v16 campaign reports + the

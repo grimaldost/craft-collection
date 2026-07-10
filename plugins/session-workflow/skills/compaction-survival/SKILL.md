@@ -37,14 +37,21 @@ the state it describes can be lost.
 
 ## The anchor
 
-One file, at a stable path the run can find again after a reset. It holds, in
-whatever shape fits the work:
+One file, at a stable path the run can find again after a reset. It has two
+tiers, split by a literal `<!-- anchor:tail -->` marker line: above it the live
+**HEAD** — the only part the re-injection hook emits — and below it the
+**TAIL**, which stays on disk. A marker-less anchor still injects whole, but
+then a long run's live state is whatever an 8K bound happens to keep.
+
+HEAD — bounded, rewritten in place:
 
 - **Mission** — the goal in a sentence or two, and the hard constraints.
 - **Plan pointer** — where the full plan lives (a separate doc), so the anchor
   stays a cursor, not a second copy of the plan.
-- **Cursor** — what is done, what is in progress, and the single next action.
-  This is the part that earns the anchor; keep it current.
+- **Cursor** — done / in progress / **next action on resume**: one imperative
+  step plus the precondition to verify before it, rewritten in place as it
+  mutates. An unanswered question or approval is armed here for verbatim
+  re-ask after the reset. This is the part that earns the anchor.
 - **Invariants** — decisions and constraints that hold across the whole run, so
   a post-compaction turn does not relitigate them.
 - **Last-known-good** — the concrete recoverable state: commit hashes, the
@@ -52,7 +59,11 @@ whatever shape fits the work:
 - **Resume steps** — how a cold reader re-orients: read this file, check the
   real state (version control log, the artifact on disk), continue from the
   cursor.
-- **Decisions log** — append-only; why the non-obvious calls were made.
+
+TAIL — append-only, read on demand:
+
+- **Decisions log** — why the non-obvious calls were made.
+- **Folded history** — closed phases' one-line outcomes, resolved incidents.
 
 ## The protocol
 
@@ -67,14 +78,19 @@ whatever shape fits the work:
 4. **Write atomically and keep one anchor.** Overwrite the single file rather
    than scattering state across several; a half-written or duplicated anchor is
    worse than a terse one.
-5. **Keep it bounded.** The anchor is a cursor plus pointers, not a transcript.
-   As a phase closes, fold its detail into a one-line outcome and point to the
-   commit or artifact that carries the rest — an anchor that grows without bound
-   becomes the token cost it was meant to avoid.
+5. **Keep the HEAD bounded.** The anchor is a cursor plus pointers, not a
+   transcript. As a phase closes, fold its detail into a one-line outcome in
+   the TAIL, below the marker — growth goes below the fold, never into the
+   injected HEAD.
 6. **Make resume idempotent.** The resume steps let a fresh context recover the
    run from the anchor and the real on-disk state alone; re-entering a
    half-finished step checks the artifact before redoing it, so re-reading is
    always safe.
+7. **Close by stubbing, then renaming.** When the run ends, rewrite the anchor
+   to a minimal landed stub — status, a one-line outcome, resume: none — and
+   rename it `<name>.closed.md`. The rename is the only close signal the hook
+   honors: a prose "status: CLOSED" line does not stop re-injection, and a
+   full-ledger close overflows the injection budget on the next session.
 
 ## Finding the anchor again
 
@@ -95,10 +111,12 @@ An anchor that cannot be found is no anchor.
   protects against *automatic* compactions that arrive unannounced.
 - **Automatic re-injection** (env-gated, off by default): with
   `SESSION_WORKFLOW_ANCHOR_HOOKS=1`, a SessionStart hook on `compact` and
-  `resume` re-injects the newest non-closed anchor into fresh context
-  mechanically — the re-read step stops depending on the model remembering
-  the protocol. Stale anchors are injected with an explicit warning, never
-  silently trusted; anchor-less sessions pay nothing.
+  `resume` re-injects the newest open anchor's HEAD (to the tail marker) into
+  fresh context mechanically — the re-read step stops depending on the model
+  remembering the protocol. Stale anchors are injected with an explicit
+  warning, never silently trusted; when several anchors are open in one
+  directory (concurrent tracks), the injection warns and names the others;
+  anchor-less sessions pay nothing.
 - **Cold start without the plugin surface** — a session whose plugin snapshot
   predates the skill, or a harness whose menu omits it, arms everything by
   hand: `references/cold-start.md` has the recipe (the anchor file by hand,
@@ -113,6 +131,7 @@ An anchor that cannot be found is no anchor.
 | Re-read skipped on resume | Acts on the summary's gaps; relitigates settled decisions. |
 | Anchor grown into a transcript | Becomes the token hog it was meant to prevent. |
 | Non-idempotent resume | Re-runs a finished irreversible step, or stacks a second attempt on a half-done one. |
+| Closed in prose, never renamed | The hook keeps re-injecting a dead anchor — over the live track's, under concurrent tracks. |
 
 ## Boundaries
 

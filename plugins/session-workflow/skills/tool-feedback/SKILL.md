@@ -22,9 +22,11 @@ user-invocable: true
 # Tool Feedback
 
 Tools in active development improve only if every session that uses them reports
-back. This skill writes that report — one per tool, into the tool's own repo — in
-a format the downstream `feedback-triage` pass can cluster: severity-tagged
-findings, stable IDs, the phase that missed, explicit links for repeats. The
+back. This skill writes that report — one per tool per distinct concern, into the
+tool's own repo — in a format the downstream `feedback-triage` pass can cluster:
+severity-tagged findings, stable IDs, the phase that missed, explicit links for
+repeats. One tool exercised across distinct phases, concerns, or surfaces (a
+library vs its consumer plugin) takes one report each, under distinct slugs. The
 quality bar: a maintainer can act on it cold.
 
 ## Registered tools — the feedback-targets binding
@@ -68,25 +70,30 @@ the user's CLAUDE.md) or the user points you at one. Shape:
 
 1. **Resolve targets and destination.** From the bindings table (or an inline
    ask), list every registered tool the session **used** (per the binding
-   section's definition); one report per tool. A tool named but never exercised
+   section's definition); one report per tool, plus one per additional distinct
+   concern or surface where that applies. A tool named but never exercised
    gets a one-line "no report" back to the user — not an empty file. Destination
    precedence: a dir the user named *this session* → the registered feedback dir
    → the tool's own repo — **named or registered only, never inferred**. A
    redirected destination moves the *write* only; the recurrence check (step 2)
    still reads the registered dir's index — state which baseline you used (fine
    print: `references/mechanics.md`).
-2. **Check recurrence before drafting.** Read the recurrence dir's `INDEX.md` and
-   scan it for a finding your candidate repeats. If the dir holds reports but no
-   `INDEX.md`, **build it first**
-   (`uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`)
-   rather than degrading to a grep. A repeat is written as **"extends
+2. **Check recurrence before drafting.** **Rebuild** the recurrence dir's
+   `INDEX.md` first (the registered dir — step 1, even when the write is
+   redirected)
+   (`uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`),
+   then scan it for a finding your candidate repeats. An existing index may
+   predate recent reports or have been built by an older rule — rebuilding is
+   cheap, idempotent, and the only staleness check that cannot false-positive;
+   never degrade to a grep. A repeat is written as **"extends
    `<prior-file-stem>#<n>`"** (or "extends `<prior-file-stem>` §Misses" for a
    narrative finding) plus only the *new* evidence — never restated fresh.
 3. **Route by ownership.** Engine/execution findings go to the engine tool's
    report; method/gate findings to the method tool's; skill findings to the skill
    collection's. If ownership is genuinely ambiguous, report it where it surfaced
    and say so — triage's ROUTE OUT is the backstop.
-4. **Draft one report per tool** using the template below. Read the tool's version
+4. **Draft each report** (per tool per distinct concern — step 1) using the
+   template below. Read the tool's version
    from its manifest (`plugin.json`, `pyproject.toml`, `__version__`) — never
    guess; under cache skew (above), record the version you actually ran and note
    the discrepancy.
