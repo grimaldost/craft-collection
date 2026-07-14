@@ -1,0 +1,19 @@
+[
+  { "query": "Which Claude model should I use for this agent?", "should_trigger": true, "note": "absorbed from choosing-tools' near-miss — the canonical capacity ask" },
+  { "query": "Score these five series tasks and pick the cheapest viable tier for each.", "should_trigger": true, "note": "batch scoring at series-authoring time" },
+  { "query": "Is Haiku enough for this refactor task, or do we need Sonnet?", "should_trigger": true, "note": "tier-sufficiency question, family-alias vocabulary" },
+  { "query": "What tier should this PR run at in the series config?", "should_trigger": true, "note": "governance-block emission" },
+  { "query": "I'm spawning three subagents for this sweep — which model should each get?", "should_trigger": true, "note": "per-spawn dispatch at delegation time" },
+  { "query": "Set the model and effort for the workflow agents in this pipeline.", "should_trigger": true, "note": "two-knob output on the workflow surface" },
+  { "query": "Does this task really need Opus, or will a cheaper model under the gate do?", "should_trigger": true, "note": "oracle-context downshift question" },
+  { "query": "Should this review panel run on Opus or is Sonnet fine for the stakes?", "should_trigger": true, "note": "review ladder sizing by stakes" },
+
+  { "query": "What does Opus cost per million tokens?", "should_trigger": false, "note": "near-miss: model fact (price) — platform model reference (claude-api)" },
+  { "query": "What's the current context window on Sonnet?", "should_trigger": false, "note": "near-miss: model fact (limit) — platform model reference (claude-api)" },
+  { "query": "Write the API call to Claude with adaptive thinking enabled.", "should_trigger": false, "note": "near-miss: API mechanics — claude-api implementation work" },
+  { "query": "Migrate this codebase from Sonnet 4.5 to Sonnet 5.", "should_trigger": false, "note": "near-miss: model migration mechanics — claude-api owns the breaking-change path" },
+  { "query": "Which skill should own this migration task?", "should_trigger": false, "note": "near-miss: skill dispatch — choosing-tools" },
+  { "query": "List every model-related skill installed here.", "should_trigger": false, "note": "near-miss: inventory — toolkit-awareness" },
+  { "query": "Have the runner escalate to a bigger model automatically whenever the gate fails twice.", "should_trigger": false, "note": "near-miss: in-run auto-escalation — explicitly out of scope" },
+  { "query": "Explain the difference between the Opus and Sonnet model families.", "should_trigger": false, "note": "concept Q&A, answerable directly" }
+]

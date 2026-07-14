@@ -125,9 +125,9 @@ Skills reference other tools without depending on them. Four rules and a test:
    under the same marketplace is a cross-tool reference and rule 2 applies —
    role-generic, with a working fallback.
 2. **Cross-tool references are role-generic with a named example and a
-   working fallback**: "when a registered model-tier policy is installed
-   (e.g. convoy's model-tiers), its thresholds win — otherwise these
-   heuristics." Name the role, give the example, work alone.
+   working fallback**: "when a capacity-dispatch policy is installed
+   (e.g. humblepowers' choosing-models), its tier rule wins — otherwise
+   this heuristic." Name the role, give the example, work alone.
 3. **Artifacts never carry tool dependencies.** A plan or spec that embeds
    "REQUIRED SUB-SKILL: <tool>" locks the artifact to a toolchain; state the
    execution contract in the artifact itself instead.

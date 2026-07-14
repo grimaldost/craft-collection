@@ -3,6 +3,15 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.14.2 — 2026-07-14
+
+### Changed
+
+- **review-panel:** the cost guardrail routes reviewer tier through a
+  capacity-dispatch policy when one is installed (e.g. humblepowers'
+  choosing-models, per its stakes rule); the ladder and the step-5 "Opus for
+  high stakes" default stay as the standalone fallback. Net −1 word.
+
 ## 0.14.1 — 2026-07-14
 
 ### Fixed
