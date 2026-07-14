@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -51,6 +52,41 @@ def _mtime(f: Path) -> float:
         return 0.0
 
 
+def _read(f: Path) -> str:
+    """Race-safe read for classification: a file renamed/deleted between glob and
+    read must not raise on this hot path."""
+    try:
+        return f.read_text(encoding='utf-8', errors='ignore')
+    except OSError:
+        return ''
+
+
+# A track declares itself finished in-content with a whole-anchor status line whose
+# VALUE is a terminal marker — `**Status:** CLOSED`, `status: landed on main` — (bold
+# and heading markers stripped first). The terminal word must be the whole value
+# (plus an optional "on/to <where>"), so an imperative or progress note that merely
+# starts with the word — `Status: complete the migration`, `Status: landed X, now Y` —
+# stays live. This never *stops* injection (the rename to *.closed.md is the only
+# close signal); it only de-ranks the anchor below live tracks and drives the rename
+# offer, so a terminal-but-unrenamed anchor stops shadowing active work.
+_TERMINAL_STATUS = re.compile(
+    r'^status\s*:?\s*(?:closed|done|complete|completed|landed|shipped|merged)'
+    r'(?:\s+(?:on|to)\s+\w+)?[.\s]*$'
+)
+
+
+def is_content_terminal(text: str) -> bool:
+    """True when an anchor's HEAD marks the whole track done but the file was never
+    renamed (the accumulation root cause: seven such anchors stranded across ~8
+    tracks). Scans only the HEAD (above the tail marker) — a folded per-phase status
+    line in the append-only TAIL must not mark a live anchor terminal."""
+    head, _ = split_head(text)
+    for line in head.splitlines():
+        if _TERMINAL_STATUS.match(line.replace('*', '').replace('#', '').strip().lower()):
+            return True
+    return False
+
+
 def find_open_anchors(anchors_dir: Path) -> list[Path]:
     """All open (not renamed *.closed.md) anchors, newest first. The rename is
     the only close signal honored here — a prose "status: CLOSED" line does not
@@ -59,6 +95,28 @@ def find_open_anchors(anchors_dir: Path) -> list[Path]:
         return []
     candidates = [f for f in anchors_dir.glob('*.md') if not f.name.endswith('.closed.md')]
     return sorted(candidates, key=_mtime, reverse=True)
+
+
+def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
+    """Choose the anchor to inject plus the others to warn about. The primary is the
+    newest genuinely-active anchor; a content-terminal-but-unrenamed anchor is
+    de-ranked and becomes primary only when nothing active remains (the recovery
+    path never drops to zero bytes). `open_anchors` is newest-first; `others` keeps
+    that order minus the primary."""
+    active = [a for a in open_anchors if not is_content_terminal(_read(a))]
+    primary = active[0] if active else open_anchors[0]
+    return primary, [a for a in open_anchors if a != primary]
+
+
+def list_stale(anchors_dir: Path) -> list[str]:
+    """Rename commands for content-terminal-but-unrenamed anchors — the mechanical
+    core of the /anchor close --stale cycle-end sweep. Returns the exact `mv` lines;
+    it never runs them (the rename is the operator's deliberate close action)."""
+    return [
+        f'mv {f.name} {f.stem}.closed.md'
+        for f in find_open_anchors(anchors_dir)
+        if is_content_terminal(_read(f))
+    ]
 
 
 def split_head(text: str) -> tuple[str, bool]:
@@ -101,12 +159,20 @@ def build_context(anchor: Path, stale_s: float, other_open: list[Path] | None = 
         names = ', '.join(f.name for f in other_open[:MAX_NAMED_OPEN])
         if len(other_open) > MAX_NAMED_OPEN:
             names += f' and {len(other_open) - MAX_NAMED_OPEN} more'
-        header.append(
+        warn = (
             f'WARNING - {len(other_open)} other open anchor(s) in this dir: {names}. '
             'Concurrent tracks share this cwd; if this anchor is not your '
-            "track's, read the right one before acting, and close (rename to "
-            '*.closed.md) any track that already ended.'
+            "track's, read the right one before acting."
         )
+        terminal = [f for f in other_open if is_content_terminal(_read(f))]
+        if terminal:
+            cmds = '; '.join(f'mv {f.name} {f.stem}.closed.md' for f in terminal[:MAX_NAMED_OPEN])
+            more = len(terminal) - MAX_NAMED_OPEN
+            warn += (
+                f' {len(terminal)} read as closed in-content but were never renamed; '
+                f'close each: {cmds}' + (f' (+{more} more)' if more > 0 else '')
+            )
+        header.append(warn)
     body = [text]
     if has_tail:
         body.append(
@@ -147,7 +213,7 @@ def main() -> int:
     open_anchors = find_open_anchors(anchors_dir)
     if not open_anchors:
         return 0
-    anchor, other_open = open_anchors[0], open_anchors[1:]
+    anchor, other_open = select_anchor(open_anchors)
 
     stale_s = max(0.0, time.time() - _mtime(anchor))
     context = build_context(anchor, stale_s, other_open)
@@ -187,6 +253,13 @@ def main() -> int:
 
 
 if __name__ == '__main__':
+    # Explicit sweep entry: `python anchor_inject.py --list-stale [anchors_dir]` prints
+    # the rename commands for the cycle-end /anchor close --stale sweep and exits.
+    if len(sys.argv) > 1 and sys.argv[1] == '--list-stale':
+        base = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.cwd() / '.claude' / 'anchors'
+        for cmd in list_stale(base):
+            print(cmd)
+        sys.exit(0)
     try:
         sys.exit(main())
     except Exception:

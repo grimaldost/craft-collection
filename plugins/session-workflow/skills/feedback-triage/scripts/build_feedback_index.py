@@ -142,20 +142,51 @@ def _is_report(p: Path) -> bool:
     )
 
 
-_INPUTS_SECTION = re.compile(r'(?ms)^## Inputs\s*$(.*?)(?=^## |\Z)')
+_COVERAGE_HEADING = re.compile(r'^#{2,4}\s+(?:inputs\b|addendum\b)', re.IGNORECASE)
+_ANY_HEADING = re.compile(r'^#{1,6}\s')
+
+
+def _coverage_text(text: str) -> str:
+    """Body text of a triage doc's coverage-bearing sections — the `## Inputs` list
+    plus any dated `## Addendum …` sections. Whole-section (not list-items-only) on
+    purpose: a report is sometimes closed in Inputs *prose* rather than a list item
+    (e.g. "two earlier un-listed reports closed here for the input-list test"), and
+    that disposition must count. The cost is that a stem merely *named in passing* in
+    a coverage section ("unlike report-x") is also credited — the authoring
+    convention is to name in a coverage section only reports the pass dispositions.
+    Fence-aware, so a `#`-comment inside a fenced command block does not
+    end the section and silently drop the inputs after it. The addendum flow appends a
+    later wave's inputs under an Addendum heading rather than editing the frozen Inputs
+    list, so coverage read from Inputs alone under-reports addendum-handled reports —
+    they resurface as untriaged (v19-sw#2). An `### Inputs` nested inside an addendum
+    re-opens capture, so it is not lost."""
+    out: list[str] = []
+    capturing = False
+    in_fence = False
+    for line in text.splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if _ANY_HEADING.match(line):
+            capturing = bool(_COVERAGE_HEADING.match(line))
+            continue
+        if capturing:
+            out.append(line)
+    return '\n'.join(out)
 
 
 def extract_inputs_coverage(text: str, report_stems: list[str]) -> list[str]:
-    """Report stems a triage doc covers: any known stem appearing in its
-    `## Inputs` section — matched at a name boundary (not followed by another
-    stem character), because the corpus has prefix-colliding stems
-    (`...-refresh-on-read` vs `...-refresh-on-read-execution`) and a bare
+    """Report stems a triage doc covers: any known stem appearing in its coverage
+    sections (`## Inputs` + dated `## Addendum …`) — matched at a name boundary (not
+    followed by another stem character), because the corpus has prefix-colliding
+    stems (`...-refresh-on-read` vs `...-refresh-on-read-execution`) and a bare
     substring test would mark the shorter one covered by accident. Otherwise
     phrasing-robust: bullets, numbering, and annotations all match."""
-    m = _INPUTS_SECTION.search(text)
-    if not m:
+    section = _coverage_text(text)
+    if not section:
         return []
-    section = m.group(1)
     return [s for s in report_stems if re.search(re.escape(s) + r'(?![A-Za-z0-9_-])', section)]
 
 
@@ -172,7 +203,8 @@ def build_index(feedback_dir: Path) -> str:
         'Each entry is a report stem with its numbered proposals and its '
         '§Misses/§Friction bullet stubs; grep here for an `extends` target before '
         'restating a finding. `## Triage coverage` maps each triage doc to the '
-        "reports its Inputs covers; `### Untriaged` is the scope step's input list.",
+        'reports its Inputs and dated Addendum sections list; `### Untriaged` is '
+        "the scope step's input list.",
         '',
     ]
     for p in reports:
@@ -202,7 +234,7 @@ def build_index(feedback_dir: Path) -> str:
             )
         except OSError:
             stems = []
-        lines += [f'- covers: `{s}`' for s in stems] or ['- (no Inputs section parsed)']
+        lines += [f'- covers: `{s}`' for s in stems] or ['- (no Inputs / Addendum coverage parsed)']
         lines.append('')
         covered.update(stems)
     untriaged = [s for s in report_stems if s not in covered]

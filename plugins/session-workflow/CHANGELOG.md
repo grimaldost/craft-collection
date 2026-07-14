@@ -3,6 +3,86 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.14.0 — 2026-07-14
+
+Build round for the 2026-07-14 triage. The 0.13.0 anchor wave shipped the close
+*mechanism* (rename) without a lifecycle *trigger*, and terminal anchors piled up
+(seven stranded across ~8 tracks in three days); this wave escalates that
+recurrence from prose to a mechanism, and closes a matching hole in the feedback
+loop's own precision (findings and open rows leaving by omission). Minor bump: the
+hook and two skills gained capability.
+
+### Added
+
+- **Anchor lifecycle: terminal anchors stop accumulating (T13a/T13b/T13c).**
+  `anchor_inject.py` gains `is_content_terminal()` — one predicate, anchored to a
+  whole-anchor `status:` line so a folded per-phase "STEP 1 status: done" does not
+  match. It drives three behaviors: selection **de-ranks** a content-terminal
+  anchor below live tracks (`select_anchor`), so a newer closed-but-unrenamed
+  track no longer shadows an older active one; the multi-anchor warning now emits
+  the exact `mv <name>.md <name>.closed.md` for each terminal-but-unrenamed
+  anchor; and `list_stale()` / `anchor_inject.py --list-stale` backs a new
+  `/anchor close --stale` cycle-end sweep. The rename stays the only signal that
+  *stops* injection — in-content status only reorders and offers the rename, so
+  T5b's bright line holds. compaction-survival SKILL states close-at-cycle-end and
+  the wind-down sweep; the failure-mode row for "closed in prose, never renamed"
+  now names the mitigation. (`v19-sw#1`, `datacontext-anchor-accumulation#1/#2/#3`,
+  `datacontext-reconciliation-sw#1`, `dc-campaign#3`.) **Scope of T13c, stated
+  honestly:** de-ranking resolves the *terminal-shadowing* case — a stale
+  closed-but-unrenamed track shadowing a live one, which is what the accumulation
+  reports evidenced. A genuinely-*active* wrong-track anchor (`context-handoff#2`)
+  is not disambiguated by content; it still warns and names the tracks, and a
+  track-scoped selection signal (an active-anchor pointer or branch scoping) is
+  carried as a **watch row**, not built this wave — de-ranking is not a substitute
+  for it. The predicate approach was chosen over a pointer for the shadowing case
+  because it needs no new convention.
+- **In-flight work as a first-class cursor element (T13d)** + two resume-discipline
+  lines: a cursor is eventually-consistent during tool outages — trust the
+  version-control log/ledgers over it when they disagree (CS2); a stored recovery
+  command is validated against the live artifact before an unattended run (CS1).
+  (`staging-runall-sw#2`, `dc-campaign#1`, `tu-grounding §Friction`.)
+- **compaction-survival cold-start reachability (T15a).** The by-hand recipe lives
+  inside the skill, unreachable exactly when the skill is absent from the menu; the
+  doctrine now keeps a compact minimal contract (anchor path, tail marker, cursor,
+  `.closed.md` rename) in `references/cold-start.md` for mirroring into the CLAUDE.md
+  protocol snippet, where a menu-less session still has it.
+  (`data-context-deep-review-sw#1`, `mantis-docs §Friction`.)
+- **feedback-triage closure invariant (T14a/T14b).** Step 7 asserts **input
+  coverage** before emit — every `<stem>#<n>` in the Inputs appears under a
+  disposition, so a finding leaves only with one, never by omission; step 2
+  reconciles **open rows across every triage doc in the dir** (via the INDEX
+  `## Triage coverage` map), not just the latest chain, so an off-chain
+  cycle-scoped triage's rows do not orphan. The template's ledger gains the third
+  closing assertion. Co-decided with keel's `reflection-triage` P3a.
+  (`convoy-governance-sw#1`, `keel-post-0120-sw#1`.)
+- **build_feedback_index credits addendum coverage (FT1).** Coverage now reads a
+  triage doc's `## Inputs` plus its dated `## Addendum …` sections, so a report
+  handled in an addendum stops resurfacing as `### Untriaged`. (`v19-sw#2`.)
+- **context-handoff third mode: Backlog (CH1).** A curated slice can become a
+  persisted repo document (findings-with-stable-IDs at a named path) that neither
+  returns nor continues a thread — modes table, trigger row, workflow branch, and
+  a Backlog template. Owner-directed build of a watch-status row (a single report,
+  `context-handoff#1`); recorded as such.
+- **review-panel: barrier before a verify stage (RW1).** Step 6 notes that when a
+  verify stage follows the lenses, findings are collected in a barrier first — a
+  pipeline that drops a finding on a verifier's error loses a real finding to a
+  coarse failure, not a refutation. (`backlog-build-round#1`.)
+
+### Notes
+
+- **Word budgets re-seeded, growth named:** compaction-survival 1143→1391,
+  feedback-triage 1556→1677, context-handoff 1560→1847, review-panel 1082→1120 —
+  each the additive doctrine above, no clause retired. Per the "consolidate before
+  you grow" check, compaction-survival and context-handoff are the two homes that
+  grew most and are flagged for a consolidation pass next round.
+- **Not built: FT2** (a tool-feedback note against bare "triage" in report
+  filenames). The structural cause it guards — filename misclassification — is
+  already fixed by the shipped H1-authoritative rule + the T6a version stamp;
+  adding the note would re-prose an already-closed cause.
+- **review-panel standing-authorization firing branch** (`data-context-deep-review-sw#2`)
+  was found already shipped (SKILL.md durable-pre-authorization line) during
+  triage grounding — confirmed, not re-built.
+
 ## 0.13.0 — 2026-07-09
 
 Build round for the 2026-07-09 triage: the anchor gains machine-readable

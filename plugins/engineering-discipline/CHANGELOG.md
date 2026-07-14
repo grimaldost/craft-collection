@@ -3,6 +3,48 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.1.15 — 2026-07-14
+
+Build round for the 2026-07-14 craft triage (rows T16, T17, and DED1). A
+consumer-contract-breaking DataHub emitter shipped because the discipline was
+never selected — its trigger surface did not claim "a metadata/catalog emitter
+with a downstream consumer"; this wave names that case and the tool/API-payload
+case, and gives bounded changes a scoped lane. Body + reference + `description`
+edit — the `description` change carries a holdout reseal obligation.
+
+### Changed
+
+- **`data-engineering-discipline` triggers name non-tabular consumer contracts
+  (T16a).** The frontmatter `description` and the "When to invoke" list now name a
+  metadata / catalog / lineage emitter whose output a separate tool loads, and a
+  tool / API response payload a client depends on; the activation test adds the
+  fields/types/closed-vocabularies of a payload. Non-negotiable #3 extends parity
+  to "the emitted contract loads and validates in the real consumer (or a
+  producer-owned encoding of it)." (`datacontext-reconciliation-ed §Misses/#1`,
+  `dc-v4-cycle#1`.) **Holdout reseal:** the `description` edit changed the trigger
+  surface; three fresh cases were sealed into
+  `evals/trigger/holdout/data-engineering-discipline.json` (two positive
+  emitter/payload, one over-fire guard) and `BASELINES.md` records a pending
+  recall/specificity A/B against the pre-0.1.15 description. Not run this pass
+  (cost-gated); the prior 7 cases are spent dev data.
+- **`references/scenarios.md` gains a tool/API-payload contract row (T16b),**
+  mapping columns→payload fields, dtypes→field types/closed vocabularies,
+  consumers→client tests + recorded eval expectations + stubs; parity means the
+  payload validates in the real client. Extends the N31a library-API-change row.
+- **A front-loaded "Scoped-change lane" section (T17a),** mirroring
+  python-engineering's edit lane: a bounded change to one transform/seam pins the
+  contract for *that* seam and runs only the parity/real-data checks that touch it,
+  skipping the full-migration apparatus — the four non-negotiables still hold for
+  the seam. (`v19-ed#1`; the over-load-for-small-work cause is a 4-report chain
+  whose python-engineering half already shipped.)
+- **`references/llm-failure-modes.md` Mode 12 gains an observer-vs-target probe
+  line (DED1):** a watcher reporting the world gone may be reporting its own
+  instrument broken (a git-bash `/c/...` path handed to a Windows interpreter) —
+  probe the observer with a known-present path first. A defense line within an
+  existing mode, not a new mode.
+- Word budget re-seeded: data-engineering-discipline 2544→2736 (the scoped lane,
+  the emitter trigger/parity lines, the scenarios resource row; no clause retired).
+
 ## 0.1.14 — 2026-07-05
 
 Corpus-review doc-accuracy round (PR #74) plus the post-merge consistency pass

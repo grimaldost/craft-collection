@@ -574,6 +574,11 @@ Axiom-2 root: a signal *about* the system stood in for the system.
   alive?), artifact mtimes (is anything still being written?), an
   append-only run log's tail. Only a dead process *and* quiescent artifacts
   is "stopped."
+- A watcher that reports the world gone may be reporting its own instrument
+  broken: a git-bash `/c/...` path handed to a Windows interpreter reads as a
+  different, empty location, so a live workspace looks absent. Probe the observer
+  with a known-present path first — if it cannot see a thing that certainly
+  exists, the "gone" verdict is the observer failing, not the target.
 - No state-changing takeover — kill, branch reset, re-fire — until
   quiescence is confirmed; a takeover that collides with a live writer
   corrupts the worktree, and that is the irreversible move.

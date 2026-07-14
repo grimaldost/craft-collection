@@ -263,7 +263,65 @@ def test_triage_doc_without_inputs_covers_nothing():
         idx = build_index(dd)
     untriaged = idx.split('\n### Untriaged', 1)[1]
     assert '`2026-01-01-r`' in untriaged
-    assert '(no Inputs section parsed)' in idx
+    assert '(no Inputs / Addendum coverage parsed)' in idx
+
+
+def test_addendum_section_credits_coverage():
+    # A triage doc's dated ## Addendum handles a later wave in place, without editing
+    # the frozen ## Inputs list; those reports must still count as covered, or the
+    # scope step re-triages them (v19-sw#2: four addendum-handled reports read as
+    # untriaged because coverage was read from ## Inputs alone).
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-01-a.md').write_text('# a feedback — x\n', encoding='utf-8')
+        (dd / '2026-01-02-b.md').write_text('# b feedback — y\n', encoding='utf-8')
+        (dd / '2026-01-03-triage.md').write_text(
+            '# Triage — backlog (1 report)\n'
+            '## Inputs\n'
+            '1. `2026-01-01-a.md`\n'
+            '## Addendum 2026-01-04\n'
+            'A later wave, triaged in place:\n'
+            '- `2026-01-02-b.md` — clustered under T7.\n'
+            '## Headline\nwords\n',
+            encoding='utf-8',
+        )
+        idx = build_index(dd)
+    assert '- covers: `2026-01-01-a`' in idx
+    assert '- covers: `2026-01-02-b`' in idx  # credited via the addendum, not Inputs
+    untriaged = idx.split('\n### Untriaged', 1)[1]
+    assert '`2026-01-02-b`' not in untriaged
+
+
+def test_coverage_is_fence_aware_and_credits_prose_disposition():
+    # #2 fence-awareness: a '#'-comment inside a fenced block in a coverage section
+    # must not flip capture off and drop the inputs listed after it.
+    # Prose disposition (the 2026-06-17 pattern): a report closed in Inputs PROSE,
+    # not as a list item, still counts as covered — whole-section capture, not
+    # list-items-only, or a deliberate prose close resurfaces as untriaged forever.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-02-01-listed.md').write_text('# a feedback — x\n', encoding='utf-8')
+        (dd / '2026-02-02-after-fence.md').write_text('# b feedback — y\n', encoding='utf-8')
+        (dd / '2026-02-03-prose.md').write_text('# c feedback — z\n', encoding='utf-8')
+        (dd / '2026-02-04-triage.md').write_text(
+            '# Triage — backlog\n'
+            '## Inputs\n'
+            'Rebuilt via:\n'
+            '```sh\n'
+            '# rebuild the index\n'
+            'uv run build_feedback_index.py .\n'
+            '```\n'
+            '1. `2026-02-01-listed.md`\n'
+            '2. `2026-02-02-after-fence.md`\n'
+            'Also closed here in prose: `2026-02-03-prose.md` (findings shipped earlier).\n'
+            '## Headline\n',
+            encoding='utf-8',
+        )
+        idx = build_index(dd)
+    for stem in ('2026-02-01-listed', '2026-02-02-after-fence', '2026-02-03-prose'):
+        assert f'- covers: `{stem}`' in idx  # fenced '#' did not drop the list; prose close counts
+    untriaged = idx.split('\n### Untriaged', 1)[1]
+    assert '`2026-02-01-listed`' not in untriaged
 
 
 def test_help_flag_returns_zero_not_swallowed_as_dir():
@@ -316,6 +374,8 @@ if __name__ == '__main__':
     test_triage_coverage_and_untriaged_sections()
     test_coverage_stem_match_is_boundary_aware()
     test_triage_doc_without_inputs_covers_nothing()
+    test_addendum_section_credits_coverage()
+    test_coverage_is_fence_aware_and_credits_prose_disposition()
     test_help_flag_returns_zero_not_swallowed_as_dir()
     test_help_emits_utf8_bytes_under_cp1252()
     print('ok: all build_feedback_index tests passed')

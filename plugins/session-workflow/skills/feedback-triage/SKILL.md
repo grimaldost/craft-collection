@@ -53,7 +53,12 @@ and writing CHANGELOGs belong to the tool's own release process.
    window — its increments land as commits, invisible to a CHANGELOG-only
    reconciliation. Map each finding to the version or commit that resolved it. Open the doc with **"Already shipped — NOT re-proposed"**; a
    cluster that goes further than a shipped change is marked as *extending* it.
-   Each triage sharpens the backlog; it never repeats it.
+   Each triage sharpens the backlog; it never repeats it. Reconcile OPEN rows too,
+   not only shipped ones: the INDEX's `## Triage coverage` lists every triage doc
+   in the dir, so carry or re-disposition each one's open `proposed`/`watch` rows
+   into this pass — a row is not closed until a later doc lists it. An
+   off-main-chain cycle-scoped triage orphans its rows otherwise (keel's
+   `reflection-triage` P3a is the house-template twin; co-land them).
 3. **Cluster by underlying cause, not symptom.** Three reports saying "the cited
    file didn't exist", "the helper didn't handle our shape", and "the precedent
    was counterfactual" are one cluster: *ungrounded referents*. Collapsing has a
@@ -115,8 +120,12 @@ and writing CHANGELOGs belong to the tool's own release process.
    list only the new reports, the new table supersedes the baseline as status
    of record, a consolidated backlog table carries every open row, cluster IDs
    continue the baseline's namespace (`references/mechanics.md`). Before
-   writing, re-list the dir: a same-corpus triage doc that appeared since
-   step 1 is reconciled with, not duplicated.
+   emitting, assert **input coverage**: every finding `<stem>#<n>` in the Inputs'
+   INDEX entries appears in the doc under a disposition — a cluster's evidence,
+   Routed out, Declined, or an explicit "no action: <reason>" — so a finding
+   leaves the loop only with a disposition, never by omission (a dropped
+   extends-chain surfaced two passes late). Then re-list the dir: a same-corpus
+   triage doc that appeared since step 1 is reconciled with, not duplicated.
 8. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
    otherwise the template below is authoritative — don't hunt for one. Triaging
@@ -158,9 +167,9 @@ and writing CHANGELOGs belong to the tool's own release process.
 ## Promotion-gate ledger
 <the gate's work, auditable per cluster: which cleared on reinforcement, which
 promoted via the BLOCKER exemption (name the exempting finding), which sit at
-`watch`, which stayed raw — and why. Close with two assertions: no singleton
-non-BLOCKER was promoted, and no prose append shipped without a named
-displacement.>
+`watch`, which stayed raw — and why. Close with three assertions: no singleton
+non-BLOCKER was promoted, no prose append shipped without a named displacement,
+and every Inputs finding is dispositioned (input coverage).>
 ```
 
 Status vocabulary: `proposed` / `watch` / `accepted` / `shipped(<version>)` /

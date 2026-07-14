@@ -1,6 +1,6 @@
 ---
 description: Snapshot the run's control anchor to disk now — a one-off backstop before a manual /compact, with or without the compaction-survival protocol armed
-argument-hint: "[close]"
+argument-hint: "[close | close --stale]"
 ---
 
 # /anchor — one-off control-anchor snapshot
@@ -25,6 +25,27 @@ with a fresher snapshot.
 4. Append to `.claude/anchors/log.ndjson`:
    `{"event":"anchor-close","source":"command","date":"<YYYY-MM-DD HH:MM>","file":"<basename>"}`
 5. Report the archived path in one line. Do **not** also snapshot.
+
+## If the argument is `close --stale`
+
+A cycle-end sweep for the accumulation failure mode: rename every anchor that
+already reads as done in-content but was never renamed, so terminal anchors do
+not pile up and shadow the live one (seven stranded across ~8 tracks is what
+motivated this).
+
+1. List the strays mechanically — run the same helper the re-injection hook uses:
+   `python <this-plugin>/skills/compaction-survival/scripts/anchor_inject.py --list-stale .claude/anchors`.
+   It emits one `mv <name>.md <name>.closed.md` per anchor whose content marks it
+   closed/landed but whose filename is still open. If the helper is not locatable,
+   scan `.claude/anchors/*.md` for a top-level `Status:` line reading closed or
+   landed and emit the same renames. An empty list means the dir is clean — say
+   so and stop.
+2. Show the commands and rename only on a go-ahead — never force, and skip any
+   anchor still marked active or belonging to another live track. The rename
+   mutates no content, so it is safe and reversible.
+3. Append one `{"event":"anchor-close","source":"command --stale","date":"<YYYY-MM-DD HH:MM>","file":"<basename>"}`
+   line per renamed file to `.claude/anchors/log.ndjson`, and report the count in
+   one line. Do not also snapshot.
 
 ## Otherwise: snapshot
 

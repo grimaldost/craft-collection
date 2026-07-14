@@ -4,7 +4,11 @@
   { "query": "We're porting the attribution pipeline to BigQuery and the per-channel totals have to match the old warehouse exactly.", "should_trigger": true, "note": "held-out classic (regression guard): migration with parity" },
   { "query": "Add a region column to the accounts dataset that two finance models already consume.", "should_trigger": true, "note": "held-out classic (regression guard): schema evolution on a consumed dataset" },
 
+  { "query": "I'm reshaping the DataHub metadata emitter's serving payload and a separate catalog tool loads it — make sure I don't break the contract.", "should_trigger": true, "note": "held-out NEW case (T16a, sealed 0.1.15) — LEXICAL guard: echoes the description tokens (emitter/catalog/payload) to confirm the surface fires; not a generalization test on its own" },
+  { "query": "Our service writes a JSON document that another team's dashboard app ingests to show dataset ownership and freshness. I'm renaming some of its keys and dropping one — will that break what the dashboard relies on?", "should_trigger": true, "note": "held-out NEW case (T16a, sealed 0.1.15) — INTENT paraphrase: same emitter-with-consumer intent, avoids the added tokens (no metadata/catalog/emitter/payload/MCP), so the A/B measures intent coverage, not lexical overlap (trigger-lexical-ceiling)" },
+
   { "query": "The browser keeps serving stale CSS — the page won't pick up the new styles after I deploy.", "should_trigger": false, "note": "held-out over-fire guard: non-data 'stale/won't update' (browser cache)" },
   { "query": "My npm lockfile didn't update after I edited package.json — sort out the install.", "should_trigger": false, "note": "held-out over-fire guard: non-data 'didn't update' (lockfile)" },
-  { "query": "Just poking at this parquet file in a scratch notebook; nothing depends on it.", "should_trigger": false, "note": "held-out classic near-miss: exploratory, no consumer" }
+  { "query": "Just poking at this parquet file in a scratch notebook; nothing depends on it.", "should_trigger": false, "note": "held-out classic near-miss: exploratory, no consumer" },
+  { "query": "Refactor the helper that formats our CLI's --help banner text; nothing consumes it as data.", "should_trigger": false, "note": "held-out over-fire guard (T16a, sealed 0.1.15): a 'payload/response' with no data-contract consumer" }
 ]
