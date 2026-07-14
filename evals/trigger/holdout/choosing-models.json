@@ -1,0 +1,9 @@
+[
+  { "query": "Budget this eight-task series — assign each task the cheapest tier that will still pass its gate.", "should_trigger": true, "note": "held-out: batch tier assignment, novel wording" },
+  { "query": "Pick the model and effort for the verifier subagent I'm about to spawn.", "should_trigger": true, "note": "held-out: two-knob spawn dispatch" },
+  { "query": "Does this design-review fan-out justify the top-tier model, or should we drop a level?", "should_trigger": true, "note": "held-out: stakes-based ladder call without model names" },
+  { "query": "The plan assigns a model per role — sanity-check those picks against the tier policy.", "should_trigger": true, "note": "held-out: per-role picks reviewed against policy" },
+  { "query": "How much would two million output tokens cost on the current top model?", "should_trigger": false, "note": "held-out near-miss: price fact — platform model reference" },
+  { "query": "Show me which of my installed skills mention model routing.", "should_trigger": false, "note": "held-out near-miss: inventory — toolkit-awareness" },
+  { "query": "Bump the pinned tool versions in stack.toml after reading the changelogs.", "should_trigger": false, "note": "held-out near-miss: toolchain pin refresh — engineering-discipline's refresh-stack" }
+]

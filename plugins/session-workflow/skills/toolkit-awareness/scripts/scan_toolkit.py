@@ -354,6 +354,14 @@ def _merge_skew(rows: list[dict], locations: dict[str, str]) -> list[str]:
     return []
 
 
+def _git_env() -> dict[str, str]:
+    """The environment minus every GIT_* variable. A git hook exports GIT_DIR and
+    friends, and GIT_DIR takes precedence over `-C`, so a child git inherits the
+    *outer* repo and silently answers about the wrong checkout — the exact
+    wrong-repo reading this staleness check exists to prevent."""
+    return {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+
+
 def _source_behind_upstream(marketplace_dir: Path) -> int | None:
     """Commits the marketplace source checkout is behind its fetched upstream
     (`git rev-list --count HEAD..@{u}`), or None when the location is not a git
@@ -366,6 +374,7 @@ def _source_behind_upstream(marketplace_dir: Path) -> int | None:
             capture_output=True,
             text=True,
             timeout=10,
+            env=_git_env(),
         )
     except (FileNotFoundError, OSError, subprocess.SubprocessError):
         return None
