@@ -280,6 +280,8 @@ def test_utf8_stdout_survives_cp1252_pipe():
 def _git(*args: str, cwd: Path) -> None:
     import subprocess
 
+    from scan_toolkit import _git_env
+
     subprocess.run(  # noqa: S603 - fixed argv, no shell
         ['git', *args],  # noqa: S607 - git resolved from PATH
         cwd=cwd,
@@ -287,6 +289,7 @@ def _git(*args: str, cwd: Path) -> None:
         capture_output=True,
         text=True,
         timeout=30,
+        env=_git_env(),  # a hook's GIT_DIR would aim these at the outer repo
     )
 
 
@@ -324,6 +327,44 @@ def test_source_behind_upstream_counts_fetched_not_merged():
         assert 'market' in caveats[0]
 
 
+def test_source_behind_upstream_ignores_inherited_git_dir():
+    # Regression: under a git hook (pre-push runs the suite) git exports GIT_DIR,
+    # which takes precedence over `-C` -- every child git then answers about the
+    # OUTER repo. The whole suite failed only inside `git push`, and the staleness
+    # check silently read the wrong checkout. Fails without _git_env().
+    import os
+    import shutil
+
+    from scan_toolkit import _source_behind_upstream
+
+    if not shutil.which('git'):
+        print('skip: git unavailable, inherited-GIT_DIR test not run')
+        return
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        origin, work, src = base / 'origin.git', base / 'work', base / 'src'
+        ident = ('-c', 'user.email=t@t', '-c', 'user.name=t')
+        _git('init', '--bare', '-b', 'main', str(origin), cwd=base)
+        _git('init', '-b', 'main', str(work), cwd=base)
+        _git(*ident, 'commit', '--allow-empty', '-m', 'c1', cwd=work)
+        _git('remote', 'add', 'origin', str(origin), cwd=work)
+        _git('push', '-q', 'origin', 'main', cwd=work)
+        _git('clone', '-q', str(origin), str(src), cwd=base)
+        _git(*ident, 'commit', '--allow-empty', '-m', 'c2', cwd=work)
+        _git('push', '-q', 'origin', 'main', cwd=work)
+        _git('fetch', '-q', cwd=src)
+
+        prior = os.environ.get('GIT_DIR')
+        os.environ['GIT_DIR'] = str(work / '.git')  # what a hook leaks in
+        try:
+            assert _source_behind_upstream(src) == 1
+        finally:
+            if prior is None:
+                os.environ.pop('GIT_DIR', None)
+            else:
+                os.environ['GIT_DIR'] = prior
+
+
 def test_source_behind_upstream_none_without_repo_or_upstream():
     # A non-repo location (or one with no upstream) yields None and no caveat —
     # absence of evidence is not staleness.
@@ -350,5 +391,6 @@ if __name__ == '__main__':
     test_read_frontmatter_handles_folded_scalar()
     test_utf8_stdout_survives_cp1252_pipe()
     test_source_behind_upstream_counts_fetched_not_merged()
+    test_source_behind_upstream_ignores_inherited_git_dir()
     test_source_behind_upstream_none_without_repo_or_upstream()
     print('ok: all scan_toolkit tests passed')

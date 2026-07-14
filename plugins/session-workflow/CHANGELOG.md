@@ -3,6 +3,21 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.14.1 — 2026-07-14
+
+### Fixed
+
+- **toolkit-awareness reads the right repo under a git hook.**
+  `_source_behind_upstream` ran `git -C <dir>`, but a hook exports `GIT_DIR`,
+  which takes **precedence over `-C`** — so every child git answered about the
+  *outer* repo. Two consequences, one cause: the staleness check silently
+  reported another checkout's "commits behind" (the exact wrong-repo reading
+  the check exists to prevent), and the pre-push suite failed inside `git push`
+  while passing standalone, which blocked every push from a hook-installed
+  clone. Both git call sites now scrub `GIT_*` from the child environment via a
+  shared `_git_env()`. Regression test sets `GIT_DIR` to a decoy repo and
+  asserts the real answer; it fails without the fix.
+
 ## 0.14.0 — 2026-07-14
 
 Build round for the 2026-07-14 triage. The 0.13.0 anchor wave shipped the close
