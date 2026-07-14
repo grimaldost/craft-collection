@@ -109,8 +109,8 @@ Batch by responsibility, never to skip a review.
 
 Mechanical implementation with a complete spec → the cheapest capable model;
 multi-file integration → a standard model; design judgment and review → the
-most capable available. When a registered model-tier policy is installed
-(e.g. convoy's model-tiers), its thresholds win over these heuristics.
+most capable available. The sibling choosing-models skill owns this call when
+present; these heuristics are the standalone-install fallback.
 
 ## Without subagents
 

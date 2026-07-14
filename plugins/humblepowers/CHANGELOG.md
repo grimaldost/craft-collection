@@ -5,6 +5,55 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.5.0 — 2026-07-14
+
+The capacity-dispatch pair: choosing-models + /refresh-models, per the accepted
+design `docs/design/2026-07-14-choosing-models-skill.md` (successor to
+pr-pilot's model-tiers + pr-prompt-scorer, whose doctrine was orphaned by the
+pr-pilot → convoy migration; design revised once after a blind review). Minor
+bump: two new skills.
+
+### Added
+
+- **choosing-models** (flexible): task → (model, effort) dispatch at
+  delegation/pricing moments. Ships the ported scoring rubric
+  (`references/scoring-rubric.md` — trivial-task override, cross-shape floor,
+  verification discount, worked examples, carried near-verbatim for its
+  observed-run calibration) and a thin `models.toml` (thresholds, tier
+  assignments, aliases, provenance, `review_by` age tripwire, typical-cost
+  observations and budget guidance — no sticker prices; the platform's model
+  reference owns those; project-level override documented). Doctrine keeps the
+  ancestry's invariants (frontier never score-assigned; no in-run
+  auto-escalation) and ships the oracle-coverage downshift as a labeled
+  hypothesis pending a crossed calibration. Trigger dev set (8+/8−, absorbing
+  choosing-tools' model-choice near-miss as its canonical positive; adversarial
+  negatives against claude-api model-facts and toolkit-awareness inventory) and
+  sealed holdout (4+/3−) authored at the same sitting; birth baseline recorded
+  as pending (cost-gated) in `evals/trigger/holdout/BASELINES.md` per the
+  data-engineering-discipline precedent.
+- **refresh-models** (manual-only command, `/refresh-models`): the update leg —
+  detect lineup drift against the platform's model reference, read release
+  notes, classify lineup-only vs guidance-affecting vs needs-human, apply
+  mechanical edits on approval, stamp `last_reviewed`/`review_by`. Downstream
+  mirror sites come from a user-supplied binding (rule 4, bindings over
+  assumptions — a plugin cannot know a stack's mirrors) with a closing grep for
+  the outgoing model string as the catch-all. Threshold changes without
+  calibration evidence are needs-human by definition.
+
+### Changed
+
+- **planned-execution:** the model-selection deference line now names the
+  same-plugin sibling (choosing-models owns the call when present; the inline
+  per-role heuristics stay as the standalone-install fallback). Net −1 word.
+- **skill-authoring:** the cross-tool-reference rule's worked example
+  re-pointed to a live cross-plugin instance (a capacity-dispatch policy, e.g.
+  humblepowers' choosing-models — as now cited from session-workflow's
+  review-panel), replacing "convoy's model-tiers", whose referent existed
+  nowhere after the pr-pilot retirement. Net 0 words.
+- **choosing-tools trigger eval:** the model-choice near-miss note now names
+  its owner (`— choosing-models`); the case stays a negative for
+  choosing-tools and is the new skill's first positive.
+
 ## 0.4.10 — 2026-07-09
 
 Two red-shape clarifications in test-driven-development, from the 2026-07-09

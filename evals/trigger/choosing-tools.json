@@ -14,6 +14,6 @@
   { "query": "Add 'not for X' boundaries to my journaling skill's description.", "should_trigger": false, "note": "near-miss: negative space authoring — skill-authoring" },
   { "query": "Continue with step 3 of the migration we planned.", "should_trigger": false, "note": "mid-task continuation, no dispatch moment" },
   { "query": "Explain how git rebase works.", "should_trigger": false, "note": "concept Q&A, answerable directly" },
-  { "query": "Which Claude model should I use for this agent?", "should_trigger": false, "note": "near-miss: model choice, not skill dispatch" },
+  { "query": "Which Claude model should I use for this agent?", "should_trigger": false, "note": "near-miss: model choice — choosing-models" },
   { "query": "Write a Python function to parse a CSV file.", "should_trigger": false, "note": "plain coding task, direct execution" }
 ]

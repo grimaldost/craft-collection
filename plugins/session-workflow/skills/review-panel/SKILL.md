@@ -97,8 +97,8 @@ The default quartet works for anything; the packs sharpen it. Mix and match.
 - **Claude Code only.** This spawns subagents; it does not work in web chat (no
   subagent primitive). If asked there, say so and offer the manual fallback: paste
   the neutral artifact brief into N separate fresh chats yourself.
-- **Cost is real.** N agents at Opus is not free; offer to drop a ladder level when
-  the stakes don't justify a full panel.
+- **Cost is real.** A capacity-dispatch policy, when installed (e.g. humblepowers'
+  choosing-models), sets reviewer tier by stakes; otherwise offer to drop a ladder level.
 - **Reviewing a repo whose plugin is also installed?** State which copy the panel
   reads (working tree vs installed cache) — the two diverge in either direction
   mid-release.
