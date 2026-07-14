@@ -70,7 +70,10 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    output to disk as it lands, at a destination named in the plan (the reviewed
    tool's own feedback intake is often right). A max-effort panel returns more
    than in-band messages carry — a truncated notification, or a dead
-   orchestrator, loses the corpus; the output file is often the only copy.
+   orchestrator, loses the corpus; the output file is often the only copy. When a
+   verify stage follows the lenses, collect the findings in a barrier before it —
+   a pipeline that drops a finding on a verifier's error loses a real finding to a
+   coarse failure, not to a refutation.
 7. **Synthesize — don't average.** Produce a comparison matrix, where they **agree**
    (consensus = high confidence), where they **disagree** (the tension worth
    examining), and — most important for an anchored author — **where the panel

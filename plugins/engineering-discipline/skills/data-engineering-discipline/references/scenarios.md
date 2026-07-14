@@ -257,6 +257,13 @@ retyping, or semantic-shift.
   default-preserving overload is additive; a new raise or guard on a
   previously-silent path is breaking, whatever the docstring says. Same
   playbooks as above.
+- *Tool / API payload contract (the contract is a serialized response, not a
+  table)*: map columns→payload fields, dtypes→field types and closed
+  vocabularies, consumers→client tests + recorded eval expectations + stubs. A
+  new optional field is additive; a renamed, removed, or retyped field — or a new
+  value in a closed vocabulary a client switches on — is breaking. Same
+  playbooks as above, and parity means the payload validates in the real client
+  (or a producer-owned encoding of its expectation).
 
 ### Step 2.2 — Determine compatibility direction
 

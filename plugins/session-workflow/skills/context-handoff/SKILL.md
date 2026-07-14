@@ -1,6 +1,6 @@
 ---
 name: context-handoff
-description: Author a paste-ready, self-contained brief that hands work to a fresh context — a new Claude Code session, a spawned task, a teammate, or an issue ticket. Use whenever current work must be packaged so a receiver with zero shared context can take it cold — "package this up for a fresh session", "bundle this for another agent", "write a standalone brief / a self-contained handoff", "spin this off", "hand this off", "offload this", "branch off", "new session for this", "subtask", "fork", "spinoff" — when curating a context slice to continue or delegate work elsewhere, or running "/context-handoff". Two modes — SUBTASK (bounded brief, an artifact comes back) and FORK (continues independently, nothing returns). For in-session parallel work where results flow back automatically, prefer the Task tool / subagents — this skill is for handoffs that cross a boundary the harness won't bridge (a fresh session, a human, a ticket).
+description: Author a paste-ready, self-contained brief that hands work to a fresh context — a new Claude Code session, a spawned task, a teammate, or an issue ticket. Use whenever current work must be packaged so a receiver with zero shared context can take it cold — "package this up for a fresh session", "bundle this for another agent", "write a standalone brief / a self-contained handoff", "spin this off", "hand this off", "offload this", "branch off", "new session for this", "author a persisted backlog / worklist doc for a future session", "subtask", "fork", "spinoff" — when curating a context slice to continue or delegate work elsewhere, or running "/context-handoff". Three modes — SUBTASK (bounded brief, an artifact comes back), FORK (continues independently, nothing returns), and BACKLOG (a persisted repo doc a future session opens to pick up any item). For in-session parallel work where results flow back automatically, prefer the Task tool / subagents — this skill is for handoffs that cross a boundary the harness won't bridge (a fresh session, a human, a ticket).
 ---
 
 # Context Handoff
@@ -25,7 +25,7 @@ session, a spawned background task you'll paste a result back from, a human
 teammate, or an issue/ticket. The deliverable is portable text someone (or some
 fresh instance) can act on with zero prior context.
 
-## Two modes
+## Three modes
 
 **Subtask** — a bounded piece of work is spun off and returns an artifact (a
 script, a draft, a piece of analysis, a list) that gets pasted back to inform
@@ -37,8 +37,17 @@ work independently. Nothing is expected back. Wider slice (enough to keep going,
 not just enough for one task). Use when the current session is getting unwieldy,
 or a sub-thread deserves its own dedicated session.
 
+**Backlog** — the curated slice becomes a persisted repo document (a
+findings/worklist file at a named path), not a paste-prompt: it neither returns
+nor continues a single thread, it sits in the tree for a future session to open
+and pick up *any* item. Structure is findings-with-stable-IDs plus a "how to use"
+line and the constraints an executor would otherwise violate; framing is "a
+future session opens this file." Subtask and Fork model *who continues*; Backlog
+models a deliverable that waits.
+
 Subtask prompts are scoped narrowly and framed as a request; fork prompts are
-scoped more generously and framed as a hand-off.
+scoped more generously and framed as a hand-off; a backlog doc is scoped to be
+independently actionable item-by-item.
 
 ## Invocation
 
@@ -49,11 +58,13 @@ phrases in ordinary requests, not slash commands (none of them ship as one).
 |---------|------|
 | "spin off a subtask for…", "package this up for a fresh session and get the result back", "bundle this for another agent" | Subtask |
 | "fork this", "branch this off", "continue this in a new session" | Fork |
+| "author a backlog / worklist / findings doc for a future session to pick up", "write these up as a persisted doc for later" | Backlog |
 | "write a self-contained handoff someone can take cold" | Subtask or Fork by destination — ask if unclear |
 | "spin this off" (destination unclear) | Ask which mode |
 
 If invoked without a description, ask one clarifying question: "What should the
-[subtask / forked session] do?" Don't proceed without a clear task statement.
+[subtask / forked session] do, or what area should the backlog cover?" Don't
+proceed without a clear task statement.
 
 ## Workflow
 
@@ -61,11 +72,14 @@ If invoked without a description, ask one clarifying question: "What should the
 2. **Curate the context slice.** Identify the minimum set of facts, decisions,
    code, numbers, and named entities the executor needs. Err toward *including*
    when a piece is load-bearing and *excluding* when it's session flavor.
-3. **Draft the prompt** using the template for the chosen mode.
-4. **Emit it as a fenced code block** so the user can copy it in one action.
+3. **Draft the brief** using the template for the chosen mode.
+4. **Emit it.** Subtask / Fork: a fenced code block the user copies in one
+   action. Backlog: write the document to the named repo path (a real file) and
+   report the path.
 5. **Subtask mode only:** after the block, emit a short `REINTEGRATION_NOTE` to
    the user (not the executor) flagging where the returned artifact slots back in.
-6. **Do not offer to run the prompt.** The skill's job ends at emitting it.
+6. **Do not offer to run the prompt** (Subtask / Fork). Backlog ends at the
+   written file — no paste-prompt and no offer to run.
 
 ## Context extraction guidance
 
@@ -150,6 +164,33 @@ You are continuing a prior Claude session. The previous session's relevant state
 ```
 
 No `REINTEGRATION_NOTE` for fork mode — nothing is coming back.
+
+### Backlog mode
+
+Write a document (not a paste-block) to a named repo path — e.g.
+`docs/design/<area>/<date>-findings-backlog.md`. Emit the file with this shape:
+
+```
+# <Area> — findings backlog (<date>)
+
+## How to use
+A future session opens this file and picks up any item below. Each finding is
+self-contained; take the highest-leverage one first. <constraints an executor
+must respect — conventions, forbidden libraries, the invariant each protects>.
+
+## Findings
+
+### F1 — <short title>
+<the finding as fact: file:line, versions, the concrete change or open question,
+and why it matters — enough that a cold reader acts without this session>.
+
+### F2 — <short title>
+…
+```
+
+No "You are a … Claude" opening line and no `REINTEGRATION_NOTE` — the reader
+finds this file on their own initiative. The extraction guidance above applies
+unchanged: state facts not references, concrete specifics, strip secrets.
 
 ## Self-check before emitting
 

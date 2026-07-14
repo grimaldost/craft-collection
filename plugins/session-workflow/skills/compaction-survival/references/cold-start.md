@@ -7,6 +7,20 @@ enabled mid-flight. Every piece degrades to a by-hand equivalent; this is the
 recipe (field-validated on a 36-hour campaign that was enabled exactly this
 way and lost no state across compactions, restarts, and a session takeover).
 
+## Minimal contract — keep this reachable without the skill
+
+This recipe lives inside the skill, so it is unreachable in exactly the sessions
+that need it (menu omits the skill). Mirror the compact contract below into the
+project or global CLAUDE.md protocol snippet, where a menu-less session still has
+it — enough to arm a hook-compatible anchor with nothing installed:
+
+- Anchor at `<project>/.claude/anchors/<date>-<slug>.md`, one file, overwritten.
+- `<!-- anchor:tail -->` on its own line: the hook injects only the HEAD above it.
+- HEAD carries a **Cursor** with a single next action; keep it near the top.
+- Close by renaming to `<name>.closed.md` — the rename is the only close signal.
+
+The fuller by-hand recipe (hook registration, verify step) follows.
+
 ## The anchor file, by hand
 
 The anchor format is a convention, not a command's private output — reproduce

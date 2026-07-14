@@ -272,6 +272,124 @@ def test_multi_anchor_warning_caps_names():
         assert ctx.count('track-') <= 6  # the injected one may appear in its path line
 
 
+def test_is_content_terminal_predicate():
+    # The one predicate behind both terminal de-ranking (selection) and the rename
+    # offer: an anchor whose CONTENT declares the track done but was never renamed.
+    import anchor_inject as ai
+
+    assert ai.is_content_terminal('# Run\n**Status:** CLOSED\nwrap-up\n')
+    assert ai.is_content_terminal('foo\nstatus: closed\nbar\n')
+    assert ai.is_content_terminal('# Done\nStatus: Landed on main\n')
+    assert not ai.is_content_terminal('# Cursor\nnext: step 7\n')
+    assert not ai.is_content_terminal('status: in progress\n')
+    assert not ai.is_content_terminal('next: close the PR\n')  # 'close' without 'status:' is live
+
+
+def test_status_line_with_trailing_prose_is_live():
+    # A status line whose value is an imperative or a progress note is NOT terminal —
+    # only a status whose value IS a terminal marker (optionally "on/to <where>")
+    # counts. Otherwise a live anchor gets de-ranked to the wrong cursor and offered
+    # a rename that would permanently stop its injection (state loss).
+    import anchor_inject as ai
+
+    assert not ai.is_content_terminal(
+        '# Cursor\nStatus: complete the migration and verify parity\n'
+    )
+    assert not ai.is_content_terminal(
+        '# Cursor\nStatus: landed the auth refactor to main, now docs\n'
+    )
+    assert not ai.is_content_terminal('# Cursor\nStatus: done with phase 1, starting phase 2\n')
+
+
+def test_landed_on_main_marker_is_terminal():
+    # The close markers still count (guard against over-narrowing the predicate).
+    import anchor_inject as ai
+
+    assert ai.is_content_terminal('# Done\n**Status:** landed on main\n')
+    assert ai.is_content_terminal('**Status:** CLOSED\n')
+    assert ai.is_content_terminal('status: done\n')
+
+
+def test_tail_status_does_not_mark_live_head_terminal():
+    # is_content_terminal scans only the HEAD (above the tail marker); a folded
+    # "Status: landed phase 2 to main" in the append-only TAIL must not mark an
+    # anchor whose HEAD cursor is still active as terminal.
+    import anchor_inject as ai
+
+    text = (
+        '# Cursor\nnext: run parity check on phase 3\n'
+        '<!-- anchor:tail -->\n'
+        '# Folded history\n**Status:** landed phase 2 to main\n'
+    )
+    assert not ai.is_content_terminal(text)
+
+
+def test_active_anchor_selected_over_newer_terminal():
+    # A NEWER anchor that reads as closed-in-content must not shadow an OLDER
+    # genuinely-active track. Selection de-ranks content-terminal anchors below live
+    # ones — the rename stays the only signal that STOPS injection; this only reorders.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='active.md', body='# Cursor\nACTIVE WORK\n', age_s=3600)
+        make_anchor(tmp, name='done.md', body='**Status:** CLOSED\nFINISHED TRACK\n')
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'ACTIVE WORK' in ctx
+        assert 'FINISHED TRACK' not in ctx
+
+
+def test_all_terminal_falls_back_to_newest():
+    # When every open anchor reads as terminal, one is still injected (the newest) —
+    # de-ranking reorders, it never suppresses the recovery path to zero bytes.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='old-done.md', body='**Status:** CLOSED\nOLD DONE\n', age_s=3600)
+        make_anchor(tmp, name='new-done.md', body='**Status:** CLOSED\nNEW DONE\n')
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'NEW DONE' in ctx
+
+
+def test_terminal_other_anchor_gets_rename_command():
+    # A content-terminal-but-unrenamed OTHER anchor is surfaced with the exact
+    # remediation command, so the operator clears the accumulation in one paste
+    # instead of opening each file (7 stranded across ~8 tracks motivated this).
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='live.md', body='# Cursor\nLIVE\n')
+        make_anchor(tmp, name='stale-done.md', body='**Status:** CLOSED\nDEAD\n', age_s=3600)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'LIVE' in ctx
+        assert 'mv stale-done.md stale-done.closed.md' in ctx
+
+
+def test_active_other_anchor_has_no_rename_command():
+    # Specificity: only content-terminal others get an mv line — a still-active
+    # concurrent track is named (go read it) but never offered for rename.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='primary.md', body='# Cursor\nPRIMARY\n')
+        make_anchor(tmp, name='other-active.md', body='# Cursor\nSTILL GOING\n', age_s=3600)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'other-active.md' in ctx
+        assert 'mv other-active.md' not in ctx
+
+
+def test_list_stale_emits_rename_commands():
+    # The /anchor close --stale sweep is mechanical — list_stale returns the exact
+    # rename commands for content-terminal-but-unrenamed anchors, nothing else.
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='done.md', body='**Status:** CLOSED\ndone\n')
+        make_anchor(tmp, name='live.md', body='# Cursor\ngoing\n')
+        cmds = ai.list_stale(tmp / '.claude' / 'anchors')
+        assert cmds == ['mv done.md done.closed.md']
+
+
 def test_emit_failure_logs_failure_event_not_success():
     # Telemetry must never say "injected" unless the payload actually reached
     # stdout: the success record is written only after the print, and an emit
@@ -330,5 +448,14 @@ if __name__ == '__main__':
     test_multi_open_anchor_warning()
     test_marker_at_top_falls_back_to_whole_file()
     test_multi_anchor_warning_caps_names()
+    test_is_content_terminal_predicate()
+    test_status_line_with_trailing_prose_is_live()
+    test_landed_on_main_marker_is_terminal()
+    test_tail_status_does_not_mark_live_head_terminal()
+    test_active_anchor_selected_over_newer_terminal()
+    test_all_terminal_falls_back_to_newest()
+    test_terminal_other_anchor_gets_rename_command()
+    test_active_other_anchor_has_no_rename_command()
+    test_list_stale_emits_rename_commands()
     test_emit_failure_logs_failure_event_not_success()
     print('ok: all anchor_inject tests passed')

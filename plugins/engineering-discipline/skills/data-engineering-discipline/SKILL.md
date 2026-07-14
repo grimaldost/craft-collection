@@ -6,14 +6,17 @@ description: >
   semantic drift is the dominant risk. Activate on: migrating or porting a
   pipeline (e.g. "migrate this Spark pipeline to the new warehouse"),
   refactoring a transform, backfilling or replaying history, evolving a schema
-  (add / rename / retype / drop a column), creating a new dataset that has
-  consumers, designing or reviewing a data contract, writing tests for a
-  pipeline, generating pipeline code with an LLM, and investigating a consumed
+  (add / rename / retype / drop a column), creating a new dataset — or a
+  metadata / catalog / lineage emitter whose output a separate tool loads — that
+  has consumers, designing or reviewing a data contract, reshaping a tool / API
+  response payload a client depends on, writing tests for a pipeline, generating
+  pipeline code with an LLM, and investigating a consumed
   dataset that misbehaves — "the numbers changed / look different", or a
   table/extract that "ran but didn't update / is stale / isn't refreshing / the
   watermark didn't advance". The test for activation:
   could this change the columns, dtypes, row or group cardinality, null
-  behavior, semantics, or freshness of a dataset that something or someone
+  behavior, semantics, or freshness of a dataset — or the fields, types, or
+  closed vocabularies of a tool/API payload — that something or someone
   else reads? If so, this skill applies — pin the contract, verify the
   observable source, and check parity on real data. Do NOT activate for pure
   exploratory analysis with no downstream consumer, throwaway notebooks, or
@@ -42,6 +45,9 @@ Activate on any task where downstream consumers might be affected:
 
 - Creating a new dataset that will have at least one consumer beyond
   yourself.
+- Building or reshaping a metadata / catalog / lineage emitter, or a tool / API
+  response payload, whose output a separate tool or client loads — the emitted
+  contract is a consumer contract even though it is not a table.
 - Migrating a pipeline between frameworks, stacks, or warehouses.
 - Refactoring transforms while preserving the produced dataset.
 - Evolving the schema of an existing dataset (add, remove, rename,
@@ -59,6 +65,18 @@ Activate on any task where downstream consumers might be affected:
 Do **not** activate for one-off exploratory analysis with no downstream
 consumer, throwaway notebooks, or software-engineering tasks unrelated to
 data outputs.
+
+## Scoped-change lane
+
+A bounded change to one transform or seam — a single tz-cursor fix, one emitter
+field, a localized incremental load — does not need the full-migration
+apparatus. Pin the contract for *that* seam (its schema / dtypes / semantics and
+the consumers of the changed field), run only the parity and real-data checks
+that touch it, and leave the rest of the pipeline alone — a wide scope is what
+invites the "improving while executing" failure mode. The four non-negotiables
+below still hold for the seam; what shrinks is the blast radius you verify, not
+the rigor. Follow the project's own conventions over greenfield defaults
+(python-engineering's edit lane owns that code-style half).
 
 ## The four non-negotiables
 
@@ -140,6 +158,9 @@ This applies symmetrically across scenarios:
   data before declaring parity.
 - For schema evolution: confirm new constraints hold against the last
   90 days of production.
+- For a metadata/catalog or tool/API-payload emitter: the emitted contract
+  loads and validates in the real consumer (or a producer-owned encoding of
+  that consumer's expectation) — not only in the producer's own tests.
 - For a framework: smoke-test each backend the framework claims to
   support against a real but small dataset.
 
@@ -312,7 +333,7 @@ Wire them into CI or run by hand before declaring done.
 | File | Read when |
 |------|-----------|
 | `references/principles.md` | Drafting a design decision, code review, or stuck on which principle applies. The 21 principles in full, each with anti-pattern, corrective, verification, and the LLM-specific gotcha. Principles are universal; per-scenario applications are noted inline. |
-| `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for new dataset, migration, refactor, schema evolution (columns — and equally event types, enum values, API fields), backfill, incremental/streaming, and investigating downstream breakage. |
+| `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for new dataset, migration, refactor, schema evolution (columns — and equally event types, enum values, API fields, tool/API payload contracts), backfill, incremental/streaming, and investigating downstream breakage. |
 | `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." Fourteen documented failure modes (incl. the fabrication family: telemetry, anchors, verifier-inherited traps; the absence-read-as-state pair: unattended-run silence, fail-open tooling; and traced-the-wrong-copy: editable-vs-installed divergence) with detection patterns and mechanical defenses. |
 | `references/parity-recipes.md` | Implementing a parity check, row-level diff, schema diff, or any verification step. Concrete code/SQL/CLI recipes for SQL warehouses, Polars, PySpark, dbt, and Python. |
 | `references/contract-templates.md` | Designing or reviewing a data contract. Worked templates for the same dataset expressed as a dbt `schema.yml`, an ODCS YAML, a Pydantic model, and a JSON Schema. |
