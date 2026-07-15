@@ -66,6 +66,20 @@ def test_holdout_comparison_errors_ignored_when_no_strict_drop() -> None:
     assert 'generalizes' in out and 'errored-before-activation' not in out
 
 
+def test_holdout_excl_point_pooled_path_uses_pooled_excl() -> None:
+    # Pooled comparison: feed the pooled error-excluded recall into the rescue.
+    score = {'recall': 0.75, 'recall_excl_errors': 1.0}
+    assert holdout_check.holdout_excl_point(score, 'pooled') == 1.0
+
+
+def test_holdout_excl_point_query_path_returns_none_not_mismatched_units() -> None:
+    # Query comparison: the strict point and dev bound are query-level, but
+    # recall_excl_errors is pooled. Returning it would compare mismatched units, so the
+    # rescue must be skipped (None), not fed a pooled value against a query-level bound.
+    score = {'recall': 0.75, 'recall_query': 0.75, 'recall_excl_errors': 1.0}
+    assert holdout_check.holdout_excl_point(score, 'query') is None
+
+
 def test_dev_recall_pair_prefers_matched_query_units() -> None:
     # The dev POINT and dev CI must come from the same estimator. Pairing the
     # pooled point (0.9) with the query-level interval ([0.5, 0.9]) let the point
@@ -97,6 +111,8 @@ if __name__ == '__main__':
     test_holdout_comparison_drop_driven_by_errors_is_not_overfit()
     test_holdout_comparison_real_drop_survives_error_exclusion()
     test_holdout_comparison_errors_ignored_when_no_strict_drop()
+    test_holdout_excl_point_pooled_path_uses_pooled_excl()
+    test_holdout_excl_point_query_path_returns_none_not_mismatched_units()
     test_dev_recall_pair_prefers_matched_query_units()
     test_dev_recall_pair_falls_back_to_pooled_pair()
     print('ok: holdout_check')

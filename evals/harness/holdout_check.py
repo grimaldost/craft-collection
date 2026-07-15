@@ -35,6 +35,18 @@ def dev_recall_pair(dev: dict) -> tuple[float | None, list | None, str]:
     return dev.get('recall'), dev.get('recall_ci'), 'pooled'
 
 
+def holdout_excl_point(score: dict, dev_units: str) -> float | None:
+    """The error-excluded recall to feed the error-rescue, or None when it would cross
+    units. `recall_excl_errors` is a POOLED rate; in the query-unit comparison path the
+    strict point and dev bound are query-level and there is no query-level excl variant
+    (an exclusion is ill-defined for a partially-errored query), so returning the pooled
+    value would compare mismatched units. Return None there — the rescue is pooled-only,
+    and the pooled excl recall is still printed to the reader regardless."""
+    if dev_units == 'query' and score.get('recall_query') is not None:
+        return None
+    return score.get('recall_excl_errors')
+
+
 def holdout_comparison(
     dev_recall, dev_ci, holdout_recall, holdout_recall_excl=None, n_err=0
 ) -> str:
@@ -205,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
             dev_recall,
             dev_ci,
             holdout_point,
-            holdout_recall_excl=score.get('recall_excl_errors'),
+            holdout_recall_excl=holdout_excl_point(score, dev_units),
             n_err=score.get('errors_no_activation_positive', 0),
         )
     )
