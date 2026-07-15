@@ -3,6 +3,28 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.14.3 — 2026-07-14
+
+### Fixed
+
+- **evaluate-skill: errored-before-activation runs no longer feed a recall
+  verdict.** A held-out or dev positive run that errors *before* the skill can
+  activate (e.g. `Prompt is too long`, which never executes the query) carries no
+  evidence the description failed, yet the scorecard (`aggregate.py`) and
+  `holdout_check.py` read the strict recall — which counts those runs as misses —
+  into a gate / DROP verdict. `score_skill` already excludes them
+  (`recall_excl_errors`); this brings the two report surfaces to parity **without
+  changing the gated number**: the scorecard recall cell gains an
+  `(err=N; excl=X)` annotation (+ legend), and `holdout_check` prints the
+  error-excluded recall and names the infra cause instead of declaring "overfit"
+  when excluding the errors would clear the dev bound. Also fixes
+  `holdout_check.py`'s docstring, which advertised positional
+  `[repeats] [concurrency]` the argparse rejects (`--repeats` / `--concurrency`).
+  Resolves the `choosing-models` birth-baseline caveat: 3 identical
+  `Prompt is too long` errors on one held-out query read 0.75 / below-gate where,
+  excluding them, recall was 1.00. `aggregate.py` is copied to the bundled
+  template; `test_scripts_in_sync` guards the pair.
+
 ## 0.14.2 — 2026-07-14
 
 ### Changed
