@@ -7,7 +7,7 @@ rather than overfitting the original eval prompts. Reads
 `evals/trigger/holdout/<skill>.json` (same schema as trigger/) and reuses the
 real triggering machinery from run_triggers.
 
-    python evals/harness/holdout_check.py <skill> [repeats] [concurrency]
+    python evals/harness/holdout_check.py <skill> [--repeats R] [--concurrency K]
 """
 
 from __future__ import annotations
@@ -35,10 +35,22 @@ def dev_recall_pair(dev: dict) -> tuple[float | None, list | None, str]:
     return dev.get('recall'), dev.get('recall_ci'), 'pooled'
 
 
-def holdout_comparison(dev_recall, dev_ci, holdout_recall) -> str:
+def holdout_comparison(
+    dev_recall, dev_ci, holdout_recall, holdout_recall_excl=None, n_err=0
+) -> str:
     """One-line dev-vs-held-out recall verdict. Warns when held-out recall drops
     below the dev recall's lower Wilson bound — the overfit-to-the-dev-prompts
-    signal the reader currently eyeballs by hand (#T2h)."""
+    signal the reader currently eyeballs by hand (#T2h).
+
+    `n_err` errored-before-activation held-out positive runs carry no evidence the
+    description failed (the mirror of N28a, which already credits fired-then-errored
+    runs as activations), yet they depress the strict point this verdict reads. When
+    they do — and the error-excluded point (`holdout_recall_excl`) would clear the
+    dev bound while the strict point would not — the DROP is an infra artifact: name
+    it and ask for a re-run rather than print a false 'overfit' verdict off a number
+    the errors produced. (2026-07-14: a held-out run read 0.75/below-gate where 3
+    identical `Prompt is too long` errors hit one query before it ever activated;
+    excluding them recall was 1.00.)"""
     if holdout_recall is None:
         return 'held-out recall: n/a (no gated positives in the held-out set)'
     if dev_recall is None:
@@ -48,7 +60,17 @@ def holdout_comparison(dev_recall, dev_ci, holdout_recall) -> str:
         )
     lo = dev_ci[0] if dev_ci else 0.0
     line = f'dev recall {dev_recall:.2f} (CI lo {lo:.2f})  vs  held-out {holdout_recall:.2f}'
-    if holdout_recall < lo:
+    strict_drop = holdout_recall < lo
+    error_rescued = (
+        strict_drop and n_err and holdout_recall_excl is not None and holdout_recall_excl >= lo
+    )
+    if error_rescued:
+        return (
+            line + f'  -> DROP driven by {n_err} errored-before-activation run(s); '
+            f'excl. errors {holdout_recall_excl:.2f} is within dev CI. Re-run the errored '
+            'query before treating this DROP as real — infra noise, not a description verdict.'
+        )
+    if strict_drop:
         return line + '  -> DROP beyond dev CI: the description may be overfit to the dev prompts'
     return line + '  -> within dev CI: generalizes'
 
@@ -125,6 +147,21 @@ def main(argv: list[str] | None = None) -> int:
         f'\nheld-out recall      = {score["recall"]:.2f}  CI[{rlo:.2f},{rhi:.2f}]  '
         f'(on {score["n_positive"]} unseen positives)'
     )
+    if score.get('errors_no_activation_positive'):
+        ree = score.get('recall_excl_errors')
+        if ree is None:
+            print(
+                f'held-out recall excl. err = n/a (all '
+                f'{score["errors_no_activation_positive"]} non-firing positive runs errored '
+                'before activation — no valid trial)'
+            )
+        else:
+            elo, ehi = score['recall_excl_errors_ci']
+            print(
+                f'held-out recall excl. err = {ree:.2f}  CI[{elo:.2f},{ehi:.2f}]  '
+                f'({score["errors_no_activation_positive"]} errored-before-activation positive '
+                'run(s) carry no description evidence)'
+            )
     print(
         f'held-out specificity = {score["specificity"]:.2f}  CI[{slo:.2f},{shi:.2f}]  '
         f'(on {score["n_negative"]} unseen near-misses)'
@@ -162,7 +199,16 @@ def main(argv: list[str] | None = None) -> int:
     holdout_point = score['recall']
     if dev_units == 'query' and score.get('recall_query') is not None:
         holdout_point = score['recall_query']
-    print('\n' + holdout_comparison(dev_recall, dev_ci, holdout_point))
+    print(
+        '\n'
+        + holdout_comparison(
+            dev_recall,
+            dev_ci,
+            holdout_point,
+            holdout_recall_excl=score.get('recall_excl_errors'),
+            n_err=score.get('errors_no_activation_positive', 0),
+        )
+    )
     return 0
 
 

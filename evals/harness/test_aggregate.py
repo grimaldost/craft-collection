@@ -104,6 +104,36 @@ def test_render_marks_action_discipline_activation():
     assert 'action-discipline' in md  # legend explains the marker
 
 
+def test_scorecard_surfaces_errored_before_activation():
+    # A recall depressed below its gate purely by errored-before-activation runs
+    # must carry the count + error-excluded recall on both the row and the render,
+    # so a reader does not read the FAIL as a description miss.
+    trig = {
+        's': {
+            'recall': 0.75,
+            'recall_ci': [0.47, 0.91],
+            'errors_no_activation_positive': 3,
+            'recall_excl_errors': 1.0,
+            'specificity': 1.0,
+            'specificity_ci': [0.76, 1.0],
+            'per_query': [],
+        }
+    }
+    rows = build_scorecard(trig, {}, GATES)
+    assert rows[0]['errors_no_activation_positive'] == 3
+    assert rows[0]['recall_excl_errors'] == 1.0
+    md = render_scorecard(rows, trig, {})
+    assert 'err=3' in md and 'excl=1.00' in md  # annotation on the recall cell
+
+
+def test_scorecard_no_error_annotation_when_clean():
+    # No errored-before-activation runs -> no annotation on the skill's row. (The
+    # legend documents the marker, so assert on the table row, not the whole doc.)
+    md = render_scorecard(build_scorecard(TRIG, GRAD, GATES), TRIG, GRAD)
+    row = next(ln for ln in md.splitlines() if '`journaling-sessions`' in ln and '0.75' in ln)
+    assert 'err=' not in row
+
+
 def test_render_marks_expected_hard_miss_not_as_failure():
     # An expected-hard positive that fires 0/3 is surfaced but labelled as
     # reported-not-gated, NOT counted as a "MISSED positive" gate failure.
@@ -140,5 +170,7 @@ if __name__ == '__main__':
     test_action_discipline_without_grading_is_na()
     test_non_action_rows_have_no_task_arm_gate()
     test_render_marks_action_discipline_activation()
+    test_scorecard_surfaces_errored_before_activation()
+    test_scorecard_no_error_annotation_when_clean()
     test_render_marks_expected_hard_miss_not_as_failure()
     print('ok: all aggregate tests passed')
