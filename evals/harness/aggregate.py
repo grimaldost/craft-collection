@@ -53,6 +53,11 @@ def build_scorecard(
                 'recall_ci': t.get('recall_ci'),
                 'recall_gate': recall_gate,
                 'recall_hard': t.get('recall_hard'),
+                # errored-before-activation runs depress the gated recall without being
+                # evidence the description failed; carry the count + error-excluded recall
+                # so a FAIL a reader sees can be recognized as a possible infra artifact.
+                'errors_no_activation_positive': t.get('errors_no_activation_positive'),
+                'recall_excl_errors': t.get('recall_excl_errors'),
                 'task_arm_recall': task_arm_recall,
                 'task_arm_recall_gate': (
                     _gate(task_arm_recall, gates['trigger_recall']) if is_action else None
@@ -95,7 +100,10 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
         'Write-less trigger arm cannot exercise: for those, the Activation column '
         'carries the gated task-arm recall proxy in parentheses. A `hard=` annotation '
         'on Recall is the expected-hard rate — immovable queries reported but excluded '
-        'from the gate.',
+        'from the gate. An `(err=N; excl=X)` annotation flags N positive runs that '
+        'errored before the skill could activate — infra noise, not a description miss; '
+        '`excl` is recall with them removed, so a FAIL is not misread off a number the '
+        'errors produced.',
         '',
     ]
 
@@ -108,9 +116,11 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
     ]
     for r in rows:
         hard = '' if r.get('recall_hard') is None else f' hard={_pct(r["recall_hard"])}'
+        err_n = r.get('errors_no_activation_positive') or 0
+        err = f' (err={err_n}; excl={_pct(r.get("recall_excl_errors"))})' if err_n else ''
         out.append(
             f'| `{r["skill"]}` '
-            f'| {_pct(r["recall"])}{_ci(r["recall_ci"])} ({r["recall_gate"]}){hard} '
+            f'| {_pct(r["recall"])}{_ci(r["recall_ci"])} ({r["recall_gate"]}){hard}{err} '
             f'| {_pct(r["specificity"])}{_ci(r["specificity_ci"])} ({r["specificity_gate"]}) '
             f'| {_pct(r["correct_usage"])}{_ci(r["correct_usage_ci"])} ({r["correct_usage_gate"]}) '
             f'| {_pct(r["judge_agreement"])} '
