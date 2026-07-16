@@ -3,6 +3,49 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.15.0 — 2026-07-16
+
+New capability: provenance signing for agent-assisted work. Minor bump: a new
+skill and script. Maintainer-directed design decisions, recorded: the signature
+is always machine-generated (a hand-typed one rots, and wrong provenance is
+worse than none); it is selective (enabled plugins only, `--plugin` to narrow);
+the model listed is the one writing and orchestrating at commit time — the one
+responsible for the change; and the model appears only in `Assisted-By`, never
+as a commit co-author (`Co-Authored-By: Claude` boilerplate carries no
+information and is actively scrubbed).
+
+### Added
+
+- **`llm-signature` skill** — sign agent-assisted work with two machine-readable
+  git trailers: `Assisted-By: <exact-model-id>` and
+  `Agent-Stack: <name>@<version> (<marketplace>); ...` (harness + enabled
+  plugins; the marketplace label is a lookup key, so URLs stay out of commits).
+  Spec in `references/spec.md` (`llm-signature/v1`), including read-back
+  recipes (`git log --format='%(trailers:key=Assisted-By,valueonly)'`) and an
+  optional `prepare-commit-msg` hook recipe.
+- **`scripts/render_signature.py`** — renders the trailer block from live
+  sources: the model from the session transcript's last main-loop assistant
+  message (sidechain/subagent and `<synthetic>` entries never sign; transcript
+  auto-discovery matches the munged cwd under `~/.claude/projects/` and is
+  gated on a live session so a stale transcript cannot sign the wrong model),
+  the stack from `claude plugin list --json` + `claude --version`. Render mode
+  fails loud when the model is unresolvable (never guesses); `--apply
+  <msg-file>` is the commit-safe mode — refreshes trailers idempotently, scrubs
+  `Co-Authored-By: Claude/Anthropic` lines and "Generated with Claude Code"
+  badges (human co-authors always survive), and exits 0 on any failure so a
+  signing problem never blocks a commit. Stdlib-only, 15 tests
+  (`test_render_signature.py`, bare-python runnable), verified live in-session
+  (resolved the running model and harness version end-to-end).
+
+### Notes
+
+- Trigger surface: a dev trigger dataset ships
+  (`evals/trigger/llm-signature.json`, 7+/6−) and the skill is registered in
+  `evals/config.json`; the sealed holdout is deferred to the next calibration
+  round so it can be sealed **with a birth baseline**, per the 0.6.5 doctrine —
+  no holdout is sealed without a birth number.
+- Word budget seeded: llm-signature 365.
+
 ## 0.14.3 — 2026-07-14
 
 ### Fixed

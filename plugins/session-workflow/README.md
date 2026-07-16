@@ -2,7 +2,8 @@
 
 Manage the work *around* the work: capture session knowledge and distill it into
 durable guidance, hand work off to a fresh context, convene fresh-eyes review
-panels, behaviorally evaluate your skills, stay aware of your toolkit, and run the
+panels, behaviorally evaluate your skills, stay aware of your toolkit, sign
+agent-assisted work with machine-generated provenance trailers, and run the
 tool-dogfooding feedback loop (capture + triage).
 
 ## Skills
@@ -35,6 +36,16 @@ tool-dogfooding feedback loop (capture + triage).
 - **toolkit-awareness** — `scripts/scan_toolkit.py` produces a live inventory of
   installed skills / commands / agents / hooks (no hand-maintained list); the
   skill adds durable guidance on referencing the toolkit in prompts and specs.
+- **llm-signature** — sign agent-assisted work with a machine-generated
+  provenance signature: an `Assisted-By` git trailer naming the exact model that
+  wrote and orchestrated the change (its only appearance — never a commit
+  co-author), and an `Agent-Stack` trailer naming the harness and enabled plugin
+  versions, each with its marketplace as a lookup key. Rendered by
+  `scripts/render_signature.py` from live sources (session transcript,
+  `claude plugin list`, `claude --version`) — never typed from memory; `--apply`
+  doubles as a `prepare-commit-msg` hook that also scrubs
+  `Co-Authored-By: Claude` / "Generated with Claude Code" boilerplate. Trailer
+  grammar in `references/spec.md` (`llm-signature/v1`).
 - **tool-feedback** — write a per-session dogfooding feedback report for each
   registered in-development tool the session exercised, into that tool's own
   feedback directory: what worked, severity-tagged friction, misses with the

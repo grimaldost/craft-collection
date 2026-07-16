@@ -19,6 +19,7 @@
   "plugins/session-workflow/skills/evaluate-skill/SKILL.md": 825,
   "plugins/session-workflow/skills/feedback-triage/SKILL.md": 1677,
   "plugins/session-workflow/skills/journaling-sessions/SKILL.md": 1761,
+  "plugins/session-workflow/skills/llm-signature/SKILL.md": 365,
   "plugins/session-workflow/skills/review-panel/SKILL.md": 1120,
   "plugins/session-workflow/skills/tool-feedback/SKILL.md": 1188,
   "plugins/session-workflow/skills/toolkit-awareness/SKILL.md": 477
