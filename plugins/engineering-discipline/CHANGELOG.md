@@ -3,6 +3,27 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.2.0 — 2026-07-16
+
+### Changed
+
+- **Enforcement ladder wording (multi-agent portability).** python-engineering's
+  pre-commit section and the README's Hooks section no longer assume act-time
+  hooks fired: enforcement is stated as the ladder — act-time on Claude Code,
+  commit-time via the exported pre-commit floor (`check-uv-hygiene` +
+  `adapters/pre-commit/craft-floor.yaml`), else advisory. refresh-stack and
+  data-engineering-discipline verified already harness-neutral (no edit).
+  Word-budget baseline bumped for python-engineering (+53 words): the growth
+  displaces nothing — it names the degradation tiers where the text previously
+  implied a hook.
+
+### Added
+
+- **hooks/harness_adapters.py** — harness-agnostic entry points wrapping the
+  tested hook cores in place (format_decision, bash_verdict, block_message,
+  parse_json_payload) plus thin Claude Code payload adapters; the seam for
+  other harnesses' hook systems (ADR-0003).
+
 ## 0.1.15 — 2026-07-14
 
 Build round for the 2026-07-14 craft triage (rows T16, T17, and DED1). A

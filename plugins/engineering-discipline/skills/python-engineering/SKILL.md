@@ -297,7 +297,11 @@ call it once at application startup (CLI entry point or FastAPI `lifespan`).
 `scripts/scaffold.py` writes the canonical `.pre-commit-config.yaml`
 (trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files,
 plus `ruff` + `ruff-format` at the revs pinned in `stack.toml`). Install with
-`uv run pre-commit install`.
+`uv run pre-commit install`. Enforcement is a ladder, not an assumption: on a
+harness with act-time hooks (Claude Code) this plugin formats each edit and
+blocks pip/poetry in uv projects as it happens; elsewhere the same rules hold
+at commit time via this pre-commit config (plus the exported
+`check-uv-hygiene` hook), and as advisory text where neither exists.
 
 > **Note on ty in pre-commit**: `ty` has no official pre-commit hook yet. Run it
 > via `uv run ty check src` in CI or as a local script.
