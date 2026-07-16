@@ -1,0 +1,14 @@
+# Hooks this repository exports to CONSUMER projects (pre-commit resolves this
+# file when a consumer references craft-collection as a `repo:` by URL).
+# `language: script` on purpose: this repo is not pip-installable, and a script
+# hook runs the file straight from the hook clone with the consumer repo as cwd.
+- id: check-uv-hygiene
+  name: uv hygiene (no pip/poetry/virtualenv residue in a uv project)
+  description: >-
+    Commit-time floor of engineering-discipline's act-time uv_enforce hook:
+    inside a uv-managed project, fail on requirements*.txt alongside uv.lock,
+    a Pipfile, or a tracked venv/.venv.
+  entry: scripts/check_uv_hygiene.py
+  language: script
+  pass_filenames: false
+  always_run: true
