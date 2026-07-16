@@ -37,6 +37,67 @@ information and is actively scrubbed).
   (`test_render_signature.py`, bare-python runnable), verified live in-session
   (resolved the running model and harness version end-to-end).
 
+### Fixed (review round, same release)
+
+From the four-lens adversarial panel (architect / skeptic / correctness /
+adopter) convened on this branch — unanimous REVISE, kernel endorsed, six
+defects reproduced by execution and fixed test-first:
+
+- **`--apply` could abort a commit on a non-UTF-8 message** — only `OSError`
+  was caught, and `UnicodeDecodeError` is a `ValueError`; legal git
+  (`i18n.commitEncoding`) crashed the hook with exit 1. Now reads bytes,
+  round-trips via `surrogateescape`, and the whole apply path catches
+  `Exception` — no input produces a nonzero exit (non-UTF-8 regression test).
+- **`git commit --verbose` silently lost the signature** — the block was
+  inserted after the scissors line, inside the diff preview git strips (and the
+  scrub mutated diff lines). Everything from the scissors line on is now
+  frozen; the block lands before it.
+- **The glue heuristic could hide the trailers from git** — checking only the
+  last line welded the block onto a prose paragraph ending in a trailer-shaped
+  line (`Note: …`), and `git interpret-trailers --parse` returned empty. The
+  block now joins an existing paragraph only when EVERY line of it is
+  trailer-shaped; a test asserts `git interpret-trailers` actually parses the
+  output.
+- **A custom `core.commentChar` resurrected aborted commits** — a comment-only
+  message under `commentChar=;` was treated as content and signed.
+  `apply_to_message` takes the configured comment char (read via
+  `git config core.commentChar` in hook mode).
+- **The scrubber destroyed content it didn't own** — a human co-author named
+  Claude (`<claude.dubois@example.fr>`) was deleted, and `_AI_BADGE.search`
+  ate body prose mentioning "generated with … Claude". Scrubs are now anchored
+  to the vendor's identity (anthropic.com / claude+noreply addresses), match
+  flush-left whole lines only, and never touch indented/quoted examples — the
+  "human co-authors never match" claim is now true (tested). A
+  `Claude-Session:` trailer is deliberately left untouched (session
+  traceability, not attribution marketing) — decision recorded in the spec.
+- **Transcript auto-discovery could sign the wrong model** — `CLAUDECODE`
+  proves *some* session is live, not that the newest-mtime `.jsonl` is
+  *this* session's, and the lossy cwd-munging collides distinct projects
+  (`my.repo` ≡ `my-repo`). A candidate now signs only when fresh (30-min
+  window) AND the cwd recorded inside the transcript verifies against this one
+  by exact path; nothing verifiable → refuse to sign. The residual
+  same-cwd-concurrent-sessions race is documented honestly in the spec with
+  the deterministic escape (`--transcript`/`--model`). Auto-discovery also
+  gained descendant-dir nomination (hook at repo root, session started
+  deeper), and unsigned (human) commits no longer pay the claude-CLI calls.
+- **The hook recipe could brick a repo** — with `uv` off PATH or a moved
+  install path, the verbatim `prepare-commit-msg` recipe exited nonzero and
+  aborted every commit, human ones included. The recipe now guards its
+  preconditions (`command -v uv || exit 0`, script-exists check, `|| true`).
+- Docs honesty from the same round: `Agent-Stack` semantics renamed to
+  **environment-at-commit** provenance ("enabled" ≠ "shaped the work"); an
+  **Adopting in a repo** section defines the one CLAUDE.md line the trigger's
+  "a project that adopts the signature" refers to; real model IDs noted as
+  dated (`claude-sonnet-4-5-20250929`-style), so read-back greps match
+  history; "provenance record, not cryptographic signature" stated; the
+  repeated-`Agent-Stack:`-keys and augment-vs-replace alternatives recorded
+  with their rejection rationale. CRLF messages round-trip. Declined, with
+  rationale: cutting `--json`/`--plugin` (they implement the owner's
+  selectivity constraint) and reducing the stack to harness-only (contradicts
+  the owner's requirement to list the tool stack). Test suite 15 → 23.
+  SKILL.md word budget 365 → 412 (adoption pointer + honest semantics; no
+  clause retired).
+
 ### Notes
 
 - Trigger surface: a dev trigger dataset ships

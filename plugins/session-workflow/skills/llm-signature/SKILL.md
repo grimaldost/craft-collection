@@ -35,9 +35,11 @@ with `git log --format='%(trailers:key=Assisted-By)'`, parseable with
   responsible for the change. One model: the orchestrator at commit time, not
   every subagent it delegated to. The model is never added as a commit
   co-author or committer; this trailer is its only appearance.
-- `Agent-Stack` lists the harness and the **enabled** plugins, each as
-  `name@version (marketplace)`. The marketplace label is a lookup key (its repo
-  or `claude plugin marketplace list` resolves it) — URLs stay out of commits.
+- `Agent-Stack` is **environment-at-commit** provenance: the harness and the
+  enabled plugins, each as `name@version (marketplace)` — what was installed
+  and enabled, not a claim that every item fired. The marketplace label is a
+  lookup key (its repo or `claude plugin marketplace list` resolves it) — URLs
+  stay out of commits.
 
 ## Generate — always by script, never by hand
 
@@ -49,7 +51,8 @@ uv run --no-project -- python "${CLAUDE_PLUGIN_ROOT}/skills/llm-signature/script
 ```
 
 The model comes from the session transcript (last main-loop assistant message —
-subagent sidechains never sign); the stack comes from `claude plugin list` and
+subagent sidechains never sign; a discovered transcript signs only when fresh
+and verified against this cwd); the stack comes from `claude plugin list` and
 `claude --version`. `--json` for machine use, `--plugin <name>` (repeatable) to
 narrow the stack, `--model` / `--transcript` as explicit overrides. If the
 model cannot be resolved, the script fails rather than guessing — do not
@@ -57,11 +60,13 @@ substitute a hand-typed signature; commit unsigned or fix the resolution.
 
 ## Apply
 
-**Commits** — in a project that adopts the signature, run the script at commit
-time and append its output verbatim as the final paragraph of the commit
-message. Drop any `Co-Authored-By` line naming the model and any "Generated
-with Claude Code" badge — the signature replaces both. Real human co-authors
-keep their lines.
+**Commits** — in a project that adopts the signature (one declaration in the
+repo's CLAUDE.md; see `references/spec.md` § Adopting), run the script at
+commit time and append its output verbatim as the final paragraph of the
+commit message. Drop any `Co-Authored-By` line carrying the vendor's identity
+(an anthropic.com or claude+noreply address) and any "Generated with Claude
+Code" badge — the signature replaces both. Real human co-authors keep their
+lines, even one named Claude.
 
 **PR bodies** — same block, fenced as `text`, at the end of the description.
 
