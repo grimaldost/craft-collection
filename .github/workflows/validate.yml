@@ -24,5 +24,7 @@ jobs:
         run: python scripts/lint_register.py
       - name: Validate plugins (structural)
         run: python scripts/validate_plugins.py
+      - name: AGENTS.md freshness (derived-artifact integrity, ADR-0001)
+        run: python scripts/gen_agents_md.py --check
       - name: Run tests
         run: python scripts/run_tests.py
