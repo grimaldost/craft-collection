@@ -26,12 +26,13 @@ tool-dogfooding feedback loop (capture + triage).
 - **review-panel** (`/review-panel`) — convene fresh reviewer subagents that are
   blind to the conversation and to each other, pointed at an artifact you've
   anchored on from adversarial angles. Neutral brief, structured comparable
-  output, synthesis over averaging, a stakes-scaled ladder. Claude Code only;
-  shows the plan + cost and asks before firing.
+  output, synthesis over averaging, a stakes-scaled ladder. Needs fresh-context
+  reviewer spawning (sequential clean contexts as the fallback); shows the
+  plan + cost and asks before firing.
 - **evaluate-skill** (`/evaluate-skill`) — behaviorally evaluate a skill by running
   it headless many times: triggering (recall / specificity), correct-usage (rubric
   judge), and a with/without baseline, each with Wilson 95% CIs. Ships the eval
-  engine in `scripts/`. Claude Code only; cost-gated.
+  engine in `scripts/`. Spawn backend: headless Claude Code today; cost-gated.
 - **toolkit-awareness** — `scripts/scan_toolkit.py` produces a live inventory of
   installed skills / commands / agents / hooks (no hand-maintained list); the
   skill adds durable guidance on referencing the toolkit in prompts and specs.

@@ -3,6 +3,23 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.15.0 — 2026-07-16
+
+### Changed
+
+- **Capability-conditional wording (multi-agent portability).** review-panel,
+  compaction-survival, toolkit-awareness, and evaluate-skill no longer gate
+  load-bearing instructions on the harness name: each states the capability it
+  needs and a degradation ladder (fresh-context subagents -> sequential clean
+  contexts; CLI plugin enumeration -> AGENTS.md index -> directory scan;
+  hook re-injection -> manual anchor re-read). Claude Code mechanics stay as
+  mechanism notes. Word-budget baselines bumped for the four bodies: the
+  growth displaces nothing — conditional ladders replaced absolute
+  harness-gating that read as "skip this skill" off Claude Code.
+- **AgentRunner seam.** The evaluate-skill engine routes spawns through an
+  AgentRunner protocol with headless Claude Code as its only backend today;
+  trigger numbers remain measured on Claude Code (plugin mirror re-synced).
+
 ## 0.14.3 — 2026-07-14
 
 ### Fixed
