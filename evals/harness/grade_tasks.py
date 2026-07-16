@@ -21,11 +21,19 @@ import sys
 import tempfile
 from pathlib import Path
 
-from claude_runner import cleanup_dir, make_isolated_config, map_concurrent, run_agent
+from claude_runner import (
+    DEFAULT_RUNNER,
+    AgentRunner,
+    cleanup_dir,
+    make_isolated_config,
+    map_concurrent,
+)
 from judge import judge_pairwise, judge_pointwise
 from run_triggers import preflight_auth
 from stats import pass_rate, wilson_interval
 
+RUNNER: AgentRunner = DEFAULT_RUNNER  # composition root (ADR-0006)
+run_agent = RUNNER.run  # module seam: tests/backends rebind this
 REPO = Path(__file__).resolve().parents[2]
 TASKS_DIR = REPO / 'evals' / 'tasks'
 REPORT_DIR = REPO / 'evals' / 'report'

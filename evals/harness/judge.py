@@ -19,7 +19,14 @@ from __future__ import annotations
 import json
 import re
 
-from claude_runner import run_agent
+from claude_runner import DEFAULT_RUNNER, AgentRunner
+
+
+def _spawn(runner):
+    """Normalize an AgentRunner or bare callable to its spawn callable."""
+    run = getattr(runner, 'run', None)
+    return run if callable(run) else runner
+
 
 JUDGE_THRESHOLD = 0.7  # score at/above which a pointwise verdict counts as a pass
 
@@ -128,7 +135,7 @@ def judge_pointwise(
     *,
     model: str,
     repeats: int = 1,
-    runner=run_agent,
+    runner: AgentRunner = DEFAULT_RUNNER,
     max_budget_usd: float = 0.25,
     timeout: int = 180,
     threshold: float = JUDGE_THRESHOLD,
@@ -144,7 +151,7 @@ def judge_pointwise(
     prompt = _render_pointwise(task, output, rubric)
     verdicts = []
     for _ in range(repeats):
-        r = runner(
+        r = _spawn(runner)(
             prompt,
             plugin_dir=None,
             allowed_tools='',
@@ -175,10 +182,19 @@ def _render_pairwise(task: str, first: str, second: str, criterion: str) -> str:
 
 
 def _ask_pairwise(
-    task, first, second, criterion, *, model, runner, max_budget_usd, timeout, config_dir=None
+    task,
+    first,
+    second,
+    criterion,
+    *,
+    model,
+    runner: AgentRunner,
+    max_budget_usd,
+    timeout,
+    config_dir=None,
 ) -> str:
     prompt = _render_pairwise(task, first, second, criterion)
-    r = runner(
+    r = _spawn(runner)(
         prompt,
         plugin_dir=None,
         allowed_tools='',
@@ -201,7 +217,7 @@ def judge_pairwise(
     criterion: str,
     *,
     model: str,
-    runner=run_agent,
+    runner: AgentRunner = DEFAULT_RUNNER,
     max_budget_usd: float = 0.25,
     timeout: int = 180,
     config_dir: str | None = None,

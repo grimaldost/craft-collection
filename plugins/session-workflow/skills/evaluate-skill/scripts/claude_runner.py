@@ -20,6 +20,7 @@ import time
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 # stderr signatures that justify a retry (transient server/network failures).
 _TRANSIENT = re.compile(
@@ -324,3 +325,22 @@ def run_agent(
     if last and not run.result_text:
         run.result_text = (last.stderr or '')[:500]
     return run
+
+
+class AgentRunner(Protocol):
+    """The runner seam (ADR-0006): spawn one prompt in an isolated context and
+    return the parsed AgentRun. Headless Claude Code is the only backend today;
+    a second harness plugs in here without touching the call sites."""
+
+    def run(self, prompt: str, **kwargs) -> AgentRun: ...
+
+
+class ClaudeRunner:
+    """AgentRunner backend for headless `claude -p` (delegates to run_agent)."""
+
+    def run(self, prompt: str, **kwargs) -> AgentRun:
+        return run_agent(prompt, **kwargs)
+
+
+# Composition root: the one line that constructs the CC backend (ADR-0006).
+DEFAULT_RUNNER: AgentRunner = ClaudeRunner()
