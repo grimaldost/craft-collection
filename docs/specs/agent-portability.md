@@ -3,7 +3,7 @@
 - **Date:** 2026-07-16
 - **Status:** ready (DoR passed)
 - **Audience:** maintainer + implementing agents (one PR per numbered section)
-- **Output artifact(s):** `AGENTS.md`, `scripts/gen_agents_md.py`, `scripts/check_uv_hygiene.py`, `.pre-commit-hooks.yaml`, `adapters/pre-commit/craft-floor.yaml`, `plugins/engineering-discipline/hooks/harness_adapters.py`, `docs/portability.md`, reworded SKILL.md bodies
+- **Output artifact(s):** `AGENTS.md`, `scripts/gen_agents_md.py`, `scripts/check_uv_hygiene.py`, `.pre-commit-hooks.yaml`, `adapters/pre-commit/craft-floor.yaml`, `plugins/engineering-discipline/hooks/harness_adapters.py`, `evals/harness/claude_runner.py` plus the runner-seam edits in the harness and evaluate-skill script copies (§8), the `.pre-commit-config.yaml` and `.github/workflows/validate.yml` freshness-gate entries (§2), `docs/portability.md`, reworded SKILL.md bodies
 - **Phases:** Decide+Specify this round (Decompose: the PR manifest below is the plan; Implement/Gate/Review/Reflect: future waves)
 
 ## Context
@@ -206,8 +206,9 @@ Create `plugins/engineering-discipline/hooks/harness_adapters.py`: it
 **imports and wraps** the extraction and decision functions where they already
 live (`target_file` and `ruff_commands` in `ruff_format.py`, `verdict` and
 `cwd_is_uv_project` in `uv_enforce.py`, `_load_payload` in `stop_nudge.py` —
-nothing is relocated out of the hook modules, since the existing tests import
-those symbols by name) plus a documented extension point — an adapter is a
+nothing is relocated out of the hook modules: the existing tests import the
+ruff/uv symbols by name, and `_load_payload` stays put for the same
+no-relocation stability) plus a documented extension point — an adapter is a
 function from a harness payload to the core call and a mapping from the core
 verdict to that harness's blocking convention. The existing hook files keep
 their CLI entry points and CC behavior byte-for-byte (same stdin, same exit
@@ -327,6 +328,7 @@ describes shipped reality.
 - **Post-fold coherence:** author re-read post-fold and reconciled two fold-introduced inconsistencies (gate-commands eval scope; AGENTS.md-regeneration timing vs PR ordering) without moving ledger anchors; round-2 reviewer independently re-verified coherence (sections vs gate commands vs DoD vs manifest) and all nine ledger anchors
 - **Failure modes considered & folded in:** FM-1 sync-twin edit surface (BLOCKER), FM-2 word-budget zero-headroom fallback, FM-3 consumer hook delivery, FM-4 vacuous test homing, FM-5 phantom eval datasets, FM-6 relocation-breaks-tests, FM-7 generated-byte hygiene, FM-8 vacuous docs/ lint, FM-9 README drift + regeneration obligation — one fold-ledger row each below
 - **Note:** the only body edit after the certified pass is the Status line (draft → ready), recording this gate's own outcome; a B2 revision WARN against the saved Spec-hash reflects that single line and is the honest record, not drift
+- **Advisory folds (2026-07-16, post-implementation):** ADV-1 folded — the Output artifact(s) header now names the §8 runner seam and the §2 gate wiring; ADV-3 folded — §6's test-import justification narrowed so it no longer over-claims for `_load_payload`; ADV-2 required no spec edit (`language: script` shipped in `.pre-commit-hooks.yaml`)
 
 ### Fold ledger
 
