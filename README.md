@@ -34,6 +34,11 @@ Local development (no marketplace needed):
 claude --plugin-dir ./plugins/engineering-discipline --plugin-dir ./plugins/session-workflow --plugin-dir ./plugins/humblepowers
 ```
 
+**Other agents (Codex, Gemini CLI, Cursor, any agents.md reader):** clone this
+repo and point the agent at the generated `AGENTS.md` index — see
+[`docs/portability.md`](docs/portability.md) for the installation matrix, the
+enforcement ladder, and what is (and is not) measured off Claude Code.
+
 ## What's inside
 
 **engineering-discipline** — skills `python-engineering`,
