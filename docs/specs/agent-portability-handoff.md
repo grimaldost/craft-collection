@@ -131,3 +131,42 @@ blind pre-mortem, then the run. Sketch to start from:
    choosing-tools 762→771, python-engineering 2261→2314.
 5. `.gitignore` now tracks `docs/adr|specs|method|portability.md` (the rest of
    `docs/` stays local-only, per the original policy's intent).
+
+---
+
+## Continuation — 2026-07-16, remote session (items closed and what they found)
+
+Status per item above, worked in a managed remote environment where the
+`claude` CLI **is** authenticated:
+
+1. **Evals (item 1): run and recorded** — full results, environment notes,
+   and attribution in `docs/specs/agent-portability-eval-run.md`; sealed
+   holdout rows appended to `evals/trigger/holdout/BASELINES.md` (one per
+   sanctioned read, per N29a). Short version: compaction-survival matches its
+   baseline at 1.00/1.00 and evaluate-skill triggers pass at 0.96;
+   python-engineering triggers pass on error-excluded recall (0.85);
+   specificity is 1.00 everywhere; the three other sealed holdouts birth at
+   0.00 recall on intent-paraphrase positives. A same-instrument pre/post-wave
+   A/B (plus byte-comparison of all six descriptions) shows **none of the
+   under-gate numbers is attributable to the wave** — the §3–§5 wording-
+   regression clause has nothing to bite on. Follow-up named there:
+   description tuning for toolkit-awareness / choosing-tools /
+   python-engineering on dev evidence, then reseal + re-baseline.
+2. **Cheap verifications (item 2):** full `pre-commit run --all-files` chain
+   is green as one mutating run. The §7 floor was re-run against
+   `https://github.com/grimaldost/craft-collection` by `rev:` SHA — clone,
+   build, dirty-fixture fail, clean-fixture pass all correct — and
+   `adapters/pre-commit/craft-floor.yaml` now pins that verified SHA (re-pin
+   to a release tag at merge; the pre-portability plugin tags can't serve).
+   The non-CC harness smoke remains open (no such harness installed here).
+3. **Advisories (item 3): folded** — ADV-1 and ADV-3 are in the spec with the
+   fold recorded in its certification block; ADV-2 had already shipped.
+4. **The A/B experiment (item 4): still yours to spec**, with two measured
+   inputs from this run to fold into its design: (a) correct-usage currently
+   conflates activation with rubric-compliance — `with_activation_rate` was
+   0.00 on every task, so the metric scores default behavior wherever the
+   task prompt doesn't trip the trigger; (b) the intent-paraphrase holdouts
+   expose a routing gap (ownership/dispatch/audit phrasings) that trigger
+   tuning would target — spec the estimand so tuning and no-degradation
+   claims don't read against the same sealed sets.
+5. **Merge mechanics (item 5): untouched**, still your call.
