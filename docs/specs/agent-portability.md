@@ -1,7 +1,7 @@
 # Spec — Multi-agent portability of the craft-collection plugins
 
 - **Date:** 2026-07-16
-- **Status:** draft
+- **Status:** ready (DoR passed)
 - **Audience:** maintainer + implementing agents (one PR per numbered section)
 - **Output artifact(s):** `AGENTS.md`, `scripts/gen_agents_md.py`, `scripts/check_uv_hygiene.py`, `.pre-commit-hooks.yaml`, `adapters/pre-commit/craft-floor.yaml`, `plugins/engineering-discipline/hooks/harness_adapters.py`, `docs/portability.md`, reworded SKILL.md bodies
 - **Phases:** Decide+Specify this round (Decompose: the PR manifest below is the plan; Implement/Gate/Review/Reflect: future waves)
@@ -319,19 +319,20 @@ describes shipped reality.
 
 ## Pre-mortem certification
 
-- **Reviewer:**
-- **Verdict:** not yet certified
-- **Certification artifact:**
-- **Date:**
-- **Reviewed against:**
-- **Post-fold coherence:**
-- **Failure modes considered & folded in:**
+- **Reviewer:** pre-mortem-review-r2 (fresh subagent, non-author; round 1 by pre-mortem-review, also fresh and non-author)
+- **Verdict:** CERTIFIED — round 2 resolution audit: FM-1..FM-9 all RESOLVED, zero new findings under the rising bar, three non-blocking advisories (ADV-1 header artifact list completeness, ADV-2 `.pre-commit-hooks.yaml` needs `language: script` since the repo is not pip-installable, ADV-3 soften §6's over-broad test-import justification) recorded here for the implementing PRs
+- **Certification artifact:** docs/specs/agent-portability.premortem.md
+- **Date:** 2026-07-16
+- **Reviewed against:** the live tree at this commit; no external dependency SHAs (gates executed read-only: word_budget, lint_register, validate_plugins; keel kit 0.13.1)
+- **Post-fold coherence:** author re-read post-fold and reconciled two fold-introduced inconsistencies (gate-commands eval scope; AGENTS.md-regeneration timing vs PR ordering) without moving ledger anchors; round-2 reviewer independently re-verified coherence (sections vs gate commands vs DoD vs manifest) and all nine ledger anchors
+- **Failure modes considered & folded in:** FM-1 sync-twin edit surface (BLOCKER), FM-2 word-budget zero-headroom fallback, FM-3 consumer hook delivery, FM-4 vacuous test homing, FM-5 phantom eval datasets, FM-6 relocation-breaks-tests, FM-7 generated-byte hygiene, FM-8 vacuous docs/ lint, FM-9 README drift + regeneration obligation — one fold-ledger row each below
+- **Note:** the only body edit after the certified pass is the Status line (draft → ready), recording this gate's own outcome; a B2 revision WARN against the saved Spec-hash reflects that single line and is the honest record, not drift
 
 ### Fold ledger
 
 | Finding | Target section | artifact:line | Confirmed |
 |---|---|---|---|
-| FM-1 sync-twin edit surface + 7-file re-copy + sync gate in acceptance | §8 | `docs/specs/agent-portability.md:247` `sync **source**` | yes |
+| FM-1 sync-twin edit surface + 7-file re-copy + sync gate in acceptance | §8 | `docs/specs/agent-portability.md:247` `evals/harness/test_scripts_in_sync.py` | yes |
 | FM-2 reviewed baseline-bump fallback pre-authorized | §3 (referenced by §4, §5) | `docs/specs/agent-portability.md:162` `baseline bump that names what the growth displaces` | yes |
 | FM-3 consumer delivery via `.pre-commit-hooks.yaml` + fixture-repo acceptance | §7 | `docs/specs/agent-portability.md:226` | yes |
 | FM-4 tests homed in `evals/harness/` + run_tests output asserted | §1, §7 | `docs/specs/agent-portability.md:123` | yes |
