@@ -18,8 +18,10 @@ repos:
 
   # Substitutes for: engineering-discipline uv_enforce (PreToolUse) — catches
   # pip/poetry/virtualenv residue at commit instead of blocking the command.
-  # Pin `rev` to a craft-collection tag or commit SHA.
+  # Pinned to the SHA the by-URL consumer run verified (both directions:
+  # dirty project fails, clean passes). Re-pin to a release tag once the
+  # portability wave is merged to main; `pre-commit autoupdate` moves it.
   - repo: https://github.com/grimaldost/craft-collection
-    rev: main
+    rev: 380d3e15c6671992cee8350c1857a89c2777f7b6
     hooks:
       - id: check-uv-hygiene
