@@ -5,17 +5,14 @@ description: >
   whenever a user wants to: scaffold a Python project, configure tooling
   (uv, ruff, ty, mypy, structlog, pytest, hypothesis, pydantic-settings,
   opentelemetry, pip-audit), set up pyproject.toml, src-layout, pre-commit,
-  CI/CD, Docker; or audit and modernize an existing, inherited, or legacy
-  project's tooling, configuration, and dev setup against current standards —
-  whether the build, lint, or CI config has drifted, what is outdated or
-  sub-par, or bringing an older project up to modern practice; or asks about
-  Python architecture, packaging, testing, type checking, observability,
-  security, async patterns, typing.Protocol, dependency injection, CLAUDE.md,
-  or Cursor rules. Covers hexagonal architecture, functional core/imperative
-  shell, property-based testing, snapshot testing, testcontainers, Trusted
-  Publishers, and Sigstore. Not for explaining what a piece of Python does
-  (comprehension), not for debugging a specific runtime bug, not for a
-  throwaway one-off script with no project, and not for non-Python stacks.
+  CI/CD, Docker — for an existing, inherited, or legacy project as much as a
+  greenfield one (assessing and modernizing current setup, not just scaffolding
+  new) — or asks about Python
+  architecture, packaging, testing, type
+  checking, observability, security, async patterns, typing.Protocol, dependency
+  injection, CLAUDE.md, or Cursor rules. Covers hexagonal architecture,
+  functional core/imperative shell, property-based testing, snapshot testing,
+  testcontainers, Trusted Publishers, and Sigstore.
 ---
 
 # Modern Python Engineering Standards
