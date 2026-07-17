@@ -1,0 +1,15 @@
+[
+  { "query": "Sign this commit with the LLM signature before you push.", "should_trigger": true, "note": "canonical: sign a commit" },
+  { "query": "Add the model and tool-stack attribution to the commit message.", "should_trigger": true, "note": "model + stack attribution on a commit" },
+  { "query": "Generate the provenance trailers for this change and append them.", "should_trigger": true, "note": "provenance trailers vocabulary" },
+  { "query": "Replace that Co-Authored-By Claude line with our provenance signature.", "should_trigger": true, "note": "boilerplate-to-signature conversion" },
+  { "query": "Record which model and which plugin versions produced this commit.", "should_trigger": true, "note": "intent-level: record what produced the work" },
+  { "query": "Add the Assisted-By block to the PR description before opening it.", "should_trigger": true, "note": "PR-body surface" },
+  { "query": "Stamp the commit with the exact model that wrote it and the tools it ran on.", "should_trigger": true, "note": "paraphrase: exact model + tools" },
+  { "query": "Write a Conventional Commit message for these staged changes.", "should_trigger": false, "note": "near-miss: plain commit authoring" },
+  { "query": "Add me and my teammate as co-authors on this commit.", "should_trigger": false, "note": "near-miss: human co-authorship" },
+  { "query": "Sign my commits with my GPG key from now on.", "should_trigger": false, "note": "near-miss: cryptographic signing" },
+  { "query": "Which plugins and hooks are installed in this environment?", "should_trigger": false, "note": "near-miss: inventory => toolkit-awareness" },
+  { "query": "Bump the plugin version and write the CHANGELOG entry for this release.", "should_trigger": false, "note": "release chores" },
+  { "query": "What model are you running on right now?", "should_trigger": false, "note": "identity chat, nothing to sign" }
+]

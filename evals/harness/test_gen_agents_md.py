@@ -24,7 +24,7 @@ def main() -> int:
 
     # Population: every SKILL.md, command, and output style is listed with its path.
     skills = sorted(ROOT.glob('plugins/*/skills/*/SKILL.md'))
-    assert len(skills) == 23, f'expected 23 skills in the tree, found {len(skills)}'
+    assert len(skills) == 24, f'expected 24 skills in the tree, found {len(skills)}'
     for md in (
         skills
         + sorted(ROOT.glob('plugins/*/commands/*.md'))
