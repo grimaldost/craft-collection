@@ -37,6 +37,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: agents-md-fresh
+        name: AGENTS.md freshness (generated index, never hand-edited)
+        entry: uv run --no-project -- python scripts/gen_agents_md.py --check
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: validate-plugins
         name: validate marketplace structure
         entry: uv run --no-project --with pyyaml -- python scripts/validate_plugins.py

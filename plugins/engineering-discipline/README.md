@@ -29,8 +29,12 @@ All scripts ship with stdlib-runnable tests (`python test_<name>.py`).
 ## Hooks
 
 The PostToolUse and PreToolUse hooks are **active as soon as the plugin is
-installed** (no env gate — they are the mechanical layer); only the Stop nudge
-is opt-in.
+installed** in Claude Code (no env gate — they are the mechanical layer); only
+the Stop nudge is opt-in. On a harness without act-time hooks the same rules
+degrade down the enforcement ladder: commit-time via the exported pre-commit
+floor (`adapters/pre-commit/craft-floor.yaml`, hook id `check-uv-hygiene`),
+else advisory text in the generated `AGENTS.md`. The decision cores are
+importable for other harnesses' hook systems via `hooks/harness_adapters.py`.
 
 - **PostToolUse** — `ruff format` only on `.py` edits via `uvx`. Non-blocking.
   `ruff check --fix` is deliberately excluded per-edit (it strips an import added

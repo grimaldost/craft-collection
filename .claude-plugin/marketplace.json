@@ -13,8 +13,8 @@
       "name": "session-workflow",
       "source": "./plugins/session-workflow",
       "category": "productivity",
-      "description": "Capture session knowledge into structured entries and consolidate them into durable guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels, audit a large file corpus by blind fan-out, maintain a compaction-surviving control anchor for long autonomous runs, behaviorally evaluate skills, keep live awareness of the installed toolkit, and run the tool-dogfooding feedback loop: per-session feedback reports captured into each tool's repo and triaged into leverage-ordered improvement backlogs.",
-      "keywords": ["journal", "handoff", "session", "knowledge-capture", "consolidate", "review", "corpus-review", "compaction-survival", "autonomous-run", "skill-eval", "toolkit", "feedback", "dogfooding", "triage"]
+      "description": "Capture session knowledge into structured entries and consolidate them into durable guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels, audit a large file corpus by blind fan-out, maintain a compaction-surviving control anchor for long autonomous runs, behaviorally evaluate skills, keep live awareness of the installed toolkit, sign agent-assisted work with machine-generated provenance trailers (exact model + versioned tool stack, never a co-author line), and run the tool-dogfooding feedback loop: per-session feedback reports captured into each tool's repo and triaged into leverage-ordered improvement backlogs.",
+      "keywords": ["journal", "handoff", "session", "knowledge-capture", "consolidate", "review", "corpus-review", "compaction-survival", "autonomous-run", "skill-eval", "toolkit", "provenance", "llm-signature", "feedback", "dogfooding", "triage"]
     },
     {
       "name": "humblepowers",

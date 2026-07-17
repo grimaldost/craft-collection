@@ -3,6 +3,127 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.16.0 — 2026-07-17
+
+New capability: provenance signing for agent-assisted work. Minor bump: a new
+skill and script. Maintainer-directed design decisions, recorded: the signature
+is always machine-generated (a hand-typed one rots, and wrong provenance is
+worse than none); it is selective (enabled plugins only, `--plugin` to narrow);
+the model listed is the one writing and orchestrating at commit time — the one
+responsible for the change; and the model appears only in `Assisted-By`, never
+as a commit co-author (`Co-Authored-By: Claude` boilerplate carries no
+information and is actively scrubbed).
+
+### Added
+
+- **`llm-signature` skill** — sign agent-assisted work with two machine-readable
+  git trailers: `Assisted-By: <exact-model-id>` and
+  `Agent-Stack: <name>@<version> (<marketplace>); ...` (harness + enabled
+  plugins; the marketplace label is a lookup key, so URLs stay out of commits).
+  Spec in `references/spec.md` (`llm-signature/v1`), including read-back
+  recipes (`git log --format='%(trailers:key=Assisted-By,valueonly)'`) and an
+  optional `prepare-commit-msg` hook recipe.
+- **`scripts/render_signature.py`** — renders the trailer block from live
+  sources: the model from the session transcript's last main-loop assistant
+  message (sidechain/subagent and `<synthetic>` entries never sign; transcript
+  auto-discovery matches the munged cwd under `~/.claude/projects/` and is
+  gated on a live session so a stale transcript cannot sign the wrong model),
+  the stack from `claude plugin list --json` + `claude --version`. Render mode
+  fails loud when the model is unresolvable (never guesses); `--apply
+  <msg-file>` is the commit-safe mode — refreshes trailers idempotently, scrubs
+  `Co-Authored-By: Claude/Anthropic` lines and "Generated with Claude Code"
+  badges (human co-authors always survive), and exits 0 on any failure so a
+  signing problem never blocks a commit. Stdlib-only, 15 tests
+  (`test_render_signature.py`, bare-python runnable), verified live in-session
+  (resolved the running model and harness version end-to-end).
+
+### Fixed (review round, same release)
+
+From the four-lens adversarial panel (architect / skeptic / correctness /
+adopter) convened on this branch — unanimous REVISE, kernel endorsed, six
+defects reproduced by execution and fixed test-first:
+
+- **`--apply` could abort a commit on a non-UTF-8 message** — only `OSError`
+  was caught, and `UnicodeDecodeError` is a `ValueError`; legal git
+  (`i18n.commitEncoding`) crashed the hook with exit 1. Now reads bytes,
+  round-trips via `surrogateescape`, and the whole apply path catches
+  `Exception` — no input produces a nonzero exit (non-UTF-8 regression test).
+- **`git commit --verbose` silently lost the signature** — the block was
+  inserted after the scissors line, inside the diff preview git strips (and the
+  scrub mutated diff lines). Everything from the scissors line on is now
+  frozen; the block lands before it.
+- **The glue heuristic could hide the trailers from git** — checking only the
+  last line welded the block onto a prose paragraph ending in a trailer-shaped
+  line (`Note: …`), and `git interpret-trailers --parse` returned empty. The
+  block now joins an existing paragraph only when EVERY line of it is
+  trailer-shaped; a test asserts `git interpret-trailers` actually parses the
+  output.
+- **A custom `core.commentChar` resurrected aborted commits** — a comment-only
+  message under `commentChar=;` was treated as content and signed.
+  `apply_to_message` takes the configured comment char (read via
+  `git config core.commentChar` in hook mode).
+- **The scrubber destroyed content it didn't own** — a human co-author named
+  Claude (`<claude.dubois@example.fr>`) was deleted, and `_AI_BADGE.search`
+  ate body prose mentioning "generated with … Claude". Scrubs are now anchored
+  to the vendor's identity (anthropic.com / claude+noreply addresses), match
+  flush-left whole lines only, and never touch indented/quoted examples — the
+  "human co-authors never match" claim is now true (tested). A
+  `Claude-Session:` trailer is deliberately left untouched (session
+  traceability, not attribution marketing) — decision recorded in the spec.
+- **Transcript auto-discovery could sign the wrong model** — `CLAUDECODE`
+  proves *some* session is live, not that the newest-mtime `.jsonl` is
+  *this* session's, and the lossy cwd-munging collides distinct projects
+  (`my.repo` ≡ `my-repo`). A candidate now signs only when fresh (30-min
+  window) AND the cwd recorded inside the transcript verifies against this one
+  by exact path; nothing verifiable → refuse to sign. The residual
+  same-cwd-concurrent-sessions race is documented honestly in the spec with
+  the deterministic escape (`--transcript`/`--model`). Auto-discovery also
+  gained descendant-dir nomination (hook at repo root, session started
+  deeper), and unsigned (human) commits no longer pay the claude-CLI calls.
+- **The hook recipe could brick a repo** — with `uv` off PATH or a moved
+  install path, the verbatim `prepare-commit-msg` recipe exited nonzero and
+  aborted every commit, human ones included. The recipe now guards its
+  preconditions (`command -v uv || exit 0`, script-exists check, `|| true`).
+- Docs honesty from the same round: `Agent-Stack` semantics renamed to
+  **environment-at-commit** provenance ("enabled" ≠ "shaped the work"); an
+  **Adopting in a repo** section defines the one CLAUDE.md line the trigger's
+  "a project that adopts the signature" refers to; real model IDs noted as
+  dated (`claude-sonnet-4-5-20250929`-style), so read-back greps match
+  history; "provenance record, not cryptographic signature" stated; the
+  repeated-`Agent-Stack:`-keys and augment-vs-replace alternatives recorded
+  with their rejection rationale. CRLF messages round-trip. Declined, with
+  rationale: cutting `--json`/`--plugin` (they implement the owner's
+  selectivity constraint) and reducing the stack to harness-only (contradicts
+  the owner's requirement to list the tool stack). Test suite 15 → 23.
+  SKILL.md word budget 365 → 412 (adoption pointer + honest semantics; no
+  clause retired).
+
+### Notes
+
+- Trigger surface: a dev trigger dataset ships
+  (`evals/trigger/llm-signature.json`, 7+/6−) and the skill is registered in
+  `evals/config.json`; the sealed holdout is deferred to the next calibration
+  round so it can be sealed **with a birth baseline**, per the 0.6.5 doctrine —
+  no holdout is sealed without a birth number.
+- Word budget seeded: llm-signature 365.
+
+## 0.15.0 — 2026-07-16
+
+### Changed
+
+- **Capability-conditional wording (multi-agent portability).** review-panel,
+  compaction-survival, toolkit-awareness, and evaluate-skill no longer gate
+  load-bearing instructions on the harness name: each states the capability it
+  needs and a degradation ladder (fresh-context subagents -> sequential clean
+  contexts; CLI plugin enumeration -> AGENTS.md index -> directory scan;
+  hook re-injection -> manual anchor re-read). Claude Code mechanics stay as
+  mechanism notes. Word-budget baselines bumped for the four bodies: the
+  growth displaces nothing — conditional ladders replaced absolute
+  harness-gating that read as "skip this skill" off Claude Code.
+- **AgentRunner seam.** The evaluate-skill engine routes spawns through an
+  AgentRunner protocol with headless Claude Code as its only backend today;
+  trigger numbers remain measured on Claude Code (plugin mirror re-synced).
+
 ## 0.14.3 — 2026-07-14
 
 ### Fixed

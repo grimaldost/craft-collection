@@ -23,7 +23,10 @@ uv run --no-project -- python "${CLAUDE_PLUGIN_ROOT}/skills/toolkit-awareness/sc
 The scan also lists **plugin-provided** components (it shells out to
 `claude plugin list`), since those live in the plugin cache rather than `.claude/`
 — the case a directory-only scan misses. For deeper detail on one plugin, use
-`claude plugin details <name>`.
+`claude plugin details <name>`. Without the `claude` CLI (another harness), the
+scan still reports the `.claude/` tree and flags plugins as not enumerated —
+fall down the ladder: a repo's generated `AGENTS.md` index when one exists,
+else a directory scan of its `plugins/*/skills/`.
 
 Prefer the scan over recalling from memory: installed capabilities change, and a
 remembered list is wrong the moment one does.
@@ -34,8 +37,8 @@ which injects a compact inventory at the start of every session.
 
 ## How to reference the toolkit in prompts and specs
 
-When writing a task prompt or a definition-of-done that another Claude Code
-session will execute, lean on what's installed instead of restating it:
+When writing a task prompt or a definition-of-done that another agent session
+will execute, lean on what's installed instead of restating it:
 
 1. **Don't restate conventions a skill already handles.** Write "follow the
    invariants in `<conventions skill / GUARDRAILS path>`" rather than copying the

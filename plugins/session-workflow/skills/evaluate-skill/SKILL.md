@@ -38,6 +38,8 @@ run both.
 
 This is **heavyweight** — it spawns dozens of headless `claude -p` runs. Show the
 plan and rough cost (≈ spawns × per-run budget) and get a go-ahead before firing.
+The spawn backend is headless Claude Code today: the engine's `AgentRunner` seam
+admits other backends, but every trigger number is measured on Claude Code only.
 
 ## Setup — an `evals/` layout in the target project
 

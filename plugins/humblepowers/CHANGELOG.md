@@ -5,6 +5,19 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.6.0 — 2026-07-16
+
+### Changed
+
+- **Capability-conditional inventory fallback (multi-agent portability).**
+  choosing-tools' dispatch and boundary steps name the full inventory ladder:
+  an inventory skill when installed, else the harness's skill listing, else a
+  repo's `AGENTS.md` index — the skill no longer assumes a harness-provided
+  in-context listing. planned-execution already carried its "Without
+  subagents" ladder; choosing-models was already harness-neutral. Word-budget
+  baseline bumped for choosing-tools (+9 words): the growth displaces nothing —
+  it widens the fallback source list.
+
 ## 0.5.0 — 2026-07-14
 
 The capacity-dispatch pair: choosing-models + /refresh-models, per the accepted

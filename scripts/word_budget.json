@@ -1,10 +1,10 @@
 {
   "plugins/engineering-discipline/skills/data-engineering-discipline/SKILL.md": 2736,
-  "plugins/engineering-discipline/skills/python-engineering/SKILL.md": 2261,
+  "plugins/engineering-discipline/skills/python-engineering/SKILL.md": 2314,
   "plugins/engineering-discipline/skills/refresh-stack/SKILL.md": 484,
   "plugins/humblepowers/skills/brainstorming/SKILL.md": 560,
   "plugins/humblepowers/skills/choosing-models/SKILL.md": 1006,
-  "plugins/humblepowers/skills/choosing-tools/SKILL.md": 762,
+  "plugins/humblepowers/skills/choosing-tools/SKILL.md": 771,
   "plugins/humblepowers/skills/planned-execution/SKILL.md": 1069,
   "plugins/humblepowers/skills/receiving-code-review/SKILL.md": 552,
   "plugins/humblepowers/skills/refresh-models/SKILL.md": 479,
@@ -12,14 +12,15 @@
   "plugins/humblepowers/skills/systematic-debugging/SKILL.md": 945,
   "plugins/humblepowers/skills/test-driven-development/SKILL.md": 999,
   "plugins/humblepowers/skills/verification-before-completion/SKILL.md": 800,
-  "plugins/session-workflow/skills/compaction-survival/SKILL.md": 1391,
+  "plugins/session-workflow/skills/compaction-survival/SKILL.md": 1409,
   "plugins/session-workflow/skills/consolidate-knowledge/SKILL.md": 932,
   "plugins/session-workflow/skills/context-handoff/SKILL.md": 1854,
   "plugins/session-workflow/skills/corpus-review/SKILL.md": 632,
-  "plugins/session-workflow/skills/evaluate-skill/SKILL.md": 825,
+  "plugins/session-workflow/skills/evaluate-skill/SKILL.md": 850,
   "plugins/session-workflow/skills/feedback-triage/SKILL.md": 1677,
   "plugins/session-workflow/skills/journaling-sessions/SKILL.md": 1761,
-  "plugins/session-workflow/skills/review-panel/SKILL.md": 1120,
+  "plugins/session-workflow/skills/llm-signature/SKILL.md": 412,
+  "plugins/session-workflow/skills/review-panel/SKILL.md": 1129,
   "plugins/session-workflow/skills/tool-feedback/SKILL.md": 1188,
-  "plugins/session-workflow/skills/toolkit-awareness/SKILL.md": 477
+  "plugins/session-workflow/skills/toolkit-awareness/SKILL.md": 515
 }

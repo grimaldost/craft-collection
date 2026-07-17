@@ -1,0 +1,27 @@
+# craft-collection enforcement floor — the COMMIT-TIME tier of the enforcement
+# ladder (ADR-0003), for consumer projects on harnesses without act-time hooks.
+# Copy these repos into your project's .pre-commit-config.yaml (or use this
+# file as-is) and run `pre-commit install`.
+#
+# Each entry names the act-time Claude Code hook it substitutes for. The floor
+# is weaker by design: it blocks at commit, not at the moment of the edit or
+# command — the AGENTS.md advisory tier states the same rules for reading time.
+repos:
+  # Substitutes for: engineering-discipline ruff_format (PostToolUse) —
+  # formats/lints at commit what the CC hook formats after every edit.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.7
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Substitutes for: engineering-discipline uv_enforce (PreToolUse) — catches
+  # pip/poetry/virtualenv residue at commit instead of blocking the command.
+  # Pinned to the SHA the by-URL consumer run verified (both directions:
+  # dirty project fails, clean passes). Re-pin to a release tag once the
+  # portability wave is merged to main; `pre-commit autoupdate` moves it.
+  - repo: https://github.com/grimaldost/craft-collection
+    rev: 380d3e15c6671992cee8350c1857a89c2777f7b6
+    hooks:
+      - id: check-uv-hygiene

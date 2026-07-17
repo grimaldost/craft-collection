@@ -8,7 +8,8 @@ A Claude Code plugin marketplace with three plugins:
 - **session-workflow** — capture session knowledge and distill it into durable
   guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels,
   behaviorally evaluate skills, keep a live inventory of the installed toolkit,
-  and run a tool-dogfooding feedback loop (capture + triage).
+  sign agent-assisted work with machine-generated provenance trailers, and run a
+  tool-dogfooding feedback loop (capture + triage).
 - **humblepowers** — superpowers-derived process disciplines in a calibrated
   register (fit-ranked dispatch, calibration-first skill authoring, TDD,
   root-cause debugging, brainstorming, verification, review reception, midweight
@@ -34,6 +35,11 @@ Local development (no marketplace needed):
 claude --plugin-dir ./plugins/engineering-discipline --plugin-dir ./plugins/session-workflow --plugin-dir ./plugins/humblepowers
 ```
 
+**Other agents (Codex, Gemini CLI, Cursor, any agents.md reader):** clone this
+repo and point the agent at the generated `AGENTS.md` index — see
+[`docs/portability.md`](docs/portability.md) for the installation matrix, the
+enforcement ladder, and what is (and is not) measured off Claude Code.
+
 ## What's inside
 
 **engineering-discipline** — skills `python-engineering`,
@@ -43,7 +49,8 @@ hooks for ruff-format and uv enforcement; a `stack.toml`-based freshness loop.
 
 **session-workflow** — skills `journaling-sessions`, `consolidate-knowledge`,
 `context-handoff`, `review-panel`, `evaluate-skill`, `toolkit-awareness`,
-`tool-feedback`, `feedback-triage`, `compaction-survival`, and `corpus-review`;
+`llm-signature`, `tool-feedback`, `feedback-triage`, `compaction-survival`, and
+`corpus-review`;
 a live `scan_toolkit.py` inventory; the headless skill-eval engine in `scripts/`;
 a selectable `step-digest` output style; an optional session-start inject hook.
 

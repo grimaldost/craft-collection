@@ -17,9 +17,20 @@ __pycache__/
 *.skill
 dist/
 
-# Internal design/build history & review notes — kept local, never published
-docs/
+# Internal design/build history & review notes — kept local, never published.
+# Exception: the keel-method artifacts (ADRs, specs, template kit) are the
+# durable coordinate system the method requires committed — tracked below.
+docs/*
+!docs/adr/
+!docs/specs/
+!docs/method/
+!docs/feedback/
+!docs/portability.md
 evals/review/
+
+# Compaction-survival anchors — intra-actor working state for long autonomous
+# runs, discarded at close (session-workflow's compaction-survival skill).
+.claude/anchors/
 
 # OS
 .DS_Store

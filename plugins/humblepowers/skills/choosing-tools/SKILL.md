@@ -31,8 +31,8 @@ not selection.
 2. **Shortlist candidates.** Installed skills whose triggers plausibly match.
    When unsure what is installed, get a live inventory rather than recalling
    from memory — an inventory skill when one is installed (e.g.
-   session-workflow's toolkit-awareness), else the skill listing already in
-   context.
+   session-workflow's toolkit-awareness), else the harness's skill listing or
+   a repo's `AGENTS.md` index already in context.
 3. **Read the target tool's own record.** When the task will exercise a tool
    that has a registered dogfooding-feedback intake (e.g. a `feedback-targets`
    binding, where session-workflow's loop is installed), read the newest
@@ -80,7 +80,8 @@ rules of thumb hold:
 
 - **The inventory is someone else's job** — what is installed and who owns
   which concern comes from an inventory skill when one is installed (e.g.
-  session-workflow's toolkit-awareness) or from the in-context skill listing.
+  session-workflow's toolkit-awareness), the harness's skill listing, or a
+  repo's `AGENTS.md` index.
   This skill consumes that answer; it does not produce it.
 - **skill-authoring** owns descriptions — when a skill keeps winning or losing
   dispatch wrongly, fix its trigger surface there. Never compensate by

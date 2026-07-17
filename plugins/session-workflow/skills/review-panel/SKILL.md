@@ -1,7 +1,7 @@
 ---
 name: review-panel
 user-invocable: true
-description: Use when the user has iterated on a design, plan, spec, architecture, code, or prose over several rounds and can no longer judge it cleanly, before a high-stakes or hard-to-reverse decision, or when they ask for "fresh eyes", "a second opinion", "red team this", "poke holes in this", "sanity-check this independently", "am I anchored" / "too close to this", "critique this from different angles", or run "/review-panel". Prefer this over reviewing the artifact yourself — its value is convening fresh reviewer subagents that are blind to this conversation and to each other, which a review you run while anchored on the same context cannot replicate. Claude Code only (it spawns subagents); always show the plan and rough cost and ask before firing. Not for a quick factual check, a single obvious answer, or a first-pass review of something just created.
+description: Use when the user has iterated on a design, plan, spec, architecture, code, or prose over several rounds and can no longer judge it cleanly, before a high-stakes or hard-to-reverse decision, or when they ask for "fresh eyes", "a second opinion", "red team this", "poke holes in this", "sanity-check this independently", "am I anchored" / "too close to this", "critique this from different angles", or run "/review-panel". Prefer this over reviewing the artifact yourself — its value is convening fresh reviewer subagents that are blind to this conversation and to each other, which a review you run while anchored on the same context cannot replicate. Requires spawning fresh-context reviewers (subagents where the harness has them; sequential clean contexts otherwise); always show the plan and rough cost and ask before firing. Not for a quick factual check, a single obvious answer, or a first-pass review of something just created.
 ---
 
 # Review Panel
@@ -55,8 +55,9 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    — independence over politeness.
 4. **Demand structured, comparable output** — a fixed per-reviewer schema (verdict +
    scores + reasons) so results sit side by side. See `references/prompt-template.md`.
-5. **Fire them — mechanism by ladder level.** Levels 1–2: spawn one subagent per
-   lens, concurrently (one message, multiple Agent calls; Opus for high stakes).
+5. **Fire them — mechanism by ladder level.** Levels 1–2: one fresh reviewer per
+   lens, concurrently (Claude Code: one message, multiple Agent calls; Opus for
+   high stakes).
    Level 3, or any panel that needs per-lens reasoning-effort control: drive the
    lenses through the Workflow tool — `agent(prompt, {effort, schema})` per lens
    — which buys what the Agent tool does not expose: reasoning-effort control and
@@ -94,9 +95,10 @@ The default quartet works for anything; the packs sharpen it. Mix and match.
 
 ## Guard-rails
 
-- **Claude Code only.** This spawns subagents; it does not work in web chat (no
-  subagent primitive). If asked there, say so and offer the manual fallback: paste
-  the neutral artifact brief into N separate fresh chats yourself.
+- **Requires fresh-context reviewers.** With a subagent primitive (Claude Code),
+  spawn them; without one, run each lens sequentially in a clean context or
+  session — or paste the neutral artifact brief into N separate fresh chats
+  yourself. Independence survives the fallback; concurrency is what you lose.
 - **Cost is real.** A capacity-dispatch policy, when installed (e.g. humblepowers'
   choosing-models), sets reviewer tier by stakes; otherwise offer to drop a ladder level.
 - **Reviewing a repo whose plugin is also installed?** State which copy the panel

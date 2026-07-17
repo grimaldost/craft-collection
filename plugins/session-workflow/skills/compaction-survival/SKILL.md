@@ -126,7 +126,8 @@ An anchor that cannot be found is no anchor.
   `SESSION_WORKFLOW_ANCHOR_HOOKS=1`, a SessionStart hook on `compact` and
   `resume` re-injects the newest **active** anchor's HEAD (to the tail marker)
   into fresh context mechanically — the re-read step stops depending on the model
-  remembering the protocol. An anchor marked done in-content is de-ranked below
+  remembering the protocol. On a harness without session-start hooks, the
+  cadence's manual re-read at each turn start is the whole mechanism. An anchor marked done in-content is de-ranked below
   live tracks, so a stray closed-but-unrenamed track no longer shadows the live
   one; the rename to `*.closed.md` remains the only signal that stops injection
   entirely. Stale anchors are injected with an explicit warning; when several
