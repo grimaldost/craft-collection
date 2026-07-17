@@ -24,6 +24,7 @@ docs/*
 !docs/adr/
 !docs/specs/
 !docs/method/
+!docs/feedback/
 !docs/portability.md
 evals/review/
 
