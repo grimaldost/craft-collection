@@ -27,6 +27,10 @@ docs/*
 !docs/portability.md
 evals/review/
 
+# Compaction-survival anchors — intra-actor working state for long autonomous
+# runs, discarded at close (session-workflow's compaction-survival skill).
+.claude/anchors/
+
 # OS
 .DS_Store
 Thumbs.db
