@@ -164,8 +164,9 @@ if __name__ == '__main__':
         if name.startswith('test_') and callable(fn):
             try:
                 fn()
-                print(f'PASS {name}')
             except AssertionError as exc:
                 failed += 1
                 print(f'FAIL {name}: {exc}')
-    sys.exit(1 if failed else 0)
+    if failed:
+        sys.exit(1)
+    print('ok: all router tests passed')

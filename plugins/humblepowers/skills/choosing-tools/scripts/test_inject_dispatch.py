@@ -207,8 +207,9 @@ if __name__ == '__main__':
             with tempfile.TemporaryDirectory() as td:
                 try:
                     fn(Path(td))
-                    print(f'PASS {name}')
                 except AssertionError as exc:
                     failed += 1
                     print(f'FAIL {name}: {exc}')
-    sys.exit(1 if failed else 0)
+    if failed:
+        sys.exit(1)
+    print('ok: all inject_dispatch tests passed')
