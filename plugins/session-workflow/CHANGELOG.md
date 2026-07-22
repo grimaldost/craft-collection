@@ -3,6 +3,18 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.16.1 — 2026-07-22
+
+### Fixed
+
+- **llm-signature: ASCII-only CLI error output.** The could-not-resolve stderr
+  message carried an em dash; on Windows a child process encodes it as cp1252
+  (0x97) while a utf-8-decoding parent's reader thread raises and returns
+  `stderr=None` — which made `test_render_signature.py` fail environment-
+  dependently and blocked every push from this machine. Same cp1252 trap class
+  the hook conventions already ban for hook stdout; runtime-emitted text in
+  bundled scripts now follows it too (docstrings/comments unaffected).
+
 ## 0.16.0 — 2026-07-17
 
 New capability: provenance signing for agent-assisted work. Minor bump: a new

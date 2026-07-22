@@ -390,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
     model = resolve_model(args)
     if not model:
         print(
-            'llm-signature: could not resolve the writing model — pass --model or --transcript '
+            'llm-signature: could not resolve the writing model - pass --model or --transcript '
             '(auto-discovery needs a live Claude Code session and a fresh, cwd-matching '
             'transcript)',
             file=sys.stderr,

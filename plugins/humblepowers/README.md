@@ -54,11 +54,22 @@ Deduplicated against craft-collection and the Claude Code harness:
 Governed multi-PR machinery stays out of the pack by design; planned-execution
 hands off to it the moment work wants gates and dependency DAGs.
 
-## Optional hook (off by default)
+## Optional hooks (off by default)
 
 | behaviour | enable with |
 |---|---|
 | Compact dispatch protocol injected at session start | `HUMBLEPOWERS_DISPATCH_INJECT=1` |
+| Per-prompt dispatch injection with tiered cadence: full protocol on the first prompt, then a two-line micro-reminder, re-escalating to full every N prompts (`HUMBLEPOWERS_DISPATCH_FULL_EVERY`, default 10) or M minutes (`HUMBLEPOWERS_DISPATCH_FULL_MINUTES`, default 30); slash-commands and short follow-ups get nothing. Subsumes and silences the session-start inject. | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1` |
+| Lexical dispatch router riding the per-prompt inject: deterministic word-boundary regexes (`router_rules.json`, calibrated against `evals/trigger/*.json`) name at most two candidate skills for the prompt, with the matched words shown; silent on no match. On by default when the per-prompt inject is on. | opt out: `HUMBLEPOWERS_DISPATCH_ROUTER=0` |
+
+The per-prompt hook fails open (any error or timeout means silence, never a
+blocked prompt), keeps payloads ASCII, and logs tier/router decisions to a
+size-capped local NDJSON (`dispatch-log.ndjson` in its state dir) so
+cadence-vs-content effectiveness can be A/B'd against real sessions. Router
+calibration numbers are dev-set numbers by construction — the trigger datasets
+are also the calibration corpus; seal a fresh holdout before citing
+generalization. Router rules are English-lexicon; prompts in other languages
+match only on loanwords (pipeline, backfill, dashboard, ETL).
 
 ## Register linter
 
