@@ -3,6 +3,18 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.16.2 — 2026-07-22
+
+### Fixed
+
+- **evaluate-skill: ASCII-only runtime output.** `aggregate.py` and
+  `run_triggers.py` emitted em dashes in `print()` / list-item strings that reach
+  a console at runtime — the same cp1252-mojibake class the 0.16.1 llm-signature
+  fix closed, surfaced across the plugins by the 2026-07-22 stress sweep. Runtime
+  strings now use ASCII hyphens; docstrings (never encoded to a console) are
+  untouched. The recurrence argues for a mechanical lint over per-instance fixes;
+  that gate is tracked in `docs/design/2026-07-22-hooks-program.md`.
+
 ## 0.16.1 — 2026-07-22
 
 ### Fixed

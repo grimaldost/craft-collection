@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "max_candidates": 2,
-  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns are matched against the lowercased prompt. Keep regexes simple: word alternations only, no nested quantifiers.",
+  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait - a full recalibration against a fresh sealed holdout is owed (docs/design/2026-07-22-hooks-program.md).",
   "skills": [
     {
       "id": "engineering-discipline:data-engineering-discipline",
@@ -12,10 +12,16 @@
         "\\bdashboards?\\b|\\bwarehouse\\b|\\bfact table\\b|\\bdimension table\\b",
         "\\bp?y?spark\\b|\\betl\\b|\\bdbt\\b|\\blineage\\b",
         "\\bschema (change|changes|evolution|drift|migration)\\b",
-        "\\b(revenue|numbers|totals) [\\w\\s]*\\b(changed|wrong|look different)\\b",
-        "\\b(data|extract|load|table|job) [\\w'\\s-]*\\b(didn.?t|hasn.?t|isn.?t|stuck|not|still) [\\w\\s]*\\b(update|updated|updating|refresh|refreshing|changed|advance)\\w*"
+        "\\b(revenue|numbers|totals) [\\w\\s]{0,40}\\b(changed|wrong|look different)\\b",
+        "\\b(data|extract|load|table|job) [\\w'\\s-]{0,40}\\b(didn.?t|hasn.?t|isn.?t|stuck|not|still) [\\w\\s]{0,40}\\b(update|updated|updating|refresh|refreshing|changed|advance)\\w*"
       ],
-      "negative_patterns": ["\\bci pipeline\\b"],
+      "negative_patterns": [
+        "\\bci pipeline\\b",
+        "\\bsales pipeline\\b",
+        "\\bwarehouse (space|rental|lease|storage|downtown|building)\\b",
+        "\\b(car|vehicle|dashboard) (dashboard )?(ui|mockup|design|layout)\\b",
+        "\\b(spreadsheet|excel)\\b"
+      ],
       "min_hits": 1
     },
     {
@@ -24,12 +30,16 @@
         "\\b(still|keeps?) (broken|failing|breaking)\\b|\\b(error|bug|failure|it).?s back\\b|\\b(error|bug) is back\\b",
         "\\bintermittent\\b|\\bflak(y|iness)\\b",
         "\\bno idea why\\b|\\bdon.?t understand\\b|\\bcan.?t (figure|tell|reproduce)\\b",
-        "\\bunexpected behavior\\b|\\b(find|investigate|hunt) [\\w\\s]*\\bcause\\b|\\binvestigate\\b",
+        "\\bunexpected behavior\\b|\\b(find|investigate|hunt) [\\w\\s]{0,40}\\bcause\\b|\\binvestigate\\b",
         "\\b(second|third|fourth|3rd|4th) fix\\b|\\bfix attempt\\b|\\bprevious (fix|patch) didn.?t\\b",
         "\\bpass(es)? locally\\b|\\bfails? (in|on) ci\\b",
         "\\b502s?\\b|\\bcrash(es|ing)?\\b|\\bsegfault\\b|\\b(linker|build) error\\b"
       ],
-      "negative_patterns": ["\\balready diagnosed\\b"],
+      "negative_patterns": [
+        "\\balready diagnosed\\b",
+        "\\bcar crash|crash(ed|es|ing) into\\b",
+        "\\bplane crash|market crash|stock.{0,5}crash\\b"
+      ],
       "min_hits": 1
     },
     {
@@ -39,9 +49,14 @@
         "\\bfix (this|the|a) bug\\b",
         "\\btests? (afterwards?|later)\\b|\\badd tests? after\\b",
         "\\bpassed on the first (run|try)\\b",
-        "\\brefactor\\b[\\w\\s]*\\bbehavior\\b"
+        "\\brefactor\\b[\\w\\s]{0,40}\\bbehavior\\b"
       ],
-      "negative_patterns": ["\\btest strategy\\b", "\\bcoverage threshold\\b"],
+      "negative_patterns": [
+        "\\btest strategy\\b",
+        "\\bcoverage threshold\\b",
+        "\\bflag (pole|post)\\b",
+        "\\b(front|back) ?yard\\b"
+      ],
       "min_hits": 1
     },
     {
@@ -51,9 +66,14 @@
         "\\bfastapi\\b|\\bopentelemetry\\b|\\bstructured logging\\b",
         "\\bscaffold\\b",
         "\\bnew (python|fastapi) (service|project|repo)\\b|\\bpython (app|project|service|repo)\\b",
-        "\\bstructure a [\\w\\s]*python (service|project)\\b"
+        "\\bstructure a [\\w\\s]{0,40}python (service|project)\\b"
       ],
-      "negative_patterns": ["\\bthrowaway\\b", "\\bone-liner\\b"],
+      "negative_patterns": [
+        "\\bthrowaway\\b",
+        "\\bone-liner\\b",
+        "\\b(construction|building|metal|steel|scaffolding) scaffold\\b",
+        "\\bscaffold(ing)? (around|for|up|on) (the )?(building|house|wall|site)\\b"
+      ],
       "min_hits": 1
     },
     {
@@ -65,7 +85,11 @@
         "\\bnail (down )?the design\\b|\\bfigure out the shape\\b|\\bexplore the options\\b",
         "\\bhaven.?t decided\\b|\\bnot sure( yet)? how\\b|\\bwhere do we start\\b|\\bhow should we approach\\b"
       ],
-      "negative_patterns": ["\\bimplement exactly this spec\\b", "\\bspec we approved\\b"],
+      "negative_patterns": [
+        "\\bimplement exactly this spec\\b",
+        "\\bspec we approved\\b",
+        "\\b(birdhouse|treehouse|deck|shed|garden|furniture|birdfeeder)\\b"
+      ],
       "min_hits": 1
     },
     {
@@ -73,12 +97,12 @@
       "patterns": [
         "\\bfresh eyes\\b|\\bsecond opinion\\b|\\bred[- ]team\\b",
         "\\bpoke holes\\b|\\bam i anchored\\b|\\btoo close to (it|this)\\b",
-        "\\bsanity-?check [\\w\\s]*\\bindependent\\w*|\\bindependent review\\b|\\breview [\\w\\s]*independent\\w*",
+        "\\bsanity-?check [\\w\\s]{0,40}\\bindependent\\w*|\\bindependent review\\b|\\breview [\\w\\s]{0,40}independent\\w*",
         "\\bconvene a panel\\b|\\breview-?panel\\b",
-        "\\bcritique [\\w\\s]*\\b(perspectives|angles)\\b|\\bfrom (several|different|a few) (perspectives|angles)\\b",
+        "\\bcritique [\\w\\s]{0,40}\\b(perspectives|angles)\\b|\\bfrom (several|different|a few) (perspectives|angles)\\b",
         "\\bcan.?t tell if it.?s good\\b|\\bgoing round and round\\b"
       ],
-      "negative_patterns": [],
+      "negative_patterns": ["\\bpoke holes in (the|a|my|these) (fence|wall|wood|ground|posts?|dirt)\\b"],
       "min_hits": 1
     },
     {
@@ -90,19 +114,30 @@
         "\\brecord the (decisions?|reasoning|dead ends)\\b|\\bnote the reasoning\\b",
         "\\bcreate registries\\b|\\bbefore i forget\\b|\\bdon.?t lose this\\b|\\bso a future session\\b"
       ],
-      "negative_patterns": ["\\bconsolidate\\b", "\\bcommit message\\b", "\\bchangelog\\b"],
+      "negative_patterns": [
+        "\\bconsolidate\\b",
+        "\\bcommit message\\b",
+        "\\bchangelog\\b",
+        "\\bjournal (about|my|of) (my )?(trip|day|life|vacation|feelings|holiday|diary)\\b"
+      ],
       "min_hits": 1
     },
     {
       "id": "session-workflow:context-handoff",
       "patterns": [
         "\\bhand (this|the|it|them|him|her)? ?[\\w-]* ?off\\b|\\bhand-?off\\b",
-        "\\bfork this\\b|\\bspin (this|it|that)? ?[\\w-]* ?off\\b|\\bpeel [\\w\\s-]*off\\b|\\bcarve [\\w\\s-]*out\\b",
+        "\\bfork this\\b|\\bspin (this|it|that)? ?[\\w-]* ?off\\b|\\bpeel [\\w\\s-]{0,40}off\\b|\\bcarve [\\w\\s-]{0,40}out\\b",
         "\\b(its|their) own (session|dedicated|focused)\\b|\\bown (dedicated|focused) session\\b|\\bseparate session\\b|\\bfresh (session|agent)\\b|\\bnew session for\\b",
         "\\boffload\\b|\\bbounded sub-?task\\b|\\bstandalone brief\\b|\\bself-contained (brief|handoff)\\b",
-        "\\bpick (it|this|things)? ?up cold\\b|\\btake [\\w\\s-]*cold\\b|\\bzero (prior context|context|memory)\\b"
+        "\\bpick (it|this|things)? ?up cold\\b|\\btake [\\w\\s-]{0,40}cold\\b|\\bzero (prior context|context|memory)\\b"
       ],
-      "negative_patterns": ["\\bsubagents?\\b", "\\bgit branch\\b", "\\brelease branch\\b", "\\bwhere we left off\\b"],
+      "negative_patterns": [
+        "\\bsubagents?\\b",
+        "\\bgit branch\\b",
+        "\\brelease branch\\b",
+        "\\bwhere we left off\\b",
+        "\\bhand (off )?[\\w\\s]{0,15}\\b(package|laptop|device|phone|keys|documents?|box|parcel|courier)\\b"
+      ],
       "min_hits": 1
     }
   ]

@@ -18,10 +18,17 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 RULES_PATH = Path(__file__).parent / 'router_rules.json'
 MAX_PROMPT_CHARS = 4000
+
+
+def _ascii(text: str) -> str:
+    """Collapse to ASCII for output. The hook's stdout may be a codepage-limited
+    console, so any prompt-derived text placed into a hint must be ASCII-safe."""
+    return text.encode('ascii', 'replace').decode('ascii')
 
 
 def load_rules(path: str | Path = RULES_PATH) -> dict:
@@ -34,7 +41,9 @@ def load_rules(path: str | Path = RULES_PATH) -> dict:
 
 def route(prompt: str, rules: dict) -> list[dict]:
     """Return up to max_candidates matches: [{'id', 'matched', 'hits'}], best first."""
-    text = prompt[:MAX_PROMPT_CHARS].lower()
+    # Strip zero-width / format-category chars so an invisible character cannot
+    # selectively defeat a negative_pattern (e.g. a ZWSP inside "ci pipeline").
+    text = ''.join(c for c in prompt[:MAX_PROMPT_CHARS] if unicodedata.category(c) != 'Cf').lower()
     matches = []
     for skill in rules['skills']:
         if any(neg.search(text) for neg in skill['_compiled_neg']):
@@ -56,7 +65,7 @@ def hint_line(matches: list[dict]) -> str:
         return ''
     parts = []
     for m in matches:
-        words = ', '.join(list(dict.fromkeys(m['matched']))[:3])
+        words = ', '.join(_ascii(w) for w in list(dict.fromkeys(m['matched']))[:3])
         parts.append(f'{m["id"]} (matched: {words})')
     return (
         'Prompt wording matches triggers for: '

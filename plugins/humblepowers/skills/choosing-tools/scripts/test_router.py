@@ -156,6 +156,41 @@ def test_cross_sweep_budget():
     assert not failures, '; '.join(failures)
 
 
+def test_adversarial_holdout_false_fire_budget():
+    """The 2026-07-22 blind adversarial holdout's near-miss negatives must stay
+    within a documented false-fire budget. This is a SEALED regression set —
+    never tune the rules against it beyond the two accepted borderline fires
+    (a genuinely-failing UI test → debugging; adding a column to a fact table a
+    report reads → a schema change with consumers). Both are defensible, so the
+    budget is 2/20; any third false-fire is a regression to investigate."""
+    adversarial = TRIGGER_DIR / 'holdout' / 'dispatch-router-adversarial.json'
+    if not adversarial.exists():
+        return  # dataset optional in a partial checkout
+    rules = _rules()
+    cases = json.loads(adversarial.read_text(encoding='utf-8'))
+    negatives = [c for c in cases if not c['should_trigger']]
+    fired = [c['query'] for c in negatives if router.route(c['query'], rules)]
+    assert len(fired) <= 2, f'false-fire budget exceeded ({len(fired)}/{len(negatives)}): {fired}'
+
+
+def test_multilingual_is_silent_not_wrong():
+    """Portuguese-intent prompts (no English trigger vocab) must not mis-fire —
+    the router is monolingual-English and degrades to silence, the safe default,
+    not to a confident wrong route."""
+    rules = _rules()
+    pt_no_loanword = [
+        'me ajuda a pensar o desenho antes de codar',
+        'o bug voltou depois do meu fix, ja e a terceira tentativa',
+        'vamos separar isso numa sessao propria antes de perder o contexto',
+    ]
+    for p in pt_no_loanword:
+        # silence is acceptable; a wrong confident route is not. We assert no
+        # route here because none of these carry a loanword the rules key on.
+        assert router.route(p, rules) == [], (
+            f'PT prompt mis-fired: {p!r} -> {router.route(p, rules)}'
+        )
+
+
 if __name__ == '__main__':
     import sys
 

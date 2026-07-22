@@ -95,13 +95,13 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
         "output satisfy the skill's discipline rubric. With/without = swap-order "
         'pairwise win-rate of the skill vs no-skill. A recall verdict of (info) '
         'marks a command-first skill (e.g. review-panel) whose auto-fire rate is '
-        'reported but not gated — it is invoked deliberately via its slash command — '
+        'reported but not gated - it is invoked deliberately via its slash command - '
         'or an action-discipline skill (TDD, debugging, verification), which the '
         'Write-less trigger arm cannot exercise: for those, the Activation column '
         'carries the gated task-arm recall proxy in parentheses. A `hard=` annotation '
-        'on Recall is the expected-hard rate — immovable queries reported but excluded '
+        'on Recall is the expected-hard rate - immovable queries reported but excluded '
         'from the gate. An `(err=N; excl=X)` annotation flags N positive runs that '
-        'errored before the skill could activate — infra noise, not a description miss; '
+        'errored before the skill could activate - infra noise, not a description miss; '
         '`excl` is recall with them removed, so a FAIL is not misread off a number the '
         'errors produced.',
         '',
@@ -152,10 +152,10 @@ def render_scorecard(rows: list[dict], triggers: dict, grading: dict) -> str:
                 else:
                     kind = 'FALSE FIRE on negative'
                 out.append(
-                    f'- `{skill}` — {kind} (fired {pq["k"]}/{pq["repeats"]}): "{pq["query"]}"'
+                    f'- `{skill}` - {kind} (fired {pq["k"]}/{pq["repeats"]}): "{pq["query"]}"'
                 )
     if not any_miss:
-        out.append('- none — every positive fired and every negative stayed quiet.')
+        out.append('- none - every positive fired and every negative stayed quiet.')
     out.append('')
 
     # per-task with/without detail
@@ -189,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     grading = json.loads(grading_path.read_text(encoding='utf-8')) if grading_path.exists() else {}
     if not triggers and not grading:
-        print('no report/triggers.json or report/grading.json found — run the eval first')
+        print('no report/triggers.json or report/grading.json found - run the eval first')
         return 1
 
     rows = build_scorecard(

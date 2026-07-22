@@ -14,7 +14,8 @@
               "python",
               "${CLAUDE_PLUGIN_ROOT}/skills/choosing-tools/scripts/inject_dispatch.py",
               "--session-start"
-            ]
+            ],
+            "timeout": 10
           }
         ]
       },

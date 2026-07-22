@@ -88,7 +88,16 @@ def _state_dir() -> Path:
 
 def _state_path(session_id: str) -> Path:
     safe = ''.join(c for c in session_id if c.isalnum() or c in '-_') or 'unknown'
-    return _state_dir() / f'{safe}.json'
+    # Cap the component length: a pathological session_id must not produce a
+    # path that exceeds the OS component limit and fails the write.
+    return _state_dir() / f'{safe[:64]}.json'
+
+
+def _coerce_num(value: object, default: float) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
 
 def _read_state(path: Path) -> dict:
@@ -96,10 +105,19 @@ def _read_state(path: Path) -> dict:
         state = json.loads(path.read_text(encoding='utf-8'))
         if not isinstance(state, dict):
             raise ValueError
-        return state
     except Exception:
         # Corrupt/absent state degrades to micro-tier cadence, never full-blast.
         return {'n': 0, 'last_full_n': 0, 'last_full_ts': time.time()}
+    # A structurally valid dict can still carry wrong-typed fields (external
+    # corruption, a future write regression). Coerce each numeric field so one
+    # bad field degrades that field only, never the whole call.
+    n = int(_coerce_num(state.get('n'), 0))
+    # Clamp the re-escalation cursors to reality: values ahead of n / in the
+    # future can never legitimately occur, and would otherwise starve the full
+    # tier forever.
+    last_full_n = min(int(_coerce_num(state.get('last_full_n'), 0)), n)
+    last_full_ts = min(_coerce_num(state.get('last_full_ts'), 0.0), time.time())
+    return {'n': n, 'last_full_n': last_full_n, 'last_full_ts': last_full_ts}
 
 
 def _write_state(path: Path, state: dict) -> None:
@@ -123,17 +141,32 @@ def _log_telemetry(session_id: str, record: dict) -> None:
 
 def _env_int(name: str, default: int) -> int:
     try:
-        return int(os.environ.get(name, ''))
+        value = int(os.environ.get(name, ''))
     except ValueError:
         return default
+    # A non-positive cadence bound would invert the throttle into
+    # full-protocol-on-every-prompt; treat it like a garbage value.
+    return value if value > 0 else default
+
+
+def _load_stdin_json() -> dict:
+    # Read bytes and decode UTF-8 explicitly (utf-8-sig strips a BOM if present).
+    # A hook's stdin encoding otherwise follows the host codepage, which would
+    # mojibake a non-ASCII prompt on some interpreters; the payload is always
+    # UTF-8 JSON, so decode it as such regardless of the console codepage.
+    raw = sys.stdin.buffer.read()
+    payload = json.loads(raw.decode('utf-8-sig'))
+    return payload if isinstance(payload, dict) else {}
 
 
 def _prompt_submit() -> int:
     if os.environ.get('HUMBLEPOWERS_DISPATCH_PROMPT_INJECT') != '1':
         return 0
-    payload = json.load(sys.stdin)
-    prompt = (payload.get('prompt') or '').strip()
-    session_id = payload.get('session_id') or 'unknown'
+    payload = _load_stdin_json()
+    prompt = payload.get('prompt')
+    prompt = prompt.strip() if isinstance(prompt, str) else ''
+    session_id = payload.get('session_id')
+    session_id = session_id if isinstance(session_id, str) and session_id else 'unknown'
 
     if prompt.startswith('/'):
         return 0  # slash command: dispatch is already explicit
@@ -165,26 +198,33 @@ def _prompt_submit() -> int:
         except Exception:
             hint = ''  # router problems must never cost the prompt
 
-    _write_state(state_file, state)
-    _log_telemetry(session_id, {'n': n, 'tier': 'full' if full else 'micro', 'hits': hits})
-
     if full:
         body = PROTOCOL
         if hint:
             body = PROTOCOL.replace('</toolkit-dispatch>', hint + '\n</toolkit-dispatch>')
-        print(body)
     else:
         lines = [MICRO]
         if hint:
             lines.append(hint)
-        print('<toolkit-dispatch>' + '\n'.join(lines) + '</toolkit-dispatch>')
+        body = '<toolkit-dispatch>' + '\n'.join(lines) + '</toolkit-dispatch>'
+
+    # Deliver the injection FIRST — it is the hook's entire purpose. ASCII-encode
+    # so a codepage-limited stdout can never raise (which would lose the whole
+    # payload). Persisting cadence state is bookkeeping: best-effort, and only
+    # after a successful print, so a failed print never burns a cadence slot.
+    print(body.encode('ascii', 'replace').decode('ascii'))
+    with contextlib.suppress(Exception):
+        _write_state(state_file, state)
+    _log_telemetry(session_id, {'n': n, 'tier': 'full' if full else 'micro', 'hits': hits})
     return 0
 
 
 def _reset_state() -> int:
-    payload = json.load(sys.stdin)
-    session_id = payload.get('session_id') or 'unknown'
-    _state_path(session_id).unlink(missing_ok=True)
+    payload = _load_stdin_json()
+    session_id = payload.get('session_id')
+    session_id = session_id if isinstance(session_id, str) and session_id else 'unknown'
+    with contextlib.suppress(Exception):
+        _state_path(session_id).unlink(missing_ok=True)
     return 0
 
 

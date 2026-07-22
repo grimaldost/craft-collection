@@ -5,6 +5,64 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.7.1 — 2026-07-22
+
+### Fixed
+
+Hardening from a 9-agent adversarial stress pass on 0.7.0 (attack cells + deep
+review + blind holdouts + headless E2E). E2E confirmed the hook fires correctly
+in a real `claude -p` process; these close the failure modes the attacks found.
+
+- **ReDoS in the router (must-fix).** The data-engineering pattern's two chained
+  unbounded `[\w\s]*` spans backtracked cubically — a crafted 4000-char prompt
+  cost ~3.5s of the 10s UserPromptSubmit budget. Every span in `router_rules.json`
+  is now bounded to `{0,40}`; the same bound also caps a matched span so an
+  attacker sentence can no longer be echoed whole into the hint. Adversarial
+  latency test added (~0.007s now).
+- **ASCII output not enforced end-to-end.** The router echoed matched prompt text
+  (Unicode `\w`) into the hint; a span capturing a non-cp1252 char (CJK/Cyrillic/
+  emoji) made `print()` raise on a codepage-limited console, and the outer
+  fail-open swallowed it — losing the whole injection *after* cadence state had
+  already recorded it as delivered, suppressing the next full tier. Now: matched
+  text is ASCII-sanitized, the body is ASCII-encoded before print, and **the print
+  happens before state/telemetry persist** (best-effort, suppressed) so a delivery
+  failure never burns a cadence slot. Latin accents (Portuguese) were always
+  cp1252-safe; this closes the non-Latin-script path and honors the documented
+  ASCII-only invariant.
+- **Silent total loss on a failed state write.** `_write_state` was unwrapped and
+  ran before the print, so an unwritable state dir (plausible under the machine's
+  Application-Control history) disabled the injection 100% with exit 0 and no
+  signal. Now best-effort and after the print.
+- **Corrupt state degrades, not crashes.** `_read_state` validated dict-ness but
+  not field types; a valid-JSON state with a wrong-typed `n` raised and produced
+  permanent sticky silence. Fields are now coerced individually, and
+  `last_full_n`/`last_full_ts` are clamped to reality so out-of-range values
+  cannot starve the full tier.
+- **Cadence env vars clamped.** `HUMBLEPOWERS_DISPATCH_FULL_EVERY`/`_FULL_MINUTES`
+  of 0 or negative inverted the throttle into full-protocol-every-prompt; now
+  treated as garbage → default.
+- **Input robustness.** stdin is read as UTF-8 (utf-8-sig, so a BOM parses) rather
+  than the host codepage — defense-in-depth, since the uv-managed interpreter
+  already decoded UTF-8, but this makes it guaranteed across interpreters.
+  Non-string and oversized `session_id` are coerced/truncated instead of dropping
+  the turn. Zero-width/format chars are stripped before matching so an invisible
+  character cannot defeat a negative pattern.
+- **Router precision (calibration, not a code bug).** Blind adversarial holdouts
+  measured 42–87% false-fire on baited out-of-context trigger words (vs the
+  dev-set CI's 0.90 specificity — the datasets are the calibration corpus).
+  Recall-safe negative patterns for the concrete non-technical senses (sales/
+  warehouse/car/construction/physical/diary uses) cut it to 10% (2/20), and both
+  residual fires are defensible (a genuinely-failing test → debugging; a column
+  added to a fact table a report reads → a schema change with consumers). The
+  holdout is sealed as `evals/trigger/holdout/dispatch-router-adversarial.json`
+  with a `test_router.py` false-fire budget; dev recall is unchanged. A full
+  semantic recalibration against a fresh sealed holdout remains owed
+  (`docs/design/2026-07-22-hooks-program.md`). Documented: the router is
+  monolingual-English (Portuguese-intent prompts degrade to silence, the safe
+  default) and `planned-execution` is intentionally unrouted.
+- **hooks.json:** the SessionStart inject entry gains `timeout: 10` for
+  consistency with the two prompt entries.
+
 ## 0.7.0 — 2026-07-22
 
 ### Added
