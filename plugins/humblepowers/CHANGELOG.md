@@ -5,6 +5,40 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.7.0 — 2026-07-22
+
+### Added
+
+- **Per-prompt dispatch injection (UserPromptSubmit), env-gated inert.**
+  `inject_dispatch.py --prompt-submit` (gate `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1`)
+  injects the dispatch protocol with tiered cadence — full 8-step protocol on
+  the first prompt and on re-escalation (every `HUMBLEPOWERS_DISPATCH_FULL_EVERY`
+  prompts, default 10, or `HUMBLEPOWERS_DISPATCH_FULL_MINUTES` minutes, default
+  30), a two-line micro-reminder otherwise; slash-commands and short follow-ups
+  are silent. Escalates the layer on triage cluster T18 (2026-07-22): dispatch
+  never fires under momentum, SessionStart injection alone decays, and the
+  description-tuning lever was A/B-refuted (b02adbf). Fails open on every path —
+  a UserPromptSubmit error or timeout would otherwise block the user's prompt —
+  and logs tier decisions to a size-capped local NDJSON for later
+  cadence-vs-content A/Bs.
+- **Lexical dispatch router** (`router.py` + `router_rules.json`): deterministic
+  word-boundary regexes over the prompt name at most two candidate skills
+  (matched words shown, hedged phrasing, silence on no match), for eight
+  chronically under-firing skills. Calibrated against `evals/trigger/*.json`
+  with CI bars in `test_router.py` (dev recall >= 0.60, own-negative
+  specificity >= 0.90, cross-fire budget <= 0.15); dev-set numbers by
+  construction — the datasets are the calibration corpus. Opt out with
+  `HUMBLEPOWERS_DISPATCH_ROUTER=0`.
+- **Cadence-state reset** on SessionStart `compact|clear` (`--reset-state`), so
+  the first post-compaction/post-clear prompt re-escalates to the full protocol.
+
+### Changed
+
+- `--session-start` now stays silent when the per-prompt gate is on (the
+  first-prompt full injection subsumes it); behavior under the old gate alone is
+  unchanged. `inject_dispatch.py` gains its missing test sibling
+  (`test_inject_dispatch.py`).
+
 ## 0.6.0 — 2026-07-16
 
 ### Changed
