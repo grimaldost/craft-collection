@@ -3,6 +3,27 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.20.0 — 2026-07-24
+
+Triage 2026-07-23 row T2a (Inputs coverage contract), reconciled against what
+the parser actually does: `extract_inputs_coverage` was verified ALREADY
+tolerant of any format carrying full stems (bullets, numbering, prose,
+backticks — token-boundary match anywhere in the Inputs/Addendum sections).
+The 2026-07-22 zero-coverage emit failed on stem FRAGMENTATION (a
+date-grouped prose list factored the date prefix out, so no full stem
+appeared), which no parser can safely reconstruct.
+
+### Changed
+
+- **feedback-triage SKILL.md:** the template's Inputs slot states the real
+  contract (full stems, one per line; a factored-out date prefix reads as
+  zero coverage), and step 7 closes with the mechanical self-check — re-run
+  the index builder and read `### Untriaged`; just-triaged stems still listed
+  means the Inputs did not parse. Fix before ending the pass.
+- **test_build_feedback_index.py:** regression test pinning the failure class
+  boundary — fragmented stems yield zero coverage, full stems parse from any
+  surrounding format.
+
 ## 0.19.0 — 2026-07-23
 
 Backlog P1-5 (triage T22a): anchor lifecycle hardening in `anchor_inject.py`.

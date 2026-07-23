@@ -27,8 +27,8 @@ The downstream half of the tool-feedback loop. `tool-feedback` captures one repo
 per session; this pass reads the accumulated corpus and turns it into the tool's
 improvement backlog. Capture is tuned for recall; triage is tuned for precision —
 the bar is *a maintainer can pick the top item and build it without re-reading the
-reports*. It ends at the backlog document: building promotions, bumping versions,
-and writing CHANGELOGs belong to the tool's own release process.
+reports*. It ends at the backlog document: building promotions, version bumps,
+and CHANGELOGs belong to the tool's release process.
 
 ## The pipeline — run in order
 
@@ -37,28 +37,27 @@ and writing CHANGELOGs belong to the tool's own release process.
    `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`):
    its `### Untriaged` section is the input list — reports in no triage doc's
    **Inputs**, detection by input lists, not dates — and the `extends`-lookup in
-   steps 2–3 is one Read. A doc counts as a triage doc only if its first heading
-   starts with `# Triage` — the same rule the index builder stamps into its
-   header; the filename is deliberately NOT a signal (`references/mechanics.md`
-   has the misclassification cases, both ways). State the count: `N un-triaged
+   steps 2–3 is one Read. A triage doc is detected by its `# Triage` H1 — the
+   rule the index builder stamps into its header; the filename is deliberately
+   NOT a signal (`references/mechanics.md` has the misclassification cases).
+   State the count: `N un-triaged
    reports`. N of 1 with no prior triage doc is too thin — stop with a note
    (nothing to cluster); 1 new report over an existing baseline is a valid delta
-   pass (step 7). If the invocation names a different count or set than the
-   directory holds, the directory is authoritative — note the discrepancy under
-   **Inputs**. Note any triage doc already dated today and re-check at emit
+   pass (step 7). When the invocation names a different count or set, the
+   directory is authoritative — note the discrepancy under **Inputs**. Note any triage doc already dated today and re-check at emit
    (step 7).
 2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
    on a first run, the whole CHANGELOG to date. For a component without its own
-   CHANGELOG (a harness, a scripts dir, a doc set), also read `git log` over the
-   window — its increments land as commits, invisible to a CHANGELOG-only
+   CHANGELOG (a harness, a scripts dir, a doc set), also read `git log` over
+   the window — increments land as commits, invisible to CHANGELOG-only
    reconciliation. Map each finding to the version or commit that resolved it. Open the doc with **"Already shipped — NOT re-proposed"**; a
    cluster that goes further than a shipped change is marked as *extending* it.
-   Each triage sharpens the backlog; it never repeats it. Reconcile OPEN rows too,
+   Reconcile OPEN rows too,
    not only shipped ones: the INDEX's `## Triage coverage` lists every triage doc
    in the dir, so carry or re-disposition each one's open `proposed`/`watch` rows
    into this pass — a row is not closed until a later doc lists it. An
-   off-main-chain cycle-scoped triage orphans its rows otherwise (keel's
-   `reflection-triage` P3a is the house-template twin; co-land them).
+   off-main-chain cycle-scoped triage otherwise orphans its rows (keel's
+   `reflection-triage` P3a is the twin; co-land).
 3. **Cluster by underlying cause, not symptom.** Three reports saying "the cited
    file didn't exist", "the helper didn't handle our shape", and "the precedent
    was counterfactual" are one cluster: *ungrounded referents*. Collapsing has a
@@ -83,16 +82,16 @@ and writing CHANGELOGs belong to the tool's own release process.
      the next layer, attack one rung down — advisory prose → required structure →
      script/gate → hook → linter/CI — instead of re-prosing the same advice. A
      judgment-bound recurrence no mechanism can reach (a dispatch-timing nudge, a
-     naming call) takes sharper prose or DECLINE, not a forced rung — the
-     loop-side of `skill-authoring`'s rule: a constraint that needs caps to hold
-     needs a gate, not louder prose.
+     naming call) takes sharper prose or DECLINE, not a forced rung —
+     `skill-authoring`'s rule, loop-side: what needs caps to hold needs a
+     gate, not louder prose.
    - **ROUTE OUT** — it belongs to another registered tool; record the target.
    - **DECLINE** — project-specific or out of charter; record why.
 
    Tie-breaker when this tool's artifact participates in behavior another tool
-   owns: route by **where the fix lands**, not where the artifact lives. Fanning
-   out per-tool digest subagents? The brief's owner taxonomy must enumerate each
-   tool's own components — the misrouting case is in `references/mechanics.md`.
+   owns: route by **where the fix lands**, not where the artifact lives.
+   Fan-out digest briefs must enumerate each tool's own components in the
+   owner taxonomy — misrouting case in `references/mechanics.md`.
 5. **Ground, then apply the promotion gate.** Before writing a row, ground it
    against the tool's **current source**: verify the mechanism it names is
    actually absent (or present, for an extension), implementable as stated (the
@@ -126,6 +125,9 @@ and writing CHANGELOGs belong to the tool's own release process.
    leaves the loop only with a disposition, never by omission (a dropped
    extends-chain surfaced two passes late). Then re-list the dir: a same-corpus
    triage doc that appeared since step 1 is reconciled with, not duplicated.
+   Close by re-running the index builder: just-triaged stems still under
+   `### Untriaged` mean the Inputs did not parse (fragmented stems) — fix
+   before ending.
 8. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
    otherwise the template below is authoritative — don't hunt for one. Triaging
@@ -143,7 +145,8 @@ and writing CHANGELOGs belong to the tool's own release process.
 <changelog reconciliation; clusters below that extend shipped work say so>
 
 ## Inputs
-<the explicit list of report files this triage covers>
+<full report stems, one per line; the coverage parser matches whole stems —
+a factored-out date prefix reads as zero coverage>
 
 ## Headline
 <2–4 sentences: what this round establishes about the tool>
