@@ -1,37 +1,38 @@
 #!/usr/bin/env python3
-"""Inject the choosing-tools dispatch protocol at session start and per prompt.
+"""Inject lexical dispatch-router hints on the user's prompt, plus a health reader.
 
-Hook entry points for the humblepowers plugin. All modes ship wired but inert
-behind env gates, so the hooks cost nothing until the user opts in:
+Hook entry point for the humblepowers plugin, inert by default behind an env gate
+so it costs nothing until the user opts in:
 
-  --session-start   SessionStart. Prints the full protocol when
-                    HUMBLEPOWERS_DISPATCH_INJECT=1 — unless the per-prompt gate
-                    (below) is also on, in which case it stays silent: the
-                    first-prompt full injection subsumes it.
   --prompt-submit   UserPromptSubmit. When HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1,
-                    injects with tiered cadence: full protocol on the first
-                    prompt and on re-escalation (every HUMBLEPOWERS_DISPATCH_FULL_EVERY
-                    prompts, default 10, or HUMBLEPOWERS_DISPATCH_FULL_MINUTES
-                    minutes since the last full, default 30); a two-line micro
-                    reminder otherwise. Slash-commands and short follow-ups get
-                    nothing. A lexical router (router.py) appends a hint naming
-                    at most two candidate skills; disable with
-                    HUMBLEPOWERS_DISPATCH_ROUTER=0. Subagent completion notices
-                    pass through UserPromptSubmit as synthetic prompts (see
-                    SYNTHETIC_PREFIXES) and are skipped silently, same as a
-                    slash command.
-  --reset-state     SessionStart matcher compact|clear. Silently deletes the
-                    session's cadence state so the next prompt re-escalates to
-                    the full protocol (context was rebuilt).
+                    runs the lexical router (router.py) over a substantive human
+                    prompt and injects a short <toolkit-dispatch> block naming at
+                    most two candidate skills, with the matched words shown.
+                    Silent on no match. Slash-commands, short follow-ups, and
+                    subagent-completion notices (SYNTHETIC_PREFIXES) get nothing.
+                    Disable the router with HUMBLEPOWERS_DISPATCH_ROUTER=0 - with
+                    nothing else to inject, that silences the hook entirely.
+
+  --health          Human-invoked (not a hook). Summarizes the local telemetry
+                    NDJSON: how many prompts were seen, how many got a hint, the
+                    most-matched skills, and how long ago the last record landed.
+                    The audit surface for an otherwise fail-open-silent hook.
+
+Retired in 0.8.0 (see CHANGELOG): the session-start full-protocol inject
+(HUMBLEPOWERS_DISPATCH_INJECT), the per-prompt tiered cadence (full/micro tiers,
+HUMBLEPOWERS_DISPATCH_FULL_EVERY / _FULL_MINUTES), and the compact|clear cadence
+reset. A 2026-07 content A/B measured the generic 8-step protocol block as no
+better than no injection, and wall-clock / prompt-count cadence was never
+validated; only the concrete-candidate router hint survives.
 
 Contract: a UserPromptSubmit hook that exits nonzero or times out BLOCKS the
-user's prompt, so every path here fails open — any error means exit 0 with
-empty stdout. No subprocesses, no network. ASCII-only output: hook stdout
-encoding varies with the host console (cp1252 vs utf-8).
+user's prompt, so every path fails open - any error means exit 0 with empty
+stdout. No subprocesses, no network. ASCII-only output: hook stdout encoding
+varies with the host console (cp1252 vs utf-8).
 
-Telemetry: each --prompt-submit decision appends one JSONL line to the state
-dir (tier fired, router hits) so cadence-vs-content A/Bs can be run against
-real sessions later. Size-capped; purely local.
+Telemetry: each --prompt-submit decision appends one JSONL line to the state dir
+(router hits, whether a hint was injected). Size-capped; purely local; read it
+back with --health.
 
 Stdlib only (Python 3.10+).
 """
@@ -45,44 +46,17 @@ import os
 import sys
 import tempfile
 import time
+from collections import Counter
 from pathlib import Path
-
-# ASCII-only: hook stdout encoding varies with the host console (cp1252 vs utf-8).
-PROTOCOL = """\
-<toolkit-dispatch>
-At the start of substantive work (build / fix / migrate / refactor / review /
-plan - not conversational turns or follow-ups inside an active task):
-1. Name the task in one phrase.
-2. Shortlist installed skills whose triggers match; scan the toolkit when unsure.
-3. About to exercise a tool with a registered feedback intake? Read its newest
-   report's Misses/Friction first - one Read; a recorded miss resurfaces at
-   dispatch, not after the fact. No intake registered: skip.
-4. Check candidates against positive and negative triggers; negative space
-   ("not for X - that is Y") decides ties.
-5. Load the best fit when its benefit clearly exceeds its context and anchoring
-   cost. Process disciplines load before implementation skills.
-6. Nothing clears the bar: proceed, and say so in one line.
-7. A loaded skill that turns out wrong is set aside explicitly, not followed
-   through.
-8. After fixing a bug, leave a regression test that fails without the fix -
-   cheap, durable insurance, even when the full TDD skill was not worth loading.
-</toolkit-dispatch>"""
-
-MICRO = (
-    'Task start or direction change? Name the task, shortlist installed skills, '
-    "load the best fit only past the benefit bar; 'nothing fits, proceeding "
-    "directly' is a valid outcome."
-)
 
 MIN_WORDS = 4
 MIN_CHARS = 15
-DEFAULT_FULL_EVERY = 10
-DEFAULT_FULL_MINUTES = 30
 TELEMETRY_CAP_BYTES = 1_000_000
+LOG_NAME = 'dispatch-log.ndjson'
 
 # Subagent completion is delivered to the parent session as a synthetic prompt
-# that passes through UserPromptSubmit like a real one. No human authored it,
-# so it must never count toward cadence or trigger injection.
+# that passes through UserPromptSubmit like a real one. No human authored it, so
+# it must never trigger injection or telemetry.
 SYNTHETIC_PREFIXES = ('[SYSTEM NOTIFICATION', '<task-notification>')
 
 
@@ -94,51 +68,19 @@ def _state_dir() -> Path:
     return Path(base) / 'humblepowers-dispatch'
 
 
-def _state_path(session_id: str) -> Path:
-    safe = ''.join(c for c in session_id if c.isalnum() or c in '-_') or 'unknown'
-    # Cap the component length: a pathological session_id must not produce a
-    # path that exceeds the OS component limit and fails the write.
-    return _state_dir() / f'{safe[:64]}.json'
+def _log_path() -> Path:
+    return _state_dir() / LOG_NAME
 
 
-def _coerce_num(value: object, default: float) -> float:
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-
-
-def _read_state(path: Path) -> dict:
-    try:
-        state = json.loads(path.read_text(encoding='utf-8'))
-        if not isinstance(state, dict):
-            raise ValueError
-    except Exception:
-        # Corrupt/absent state degrades to micro-tier cadence, never full-blast.
-        return {'n': 0, 'last_full_n': 0, 'last_full_ts': time.time()}
-    # A structurally valid dict can still carry wrong-typed fields (external
-    # corruption, a future write regression). Coerce each numeric field so one
-    # bad field degrades that field only, never the whole call.
-    n = int(_coerce_num(state.get('n'), 0))
-    # Clamp the re-escalation cursors to reality: values ahead of n / in the
-    # future can never legitimately occur, and would otherwise starve the full
-    # tier forever.
-    last_full_n = min(int(_coerce_num(state.get('last_full_n'), 0)), n)
-    last_full_ts = min(_coerce_num(state.get('last_full_ts'), 0.0), time.time())
-    return {'n': n, 'last_full_n': last_full_n, 'last_full_ts': last_full_ts}
-
-
-def _write_state(path: Path, state: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps(state), encoding='utf-8')
-    os.replace(tmp, path)
+def _ascii(text: str) -> str:
+    """Collapse to ASCII for output; hook stdout may be a codepage-limited console."""
+    return text.encode('ascii', 'replace').decode('ascii')
 
 
 def _log_telemetry(session_id: str, record: dict) -> None:
     # Telemetry is best-effort by contract: it must never cost the prompt.
     with contextlib.suppress(Exception):
-        log = _state_dir() / 'dispatch-log.ndjson'
+        log = _log_path()
         if log.exists() and log.stat().st_size > TELEMETRY_CAP_BYTES:
             return
         log.parent.mkdir(parents=True, exist_ok=True)
@@ -147,21 +89,10 @@ def _log_telemetry(session_id: str, record: dict) -> None:
             fh.write(json.dumps(record) + '\n')
 
 
-def _env_int(name: str, default: int) -> int:
-    try:
-        value = int(os.environ.get(name, ''))
-    except ValueError:
-        return default
-    # A non-positive cadence bound would invert the throttle into
-    # full-protocol-on-every-prompt; treat it like a garbage value.
-    return value if value > 0 else default
-
-
 def _load_stdin_json() -> dict:
-    # Read bytes and decode UTF-8 explicitly (utf-8-sig strips a BOM if present).
-    # A hook's stdin encoding otherwise follows the host codepage, which would
-    # mojibake a non-ASCII prompt on some interpreters; the payload is always
-    # UTF-8 JSON, so decode it as such regardless of the console codepage.
+    # The payload is always UTF-8 JSON; decode it as such regardless of the console
+    # codepage (utf-8-sig strips a BOM if present), so a non-ASCII prompt never
+    # mojibakes on an interpreter whose stdin follows the host codepage.
     raw = sys.stdin.buffer.read()
     payload = json.loads(raw.decode('utf-8-sig'))
     return payload if isinstance(payload, dict) else {}
@@ -181,20 +112,7 @@ def _prompt_submit() -> int:
     if prompt.startswith('/'):
         return 0  # slash command: dispatch is already explicit
     if len(prompt) < MIN_CHARS or len(prompt.split()) < MIN_WORDS:
-        return 0  # short follow-up: a dispatch check here is ceremony
-
-    state_file = _state_path(session_id)
-    state = _read_state(state_file)
-    state['n'] = int(state.get('n', 0)) + 1
-    n = state['n']
-
-    full_every = _env_int('HUMBLEPOWERS_DISPATCH_FULL_EVERY', DEFAULT_FULL_EVERY)
-    full_minutes = _env_int('HUMBLEPOWERS_DISPATCH_FULL_MINUTES', DEFAULT_FULL_MINUTES)
-    stale = time.time() - float(state.get('last_full_ts', 0)) >= full_minutes * 60
-    full = n == 1 or (n - int(state.get('last_full_n', 0))) >= full_every or stale
-    if full:
-        state['last_full_n'] = n
-        state['last_full_ts'] = time.time()
+        return 0  # short follow-up: a dispatch hint here is ceremony
 
     hint = ''
     hits: list[str] = []
@@ -208,63 +126,75 @@ def _prompt_submit() -> int:
         except Exception:
             hint = ''  # router problems must never cost the prompt
 
-    if full:
-        body = PROTOCOL
-        if hint:
-            body = PROTOCOL.replace('</toolkit-dispatch>', hint + '\n</toolkit-dispatch>')
-    else:
-        lines = [MICRO]
-        if hint:
-            lines.append(hint)
-        body = '<toolkit-dispatch>' + '\n'.join(lines) + '</toolkit-dispatch>'
-
-    # Deliver the injection FIRST — it is the hook's entire purpose. ASCII-encode
+    # Deliver the injection FIRST - it is the hook's entire purpose. ASCII-encode
     # so a codepage-limited stdout can never raise (which would lose the whole
-    # payload). Persisting cadence state is bookkeeping: best-effort, and only
-    # after a successful print, so a failed print never burns a cadence slot.
-    print(body.encode('ascii', 'replace').decode('ascii'))
-    with contextlib.suppress(Exception):
-        _write_state(state_file, state)
-    _log_telemetry(session_id, {'n': n, 'tier': 'full' if full else 'micro', 'hits': hits})
+    # payload). Telemetry is bookkeeping: best-effort, and only after the print,
+    # so a failed print never suppresses a record that claims a hint shipped.
+    if hint:
+        print(_ascii('<toolkit-dispatch>\n' + hint + '\n</toolkit-dispatch>'))
+    _log_telemetry(session_id, {'router_hits': hits, 'injected': bool(hint)})
     return 0
 
 
-def _reset_state() -> int:
-    payload = _load_stdin_json()
-    session_id = payload.get('session_id')
-    session_id = session_id if isinstance(session_id, str) and session_id else 'unknown'
-    with contextlib.suppress(Exception):
-        _state_path(session_id).unlink(missing_ok=True)
-    return 0
-
-
-def _session_start() -> int:
-    if os.environ.get('HUMBLEPOWERS_DISPATCH_PROMPT_INJECT') == '1':
-        return 0  # the first-prompt full injection subsumes the session-start one
-    if os.environ.get('HUMBLEPOWERS_DISPATCH_INJECT') != '1':
+def _health() -> int:
+    log = _log_path()
+    if not log.exists():
+        print(_ascii(f'dispatch telemetry: no records yet ({log})'))
         return 0
-    print(PROTOCOL)
+    total = 0
+    injected = 0
+    skills: Counter[str] = Counter()
+    last_ts = 0.0
+    with contextlib.suppress(Exception):
+        for raw in log.read_text(encoding='utf-8').splitlines():
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                rec = json.loads(raw)
+            except ValueError:
+                continue  # a corrupt line must not abort the whole read
+            if not isinstance(rec, dict):
+                continue
+            total += 1
+            if rec.get('injected'):
+                injected += 1
+            for sid in rec.get('router_hits') or []:
+                if isinstance(sid, str):
+                    skills[sid] += 1
+            ts = rec.get('ts')
+            if isinstance(ts, (int, float)):
+                last_ts = max(last_ts, float(ts))
+    pct = round(100 * injected / total) if total else 0
+    lines = [
+        f'dispatch telemetry ({log})',
+        f'prompts logged: {total}',
+        f'hint injected:  {injected} ({pct}%)',
+    ]
+    if last_ts:
+        age_min = max(0, round((time.time() - last_ts) / 60))
+        lines.append(f'last record:    {age_min} min ago')
+    if skills:
+        lines.append('top matched skills:')
+        for sid, count in skills.most_common(5):
+            lines.append(f'  {count:>4}x {sid}')
+    print(_ascii('\n'.join(lines)))
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description='Dispatch-protocol inject hooks.')
+    parser = argparse.ArgumentParser(description='Dispatch-router prompt hook + health reader.')
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('--session-start', action='store_true', help='SessionStart entry point')
     mode.add_argument('--prompt-submit', action='store_true', help='UserPromptSubmit entry point')
-    mode.add_argument(
-        '--reset-state', action='store_true', help='SessionStart compact|clear entry point'
-    )
+    mode.add_argument('--health', action='store_true', help='summarize local dispatch telemetry')
     args = parser.parse_args(argv)
 
     try:
         if args.prompt_submit:
             return _prompt_submit()
-        if args.reset_state:
-            return _reset_state()
-        if args.session_start:
-            return _session_start()
-        print(PROTOCOL)  # manual invocation
+        if args.health:
+            return _health()
+        parser.print_help()
         return 0
     except Exception:
         return 0  # fail open: a hook error must never block the prompt

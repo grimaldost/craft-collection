@@ -54,22 +54,29 @@ Deduplicated against craft-collection and the Claude Code harness:
 Governed multi-PR machinery stays out of the pack by design; planned-execution
 hands off to it the moment work wants gates and dependency DAGs.
 
-## Optional hooks (off by default)
+## Optional hook (off by default)
 
 | behaviour | enable with |
 |---|---|
-| Compact dispatch protocol injected at session start | `HUMBLEPOWERS_DISPATCH_INJECT=1` |
-| Per-prompt dispatch injection with tiered cadence: full protocol on the first prompt, then a two-line micro-reminder, re-escalating to full every N prompts (`HUMBLEPOWERS_DISPATCH_FULL_EVERY`, default 10) or M minutes (`HUMBLEPOWERS_DISPATCH_FULL_MINUTES`, default 30); slash-commands and short follow-ups get nothing. Subsumes and silences the session-start inject. | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1` |
-| Lexical dispatch router riding the per-prompt inject: deterministic word-boundary regexes (`router_rules.json`, calibrated against `evals/trigger/*.json`) name at most two candidate skills for the prompt, with the matched words shown; silent on no match. On by default when the per-prompt inject is on. | opt out: `HUMBLEPOWERS_DISPATCH_ROUTER=0` |
+| Per-prompt lexical dispatch router: a UserPromptSubmit hook runs deterministic word-boundary regexes (`router_rules.json`, calibrated against `evals/trigger/*.json`) over a substantive human prompt and injects a short `<toolkit-dispatch>` block naming at most two candidate skills, with the matched words shown; silent on no match, on slash-commands, on short follow-ups, and on subagent-completion notices. | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1` |
+| Disable the router — with nothing else to inject, this silences the hook entirely. | `HUMBLEPOWERS_DISPATCH_ROUTER=0` |
 
-The per-prompt hook fails open (any error or timeout means silence, never a
-blocked prompt), keeps payloads ASCII, and logs tier/router decisions to a
-size-capped local NDJSON (`dispatch-log.ndjson` in its state dir) so
-cadence-vs-content effectiveness can be A/B'd against real sessions. Router
-calibration numbers are dev-set numbers by construction — the trigger datasets
-are also the calibration corpus; seal a fresh holdout before citing
-generalization. Router rules are English-lexicon; prompts in other languages
-match only on loanwords (pipeline, backfill, dashboard, ETL).
+The hook fails open (any error or timeout means silence, never a blocked
+prompt), keeps payloads ASCII, and logs each decision (router hits, whether a
+hint shipped) to a size-capped local NDJSON (`dispatch-log.ndjson` in its state
+dir); read it back with `inject_dispatch.py --health`. Router calibration
+numbers are dev-set numbers by construction — the trigger datasets are also the
+calibration corpus; seal a fresh holdout before citing generalization. Router
+rules are English-lexicon; prompts in other languages match only on loanwords
+(pipeline, backfill, dashboard, ETL).
+
+**Retired in 0.8.0.** The generic dispatch *protocol* injection (both the
+session-start `HUMBLEPOWERS_DISPATCH_INJECT` full-protocol print and the
+per-prompt tiered cadence with `HUMBLEPOWERS_DISPATCH_FULL_EVERY` /
+`_FULL_MINUTES` knobs) is gone: a 2026-07 content A/B measured the 8-step block
+as no better than no injection, and the wall-clock / prompt-count cadence was
+never validated. Only the concrete-candidate router hint — the one shape the
+A/B favored — survives.
 
 ## Register linter
 

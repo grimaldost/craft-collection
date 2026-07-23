@@ -5,6 +5,45 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.8.0 — 2026-07-23
+
+Dispatch retirement (redesign step R1). A 2026-07 content A/B (fathom
+`inject-content-v1`, 30 sonnet-5 trials) measured the generic 8-step dispatch
+protocol block as no better than no injection at all, and the per-prompt tiered
+cadence (wall-clock / prompt-count re-escalation) was never validated. Both are
+retired here as a standalone release, justified independently of any
+replacement: reverting to a mechanism that equals bare cannot help. Only the
+concrete-candidate lexical router — the injection shape the same A/B favored —
+survives. The redesign (design doc + blind review panel) plans the semantic and
+action-stream layers as measured, gated follow-ups.
+
+### Removed
+
+- **The session-start full-protocol inject** (`HUMBLEPOWERS_DISPATCH_INJECT`)
+  and its SessionStart hook.
+- **The per-prompt tiered cadence** — full/micro tiers and the
+  `HUMBLEPOWERS_DISPATCH_FULL_EVERY` (default 10) / `HUMBLEPOWERS_DISPATCH_FULL_MINUTES`
+  (default 30) knobs, plus the per-session cadence state file and the
+  compact|clear `--reset-state` reset that served it. With no cadence state,
+  the four stress regressions that pinned its corruption-resilience (bad field
+  types, future-dated cursors, zero/negative knobs) are removed with it.
+
+### Changed
+
+- **The UserPromptSubmit hook is now the lexical router alone**: gate a
+  substantive human prompt, route it, inject a `<toolkit-dispatch>` block naming
+  candidate skills on a match, else stay silent. `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1`
+  still gates it; `HUMBLEPOWERS_DISPATCH_ROUTER=0` now silences the hook
+  outright (nothing else is left to inject). Telemetry records router hits and
+  whether a hint shipped (cadence-tier fields dropped).
+
+### Added
+
+- **`inject_dispatch.py --health`** — a human-invoked audit surface over the
+  telemetry NDJSON (prompts seen, hints injected, most-matched skills, last
+  record age). A fail-open-silent hook needs a way to prove it is alive; this is
+  it.
+
 ## 0.7.4 — 2026-07-23
 
 Router recall recalibration (backlog item 4), run seal-first: a fresh blind

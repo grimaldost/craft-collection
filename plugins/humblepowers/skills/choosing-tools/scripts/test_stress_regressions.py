@@ -141,79 +141,23 @@ def test_full_stdout_is_ascii_when_span_captures_non_cp1252(tmp_path):
     assert b'toolkit-dispatch' in proc.stdout
 
 
-# --- Finding: state/telemetry written before print (HIGH: silent loss + burned slot) ---
+# --- Finding: state/telemetry written before print (HIGH: silent loss of injection) ---
 
 
-def test_injection_survives_unwritable_state_dir(tmp_path):
-    """When the state dir cannot be written, the injection must still be emitted
-    (persistence is best-effort; delivery is the whole point)."""
+def test_injection_survives_unwritable_telemetry_dir(tmp_path):
+    """When the telemetry dir cannot be written, the router hint must still be
+    emitted (persistence is best-effort; delivery is the whole point)."""
     blocker = tmp_path / 'afile'
     blocker.parent.mkdir(parents=True, exist_ok=True)
     blocker.write_text('x', encoding='utf-8')
     bad_state = blocker / 'statedir'  # a dir under a regular file: unwritable
     _, out = _submit(
-        'Migrate the billing pipeline to the new warehouse without changing output',
+        'Backfill six months of history into the sessions table and replay it',
         bad_state,
-        HUMBLEPOWERS_DISPATCH_ROUTER='0',
     )
-    assert 'Name the task in one phrase' in out, (
-        'an unwritable state dir silently swallowed the whole injection'
+    assert 'matches triggers for' in out, (
+        'an unwritable telemetry dir silently swallowed the router hint'
     )
-
-
-# --- Finding: _read_state validates dict but not field types (HIGH: sticky silence) ---
-
-
-def test_corrupt_field_type_degrades_not_crashes(tmp_path):
-    """A structurally valid state dict with a wrong-typed field must degrade
-    (still inject), not abort the turn forever."""
-    state_file = tmp_path / 's1.json'
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    state_file.write_text(
-        json.dumps({'n': 'abc', 'last_full_n': 0, 'last_full_ts': 0}), encoding='utf-8'
-    )
-    _, out = _submit(
-        'Migrate the billing pipeline to the new warehouse without changing output', tmp_path
-    )
-    assert '<toolkit-dispatch>' in out, 'a bad n field caused permanent silence'
-
-
-def test_future_last_full_cannot_starve_reescalation(tmp_path):
-    """Corrupt last_full_n/ts far ahead of reality must not permanently suppress
-    the full tier."""
-    state_file = tmp_path / 's1.json'
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    state_file.write_text(
-        json.dumps({'n': 5, 'last_full_n': 999999999, 'last_full_ts': time.time() + 1e9}),
-        encoding='utf-8',
-    )
-    _, out = _submit('Refactor the transform behind the finance dashboard now', tmp_path)
-    assert '<toolkit-dispatch>' in out
-    # a clamped read means the next prompt is treated sanely, not starved forever
-
-
-# --- Finding: env vars 0/negative invert the throttle (MED) ---
-
-
-def test_zero_full_every_does_not_spam_full(tmp_path):
-    """FULL_EVERY=0 must not turn every prompt into the full protocol."""
-    with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_FULL_EVERY='0'):
-        _submit('Refactor the finance pipeline number one for the dataset today', tmp_path)
-        _, out2 = _submit(
-            'Refactor the finance pipeline number two for the dataset today', tmp_path
-        )
-    assert 'Name the task in one phrase' not in out2, (
-        'FULL_EVERY=0 inverted the throttle into full-every-prompt'
-    )
-
-
-def test_negative_full_minutes_does_not_spam_full(tmp_path):
-    with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_FULL_MINUTES='-1'):
-        _submit('Refactor the finance pipeline number one for the dataset today', tmp_path)
-        _, out2 = _submit(
-            'Refactor the finance pipeline number two for the dataset today', tmp_path
-        )
-    assert 'Name the task in one phrase' not in out2
 
 
 # --- Finding: non-string / oversized session_id (LOW x2) ---
