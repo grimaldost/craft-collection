@@ -1,0 +1,290 @@
+[
+ {
+  "query": "I need to backfill the orders table after replaying missed events from last week.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "This bug keeps failing intermittently in prod and I have no idea why.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Let's implement a new validator for incoming webhook requests.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Can you hand this off to a fresh session with a self-contained brief?",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "I inherited this old Python codebase and want to bring it up to modern standards - better tooling, checks, and testing.",
+  "should_trigger": true,
+  "register": "paraphrase",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "I keep going back and forth on how this thing should even work - nothing is settled yet, need to think through options before touching code.",
+  "should_trigger": true,
+  "register": "paraphrase",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "I have been staring at this design for so many rounds I do not trust my own judgment anymore - can someone completely unfamiliar with this take a look before we commit?",
+  "should_trigger": true,
+  "register": "paraphrase",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Before we move on, let's make sure the key decisions and why we made them are written down somewhere for later.",
+  "should_trigger": true,
+  "register": "paraphrase",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "We're renaming a column in the customers table and three downstream dashboards read it - want to make sure we don't break anything silently.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Third time I've tried to fix this and it's still broken, need to actually figure out what's going on before another patch.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Before writing the fix for this bug, let's write a test that reproduces it first.",
+  "should_trigger": true,
+  "register": "paraphrase",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "This subtask is bounded enough that I want to spin up a brand new session with just the essentials so someone else can pick it up cold.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Can you validate this JSON schema for the API request payload?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Our CI pipeline is timing out during the build step, can you check the yaml config?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "We need to migrate this app from React 17 to React 18.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "I'm building a simple journal app where users can write daily diary entries.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Can you hand off this package to the courier when they arrive?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Can you help me review our sales pipeline for Q3, we have too many deals stuck in negotiation stage?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Can you design a car dashboard UI mockup for a client project?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "My car crashed into the mailbox this morning, is there a good body shop nearby?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "The construction crew put up scaffold around the building for renovations.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "The contractor needs to poke holes in the fence posts for the new gate installation.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Can you help me add a flag pole to the front yard?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "We're renting a warehouse space downtown for extra storage, any tips on lease negotiation?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "migre o pipeline de posicoes sem mudar o resultado",
+  "should_trigger": true,
+  "register": "multilingual",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "nao entendo por que os testes passam local mas falham no CI",
+  "should_trigger": true,
+  "register": "multilingual",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "me ajuda a pensar o desenho antes de codar",
+  "should_trigger": true,
+  "register": "multilingual",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "quero adicionar uma nova funcionalidade mas ainda nao sei bem o formato",
+  "should_trigger": true,
+  "register": "multilingual",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "o bug voltou depois do meu fix, ja e a terceira tentativa",
+  "should_trigger": true,
+  "register": "multilingual",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "preciso migrar o schema do banco de dados, hoje tem consumidores usando isso",
+  "should_trigger": true,
+  "register": "multilingual",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "vamos separar isso numa sessao propria antes de perder o contexto",
+  "should_trigger": true,
+  "register": "multilingual",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "o pipeline de ETL esta rodando mas os dados nao estao atualizando",
+  "should_trigger": true,
+  "register": "multilingual",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Write a JSON schema validator for the API request bodies; the schema feeds downstream services.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "The UI test for the login modal is still failing after we bumped the CSS z-index.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Can you help me hand off this old laptop to my cousin, wiping it first?",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "We need to backfill the empty cells in this spreadsheet with last week's numbers manually.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Write documentation explaining what happens when a car crashes into a barrier in our physics engine.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Let's build a birdhouse this weekend, I found a rough idea online for the design.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "The fact table in the report footer needs a new column for tax total -- it's just a display table for the printed invoice, no other reader.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "I want to journal about my trip before I forget the details.",
+  "should_trigger": false,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Not sure how to approach this - let's figure out the design before I write the plan and execute it.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "We agreed on the design, now write the full implementation plan and execute it task by task.",
+  "should_trigger": true,
+  "register": "paraphrase",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Before I forget, let's wrap up and journal what we decided, then hand this off to a fresh session tomorrow.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Spin this off into its own session so a future me can pick it up cold.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "Let's make a record of the reasoning before we hand this off to another engineer.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "I want a second opinion -- poke holes in this design, and separately hand the write-up off to the docs team.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "This bug keeps failing on CI but passes locally, and honestly I don't understand why -- should we redesign the retry logic or just patch it in a fresh session?",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ },
+ {
+  "query": "We haven't decided how to shape this feature, and once we do, hand it off to a dedicated session to build.",
+  "should_trigger": true,
+  "register": "lexical",
+  "note": "adversarial holdout 2026-07-22"
+ }
+]

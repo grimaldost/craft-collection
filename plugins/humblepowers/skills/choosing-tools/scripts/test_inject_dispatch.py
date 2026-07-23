@@ -45,6 +45,13 @@ class _Env:
                 os.environ[key] = old
 
 
+class _FakeStdin:
+    """A stdin stand-in exposing the .buffer bytes stream the script reads."""
+
+    def __init__(self, text):
+        self.buffer = io.BytesIO(text.encode('utf-8'))
+
+
 def _submit(prompt, session='s1'):
     payload = json.dumps(
         {
@@ -56,7 +63,7 @@ def _submit(prompt, session='s1'):
     )
     out = io.StringIO()
     old_stdin = sys.stdin
-    sys.stdin = io.StringIO(payload)
+    sys.stdin = _FakeStdin(payload)
     try:
         with redirect_stdout(out):
             code = inject_dispatch.main(['--prompt-submit'])
@@ -68,7 +75,7 @@ def _submit(prompt, session='s1'):
 def _run(args, stdin_text=''):
     out = io.StringIO()
     old_stdin = sys.stdin
-    sys.stdin = io.StringIO(stdin_text)
+    sys.stdin = _FakeStdin(stdin_text)
     try:
         with redirect_stdout(out):
             code = inject_dispatch.main(args)

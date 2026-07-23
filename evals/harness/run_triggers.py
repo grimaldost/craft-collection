@@ -344,7 +344,7 @@ def format_error_samples(samples: list[dict]) -> list[str]:
     print identically."""
     if not samples:
         return []
-    lines = ['error sample(s) — distinct run.result_text, most frequent first:']
+    lines = ['error sample(s) - distinct run.result_text, most frequent first:']
     lines += [f'  ({s["count"]}x) {s["text"]}' for s in samples]
     return lines
 
@@ -396,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
     queries = load_queries(args.skill, args.limit)
     problems = validate_queries(queries)
     if problems:
-        print(f'dataset {args.skill}.json has {len(problems)} problem(s) — fix before running:')
+        print(f'dataset {args.skill}.json has {len(problems)} problem(s) - fix before running:')
         for p in problems:
             print(f'  - {p}')
         return 1
@@ -404,7 +404,7 @@ def main(argv: list[str] | None = None) -> int:
     if bad_deny:
         print(
             f'config.json disallowed_tools_trigger names unknown CLI tool(s): '
-            f'{", ".join(bad_deny)} — every spawn would error "deny rule matches no known '
+            f'{", ".join(bad_deny)} - every spawn would error "deny rule matches no known '
             f'tool" and silently shrink the sample. Fix the deny-list (or add the tool to '
             f'KNOWN_CLI_TOOLS in run_triggers.py if the CLI added it) before running.'
         )
@@ -423,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.limit or args.repeats != cfg['agent_repeats']:
         print(
-            f'NOTE: partial run — overwrites any full "{args.skill}" entry in '
+            f'NOTE: partial run - overwrites any full "{args.skill}" entry in '
             f'report/triggers.json; re-run full (or restore a backup) before aggregating'
         )
 
@@ -435,7 +435,7 @@ def main(argv: list[str] | None = None) -> int:
         if not ok:
             print(
                 f'\nPRE-FLIGHT FAILED: the auth/CLI probe errored ({detail}). '
-                f'Re-login (claude /login) and retry — not spending the {n_spawn} run spawns.'
+                f'Re-login (claude /login) and retry - not spending the {n_spawn} run spawns.'
             )
             return 2
         score = run_skill(
@@ -455,13 +455,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if all_runs_errored(score):
         hint = (
-            '$0 cost points to auth — re-login (claude /login) and re-run.'
+            '$0 cost points to auth - re-login (claude /login) and re-run.'
             if not score['cost_usd']
-            else 'Likely network/CLI — re-run.'
+            else 'Likely network/CLI - re-run.'
         )
         print(
             f'\nINVALID: all {score["total_runs"]} runs errored (cost=${score["cost_usd"]}). '
-            f'Infrastructure failure, NOT a measurement — the recall/specificity it would print '
+            f'Infrastructure failure, NOT a measurement - the recall/specificity it would print '
             f'are artifacts of nothing running, so the result is discarded (not written to '
             f'report/triggers.json). {hint}'
         )
@@ -480,7 +480,7 @@ def main(argv: list[str] | None = None) -> int:
     action = args.skill in set(cfg.get('action_discipline_skills', []))
     slo, shi = score['specificity_ci']
     if score['recall'] is None:
-        rec_ok = 'INFO (no gated positives — all expected_hard, or none in the slice)'
+        rec_ok = 'INFO (no gated positives - all expected_hard, or none in the slice)'
     elif action:
         rec_ok = 'INFO (action-discipline: not gated on trigger-arm recall)'
     else:
