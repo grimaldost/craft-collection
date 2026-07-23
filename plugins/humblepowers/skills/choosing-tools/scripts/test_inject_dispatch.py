@@ -204,6 +204,33 @@ def test_session_start_unchanged_when_prompt_inject_off(tmp_path):
     assert code == 0 and 'Name the task in one phrase' in out
 
 
+def test_synthetic_prompts_are_silent(tmp_path):
+    tail = (
+        ' Subagent task complete: the migration finished successfully with '
+        'all tests passing and no errors reported anywhere in the pipeline'
+    )
+    for i, prefix in enumerate(inject_dispatch.SYNTHETIC_PREFIXES):
+        session = f'synth{i}'
+        with _Env(tmp_path):
+            code, out = _submit(prefix + tail, session=session)
+            state_file = inject_dispatch._state_path(session)
+            log_file = inject_dispatch._state_dir() / 'dispatch-log.ndjson'
+        assert code == 0 and out == '', f'{prefix!r} prompt must be silent'
+        assert not state_file.exists(), f'{prefix!r} prompt must not create session state'
+        assert not log_file.exists(), f'{prefix!r} prompt must not append telemetry'
+
+
+def test_normal_long_prompt_still_injects_regression(tmp_path):
+    with _Env(tmp_path):
+        code, out = _submit(SUBSTANTIVE)
+        state_file = inject_dispatch._state_path('s1')
+        state = json.loads(state_file.read_text(encoding='utf-8'))
+    assert code == 0
+    assert '<toolkit-dispatch>' in out
+    assert 'Name the task in one phrase' in out
+    assert state['n'] == 1
+
+
 if __name__ == '__main__':
     import tempfile
     from pathlib import Path

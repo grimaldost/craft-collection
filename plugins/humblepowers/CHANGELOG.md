@@ -5,6 +5,17 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.7.2 — 2026-07-23
+
+### Fixed
+
+- **Subagent completion counted as a human turn.** Headless probes confirmed
+  subagent completion is delivered to the parent session as a synthetic prompt
+  (starting `[SYSTEM NOTIFICATION` or `<task-notification>`) that passes through
+  UserPromptSubmit like a real one; `--prompt-submit` now recognizes both
+  prefixes and skips them silently before any state read or cadence increment,
+  the same treatment as a slash command.
+
 ## 0.7.1 — 2026-07-22
 
 ### Fixed

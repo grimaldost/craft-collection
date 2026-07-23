@@ -16,7 +16,10 @@ behind env gates, so the hooks cost nothing until the user opts in:
                     reminder otherwise. Slash-commands and short follow-ups get
                     nothing. A lexical router (router.py) appends a hint naming
                     at most two candidate skills; disable with
-                    HUMBLEPOWERS_DISPATCH_ROUTER=0.
+                    HUMBLEPOWERS_DISPATCH_ROUTER=0. Subagent completion notices
+                    pass through UserPromptSubmit as synthetic prompts (see
+                    SYNTHETIC_PREFIXES) and are skipped silently, same as a
+                    slash command.
   --reset-state     SessionStart matcher compact|clear. Silently deletes the
                     session's cadence state so the next prompt re-escalates to
                     the full protocol (context was rebuilt).
@@ -76,6 +79,11 @@ MIN_CHARS = 15
 DEFAULT_FULL_EVERY = 10
 DEFAULT_FULL_MINUTES = 30
 TELEMETRY_CAP_BYTES = 1_000_000
+
+# Subagent completion is delivered to the parent session as a synthetic prompt
+# that passes through UserPromptSubmit like a real one. No human authored it,
+# so it must never count toward cadence or trigger injection.
+SYNTHETIC_PREFIXES = ('[SYSTEM NOTIFICATION', '<task-notification>')
 
 
 def _state_dir() -> Path:
@@ -165,6 +173,8 @@ def _prompt_submit() -> int:
     payload = _load_stdin_json()
     prompt = payload.get('prompt')
     prompt = prompt.strip() if isinstance(prompt, str) else ''
+    if prompt.startswith(SYNTHETIC_PREFIXES):
+        return 0  # subagent completion pass-through: no human turn occurred
     session_id = payload.get('session_id')
     session_id = session_id if isinstance(session_id, str) and session_id else 'unknown'
 
