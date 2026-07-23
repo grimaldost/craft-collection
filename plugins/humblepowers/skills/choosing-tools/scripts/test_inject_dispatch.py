@@ -1,8 +1,8 @@
 """Tests for inject_dispatch. Runnable with pytest or `python test_inject_dispatch.py`.
 
-Covers the --prompt-submit cadence machine, its gates, fail-open behavior, the
---session-start demotion, and --reset-state. Every path must exit 0 — a
-UserPromptSubmit hook that exits nonzero or hangs blocks the user's prompt.
+Covers the --prompt-submit router-hint injector, its gates, fail-open behavior,
+telemetry, and the --health reader. Every path must exit 0 - a UserPromptSubmit
+hook that exits nonzero or hangs blocks the user's prompt.
 """
 
 from __future__ import annotations
@@ -11,10 +11,14 @@ import io
 import json
 import os
 import sys
-import time
 from contextlib import redirect_stdout
 
 import inject_dispatch
+
+# A prompt whose wording lexically triggers the router (data-engineering-discipline).
+ROUTING = 'Backfill six months of history into the sessions table and replay it'
+# Substantive (>= 4 words, >= 15 chars, non-slash) but hits no router rule.
+NON_ROUTING = 'tell me a fun fact about the history of typography please'
 
 
 class _Env:
@@ -84,56 +88,42 @@ def _run(args, stdin_text=''):
     return code, out.getvalue()
 
 
-SUBSTANTIVE = 'Migrate the billing pipeline to the new warehouse without changing output'
+def _log_records(tmp_path):
+    log = inject_dispatch._log_path()
+    if not log.exists():
+        return []
+    return [
+        json.loads(line) for line in log.read_text(encoding='utf-8').splitlines() if line.strip()
+    ]
+
+
+# --- --prompt-submit -------------------------------------------------------
 
 
 def test_inert_without_gate(tmp_path):
     with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=None):
-        code, out = _submit(SUBSTANTIVE)
+        code, out = _submit(ROUTING)
     assert code == 0 and out == ''
 
 
-def test_first_prompt_gets_full_protocol(tmp_path):
+def test_routing_prompt_gets_hint(tmp_path):
     with _Env(tmp_path):
-        code, out = _submit(SUBSTANTIVE)
+        code, out = _submit(ROUTING)
     assert code == 0
     assert '<toolkit-dispatch>' in out
-    assert 'Name the task in one phrase' in out, 'first prompt should carry the full protocol'
+    assert 'matches triggers for' in out
+    assert 'data-engineering-discipline' in out
 
 
-def test_second_prompt_gets_micro(tmp_path):
+def test_non_routing_prompt_is_silent(tmp_path):
     with _Env(tmp_path):
-        _submit(SUBSTANTIVE)
-        code, out = _submit('Now refactor the transform that feeds the finance dashboard')
-    assert code == 0
-    assert '<toolkit-dispatch>' in out
-    assert 'Name the task in one phrase' not in out, 'second prompt should be the micro tier'
-
-
-def test_full_reescalates_after_n_prompts(tmp_path):
-    with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_FULL_EVERY='3'):
-        _submit(SUBSTANTIVE)
-        _submit('Refactor the transform behind the finance dashboard now')
-        _submit('Backfill the sessions table and replay the history please')
-        code, out = _submit('Design the data contract for the customer events dataset')
-    assert code == 0
-    assert 'Name the task in one phrase' in out, '4th prompt (N=3) should re-escalate to full'
-
-
-def test_full_reescalates_after_stale_minutes(tmp_path):
-    with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_FULL_MINUTES='1'):
-        _submit(SUBSTANTIVE)
-        state_file = inject_dispatch._state_path('s1')
-        state = json.loads(state_file.read_text(encoding='utf-8'))
-        state['last_full_ts'] = time.time() - 120
-        state_file.write_text(json.dumps(state), encoding='utf-8')
-        _code, out = _submit('Backfill the sessions table and replay the history please')
-    assert 'Name the task in one phrase' in out
+        code, out = _submit(NON_ROUTING)
+    assert code == 0 and out == '', 'a substantive but non-matching prompt must inject nothing'
 
 
 def test_slash_commands_are_silent(tmp_path):
     with _Env(tmp_path):
-        code, out = _submit('/review-panel the caching design')
+        code, out = _submit('/review-panel the caching design and the router rules')
     assert code == 0 and out == ''
 
 
@@ -144,29 +134,16 @@ def test_short_followups_are_silent(tmp_path):
             assert code == 0 and out == '', f'short follow-up {prompt!r} must be gated'
 
 
-def test_router_hint_appended_on_match(tmp_path):
-    with _Env(tmp_path):
-        _submit(
-            'hello there my good friend, how are you doing today'
-        )  # ungated: burns the full tier
-        _code, out = _submit('Backfill six months of history into the sessions table and replay it')
-    assert 'matches triggers for' in out
-    assert 'data-engineering-discipline' in out
-
-
 def test_router_can_be_disabled(tmp_path):
     with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_ROUTER='0'):
-        _submit(SUBSTANTIVE)
-        _code, out = _submit('Backfill six months of history into the sessions table and replay it')
-    assert 'matches triggers for' not in out
+        code, out = _submit(ROUTING)
+    assert code == 0 and out == '', 'ROUTER=0 leaves nothing to inject, so the hook is silent'
 
 
 def test_payload_is_ascii(tmp_path):
     with _Env(tmp_path):
-        _, out1 = _submit(SUBSTANTIVE)
-        _, out2 = _submit('Backfill six months of history into the sessions table and replay it')
-    out1.encode('ascii')
-    out2.encode('ascii')
+        _, out = _submit(ROUTING)
+    out.encode('ascii')  # must not raise
 
 
 def test_malformed_stdin_fails_open(tmp_path):
@@ -175,60 +152,61 @@ def test_malformed_stdin_fails_open(tmp_path):
     assert code == 0 and out == ''
 
 
-def test_reset_state_reescalates(tmp_path):
-    with _Env(tmp_path):
-        _submit(SUBSTANTIVE)
-        _submit('Refactor the transform behind the finance dashboard now')
-        payload = json.dumps(
-            {'session_id': 's1', 'hook_event_name': 'SessionStart', 'source': 'compact'}
-        )
-        code, _ = _run(['--reset-state'], stdin_text=payload)
-        assert code == 0
-        _, out = _submit('Backfill the sessions table and replay the history please')
-    assert 'Name the task in one phrase' in out, 'post-reset prompt should re-escalate to full'
-
-
-def test_session_start_demoted_when_prompt_inject_on(tmp_path):
-    with _Env(tmp_path):
-        code, out = _run(['--session-start'])
-    assert code == 0 and out == ''
-
-
-def test_session_start_unchanged_when_prompt_inject_off(tmp_path):
-    with _Env(
-        tmp_path,
-        HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=None,
-        HUMBLEPOWERS_DISPATCH_INJECT='1',
-    ):
-        code, out = _run(['--session-start'])
-    assert code == 0 and 'Name the task in one phrase' in out
-
-
 def test_synthetic_prompts_are_silent(tmp_path):
     tail = (
         ' Subagent task complete: the migration finished successfully with '
         'all tests passing and no errors reported anywhere in the pipeline'
     )
     for i, prefix in enumerate(inject_dispatch.SYNTHETIC_PREFIXES):
-        session = f'synth{i}'
         with _Env(tmp_path):
-            code, out = _submit(prefix + tail, session=session)
-            state_file = inject_dispatch._state_path(session)
-            log_file = inject_dispatch._state_dir() / 'dispatch-log.ndjson'
+            code, out = _submit(prefix + tail, session=f'synth{i}')
+            log_file = inject_dispatch._log_path()
         assert code == 0 and out == '', f'{prefix!r} prompt must be silent'
-        assert not state_file.exists(), f'{prefix!r} prompt must not create session state'
         assert not log_file.exists(), f'{prefix!r} prompt must not append telemetry'
 
 
-def test_normal_long_prompt_still_injects_regression(tmp_path):
+def test_telemetry_records_hit_and_miss(tmp_path):
     with _Env(tmp_path):
-        code, out = _submit(SUBSTANTIVE)
-        state_file = inject_dispatch._state_path('s1')
-        state = json.loads(state_file.read_text(encoding='utf-8'))
+        _submit(ROUTING)
+        _submit(NON_ROUTING)
+        records = _log_records(tmp_path)
+    assert len(records) == 2, 'each gated-through prompt logs exactly one record'
+    hit, miss = records
+    assert hit['injected'] is True and any('data-engineering' in s for s in hit['router_hits'])
+    assert miss['injected'] is False and miss['router_hits'] == []
+
+
+# --- --health --------------------------------------------------------------
+
+
+def test_health_no_records(tmp_path):
+    with _Env(tmp_path):
+        code, out = _run(['--health'])
+    assert code == 0 and 'no records yet' in out
+
+
+def test_health_summarizes_after_submits(tmp_path):
+    with _Env(tmp_path):
+        _submit(ROUTING)
+        _submit(ROUTING, session='s2')
+        _submit(NON_ROUTING)
+        code, out = _run(['--health'])
     assert code == 0
-    assert '<toolkit-dispatch>' in out
-    assert 'Name the task in one phrase' in out
-    assert state['n'] == 1
+    assert 'prompts logged: 3' in out
+    assert 'hint injected:  2' in out
+    assert 'data-engineering-discipline' in out
+    out.encode('ascii')  # health output must be ASCII
+
+
+def test_health_fails_open_on_corrupt_log(tmp_path):
+    with _Env(tmp_path):
+        _submit(ROUTING)  # one good record + creates the dir
+        log = inject_dispatch._log_path()
+        with log.open('a', encoding='utf-8') as fh:
+            fh.write('{ this is not json\n')
+        code, out = _run(['--health'])
+    assert code == 0, 'a corrupt telemetry line must not crash --health'
+    assert 'prompts logged: 1' in out, 'the corrupt line is skipped, the good one counted'
 
 
 if __name__ == '__main__':

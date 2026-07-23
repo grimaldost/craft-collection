@@ -88,10 +88,9 @@ rules of thumb hold:
   inflating register; selection quality depends on descriptions staying
   honest.
 
-## Optional session-start reminder
+## Optional dispatch-router hook
 
-The plugin ships a SessionStart hook that injects a compact version of the
-procedure above. It is inert by default: set `HUMBLEPOWERS_DISPATCH_INJECT=1`
-to enable it. The hook is the mechanical home for "always consider the
-toolkit" — a reminder the harness re-issues each session beats prose asking to
-be remembered.
+The plugin ships a UserPromptSubmit hook that runs a lexical router over each
+substantive prompt and names candidate skills when the wording matches. Inert
+by default: set `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1` to enable it. A concrete
+candidate the harness computes per prompt beats prose asking to be remembered.
