@@ -10,20 +10,33 @@ Usage:
     python scan_toolkit.py                  # grouped table
     python scan_toolkit.py --json           # machine-readable
     python scan_toolkit.py --session-start  # inert unless TOOLKIT_AWARENESS_INJECT=1
+    python scan_toolkit.py --session-start --no-cache   # force a fresh scan
+    python scan_toolkit.py --check-serving <transcript>  # diagnose a frozen snapshot
 
 Stdlib only (Python 3.10+). Plugin discovery shells out to `claude plugin list`
 and degrades gracefully if the CLI is absent or changes its output format.
 Installed plugin versions are compared against each marketplace source's manifest
-and any skew is flagged — a stale install can silently hide newer skills.
+and any skew is flagged — a stale install can silently hide newer skills; a
+skill-directory diff catches the same lag when the install carries no manifest.
+
+The --session-start path is cached: it fingerprints the settings/plugin/manifest
+files and, on a warm hit under 24h, prints the last inventory WITHOUT invoking the
+claude CLI (the inject is otherwise too slow to default on). It also diffs this
+session's transcript against the installed plugin hooks to catch an app-level
+frozen plugin snapshot — the only observable of that freeze. Both are best-effort
+and fail open; the table and --json modes never touch the cache.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 # Component kinds discovered under a `.claude/` directory, plus plugins (which are
@@ -296,6 +309,75 @@ def _source_manifest_version(marketplace_dir: Path, plugin_label: str) -> str | 
     return None
 
 
+def _source_plugin_dir(marketplace_dir: Path, plugin_label: str) -> Path | None:
+    """Resolve `plugin_label`'s on-disk source directory inside a marketplace tree —
+    the `.claude-plugin/marketplace.json` entry's `source` path, else the
+    conventional `plugins/<label>/` layout. Returns the first candidate that carries
+    a `.claude-plugin/plugin.json` (so it is a real plugin root), else None. Same
+    resolution the version check uses, exposed for the skill-list diff; None means
+    no comparison, never false skew."""
+    base = Path(marketplace_dir)
+    declared = None
+    try:
+        mp = json.loads((base / '.claude-plugin' / 'marketplace.json').read_text(encoding='utf-8'))
+        entries = mp.get('plugins', []) if isinstance(mp, dict) else []
+        for entry in entries:
+            if isinstance(entry, dict) and entry.get('name') == plugin_label:
+                src = str(entry.get('source', ''))
+                if src:
+                    declared = base / src
+                break
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass
+    for candidate in (declared, base / 'plugins' / plugin_label):
+        if candidate and (candidate / '.claude-plugin' / 'plugin.json').is_file():
+            return candidate
+    return None
+
+
+def _skill_dir_names(plugin_dir: Path) -> set[str]:
+    """Names of the skill directories under `plugin_dir/skills` — a subdir counts
+    only when it holds a SKILL.md. {} on any error or missing dir."""
+    out: set[str] = set()
+    skills = Path(plugin_dir) / 'skills'
+    try:
+        if not skills.is_dir():
+            return out
+        for sub in skills.iterdir():
+            if sub.is_dir() and (sub / 'SKILL.md').is_file():
+                out.add(sub.name)
+    except OSError:
+        return out
+    return out
+
+
+def _skill_list_skew(rows: list[dict], locations: dict[str, str]) -> list[str]:
+    """Skills present in a plugin's marketplace SOURCE but absent from its installed
+    copy — the skew the version check misses when an install carries NO plugin.json
+    (version unknown, yet whole skills can still be missing). One caveat per lagging
+    plugin, missing-in-installed only (an extra installed skill is not the footgun).
+    An unresolvable source is compared against nothing: absence of evidence is not
+    skew."""
+    out: list[str] = []
+    for r in rows:
+        market, install = r.get('marketplace'), r.get('installPath')
+        loc = locations.get(market) if market else None
+        if not (loc and install):
+            continue
+        src_dir = _source_plugin_dir(Path(loc), r.get('plugin') or '')
+        if not src_dir:
+            continue
+        missing = sorted(_skill_dir_names(src_dir) - _skill_dir_names(Path(install)))
+        if not missing:
+            continue
+        label = r.get('plugin') or ''
+        out.append(
+            f'installed copy lags repo: {label} missing skills: {", ".join(missing)}'
+            f' -- consider claude plugin update {label}'
+        )
+    return out
+
+
 def _marketplace_locations() -> dict[str, str]:
     """{marketplace name: on-disk installLocation} via `claude plugin marketplace
     list --json`. For a `directory` marketplace the location IS the live source
@@ -470,7 +552,277 @@ def scan(roots: list[Path]) -> dict[str, list[dict]]:
         locations = _marketplace_locations()
         result['_caveats'].extend(_merge_skew(plugins, locations))
         result['_caveats'].extend(_stale_checkout_caveats(locations))
+        # Version skew can't see a lag when the install carries no plugin.json; a
+        # skill-directory diff catches skills present in source but missing locally.
+        result['_caveats'].extend(_skill_list_skew(plugins, locations))
     return result
+
+
+# --- serving-snapshot check (transcript diff) ---------------------------------
+# The desktop app can serve a plugin hooks snapshot frozen weeks behind the
+# installed cache; every disk layer reads "current". The only observable is the
+# session transcript's recorded hook command strings differing from the installed
+# hooks.json. This whole path is best-effort and fail-open: any error skips the
+# check silently (absence of evidence is not skew).
+
+_SERVING_CAVEAT_CAP = 2
+
+
+def _read_hook_stdin() -> dict | None:
+    """The SessionStart hook envelope on stdin (session_id, transcript_path, cwd),
+    or None. Only attempted when stdin is a non-tty pipe; every failure -> None so
+    an interactive or malformed invocation never blocks or raises."""
+    try:
+        stdin = sys.stdin
+        if stdin is None or stdin.isatty():
+            return None
+        raw = stdin.read()
+        if not raw or not raw.strip():
+            return None
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def _transcript_hook_commands(transcript_path: str) -> list[str]:
+    """Plugin-hook command strings recorded in an NDJSON transcript: each record
+    whose `attachment` is a dict with a string `command`, keeping only commands
+    that contain the literal `${CLAUDE_PLUGIN_ROOT}` (settings-level hooks vary
+    legitimately and are excluded). Bad lines are skipped; any error -> []."""
+    out: list[str] = []
+    try:
+        p = Path(transcript_path)
+        if not p.is_file():
+            return out
+        for line in p.read_text(encoding='utf-8', errors='replace').splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(rec, dict):
+                continue
+            att = rec.get('attachment')
+            if isinstance(att, dict):
+                cmd = att.get('command')
+                if isinstance(cmd, str) and '${CLAUDE_PLUGIN_ROOT}' in cmd:
+                    out.append(cmd)
+    except Exception:
+        return out
+    return out
+
+
+def _expected_hook_commands(install_paths: list) -> set[str]:
+    """The joined command strings every installed plugin's `hooks/hooks.json`
+    declares -- `' '.join([command] + args)`, the exact unresolved form the
+    transcript records. Unreadable manifests contribute nothing, never raise."""
+    expected: set[str] = set()
+    for ip in install_paths:
+        if not ip:
+            continue
+        try:
+            data = json.loads((Path(ip) / 'hooks' / 'hooks.json').read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+        hooks = data.get('hooks') if isinstance(data, dict) else None
+        if not isinstance(hooks, dict):
+            continue
+        for entries in hooks.values():
+            if not isinstance(entries, list):
+                continue
+            for group in entries:
+                inner = group.get('hooks') if isinstance(group, dict) else None
+                if not isinstance(inner, list):
+                    continue
+                for h in inner:
+                    if not isinstance(h, dict):
+                        continue
+                    command = h.get('command')
+                    if not isinstance(command, str):
+                        continue
+                    args = h.get('args')
+                    parts = (
+                        [command] + [str(a) for a in args] if isinstance(args, list) else [command]
+                    )
+                    expected.add(' '.join(parts))
+    return expected
+
+
+def _serving_snapshot_caveats(recorded_commands: list, install_paths: list) -> list[str]:
+    """One caveat per recorded plugin-hook command that no installed hooks.json
+    produces -- the app-level frozen-snapshot signature. Deduped and capped; all
+    matched (or nothing recorded) -> []."""
+    expected = _expected_hook_commands(install_paths)
+    out: list[str] = []
+    seen: set[str] = set()
+    for cmd in recorded_commands:
+        if not isinstance(cmd, str) or cmd in expected or cmd in seen:
+            continue
+        seen.add(cmd)
+        out.append(
+            "session is serving a plugin hook not in any installed hooks.json: '"
+            + cmd[:100]
+            + "' -- app-level frozen plugin snapshot; verify hooks headless (claude -p)"
+        )
+        if len(out) >= _SERVING_CAVEAT_CAP:
+            break
+    return out
+
+
+def _serving_snapshot_from_stdin(install_paths: list) -> list[str]:
+    """Read the hook envelope from stdin and diff its transcript against the given
+    install paths. Fail-open at every step: no envelope, no transcript, no records,
+    or any error -> []."""
+    try:
+        envelope = _read_hook_stdin()
+        if not isinstance(envelope, dict):
+            return []
+        tp = envelope.get('transcript_path')
+        if not isinstance(tp, str) or not tp:
+            return []
+        recorded = _transcript_hook_commands(tp)
+        if not recorded:
+            return []
+        return _serving_snapshot_caveats(recorded, install_paths)
+    except Exception:
+        return []
+
+
+# --- inventory cache (--session-start only) ------------------------------------
+# The --session-start inject shells to the claude CLI (seconds), too slow to ever
+# default on. A fingerprinted cache lets a warm session start return instantly
+# without the CLI. Every cache failure path is silent, never fatal.
+
+_CACHE_TTL_SECONDS = 24 * 60 * 60
+
+
+def _cache_dir() -> Path:
+    base = os.environ.get('CLAUDE_PLUGIN_DATA') or tempfile.gettempdir()
+    return Path(base) / 'toolkit-awareness'
+
+
+def _cache_path() -> Path:
+    return _cache_dir() / 'inventory-cache.json'
+
+
+def _fingerprint_paths(roots: list[Path]) -> list[Path]:
+    """The files whose mtime/size decide whether a cached inventory is still valid:
+    user + per-root settings, the installed-plugins record, every marketplace
+    manifest, and this script itself."""
+    home = Path.home()
+    paths = [
+        home / '.claude' / 'settings.json',
+        home / '.claude' / 'settings.local.json',
+        home / '.claude' / 'plugins' / 'installed_plugins.json',
+    ]
+    for root in roots:
+        paths.append(Path(root) / '.claude' / 'settings.json')
+        paths.append(Path(root) / '.claude' / 'settings.local.json')
+    try:
+        markets = home / '.claude' / 'plugins' / 'marketplaces'
+        paths.extend(sorted(markets.glob('*/.claude-plugin/marketplace.json')))
+    except OSError:
+        pass
+    paths.append(Path(__file__).resolve())
+    return paths
+
+
+def _fingerprint(roots: list[Path]) -> str:
+    """A sha256 over a sorted list of [str(path), mtime_ns, size] for every
+    fingerprint file (a missing file participates as [path, null, null]) plus the
+    literal sorted list of scan roots -- changes when any of them does."""
+    entries = []
+    for p in _fingerprint_paths(roots):
+        try:
+            st = p.stat()
+            entries.append([str(p), st.st_mtime_ns, st.st_size])
+        except OSError:
+            entries.append([str(p), None, None])
+    payload = {'files': sorted(entries), 'roots': sorted(str(r) for r in roots)}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode('utf-8')).hexdigest()
+
+
+def _read_cache() -> dict | None:
+    try:
+        data = json.loads(_cache_path().read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else None
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def _write_cache(fingerprint: str, output_text: str, install_paths: list) -> None:
+    """Atomic best-effort cache write (tmp + os.replace). Every failure is
+    swallowed -- a cache problem must never break a session start."""
+    try:
+        d = _cache_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        record = {
+            'fingerprint': fingerprint,
+            'ts': time.time(),
+            'output_text': output_text,
+            'install_paths': [str(p) for p in install_paths if p],
+        }
+        tmp = d / f'inventory-cache.json.{os.getpid()}.tmp'
+        tmp.write_text(json.dumps(record), encoding='utf-8')
+        os.replace(tmp, _cache_path())
+    except Exception:  # noqa: S110 - cache is best-effort; a write failure must never break a session start
+        pass
+
+
+def _install_paths_of(inv: dict[str, list[dict]]) -> list[str]:
+    return [p.get('installPath') for p in inv.get('plugins', []) if p.get('installPath')]
+
+
+def _emit_compact(output_text: str, serving_caveats: list[str]) -> None:
+    if output_text:
+        print(output_text)
+    for line in serving_caveats:
+        print(f'note: {line}')
+
+
+def _run_session_start(roots: list[Path], use_cache: bool) -> int:
+    """Cached, CLI-free warm path when possible; otherwise a full scan cached for
+    next time. The serving-snapshot check is computed fresh from this session's
+    transcript every time (never cached), on both hit and miss."""
+    fingerprint = None
+    if use_cache:
+        try:
+            fingerprint = _fingerprint(roots)
+            cached = _read_cache()
+            if (
+                cached
+                and cached.get('fingerprint') == fingerprint
+                and (time.time() - float(cached.get('ts', 0))) < _CACHE_TTL_SECONDS
+            ):
+                serving = _serving_snapshot_from_stdin(cached.get('install_paths') or [])
+                _emit_compact(str(cached.get('output_text', '')), serving)
+                return 0
+        except Exception:
+            fingerprint = None  # any cache error -> full scan below
+    inv = scan(roots)
+    text = _compact_text(inv)
+    install_paths = _install_paths_of(inv)
+    serving = _serving_snapshot_from_stdin(install_paths)
+    _emit_compact(text, serving)
+    if use_cache and fingerprint is not None:
+        _write_cache(fingerprint, text, install_paths)
+    return 0
+
+
+def _run_check_serving(transcript_path: str, roots: list[Path]) -> int:
+    """On-demand serving-snapshot diagnosis: diff a transcript against the live
+    installed hooks. Prints the caveat lines or a clean-match line; always 0."""
+    recorded = _transcript_hook_commands(transcript_path)
+    caveats = _serving_snapshot_caveats(recorded, _install_paths_of(scan(roots)))
+    if caveats:
+        for line in caveats:
+            print(line)
+    else:
+        print('serving snapshot matches installed hooks')
+    return 0
 
 
 def _print_table(inv: dict[str, list[dict]]) -> None:
@@ -489,16 +841,27 @@ def _print_table(inv: dict[str, list[dict]]) -> None:
     print()
 
 
-def _print_compact(inv: dict[str, list[dict]]) -> None:
+def _compact_text(inv: dict[str, list[dict]]) -> str:
+    """The one-line inventory plus its `note:` caveat lines, as a single string —
+    the text the session-start path prints and caches (serving-snapshot caveats,
+    being session-specific, are appended fresh at print time, never cached)."""
+    lines: list[str] = []
     parts = []
     for kind in DISPLAY_ORDER:
         names = [it['name'] for it in inv.get(kind, [])]
         if names:
             parts.append(f'{kind}: ' + ', '.join(names))
     if parts:
-        print('Installed toolkit: ' + ' | '.join(parts))
+        lines.append('Installed toolkit: ' + ' | '.join(parts))
     for caveat in inv.get('_caveats', []):
-        print(f'note: {caveat}')
+        lines.append(f'note: {caveat}')
+    return '\n'.join(lines)
+
+
+def _print_compact(inv: dict[str, list[dict]]) -> None:
+    text = _compact_text(inv)
+    if text:
+        print(text)
 
 
 def _default_roots() -> list[Path]:
@@ -519,6 +882,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help='override scan root (repeatable); defaults to ~ and cwd',
     )
+    parser.add_argument(
+        '--no-cache',
+        action='store_true',
+        help='force a fresh scan on --session-start (bypass the inventory cache)',
+    )
+    parser.add_argument(
+        '--check-serving',
+        metavar='TRANSCRIPT',
+        default=None,
+        help='diff a session transcript against installed plugin hooks and exit',
+    )
     args = parser.parse_args(argv)
 
     # Piped Windows stdout defaults to cp1252; skill descriptions carry em-dashes
@@ -527,18 +901,23 @@ def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-    # SessionStart hook entry point: silent unless explicitly opted in, so the hook
-    # can ship enabled-but-inert and cost nothing until the user wants it.
-    if args.session_start and os.environ.get('TOOLKIT_AWARENESS_INJECT') != '1':
-        return 0
-
     roots = [Path(r) for r in args.root] if args.root else _default_roots()
-    inv = scan(roots)
 
+    # On-demand serving-snapshot diagnosis: never touches the inventory cache.
+    if args.check_serving is not None:
+        return _run_check_serving(args.check_serving, roots)
+
+    # SessionStart hook entry point: silent unless explicitly opted in, so the hook
+    # can ship enabled-but-inert and cost nothing until the user wants it. Served
+    # from the inventory cache when warm (no claude CLI); --no-cache forces a scan.
+    if args.session_start:
+        if os.environ.get('TOOLKIT_AWARENESS_INJECT') != '1':
+            return 0
+        return _run_session_start(roots, use_cache=not args.no_cache)
+
+    inv = scan(roots)  # table and --json never touch the cache
     if args.json:
         print(json.dumps(inv, indent=2))
-    elif args.session_start:
-        _print_compact(inv)
     else:
         _print_table(inv)
     return 0
