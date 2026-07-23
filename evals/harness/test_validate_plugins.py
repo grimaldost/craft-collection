@@ -171,6 +171,31 @@ def test_bad_frontmatter_flagged_when_yaml_present():
     assert any('bad frontmatter YAML' in e for e in errs), errs
 
 
+def test_word_budget_follows_patched_root():
+    # The T3b leak (bit twice: P1 wave, then the 0.20.0 build): the budget scan
+    # ran against the REAL repo regardless of the patched ROOT, so fixture tests
+    # failed whenever the working tree was transiently over budget. Contract:
+    # a fixture tree WITHOUT scripts/word_budget.json gets no budget check; a
+    # fixture tree WITH one is checked against ITS OWN skills.
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        _make_plugin(base, skill_body='word ' * 50)
+        errs = _run(base)
+        assert not any('word_budget' in e or 'budget' in e for e in errs), errs
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        _make_plugin(base, skill_body='word ' * 50)
+        (base / 'scripts').mkdir()
+        (base / 'scripts' / 'word_budget.json').write_text(
+            '{"plugins/p/skills/s/SKILL.md": 3}', encoding='utf-8'
+        )
+        errs = _run(base)
+    assert any('> budget 3' in e for e in errs), (
+        'fixture budget file ignored - the scan did not follow the patched ROOT',
+        errs,
+    )
+
+
 def test_marketplace_description_mismatch_flagged():
     # The same fact stated in two surfaces drifts silently: each marketplace
     # entry's description must equal its plugin.json description — the missing
@@ -198,6 +223,7 @@ def main() -> int:
     test_empirically_verified_events_accepted()
     test_valid_plugin_has_no_errors()
     test_bad_frontmatter_flagged_when_yaml_present()
+    test_word_budget_follows_patched_root()
     test_marketplace_description_mismatch_flagged()
     print('ok: validate_plugins')
     return 0
