@@ -3,6 +3,46 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.18.0 — 2026-07-23
+
+Backlog P1-4: mechanize the standing tool-feedback default. Both hooks ship
+wired but inert (house rule); enabling is two env vars.
+
+### Added
+
+- **Skill-exercise ledger (async PostToolUse, gate
+  `SESSION_WORKFLOW_EXERCISE_LEDGER=1`).** Matcher `^Skill$|^mcp__plugin_.*`;
+  appends `{ts, tool, skill, prompt_id}` per invocation to
+  `<CLAUDE_PLUGIN_DATA>/exercise-ledger/<session_id>.jsonl`
+  (`SESSION_WORKFLOW_LEDGER_DIR` overrides; tempdir fallback). This is the
+  substrate for real-session activation telemetry — the observational
+  replacement for spent trigger holdouts — and the evidence base the Stop
+  nudge reads. Registered `async: true`: a headless probe (2.1.218) verified
+  async hooks still receive the full stdin payload, so the append costs the
+  turn nothing.
+- **Feedback-debt Stop nudge (gate `SESSION_WORKFLOW_FEEDBACK_NUDGE=1`).**
+  At Stop, when the ledger shows plugin tools were exercised, no
+  `tool-feedback` invocation is on record, and the transcript counts at least
+  `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) real user turns, it emits one
+  `decision:"block"` whose reason asks the model to apply the tool-feedback
+  skill — or finish if nothing is worth recording. "Real user turns" is
+  literal: `type=="user"` transcript records count only when they carry human
+  text — tool results (the majority of user-typed records: 64 of 71 in the
+  reviewed real transcript, all textless) and synthetic
+  `[SYSTEM NOTIFICATION`/`<task-notification>` completions are excluded, a
+  defect the adversarial review caught before ship (the gate would otherwise
+  have been ~10x too loose and effectively inert). `stop_hook_active` exits
+  early (probe-verified loop guard); a marker file caps the nudge at once per
+  session; the block prints before the marker persists so a delivery failure
+  never burns the slot (regression-tested by forcing the print to fail).
+  Known imprecision, accepted and documented: a report written without
+  invoking the skill is not detected.
+
+Both paths: stdlib-only, ASCII-only runtime output, every failure exits 0.
+Test sibling `test_exercise_ledger.py` covers gates, matcher mirror, hostile
+session ids, marker semantics, debt clearing, synthetic-turn exclusion, and
+garbage stdin.
+
 ## 0.17.0 — 2026-07-23
 
 `toolkit-awareness` / `scan_toolkit.py` gains three related staleness defenses,

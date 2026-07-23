@@ -82,3 +82,13 @@ tool-dogfooding feedback loop (capture + triage).
   Enabling it in a session whose plugin snapshot predates the hook (or in a
   harness without the plugin surface):
   `skills/compaction-survival/references/cold-start.md` has the manual recipe.
+- **PostToolUse (async)** — skill-exercise ledger: one JSONL entry per `Skill`
+  or plugin-MCP tool call, under `<CLAUDE_PLUGIN_DATA>/exercise-ledger/`. The
+  substrate for real-session activation telemetry and for the Stop nudge below.
+  Ships wired but inert; enable with `SESSION_WORKFLOW_EXERCISE_LEDGER=1`.
+- **Stop** — feedback-debt nudge: once per session, when the ledger shows
+  plugin tools were exercised, no tool-feedback invocation is on record, and
+  the session has at least `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) real
+  user turns, a Stop block asks the model to apply the tool-feedback skill (or
+  finish if nothing is worth recording). Requires the ledger. Ships wired but
+  inert; enable with `SESSION_WORKFLOW_FEEDBACK_NUDGE=1`.
