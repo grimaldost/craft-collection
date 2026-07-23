@@ -171,7 +171,14 @@ def validate() -> list[str]:
 
     # Word-budget ratchet (issue #54): a skill body may not grow past its recorded
     # baseline without a reviewed baseline bump that names what the growth displaces.
-    errors += check_budgets(current_counts(), load_baselines())
+    # Follows the module ROOT so fixture trees are self-contained (the T3b leak bit
+    # twice: defaults scanned the REAL repo under a patched ROOT, failing fixture
+    # tests whenever the working tree was transiently over budget). No
+    # scripts/word_budget.json under ROOT -> no budget check; the real repo's file
+    # is tracked, so its absence would be a visible diff, not a silent skip.
+    budget_file = ROOT / 'scripts' / 'word_budget.json'
+    if budget_file.is_file():
+        errors += check_budgets(current_counts(ROOT), load_baselines(budget_file))
 
     return errors
 
