@@ -251,6 +251,36 @@ def test_coverage_stem_match_is_boundary_aware():
     assert '- covers: `2026-01-04-foo-execution`' in idx
 
 
+def test_fragmented_stems_read_as_zero_coverage():
+    # The 2026-07-22 emit failure class (T2a): Inputs written as compressed
+    # prose with the date prefix factored out ("2026-01-04: foo, bar") never
+    # contains a full stem, so coverage is zero and the reports resurface as
+    # Untriaged. No parser can safely reconstruct fragments — the contract is
+    # full stems (any surrounding format), and the skill's step-7 self-check
+    # (re-run the builder, read Untriaged) is the gate that catches this.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-04-foo.md').write_text('# foo feedback — a\n', encoding='utf-8')
+        (dd / '2026-01-04-bar.md').write_text('# bar feedback — b\n', encoding='utf-8')
+        (dd / '2026-01-05-triage-x.md').write_text(
+            '# Triage — x\n## Inputs\n2026-01-04: foo, bar (both waves)\n## Headline\n',
+            encoding='utf-8',
+        )
+        idx = build_index(dd)
+    untriaged = idx.split('\n### Untriaged', 1)[1]
+    assert '`2026-01-04-foo`' in untriaged and '`2026-01-04-bar`' in untriaged
+    # Full stems in ANY format (prose, numbering, backticks) DO parse:
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-04-foo.md').write_text('# foo feedback — a\n', encoding='utf-8')
+        (dd / '2026-01-05-triage-x.md').write_text(
+            '# Triage — x\n## Inputs\ncovered 2026-01-04-foo in passing prose\n## Headline\n',
+            encoding='utf-8',
+        )
+        idx = build_index(dd)
+    assert '- covers: `2026-01-04-foo`' in idx
+
+
 def test_triage_doc_without_inputs_covers_nothing():
     # A triage doc with no parseable ## Inputs section covers nothing — every
     # report stays in the untriaged remainder rather than being silently absorbed.
@@ -373,6 +403,7 @@ if __name__ == '__main__':
     test_header_stamps_generator_version_and_rule()
     test_triage_coverage_and_untriaged_sections()
     test_coverage_stem_match_is_boundary_aware()
+    test_fragmented_stems_read_as_zero_coverage()
     test_triage_doc_without_inputs_covers_nothing()
     test_addendum_section_credits_coverage()
     test_coverage_is_fence_aware_and_credits_prose_disposition()
