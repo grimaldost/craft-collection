@@ -19,7 +19,7 @@
         ]
       },
       {
-        "matcher": "compact|resume",
+        "matcher": "compact|resume|clear|startup",
         "hooks": [
           {
             "type": "command",

@@ -1,12 +1,16 @@
-"""Tests for anchor_inject.py — the SessionStart(compact|resume) re-injection hook.
+"""Tests for anchor_inject.py — the SessionStart(compact|resume|clear|startup)
+re-injection hook.
 
 Contract under test (panel-hardened design, memory-suite v2):
 - inert unless SESSION_WORKFLOW_ANCHOR_HOOKS=1 (house precedent: hooks ship OFF);
 - silent no-op when no anchor exists (an anchor-less session pays nothing);
 - fresh anchor -> stdout JSON with hookSpecificOutput.additionalContext carrying
   the anchor content;
-- stale anchor -> still injected, prefixed with an explicit staleness warning
-  (never silently suppressed, never silently trusted);
+- stale anchor (>24h) -> a POINTER, not the body: path + title + age +
+  confirm-to-expand + the close command (never silently suppressed, never
+  silently trusted, never 8K chars of dead cursor);
+- source=startup injects only when the anchor is recent (crash-restart window);
+  compact/resume/clear always evaluate;
 - closed anchors (*.closed.md) are never injected;
 - oversized anchors are truncated to a bound (the anchor must not become the
   token hog it exists to prevent);
@@ -117,15 +121,147 @@ def test_closed_anchor_ignored():
         assert proc.stdout.strip() == ''
 
 
-def test_stale_anchor_injected_with_warning():
+def test_stale_anchor_gets_pointer_not_body():
+    # T22a age gate: a stale anchor (>24h) is never silently dropped, but its
+    # FULL BODY no longer rides every session start - the injection degrades to
+    # a pointer (path + title + age + confirm-to-expand + close command) so a
+    # dead track costs a paragraph, not 8K chars, until someone confirms it.
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
-        make_anchor(tmp, age_s=3 * 24 * 3600)
+        make_anchor(tmp, name='old-run.md', age_s=3 * 24 * 3600)
         proc = run_hook(tmp)
         out = json.loads(proc.stdout)
         ctx = out['hookSpecificOutput']['additionalContext']
-        assert 'STALE' in ctx
+        assert 'STALE' in ctx.upper()
+        assert 'test mission' not in ctx, 'stale anchor body must be withheld'
+        assert 'old-run.md' in ctx
+        assert 'read the file' in ctx.lower()  # confirm-to-expand instruction
+        assert 'mv old-run.md old-run.closed.md' in ctx  # the close command
+        assert len(ctx) < 1200, 'pointer tier must stay small'
+
+
+def test_stale_pointer_carries_title():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, body='# Anchor - big migration wave\ndetails body\n', age_s=48 * 3600)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'big migration wave' in ctx
+        assert 'details body' not in ctx
+
+
+def test_just_under_stale_boundary_injects_full_body():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, age_s=23 * 3600)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
         assert 'test mission' in ctx
+        assert 'next: step 7' in ctx
+
+
+def test_startup_with_recent_anchor_injects():
+    # Crash-restart branch: a fresh process (source=startup) whose newest anchor
+    # was updated recently is a restart continuation - inject the full body.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, age_s=600)
+        proc = run_hook(tmp, source='startup')
+        assert proc.returncode == 0
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'test mission' in ctx
+
+
+def test_startup_with_old_anchor_is_silent():
+    # An ordinary new session days (or even half a day) after the last anchor
+    # write is NOT a crash recovery - startup stays silent past the recency
+    # window instead of taxing every fresh session in the cwd.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, age_s=12 * 3600)
+        proc = run_hook(tmp, source='startup')
+        assert proc.returncode == 0
+        assert proc.stdout.strip() == ''
+
+
+def test_startup_window_boundary_is_6h():
+    # Pin the exact STARTUP_RECENT_S value, not just the wide bracket: ~10 min
+    # inside the window injects, ~10 min outside stays silent.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, age_s=6 * 3600 - 600)
+        proc = run_hook(tmp, source='startup')
+        assert proc.stdout.strip(), 'just inside the 6h window must inject'
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, age_s=6 * 3600 + 600)
+        proc = run_hook(tmp, source='startup')
+        assert proc.stdout.strip() == '', 'just outside the 6h window must stay silent'
+
+
+def test_pointer_tier_survives_cp1252_stdout():
+    # The pointer's Title: line is a new UTF-8 surface; it must survive a
+    # cp1252 hook-runner stdout exactly as the full tier does.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, body='# Café → não esquecer\ndetails body\n', age_s=48 * 3600)
+        proc = run_hook(tmp, extra_env={'PYTHONIOENCODING': 'cp1252'})
+        assert proc.returncode == 0
+        assert proc.stdout.strip(), 'pointer emitted 0 bytes under cp1252 stdout'
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'Café → não esquecer' in ctx
+        assert 'details body' not in ctx
+
+
+def test_full_tier_read_race_degrades_not_raises():
+    # An anchor renamed/deleted between selection and read (a concurrent session
+    # closing it) must not skip both the injection and the telemetry: the
+    # race-safe read degrades to a path-only context.
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        ghost = tmp / '.claude' / 'anchors' / 'gone.md'
+        ctx = ai.build_context(ghost, None)
+        assert str(ghost) in ctx, 'path-only context must still name the anchor'
+
+
+def test_clear_source_injects():
+    # /clear wipes context in a continuing session - an explicit reset signal,
+    # same treatment as compact/resume.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp)
+        proc = run_hook(tmp, source='clear')
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'test mission' in ctx
+
+
+def test_pointer_tier_still_warns_other_open_anchors():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='track-a.md', body='TRACK A\n', age_s=49 * 3600)
+        make_anchor(tmp, name='track-b.md', body='TRACK B\n', age_s=48 * 3600)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'other open anchor' in ctx.lower()
+        assert 'track-a.md' in ctx
+
+
+def test_telemetry_carries_tier():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp)
+        run_hook(tmp)
+        make_anchor(tmp, name='stale.md', age_s=48 * 3600)
+        (tmp / '.claude' / 'anchors' / 'run.md').unlink()
+        run_hook(tmp)
+        log = tmp / '.claude' / 'anchors' / 'log.ndjson'
+        tiers = [
+            json.loads(line)['tier']
+            for line in log.read_text(encoding='utf-8').strip().splitlines()
+        ]
+        assert tiers == ['full', 'pointer'], tiers
 
 
 def test_oversized_anchor_truncated():
@@ -438,7 +574,17 @@ if __name__ == '__main__':
     test_silent_when_no_anchor()
     test_fresh_anchor_injected()
     test_closed_anchor_ignored()
-    test_stale_anchor_injected_with_warning()
+    test_stale_anchor_gets_pointer_not_body()
+    test_stale_pointer_carries_title()
+    test_just_under_stale_boundary_injects_full_body()
+    test_startup_with_recent_anchor_injects()
+    test_startup_with_old_anchor_is_silent()
+    test_startup_window_boundary_is_6h()
+    test_pointer_tier_survives_cp1252_stdout()
+    test_full_tier_read_race_degrades_not_raises()
+    test_clear_source_injects()
+    test_pointer_tier_still_warns_other_open_anchors()
+    test_telemetry_carries_tier()
     test_oversized_anchor_truncated()
     test_telemetry_line_appended()
     test_newest_non_closed_wins()

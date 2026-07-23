@@ -3,6 +3,36 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.19.0 — 2026-07-23
+
+Backlog P1-5 (triage T22a): anchor lifecycle hardening in `anchor_inject.py`.
+A contract change, deliberate: a stale anchor is no longer injected in full.
+
+### Changed
+
+- **Age-gated injection tiers.** An anchor updated within 24h injects its full
+  HEAD as before. Older, it degrades to a POINTER: path + title (first heading
+  after frontmatter) + age + a confirm-to-expand line + the exact
+  `mv <name> <stem>.closed.md` close command. A dead track now costs a
+  paragraph per session start instead of up to 8K chars, and is still never
+  silently dropped. The concurrent-tracks warning (other open anchors, rename
+  commands for terminal-but-unrenamed ones) rides both tiers. Telemetry gains
+  `tier: full|pointer`.
+- **Matcher widened to `compact|resume|clear|startup`.** `/clear` wipes
+  context in a continuing session — an explicit reset signal, same treatment
+  as compact/resume. `startup` (fresh process) is the crash-restart path and
+  gets a recency gate: inject only when the anchor was updated within 6h
+  (`STARTUP_RECENT_S`), so an ordinary new session in a cwd with an old
+  anchor stays untaxed. Mirrored in the cold-start recipe
+  (`references/cold-start.md`). Accepted cost, named: when the gate env is on,
+  the hook subprocess now spawns on every session start (the matcher cannot
+  see mtimes) — only its OUTPUT is gated.
+
+Test contract updated in kind: the old "stale -> full body + warning" case is
+replaced by pointer-tier assertions (body withheld, close command present,
+bounded size), plus startup-window, clear-source, boundary (23h), and
+telemetry-tier cases.
+
 ## 0.18.0 — 2026-07-23
 
 Backlog P1-4: mechanize the standing tool-feedback default. Both hooks ship
