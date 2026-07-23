@@ -3,6 +3,42 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.3.0 — 2026-07-23
+
+### Fixed
+
+- **`ruff_format.py` moved from per-call `PostToolUse` to turn-level
+  `PostToolBatch`, closing the strip-between-batched-edits race (3+ recorded
+  recurrences).** Formatting the first of two batched edits before the second
+  applies invalidates the second edit's `old_string` match. `PostToolBatch`
+  fires once per assistant turn, after all of that turn's `PostToolUse` calls
+  (a batch of one still fires it), so the format now runs once at the end of
+  the turn instead of racing the edits themselves. The hook accepts both
+  payload shapes: the batch shape (`tool_calls: [...]`) collects every
+  `Write`/`Edit` call's `.py` path, dedupes preserving first-seen order, drops
+  non-`.py` and no-longer-existing paths, and formats all survivors with a
+  single `uvx ruff format p1 p2 ...` invocation; the legacy single-payload
+  shape (a top-level `tool_input`, from a manual invocation or an older
+  `PostToolUse` registration) keeps working unchanged. Format-only doctrine
+  unchanged — `ruff check --fix` is still never run per-edit.
+  `hooks.json`'s `PostToolUse` registration for this hook is removed outright
+  (not left in place alongside `PostToolBatch`), since keeping it would
+  preserve the race. **Caveat: `PostToolBatch` requires CLI >= 2.1.218.** On
+  an older CLI the event never fires, so per-edit auto-format stops firing
+  entirely (there is no PostToolUse fallback registered), and the
+  pre-commit/CI gate is the floor until the CLI is upgraded.
+
+### Added
+
+- **`uv_enforce.py` covers the PowerShell tool and the Windows py-launcher.**
+  `hooks.json`'s `PreToolUse` matcher is now `Bash|PowerShell` (the PowerShell
+  tool carries the same `tool_input.command` field, including `;`-chained
+  commands). Two new command-position arms block `py [-3[.N]] -m pip install`
+  and `py [-3[.N]] -m venv` — the py-launcher is the same interpreter-form
+  act as `python -m pip install` / `python -m venv` under a different name.
+  The existing command-position anchoring keeps `uv pip install`, quoted
+  mentions, and words merely ending in "py" (`numpy`, `happy`) unmatched.
+
 ## 0.2.0 — 2026-07-16
 
 ### Changed
