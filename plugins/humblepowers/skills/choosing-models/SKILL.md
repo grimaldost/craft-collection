@@ -42,8 +42,8 @@ decision; the judgment inside each step is yours.
 3. **Map tier → the surface's vocabulary** (table below).
 4. **Apply the context modifiers** (next section).
 5. **For batches** — a series, a workflow, a panel — present the per-task
-   table (task, score, tier, model, estimated cost) with a comparison row
-   showing the all-top-tier total, so the saving is visible.
+   table (task, score, tier, model, estimated cost) with an all-top-tier
+   comparison row, so the saving is visible.
 6. **Persist the prediction.** A score that lives only in chat can never be
    reconciled with outcomes. Land the batch table where run telemetry can
    reach it — comments on each task block of the series file
@@ -56,10 +56,9 @@ decision; the judgment inside each step is yours.
 - **Oracle-coverage discount — a labeled hypothesis, pending a crossed
   calibration.** Downshifting one tier on implementation work is licensed by
   the *quality of the oracle around the task*, not by the presence of a gate:
-  the strongest replicated finding in the ancestry is that a suite-only gate
-  at the weak tier neither detects nor lifts (gates all green, most escapes
-  reaching the oracle), while gate value tracks the independence and coverage
-  of the checks. Downshift when the gate carries independent checks covering
+  the strongest replicated finding: a suite-only gate at the weak tier
+  neither detects nor lifts (gates green, escapes reach the oracle); gate
+  value tracks the independence and coverage of the checks. Downshift when the gate carries independent checks covering
   the task's dominant failure classes; a lint-plus-types-plus-tests gate does
   not qualify on its own. What is established twice over: scored tiers
   over-provision in the small, and on feature-refactor shapes an iterative
@@ -70,10 +69,9 @@ decision; the judgment inside each step is yours.
   score — the top tier for a hard-to-reverse call, a lower rung when the
   stakes don't justify it.
 - **Escalation is an authoring or retry decision.** The frontier tier is
-  never score-assigned; opt in when a strong-tier attempt already failed and
-  the retry needs more model, when the task is the highest-stakes
-  hardest-to-reverse design work in the batch, or when the score is ≥ 90 and
-  the task genuinely cannot be decomposed. No in-run auto-escalation — an
+  never score-assigned; opt in when a strong-tier attempt failed and the
+  retry needs more model, for the batch's highest-stakes hardest-to-reverse
+  design work, or at score ≥ 90 when the task cannot be decomposed. No in-run auto-escalation — an
   engine that tried it cut it ("fired on the wrong signal"), and stronger
   models attempting more ambitious strategies can be *less* reliable on
   long-horizon irreversible work.
@@ -102,12 +100,16 @@ Tier names are not shared across surfaces — emit each surface's own words:
 | planning-tool per-PR tier (e.g. keel) | tier per task | family names — translate, don't assume |
 | direct API tooling | model id | undated API string |
 
+A workflow `agent()` with no `model` inherits the session model (possibly
+frontier); no engine-level cap exists — under a tier cap, every call carries
+an explicit `model`.
+
 While an engine is series-global (no per-task keys): score every task anyway,
-set the series tier to the modal tier, and consider splitting the series at a
-tier boundary when the spread is two or more tiers — splitting buys tier fit
-at a real coordination cost, so sometimes accepting the overpay is right.
+set the series tier to the modal tier, and consider splitting at a tier
+boundary when the spread is two or more tiers — splitting buys tier fit at
+coordination cost; sometimes accepting the overpay is right.
 Silently pinning the top tier for a whole series is the failure mode this
-skill exists to end.
+skill ends.
 
 ## Staleness tripwires
 

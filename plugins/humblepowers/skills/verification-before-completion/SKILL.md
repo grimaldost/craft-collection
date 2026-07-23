@@ -5,7 +5,7 @@ description: "Evidence before completion claims: identify the command that would
 
 # Verification Before Completion
 
-Evidence before claims. This is a **rigid** skill. The bright line: **a
+Evidence before claims — a **rigid** skill. The bright line: **a
 completion claim is made only after the command that proves it has run in
 this session and its output has been read.**
 
@@ -14,9 +14,10 @@ this session and its output has been read.**
 Before stating any status — done, fixed, passing, ready, complete:
 
 1. **Identify** the command that would prove the claim.
-2. **Run it**, fresh and in full — not a remembered result, not a partial
-   check.
-3. **Read** the output: exit code, counts, failures, warnings.
+2. **Run it**, fresh and in full — not a remembered result or partial check.
+3. **Read** the output: exit code, counts, failures, warnings. (`$?` is the
+   LAST command's exit code — read it right after the bare command, never
+   after a pipe; capture output to a file instead.)
 4. **State the result that the output supports.** Confirmed → the claim, with
    the evidence. Refuted → the actual state, with the output. A true "still
    failing" is a better deliverable than a false "done".
@@ -32,21 +33,20 @@ Before stating any status — done, fixed, passing, ready, complete:
 | Regression test works | Red-green verified (below) | The test passing once |
 | Delegated work done | The diff inspected, checks re-run | The agent's success report |
 | Requirements met | Line-by-line check against the plan | Tests passing |
-| Artifact ships right (wheel, image, bundle) | The built artifact inspected directly | A green editable/CI run — it may never build the artifact |
+| Artifact ships right (wheel, image, bundle) | The built artifact inspected directly | A green editable/CI run — it may never build it |
 
 ## Regression tests are red-green verified
 
 Write the test → it passes → revert the fix → the test fails → restore the
-fix → it passes again. A regression test that was never seen failing against
-the bug proves nothing about the bug.
+fix → it passes again. A regression test never seen failing against the bug
+proves nothing about it.
 
 **A bug fix is not done until that test exists** — even a one-line fix, even when
 you judged the full test-driven-development cycle not worth loading for the change
 (its exceptions still hold: throwaway spikes, generated code, pure config — agreed
-with the user, not self-granted). The regression test costs seconds and is the only
-thing that keeps the bug from returning; "the fix is obvious" is how a fixed bug
-comes back a month later. Shipping a fix without one is an unverified durability
-claim, not a smaller scope.
+with the user, not self-granted). The regression test costs seconds and keeps the
+bug from returning; "the fix is obvious" is how a fixed bug comes back later.
+Shipping a fix without one is an unverified durability claim, not a smaller scope.
 
 ## A verifier is trusted green only after it has been seen red
 
@@ -57,23 +57,23 @@ key, a tolerance so wide nothing trips, a fixture that hits a fallback). Before
 trusting a green, watch it go red — plant a known violation, confirm the catch,
 remove the plant. test-driven-development's "verify red" is this for tests; for
 an enforcement gate, prove it can fail before trusting it green. (A
-data-engineering skill states this canonically for gates when one is installed —
-e.g. `data-engineering-discipline`'s prove-the-gate-can-fail, its non-vacuity
-matrix.) Same discipline, named here.
+data-engineering skill states this canonically for gates when installed — e.g.
+`data-engineering-discipline`'s prove-the-gate-can-fail non-vacuity matrix.)
+Same discipline, named here.
 
 ## Delegated work
 
 A subagent's "success" is a claim, not evidence. Inspect the diff, run the
-verification yourself, and report the state you observed — including any gap
-between the report and the diff.
+verification yourself, and report the state you observed, including any gap
+between report and diff.
 
 ## Finishing a change
 
 Before committing, opening a PR, or moving on: the full test command ran this
-session with zero failures; the requirements were re-read and checked off
+session with zero failures; requirements re-read and checked off
 individually; the output is pristine — no stray errors or warnings riding
-along. Recurring checks belong in pre-commit or CI rather than in memory —
-mechanism outlasts intention. When the suite carries irreducible pre-existing
+along. Recurring checks belong in pre-commit or CI, not memory — mechanism
+outlasts intention. When the suite carries irreducible pre-existing
 failures, the honest gate is "zero net regression" against a baseline, not an
 absolute zero: diff this run's failure set against the baseline's and require
 the difference to be empty — capture the baseline by stashing the change and
@@ -85,9 +85,8 @@ base-commit set-diff.)
 ## Wording that signals an unverified claim
 
 "Should work", "probably passes", "seems fixed", and satisfaction expressed
-before the verification ran — each marks a claim outrunning its evidence.
-Either run the proving command or state plainly that verification hasn't
-happened yet.
+before the verification ran — each marks a claim outrunning its evidence: run
+the proving command or say plainly that verification hasn't happened.
 
 ## Boundaries
 

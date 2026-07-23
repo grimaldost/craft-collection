@@ -5,6 +5,25 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.7.3 — 2026-07-23
+
+Two doctrine one-liners from the 2026-07-23 triage, each reinforced across two
+report arcs; both SKILL.md bodies held under their word budgets by trimming
+existing prose (the displaced words are the flabbier phrasings, not content).
+
+### Added
+
+- **choosing-models (T5b):** after the emission-surfaces table — a workflow
+  `agent()` with no `model` inherits the session model (possibly frontier);
+  no engine-level cap exists, so under a tier cap every call carries an
+  explicit `model`. Evidence: the stress and hooks-verify fan-outs both hit
+  the inherit-Fable gotcha; the engine-side guardrail is routed upstream.
+- **verification-before-completion (T8a):** the gate's Read step names the
+  pipe-exit idiom — `$?` is the LAST command's exit code; read it right after
+  the bare command, never after a pipe; capture output to a file instead.
+  Evidence: recurred in the himed campaign past a written handoff warning
+  (extends the convoy-backlog claims-over-unread-signals miss).
+
 ## 0.7.2 — 2026-07-23
 
 ### Fixed
