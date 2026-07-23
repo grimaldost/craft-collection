@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Self-contained checks for scripts/validate_plugins.py (no pytest required).
 
-`validate_plugins` imports PyYAML (used to catch the frontmatter colon-space trap),
-so this test is skipped when PyYAML is not installed — run_tests.py stays stdlib-only,
-and CI (which installs pyyaml) exercises it fully.
+PyYAML is optional in the validator (frontmatter checks degrade without it),
+so this module now runs stdlib-only under run_tests.py — the hook-event
+allowlist, hooks.json shape, and reference-resolution assertions gate every
+push instead of hiding behind a whole-module skip (the gap that let two real
+gate issues stay invisible locally, 2026-07-23). Only the frontmatter-YAML
+test self-guards on PyYAML's presence; CI (which installs pyyaml) runs it.
 """
 
 from __future__ import annotations
@@ -16,10 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 
-try:
-    import validate_plugins
-except ImportError:
-    validate_plugins = None
+import validate_plugins  # noqa: E402 - sys.path set up first
 
 
 def _make_plugin(base: Path, *, hooks_json: str | None = None, skill_body: str = '') -> Path:
@@ -154,6 +154,23 @@ def test_valid_plugin_has_no_errors():
     assert errs == [], errs
 
 
+def test_bad_frontmatter_flagged_when_yaml_present():
+    # The colon-space trap and friends need PyYAML; self-guard instead of
+    # skipping the whole module (CI installs pyyaml and runs this).
+    if validate_plugins.yaml is None:
+        print('note: frontmatter-YAML case skipped (PyYAML not installed)')
+        return
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        pdir = _make_plugin(base)
+        (pdir / 'skills' / 's' / 'SKILL.md').write_text(
+            '---\nname: s\ndescription: broken: colon space\n  bad indent\n---\n\n# S\n',
+            encoding='utf-8',
+        )
+        errs = _run(base)
+    assert any('bad frontmatter YAML' in e for e in errs), errs
+
+
 def test_marketplace_description_mismatch_flagged():
     # The same fact stated in two surfaces drifts silently: each marketplace
     # entry's description must equal its plugin.json description — the missing
@@ -172,9 +189,6 @@ def test_marketplace_description_mismatch_flagged():
 
 
 def main() -> int:
-    if validate_plugins is None:
-        print('skip: validate_plugins (PyYAML not installed)')
-        return 0
     test_invalid_hooks_json_is_flagged()
     test_unknown_event_and_missing_hook_script_flagged()
     test_dangling_plugin_root_reference_flagged()
@@ -183,6 +197,7 @@ def main() -> int:
     test_hooks_json_bare_event_map_flagged()
     test_empirically_verified_events_accepted()
     test_valid_plugin_has_no_errors()
+    test_bad_frontmatter_flagged_when_yaml_present()
     test_marketplace_description_mismatch_flagged()
     print('ok: validate_plugins')
     return 0

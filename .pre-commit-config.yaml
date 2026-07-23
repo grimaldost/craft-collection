@@ -49,6 +49,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: ascii-runtime-lint
+        name: ascii runtime output (ratchet against baseline)
+        entry: uv run --no-project -- python scripts/ascii_runtime_lint.py
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: run-tests
         name: run self-contained test suite
         entry: uv run --no-project -- python scripts/run_tests.py

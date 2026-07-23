@@ -1,0 +1,18 @@
+{
+  "evals/harness/grade_tasks.py": 11,
+  "evals/harness/holdout_check.py": 5,
+  "evals/harness/judge.py": 1,
+  "evals/harness/offer_probe.py": 2,
+  "evals/harness/token_probe.py": 1,
+  "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/freshness_check.py": 1,
+  "plugins/engineering-discipline/skills/python-engineering/scripts/scaffold.py": 1,
+  "plugins/session-workflow/skills/evaluate-skill/scripts/grade_tasks.py": 11,
+  "plugins/session-workflow/skills/evaluate-skill/scripts/judge.py": 1,
+  "plugins/session-workflow/skills/feedback-triage/scripts/build_feedback_index.py": 5,
+  "scripts/check_uv_hygiene.py": 3,
+  "scripts/gen_agents_md.py": 3,
+  "scripts/lint_register.py": 2,
+  "scripts/run_tests.py": 1,
+  "scripts/validate_plugins.py": 1,
+  "scripts/word_budget.py": 2
+}

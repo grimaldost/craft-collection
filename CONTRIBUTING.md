@@ -74,6 +74,16 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
 - **Stdlib-first.** Scripts avoid third-party dependencies where practical (heavier
   libs like pandas stay optional). This keeps the harness and scripts runnable with
   nothing to install.
+- **ASCII runtime output — any bundled script, not just hooks.** Text a script
+  emits at runtime (print, stderr, argparse messages, hook payloads) is ASCII:
+  Windows consoles run cp1252, and a cp1252-encoding child meeting a
+  utf-8-decoding parent mojibakes even encodable chars (an em dash in one stderr
+  message once failed a test environment-dependently and blocked every push).
+  Docstrings and comments are exempt; content written to explicitly-UTF-8 files
+  takes an `# ascii-ok` comment. Enforced as a ratchet by
+  `scripts/ascii_runtime_lint.py` in pre-commit (baseline burn-down tracked).
+  When fixing findings, rewrite the line — never round-trip via `untokenize`,
+  which reflows the whole file.
 - **Tests live beside code.** Every `script.py` ships a `test_script.py` that runs
   under plain `python` (no pytest). `scripts/run_tests.py` discovers them.
 - **Skills** follow the existing shape: `plugins/<plugin>/skills/<skill>/SKILL.md`

@@ -5,7 +5,13 @@ Checks marketplace.json, each plugin.json, each SKILL.md (frontmatter,
 description budget, line budget, reference resolution), and any hooks.json.
 A fallback for `claude plugin validate` that needs no Claude Code CLI.
 
-Run locally:
+PyYAML is optional: without it the frontmatter YAML checks are skipped (with a
+note) while everything else — hook events, hooks.json shape, reference
+resolution, word budgets — still runs. That keeps the stdlib-only pre-push
+suite able to exercise the validator instead of skipping it whole (the gap
+that hid two real gate issues, 2026-07-23).
+
+Run locally (full):
     uv run --no-project --with pyyaml -- python scripts/validate_plugins.py
 """
 
@@ -16,7 +22,11 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:  # frontmatter checks degrade; everything else still runs
+    yaml = None
+
 from word_budget import check_budgets, current_counts, load_baselines
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -131,18 +141,19 @@ def validate() -> list[str]:
         if not text.startswith('---'):
             errors.append(f'{skill_md}: no frontmatter')
             continue
-        try:
-            fm = yaml.safe_load(text.split('---', 2)[1]) or {}
-        except yaml.YAMLError as e:
-            errors.append(f'{skill_md}: bad frontmatter YAML: {e}')
-            continue
-        if not fm.get('name'):
-            errors.append(f'{skill_md}: missing name')
-        desc = (fm.get('description') or '') + (fm.get('when_to_use') or '')
-        if not desc:
-            errors.append(f'{skill_md}: missing description')
-        elif len(desc) > DESC_CAP:
-            errors.append(f'{skill_md}: description {len(desc)} > {DESC_CAP}')
+        if yaml is not None:
+            try:
+                fm = yaml.safe_load(text.split('---', 2)[1]) or {}
+            except yaml.YAMLError as e:
+                errors.append(f'{skill_md}: bad frontmatter YAML: {e}')
+                continue
+            if not fm.get('name'):
+                errors.append(f'{skill_md}: missing name')
+            desc = (fm.get('description') or '') + (fm.get('when_to_use') or '')
+            if not desc:
+                errors.append(f'{skill_md}: missing description')
+            elif len(desc) > DESC_CAP:
+                errors.append(f'{skill_md}: description {len(desc)} > {DESC_CAP}')
         n_lines = text.count('\n') + 1
         if n_lines > SKILL_LINE_CAP:
             errors.append(f'{skill_md}: {n_lines} lines > {SKILL_LINE_CAP}')
@@ -172,7 +183,8 @@ def main() -> int:
         for e in errors:
             print(f'  - {e}')
         return 1
-    print('All plugins valid.')
+    note = ' (frontmatter YAML checks skipped: PyYAML not installed)' if yaml is None else ''
+    print(f'All plugins valid.{note}')
     return 0
 
 
