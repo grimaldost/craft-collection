@@ -1,7 +1,7 @@
 {
   "version": 2,
   "max_candidates": 2,
-  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait - a full recalibration against a fresh sealed holdout is owed (docs/design/2026-07-22-hooks-program.md).",
+  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait. Recalibrated 2026-07-23 against the fresh blind recall holdout (evals/trigger/holdout/dispatch-router-recall.json, sealed with baseline; floors in test_router.py): register gradient direct 0.94 / embedded 0.44 / paraphrase 0.12 - the lexical ceiling. More patterns do not buy oblique-phrasing recall; that is the semantic layer's job. Never tune against either sealed holdout.",
   "skills": [
     {
       "id": "engineering-discipline:data-engineering-discipline",
@@ -33,7 +33,8 @@
         "\\bunexpected behavior\\b|\\b(find|investigate|hunt) [\\w\\s]{0,40}\\bcause\\b|\\binvestigate\\b",
         "\\b(second|third|fourth|3rd|4th) fix\\b|\\bfix attempt\\b|\\bprevious (fix|patch) didn.?t\\b",
         "\\bpass(es)? locally\\b|\\bfails? (in|on) ci\\b",
-        "\\b502s?\\b|\\bcrash(es|ing)?\\b|\\bsegfault\\b|\\b(linker|build) error\\b"
+        "\\b502s?\\b|\\bcrash(es|ing)?\\b|\\bsegfault\\b|\\b(linker|build) error\\b",
+        "\\bdebug(ging)?\\b(?!\\s+(log|logging|logs|build|mode|symbols?|level|flags?|print))"
       ],
       "negative_patterns": [
         "\\balready diagnosed\\b",
@@ -45,7 +46,7 @@
     {
       "id": "humblepowers:test-driven-development",
       "patterns": [
-        "\\b(implement|build|add) (a|an|the|this)? ?[\\w-]* ?(helper|validation|validator|feature|flag|limiter|endpoint|command|parser)\\b",
+        "\\b(implement|build|add) (?:(?:a|an|the|this|that) )?(?:[\\w-]+ ){0,3}(helper|validation|validator|feature|flag|limiter|endpoint|command|parser)\\b",
         "\\bfix (this|the|a) bug\\b",
         "\\btests? (afterwards?|later)\\b|\\badd tests? after\\b",
         "\\bpassed on the first (run|try)\\b",

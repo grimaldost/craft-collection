@@ -173,6 +173,31 @@ def test_adversarial_holdout_false_fire_budget():
     assert len(fired) <= 2, f'false-fire budget exceeded ({len(fired)}/{len(negatives)}): {fired}'
 
 
+def test_recall_holdout_floors():
+    """The 2026-07-23 blind recall holdout (sealed with baseline in
+    holdout/BASELINES.md) gates against regression, never against fitting:
+    floors sit under the sealed numbers (overall 0.50, direct 0.94, 2/28 null
+    false-fires). Tuning against individual cases spends the seal — the
+    register gradient (direct 0.94 / embedded 0.44 / paraphrase 0.12) is the
+    lexical ceiling and is closed by a semantic layer, not more patterns."""
+    holdout = TRIGGER_DIR / 'holdout' / 'dispatch-router-recall.json'
+    if not holdout.exists():
+        return  # dataset optional in a partial checkout
+    rules = _rules()
+    cases = json.loads(holdout.read_text(encoding='utf-8'))
+    pos = [c for c in cases if c.get('expected')]
+    direct = [c for c in pos if c.get('register') == 'direct']
+    nulls = [c for c in cases if not c.get('expected')]
+    hits = sum(1 for c in pos if c['expected'] in _fired_ids(c['query'], rules))
+    direct_hits = sum(1 for c in direct if c['expected'] in _fired_ids(c['query'], rules))
+    null_fires = sum(1 for c in nulls if _fired_ids(c['query'], rules))
+    assert hits / len(pos) >= 0.45, f'overall recall regressed: {hits}/{len(pos)}'
+    assert direct_hits / len(direct) >= 0.85, (
+        f'direct recall regressed: {direct_hits}/{len(direct)}'
+    )
+    assert null_fires <= 3, f'null false-fires regressed: {null_fires}/{len(nulls)}'
+
+
 def test_multilingual_is_silent_not_wrong():
     """Portuguese-intent prompts (no English trigger vocab) must not mis-fire —
     the router is monolingual-English and degrades to silence, the safe default,
