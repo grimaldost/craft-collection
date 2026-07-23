@@ -5,6 +5,45 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.7.4 — 2026-07-23
+
+Router recall recalibration (backlog item 4), run seal-first: a fresh blind
+recall holdout was authored (by a subagent forbidden from reading the router,
+its rules, or the dev sets), baselined against the committed rules, and SEALED
+before the post-tune measurement. Both sealed sets are regression-only.
+
+### Changed
+
+- **Two dev-evidenced router widenings** (frozen before the holdout was seen):
+  the test-driven-development noun-phrase now allows up to three bounded words
+  between article and head noun ("implement the new discount feature" fires);
+  systematic-debugging gains a plain `debug(ging)` pattern with a lookahead
+  excluding tooling nouns (debug log/build/mode/symbols/level/flag/print).
+  Both reported real-session misses now route; dev bars unchanged (recall
+  1.00/spec 1.00 on both skills), adversarial false-fire budget unchanged at
+  2/20.
+
+### Added
+
+- **Sealed recall holdout + regression floors.**
+  `evals/trigger/holdout/dispatch-router-recall.json` (76 cases: 8 skills x 6
+  positives across direct/embedded/paraphrase registers, 16 hard negatives,
+  12 silence) with its baseline row in `holdout/BASELINES.md`;
+  `test_router.py::test_recall_holdout_floors` pins overall >= 0.45, direct
+  >= 0.85, null false-fires <= 3.
+
+### Measured (the honest headline)
+
+The tuned rules move ZERO holdout cases — baseline and post-tune are
+identical: overall 0.50, by register **direct 0.94 / embedded 0.44 /
+paraphrase 0.12**, nulls 26/28 clean. This is the trigger-lexical-ceiling
+measured on the router: direct phrasings are nearly solved, oblique phrasings
+are structurally out of a lexical instrument's reach. Consequence, recorded
+in the rules comment: further recall work on embedded/paraphrase registers
+goes to the semantic layer (cadence-vs-content A/B; the 0.18.0
+exercise-ledger activation telemetry), not to more patterns. The PT-BR arm
+still requires its own labeled dev set before any PT tuning.
+
 ## 0.7.3 — 2026-07-23
 
 Two doctrine one-liners from the 2026-07-23 triage, each reinforced across two
