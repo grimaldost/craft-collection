@@ -3,6 +3,53 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.17.0 — 2026-07-23
+
+`toolkit-awareness` / `scan_toolkit.py` gains three related staleness defenses,
+all in the SessionStart path. Minor bump: the scan script gained capability, no
+skill `description` changed (no holdout implications).
+
+### Added
+
+- **Skill-list skew, beside the version check.** `_merge_skew` compares installed
+  vs source *versions*, which sees nothing when an install carries no `plugin.json`
+  at all — yet whole skills can still be missing locally. A new `_skill_list_skew`
+  diffs the skill *directory* names (subdirs holding a `SKILL.md`) between each
+  plugin's marketplace source and its installPath, and emits one caveat per lagging
+  plugin: `installed copy lags repo: <plugin> missing skills: a, b -- consider
+  claude plugin update <plugin>`. Missing-in-installed only (an extra local skill is
+  not the footgun); an unresolvable source is compared against nothing — absence of
+  evidence is not skew. Reuses the source-dir resolution the version check uses
+  (factored into `_source_plugin_dir`).
+- **Serving-snapshot check (frozen-snapshot detector).** The desktop app can serve
+  a plugin hooks snapshot frozen weeks behind the installed cache while every disk
+  layer reads "current"; the only observable is the session transcript's recorded
+  hook-command strings differing from the installed `hooks.json`. On `--session-start`
+  the scan reads the hook envelope from stdin (fail-open: non-tty only, any error
+  skips), parses `transcript_path` as NDJSON, collects each `attachment.command`
+  containing `${CLAUDE_PLUGIN_ROOT}` (settings-level hooks vary legitimately and are
+  excluded), and diffs them against the joined `command + args` form every installed
+  plugin `hooks.json` declares. A recorded command that no install produces yields a
+  caveat (deduped, capped at 2) naming the frozen snapshot and pointing at `claude -p`
+  to verify headless. No transcript / no records / all matched -> silence. A new
+  `--check-serving <transcript_path>` mode runs the same diff on demand, printing
+  either `serving snapshot matches installed hooks` or the caveat lines; always exits 0.
+- **Inventory cache for `--session-start`.** The inject shells to the `claude` CLI
+  (seconds), which is why it can't default on. The path now fingerprints the settings,
+  installed-plugin, and marketplace-manifest files (plus the script itself and the
+  scan roots) by mtime/size; a warm hit under 24h prints the cached inventory without
+  invoking the CLI. A miss or any error falls back to a full scan, then writes the
+  cache atomically (tmp + `os.replace`) — every cache failure path is silent, never
+  fatal. `--no-cache` forces a scan; the table and `--json` modes never touch the
+  cache. The persisted record carries the plugins' installPaths so the
+  serving-snapshot check still works on a cache hit without the CLI. The
+  `TOOLKIT_AWARENESS_INJECT` default is deliberately unchanged: cache first, measure,
+  then decide whether the inject is cheap enough to enable by default.
+
+Fifteen new fixture/NDJSON tests (skill-list skew, fingerprint sensitivity, cache
+hit/miss/TTL/corrupt, transcript parsing, matched-vs-frozen serving diff, and the
+`--check-serving` CLI). Existing version-skew and stale-checkout tests unchanged.
+
 ## 0.16.2 — 2026-07-22
 
 ### Fixed
