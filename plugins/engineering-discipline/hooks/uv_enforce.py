@@ -23,8 +23,13 @@ from pathlib import Path
 # a negative lookbehind for `uv ` so uv's own `uv pip install` interface is left
 # alone (only bare `pip`/`pip3 install` is redirected). `python -m pip install`
 # is the same act in module form and needs its own arm: there the *interpreter*
-# sits at the command position, so the bare-pip arm cannot see it.
+# sits at the command position, so the bare-pip arm cannot see it. The Windows
+# py-launcher (`py`, optionally `-3` or `-3.N`) is the same interpreter-form
+# again under a different name and needs its own arms too; because it is
+# anchored at the command position the same way, a longer word merely ending in
+# "py" (numpy, happy) at that position is not "py" and does not match.
 _CMD_POS = r'(?:^|(?<=[\n;|&])|(?<=\|\|)|(?<=&&)|(?<=\$\())\s*'
+_PY_LAUNCHER_VERSION = r'(?:\s+-3(?:\.\d+)?)?'
 _BLOCKED = re.compile(
     _CMD_POS + r'(?:'
     r'(?<!uv )pip3?\s+install'
@@ -34,6 +39,8 @@ _BLOCKED = re.compile(
     r'|conda\s+install'
     r'|virtualenv\b'
     r'|python3?\s+-m\s+venv'
+    r'|py' + _PY_LAUNCHER_VERSION + r'\s+-m\s+pip\s+install'
+    r'|py' + _PY_LAUNCHER_VERSION + r'\s+-m\s+venv'
     r')\b'
 )
 

@@ -129,6 +129,34 @@ def test_blocks_real_install_at_command_positions():
     )
 
 
+def test_blocks_py_launcher_pip_install():
+    # Windows py-launcher form of `pip install`, bare and with a version flag.
+    assert verdict('py -m pip install requests', cwd_has_uv=True, allow_env=False) == 'block'
+    assert verdict('py -3 -m pip install requests', cwd_has_uv=True, allow_env=False) == 'block'
+    assert verdict('py -3.12 -m pip install requests', cwd_has_uv=True, allow_env=False) == 'block'
+
+
+def test_blocks_py_launcher_venv():
+    assert verdict('py -m venv .venv', cwd_has_uv=True, allow_env=False) == 'block'
+    assert verdict('py -3 -m venv .venv', cwd_has_uv=True, allow_env=False) == 'block'
+
+
+def test_powershell_semicolon_chain_blocks():
+    # The PowerShell tool carries the same tool_input.command field as Bash; a
+    # `;`-chained install must block the same way it does for Bash.
+    assert verdict('cd x; pip install y', cwd_has_uv=True, allow_env=False) == 'block'
+
+
+def test_py_launcher_does_not_false_positive_on_similar_words():
+    assert verdict('py -m pytest', cwd_has_uv=True, allow_env=False) == 'allow'
+    assert verdict('uv pip install x', cwd_has_uv=True, allow_env=False) == 'allow'
+    assert verdict('grep "pip install"', cwd_has_uv=True, allow_env=False) == 'allow'
+    # "happy"/"numpy" end in "py" but are not at a command position relative to
+    # the py-launcher arm — must not match via the py arm or any other arm.
+    assert verdict('happy -m pip install', cwd_has_uv=True, allow_env=False) == 'allow'
+    assert verdict('numpy -m pip install x', cwd_has_uv=True, allow_env=False) == 'allow'
+
+
 if __name__ == '__main__':
     for name, fn in list(globals().items()):
         if name.startswith('test_') and callable(fn):

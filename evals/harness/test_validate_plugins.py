@@ -8,6 +8,7 @@ and CI (which installs pyyaml) exercises it fully.
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -112,6 +113,34 @@ def test_hooks_json_bare_event_map_flagged():
     assert any('top-level' in e for e in errs), errs
 
 
+def test_empirically_verified_events_accepted():
+    # PostToolBatch / PostToolUseFailure / MessageDisplay were verified real by
+    # the 2026-07-23 headless probes (docs/research/2026-07-22-claude-code-
+    # hook-events.md); the allowlist must not reject a registration on them.
+    for event in ('PostToolBatch', 'PostToolUseFailure', 'MessageDisplay'):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            hooks = {
+                'hooks': {
+                    event: [
+                        {
+                            'hooks': [
+                                {
+                                    'type': 'command',
+                                    'command': 'uv',
+                                    'args': ['run', '${CLAUDE_PLUGIN_ROOT}/hooks/ok.py'],
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+            pdir = _make_plugin(base, hooks_json=json.dumps(hooks))
+            (pdir / 'hooks' / 'ok.py').write_text('x = 1\n', encoding='utf-8')
+            errs = _run(base)
+        assert not any('unknown hook event' in e for e in errs), (event, errs)
+
+
 def test_valid_plugin_has_no_errors():
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
@@ -152,6 +181,7 @@ def main() -> int:
     test_dangling_nested_reference_flagged()
     test_hooks_json_top_level_array_flagged()
     test_hooks_json_bare_event_map_flagged()
+    test_empirically_verified_events_accepted()
     test_valid_plugin_has_no_errors()
     test_marketplace_description_mismatch_flagged()
     print('ok: validate_plugins')

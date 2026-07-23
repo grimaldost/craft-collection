@@ -1,9 +1,8 @@
 {
-  "description": "Mechanical enforcement: ruff-format on edit (PostToolUse, non-blocking); steer Bash toward uv inside uv projects (PreToolUse, CLAUDE_ALLOW_PIP=1 to override); and an inert-by-default data pre-shipping-checklist nudge (Stop, enable with DATAENG_CHECKLIST_NUDGE=1).",
+  "description": "Mechanical enforcement: ruff-format at end of turn across every edited file (PostToolBatch, non-blocking; requires CLI >= 2.1.218); steer Bash/PowerShell toward uv inside uv projects (PreToolUse, CLAUDE_ALLOW_PIP=1 to override); and an inert-by-default data pre-shipping-checklist nudge (Stop, enable with DATAENG_CHECKLIST_NUDGE=1).",
   "hooks": {
-    "PostToolUse": [
+    "PostToolBatch": [
       {
-        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
@@ -15,7 +14,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",

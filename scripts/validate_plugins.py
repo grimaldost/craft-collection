@@ -32,6 +32,11 @@ KNOWN_HOOK_EVENTS = {
     'SessionStart',
     'SessionEnd',
     'PreCompact',
+    # Verified real by the 2026-07-23 headless probes (docs/research/
+    # 2026-07-22-claude-code-hook-events.md, "Empirically verified" section).
+    'PostToolBatch',
+    'PostToolUseFailure',
+    'MessageDisplay',
 }
 
 
