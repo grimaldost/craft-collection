@@ -55,7 +55,7 @@ plugin manifests, so use the absolute script path):
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "compact|resume",
+        "matcher": "compact|resume|clear|startup",
         "hooks": [
           {
             "type": "command",

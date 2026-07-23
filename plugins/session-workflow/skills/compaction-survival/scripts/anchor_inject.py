@@ -1,13 +1,23 @@
-"""SessionStart(compact|resume) anchor re-injection hook — memory-suite v2, C2.
+"""SessionStart(compact|resume|clear|startup) anchor re-injection hook.
 
 Reads the hook input JSON on stdin, finds the newest open control anchor under
-<cwd>/.claude/anchors/ (open = not renamed *.closed.md), and emits its HEAD —
-the content above the `<!-- anchor:tail -->` marker; the whole file when
-marker-less — as SessionStart additionalContext, warning when other anchors
-are open in the same directory (concurrent tracks). A freshly compacted or
-resumed session thus re-reads its own live state mechanically — never relying
-on the compaction summary to carry constraints and decisions (evidence base:
+<cwd>/.claude/anchors/ (open = not renamed *.closed.md), and emits it as
+SessionStart additionalContext, warning when other anchors are open in the
+same directory (concurrent tracks). A freshly compacted or resumed session
+thus re-reads its own live state mechanically — never relying on the
+compaction summary to carry constraints and decisions (evidence base:
 docs/design/2026-07-04-memory-suite-research.md).
+
+Lifecycle gates (T22a hardening):
+- FULL tier (anchor updated within STALE_AFTER_S): the HEAD — content above
+  the `<!-- anchor:tail -->` marker; whole file when marker-less.
+- POINTER tier (older): path + title + age + a confirm-to-expand line + the
+  close command. A dead track costs a paragraph, never 8K chars, until a
+  session confirms it — and it is never silently dropped either.
+- source=startup (fresh process, the crash-restart path) proceeds only when
+  the anchor was updated within STARTUP_RECENT_S; an ordinary new session in
+  a cwd with an old anchor stays untaxed. compact/resume/clear — explicit
+  continuation or reset signals — always evaluate.
 
 Ships INERT: does nothing unless SESSION_WORKFLOW_ANCHOR_HOOKS=1 (house
 precedent — hooks are enabled deliberately, never by install). Hot-path
@@ -34,7 +44,8 @@ from pathlib import Path
 
 ENV_GATE = 'SESSION_WORKFLOW_ANCHOR_HOOKS'
 MAX_CONTEXT_CHARS = 8_000
-STALE_AFTER_S = 24 * 3600
+STALE_AFTER_S = 24 * 3600  # older than this -> pointer tier, not the full body
+STARTUP_RECENT_S = 6 * 3600  # source=startup injects only within this window
 MAX_NAMED_OPEN = 5  # cap the multi-track warning's name list; count the rest
 # anchor/v1 two-tier structure: content above this marker line is the live HEAD
 # (mission, cursor, invariants, last-known-good, resume steps) and is injected;
@@ -134,8 +145,59 @@ def split_head(text: str) -> tuple[str, bool]:
     return text, False
 
 
-def build_context(anchor: Path, stale_s: float, other_open: list[Path] | None = None) -> str:
-    text, has_tail = split_head(anchor.read_text(encoding='utf-8', errors='ignore'))
+def _other_open_warning(other_open: list[Path] | None) -> str:
+    """The concurrent-tracks warning block, shared by both tiers; '' when alone."""
+    if not other_open:
+        return ''
+    names = ', '.join(f.name for f in other_open[:MAX_NAMED_OPEN])
+    if len(other_open) > MAX_NAMED_OPEN:
+        names += f' and {len(other_open) - MAX_NAMED_OPEN} more'
+    warn = (
+        f'WARNING - {len(other_open)} other open anchor(s) in this dir: {names}. '
+        'Concurrent tracks share this cwd; if this anchor is not your '
+        "track's, read the right one before acting."
+    )
+    terminal = [f for f in other_open if is_content_terminal(_read(f))]
+    if terminal:
+        cmds = '; '.join(f'mv {f.name} {f.stem}.closed.md' for f in terminal[:MAX_NAMED_OPEN])
+        more = len(terminal) - MAX_NAMED_OPEN
+        warn += (
+            f' {len(terminal)} read as closed in-content but were never renamed; '
+            f'close each: {cmds}' + (f' (+{more} more)' if more > 0 else '')
+        )
+    return warn
+
+
+def anchor_title(text: str) -> str:
+    """First markdown heading (or first non-empty line) of the HEAD, minus any
+    leading frontmatter block — the one-line identity the pointer tier shows."""
+    head, _ = split_head(text)
+    lines = head.splitlines()
+    start = 0
+    if lines and lines[0].strip() == '---':
+        for j in range(1, len(lines)):
+            if lines[j].strip() == '---':
+                start = j + 1
+                break
+    for line in lines[start:]:
+        s = line.strip()
+        if s.startswith('#'):
+            title = s.lstrip('#').strip()
+            if title:
+                return title[:120]
+    for line in lines[start:]:
+        s = line.strip()
+        if s and s.lstrip('#').strip():
+            return s[:120]
+    return '(untitled)'
+
+
+def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
+    """FULL tier: the anchor HEAD (bounded), plus the concurrent-tracks warning.
+    Race-safe read: an anchor renamed/deleted after selection (a concurrent
+    session closing it) degrades to a path-only context — never a raise that
+    would skip both the injection AND the failure telemetry."""
+    text, has_tail = split_head(_read(anchor))
     truncated = False
     if len(text) > MAX_CONTEXT_CHARS:
         text = text[:MAX_CONTEXT_CHARS]
@@ -148,30 +210,8 @@ def build_context(anchor: Path, stale_s: float, other_open: list[Path] | None = 
         'real state (git log, files on disk), then continue from its cursor. '
         'Treat it as the source of truth for run state over any summary above.',
     ]
-    if stale_s > STALE_AFTER_S:
-        hours = int(stale_s // 3600)
-        header.append(
-            f'WARNING - STALE: this anchor was last updated ~{hours}h ago. '
-            'Validate it against external reality before trusting the cursor; '
-            'the world may have moved on.'
-        )
-    if other_open:
-        names = ', '.join(f.name for f in other_open[:MAX_NAMED_OPEN])
-        if len(other_open) > MAX_NAMED_OPEN:
-            names += f' and {len(other_open) - MAX_NAMED_OPEN} more'
-        warn = (
-            f'WARNING - {len(other_open)} other open anchor(s) in this dir: {names}. '
-            'Concurrent tracks share this cwd; if this anchor is not your '
-            "track's, read the right one before acting."
-        )
-        terminal = [f for f in other_open if is_content_terminal(_read(f))]
-        if terminal:
-            cmds = '; '.join(f'mv {f.name} {f.stem}.closed.md' for f in terminal[:MAX_NAMED_OPEN])
-            more = len(terminal) - MAX_NAMED_OPEN
-            warn += (
-                f' {len(terminal)} read as closed in-content but were never renamed; '
-                f'close each: {cmds}' + (f' (+{more} more)' if more > 0 else '')
-            )
+    warn = _other_open_warning(other_open)
+    if warn:
         header.append(warn)
     body = [text]
     if has_tail:
@@ -181,6 +221,28 @@ def build_context(anchor: Path, stale_s: float, other_open: list[Path] | None = 
     if truncated:
         body.append('[anchor truncated for injection - read the file for the rest]')
     return '\n'.join(header) + '\n---\n' + '\n'.join(body) + '\n</control-anchor>'
+
+
+def build_pointer(anchor: Path, stale_s: float, other_open: list[Path] | None = None) -> str:
+    """POINTER tier for a stale anchor: identity + age + confirm-to-expand +
+    the close command — a short pointer, never the 8K body, and never silence.
+    (The title is capped; the shared concurrent-tracks warning can extend the
+    total when many terminal anchors accumulate — still far under the bound.)"""
+    hours = int(stale_s // 3600)
+    lines = [
+        '<control-anchor>',
+        f'A control anchor exists at {anchor} but is STALE: last updated '
+        f'~{hours}h ago, so its body is withheld to spare context.',
+        f'Title: {anchor_title(_read(anchor))}',
+        'If you are continuing that track, read the file now - it is the source '
+        'of truth for its run state. If the track is finished, close it: '
+        f'mv {anchor.name} {anchor.stem}.closed.md',
+    ]
+    warn = _other_open_warning(other_open)
+    if warn:
+        lines.append(warn)
+    lines.append('</control-anchor>')
+    return '\n'.join(lines)
 
 
 def append_telemetry(anchors_dir: Path, record: dict) -> None:
@@ -216,14 +278,25 @@ def main() -> int:
     anchor, other_open = select_anchor(open_anchors)
 
     stale_s = max(0.0, time.time() - _mtime(anchor))
-    context = build_context(anchor, stale_s, other_open)
+    source = payload.get('source')
+    source = source if isinstance(source, str) else ''
+    # Crash-restart branch: a fresh process only gets the anchor when it was
+    # updated recently enough to plausibly be the interrupted run. Explicit
+    # continuation/reset signals (compact/resume/clear) always evaluate.
+    if source == 'startup' and stale_s > STARTUP_RECENT_S:
+        return 0
+    pointer = stale_s > STALE_AFTER_S
+    context = (
+        build_pointer(anchor, stale_s, other_open) if pointer else build_context(anchor, other_open)
+    )
 
     record = {
         'event': 'anchor-inject',
         'source': payload.get('source', 'unknown'),
         'session': payload.get('session_id', ''),
         'file': anchor.name,
-        'stale': stale_s > STALE_AFTER_S,
+        'stale': pointer,
+        'tier': 'pointer' if pointer else 'full',
         'open_anchors': len(open_anchors),
         'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
     }

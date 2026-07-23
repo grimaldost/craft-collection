@@ -24,7 +24,7 @@ description: >
 
 # Compaction Survival
 
-A long autonomous run loses to one thing more than any other — the context that
+A long autonomous run loses most often to this — the context that
 held the plan gets compacted or reset, and the next turn resumes from a summary
 that dropped the load-bearing detail. The defense is an anchor on disk that the
 run re-reads and rewrites as it goes, so the plan lives in a file, not only in
@@ -32,8 +32,8 @@ the context window.
 
 This is a **flexible** skill: the anchor's schema and update cadence adapt to
 the task. What stays firm is small — the anchor is the single source of truth
-for run state, it is re-read at the start of each turn, and it is updated before
-the state it describes can be lost.
+for run state, re-read at the start of each turn and updated before the state
+it describes can be lost.
 
 ## The anchor
 
@@ -41,7 +41,7 @@ One file, at a stable path the run can find again after a reset. It has two
 tiers, split by a literal `<!-- anchor:tail -->` marker line: above it the live
 **HEAD** — the only part the re-injection hook emits — and below it the
 **TAIL**, which stays on disk. A marker-less anchor still injects whole, but
-then a long run's live state is whatever an 8K bound happens to keep.
+then a long run's live state is whatever the 8K bound keeps.
 
 HEAD — bounded, rewritten in place:
 
@@ -77,8 +77,8 @@ TAIL — append-only, read on demand:
    lives only in the context window is one compaction away from gone; write it
    down while it is still true.
 3. **Re-read the anchor at the start of each turn** — especially when a summary
-   has appeared or the context feels thinner than the work already done, the
-   visible signs that a compaction happened. Re-read before acting, not after. A
+   has appeared or the context feels thinner than the work already done — the
+   signs of a compaction. Re-read before acting, not after. A
    cursor is an Edit, so during tool outages it can lag reality by a phase; when
    it disagrees with durable state (the version-control log, run ledgers), trust
    the durable state.
@@ -92,10 +92,9 @@ TAIL — append-only, read on demand:
 6. **Make resume idempotent.** The resume steps let a fresh context recover the
    run from the anchor and the real on-disk state alone; re-entering a
    half-finished step checks the artifact before redoing it, so re-reading is
-   always safe. A recovery command the anchor stores (a ledger-count grep, a
-   resume key) is validated against the live artifact before the run goes
-   unattended — an unchecked recovery command is a fabricated inference waiting
-   to misfire.
+   always safe. A stored recovery command (a ledger-count grep, a resume key)
+   is validated against the live artifact before the run goes unattended —
+   unchecked, it is a fabricated inference waiting to misfire.
 7. **Close by stubbing, then renaming.** When the run ends, rewrite the anchor
    to a minimal landed stub — status, a one-line outcome, resume: none — and
    rename it `<name>.closed.md`. The rename is the only close signal the hook
@@ -123,16 +122,19 @@ An anchor that cannot be found is no anchor.
   state to be persisted; it does not replace the cadence, which is what
   protects against *automatic* compactions that arrive unannounced.
 - **Automatic re-injection** (env-gated, off by default): with
-  `SESSION_WORKFLOW_ANCHOR_HOOKS=1`, a SessionStart hook on `compact` and
-  `resume` re-injects the newest **active** anchor's HEAD (to the tail marker)
-  into fresh context mechanically — the re-read step stops depending on the model
-  remembering the protocol. On a harness without session-start hooks, the
-  cadence's manual re-read at each turn start is the whole mechanism. An anchor marked done in-content is de-ranked below
-  live tracks, so a stray closed-but-unrenamed track no longer shadows the live
-  one; the rename to `*.closed.md` remains the only signal that stops injection
-  entirely. Stale anchors are injected with an explicit warning; when several
-  anchors are open in one directory (concurrent tracks), the injection names the
-  others and emits the exact `mv` rename for any that read as closed in-content.
+  `SESSION_WORKFLOW_ANCHOR_HOOKS=1`, a SessionStart hook on `compact`,
+  `resume`, `clear`, and `startup` re-injects the newest **active** anchor's
+  HEAD (to the tail marker) into fresh context mechanically — the re-read step
+  stops depending on the model remembering the protocol. Without session-start
+  hooks, the cadence's manual re-read at each turn start is the whole
+  mechanism. An anchor marked done in-content is de-ranked below live
+  tracks, so a stray closed-but-unrenamed track no longer shadows the live one;
+  the rename to `*.closed.md` remains the only signal that stops injection
+  entirely. An anchor untouched for 24h injects as a short pointer (path,
+  title, age, close command), not its body; `startup` (crash restart) injects
+  only an anchor updated within 6h. When several anchors are open
+  in one directory (concurrent tracks), the injection names the others and
+  emits the exact `mv` rename for any that read as closed in-content.
   Anchor-less sessions pay nothing.
 - **Cold start without the plugin surface** — a session whose plugin snapshot
   predates the skill, or a harness whose menu omits it, arms everything by hand:
@@ -152,7 +154,7 @@ An anchor that cannot be found is no anchor.
 | Re-read skipped on resume | Acts on the summary's gaps; relitigates settled decisions. |
 | Anchor grown into a transcript | Becomes the token hog it was meant to prevent. |
 | Non-idempotent resume | Re-runs a finished irreversible step, or stacks a second attempt on a half-done one. |
-| Closed in prose, never renamed | Injection de-ranks it below live tracks and offers the rename, but until renamed it lingers and the strays accumulate — sweep at wind-down. |
+| Closed in prose, never renamed | Injection de-ranks it and offers the rename, but strays accumulate until renamed — sweep at wind-down. |
 
 ## Boundaries
 

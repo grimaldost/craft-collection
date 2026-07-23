@@ -73,11 +73,16 @@ tool-dogfooding feedback loop (capture + triage).
 
 - **SessionStart** — inject the live toolkit inventory each session. Ships wired
   but inert; enable with `TOOLKIT_AWARENESS_INJECT=1`.
-- **SessionStart (compact/resume)** — re-inject the newest open control
-  anchor's HEAD (`.claude/anchors/*.md`; content above the
+- **SessionStart (compact/resume/clear/startup)** — re-inject the newest open
+  control anchor's HEAD (`.claude/anchors/*.md`; content above the
   `<!-- anchor:tail -->` marker, whole file when marker-less) so a run survives
   compaction and process restarts; warns and names the others when several
-  anchors are open in one directory. Ships wired but inert; enable with
+  anchors are open in one directory. Lifecycle gates: an anchor untouched for
+  >24h degrades to a one-paragraph pointer (path + title + age +
+  confirm-to-expand + close command) instead of the full body; `startup`
+  (fresh process — the crash-restart path) injects only when the anchor was
+  updated in the last 6h, so ordinary new sessions in a cwd with an old anchor
+  pay nothing. Ships wired but inert; enable with
   `SESSION_WORKFLOW_ANCHOR_HOOKS=1`.
   Enabling it in a session whose plugin snapshot predates the hook (or in a
   harness without the plugin surface):
