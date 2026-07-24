@@ -254,6 +254,190 @@ def render_chain(record_path: str | Path) -> str:
     return '\n'.join(lines) + '\n'
 
 
+# --- the mantis journal envelope (Q8) ---------------------------------------
+#
+# render.py emits the record's belief-update as a journaling-sessions envelope so
+# the mantis ingestion pipeline can compost it into the long-term store. Two shapes:
+#
+#   PRIMARY (default) -- the full journaling-sessions envelope carrying the update
+#   and its provenance as EXTRA header fields (experiment, tier, certainty, ...): a
+#   SUPERSET of the required keys. Both real mantis parsers collect header lines into
+#   a dict and consume only the keys they know, ignoring the rest -- verified against
+#   mantis-ai/src/mantis/ingestion/{journal.py, journal_v2.py}; neither enforces
+#   additionalProperties. So the superset ingests without loss.
+#
+#   STRICT FALLBACK (--strict) -- for a hypothetical parser that DOES reject unknown
+#   keys (an additionalProperties:false JSON-schema validator): the mantis-required
+#   keys only, plus a record_ref path and a record_sha256, no rich-provenance
+#   superset. The provenance is not dropped, it is LINKED: the envelope points at the
+#   typed record, hash-pinned. test_mantis_fallback.py mocks a rejecting parser and
+#   asserts the fallback is well-formed and resolvable (the R2 fold: the fallback
+#   shape is defined and tested, not left as prose).
+#
+# The standing journal contract: field / enum / required-key mismatches fail SILENTLY
+# in that pipeline, so the emitter matches the contract exactly -- ISO timestamps, a
+# valid EntryType, one of the four journal origins, and the seven-field required set
+# (the v1 union, so both JournalParser and JournalParserV2 accept the entry).
+
+# The mantis journal-ingestion required header set: the union of the v1 and v2 parser
+# contracts (v1 requires 'language', v2 does not -- emitting it satisfies both).
+_MANTIS_REQUIRED: tuple[str, ...] = (
+    'type',
+    'author',
+    'timestamp',
+    'area',
+    'language',
+    'origin',
+    'session',
+)
+
+# GRADE certainty -> journaling-sessions confidence band (evidence-calibrated,
+# output-format.md section 9). A cross-experiment update is inference over small n,
+# so it lands low.
+_CERTAINTY_CONFIDENCE: dict[str, float] = {
+    'very_low': 0.2,
+    'low': 0.35,
+    'moderate': 0.6,
+    'high': 0.9,
+}
+
+_DEFAULT_AUTHOR = 'user:grimaldo-stanzani'
+_DEFAULT_AREA = 'platform_engineering'
+
+
+def _slug(text: str) -> str:
+    """kebab-case slug for a session name (ASCII, lowercase, hyphen-joined)."""
+    return '-'.join(re.findall(r'[a-z0-9]+', str(text).lower())) or 'experiment'
+
+
+def _iso(value: Any) -> str:
+    """Normalize a timestamp to ISO 8601 with a 'T' separator. PyYAML auto-parses an
+    ISO string into a datetime, whose str() uses a space; the mantis parser tolerates
+    both, but the T form matches the envelope contract's examples and stays stable."""
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
+
+def record_sha256(record: dict[str, Any]) -> str:
+    """sha256 over the record's canonical serialization -- stable regardless of how
+    record.yaml is formatted on disk (the canonical policy pins the bytes)."""
+    return hashlib.sha256(canonical_yaml(record).encode('utf-8')).hexdigest()
+
+
+def _envelope_content(record: dict[str, Any], *, strict: bool) -> str:
+    """The CONTENT body: prose the embedder reads. Kept ASCII (ascii-runtime gate)."""
+    experiment = record.get('experiment', '(unnamed)')
+    tier = record.get('tier', '(no tier)')
+    ref = record.get('_record_ref', 'record.yaml')
+    if strict:
+        return (
+            f'Experiment-rigor belief update for {experiment} ({tier} tier). '
+            f'The full typed record, results, and provenance are in the linked, '
+            f'hash-pinned record at {ref} -- this strict envelope carries only the link.'
+        )
+    updates = record.get('updates') if isinstance(record.get('updates'), dict) else {}
+    prior = updates.get('prior') if isinstance(updates.get('prior'), dict) else {}
+    posterior = updates.get('posterior') if isinstance(updates.get('posterior'), dict) else {}
+    parts: list[str] = [
+        f'In dispatch / experiment-rigor work, the {experiment} experiment ({tier} tier) '
+        f'updates a prior belief.'
+    ]
+    if prior.get('belief'):
+        parts.append(f'Prior: {prior["belief"]} (grade {prior.get("grade", "unstated")}).')
+    if posterior.get('belief'):
+        parts.append(
+            f'Posterior: {posterior["belief"]} '
+            f'(grade {posterior.get("grade", "unstated")}, '
+            f'method {posterior.get("method", "unstated")}).'
+        )
+    reasons = updates.get('downgrade_reasons') or []
+    if reasons:
+        parts.append(f'Certainty is downgraded for: {", ".join(str(r) for r in reasons)}.')
+    parts.append(f'The full typed record is at {ref}, hash-pinned by record_sha256.')
+    return ' '.join(parts)
+
+
+def journal_envelope(
+    record: dict[str, Any],
+    *,
+    strict: bool = False,
+    record_ref: str = 'record.yaml',
+    journaled_at: str | None = None,
+    author: str = _DEFAULT_AUTHOR,
+    area: str = _DEFAULT_AREA,
+    entry_type: str = 'FINDING',
+) -> str:
+    """Render the record's belief-update as a journaling-sessions envelope.
+
+    PRIMARY (strict=False): the required set plus the update's provenance as extra
+    header fields (a superset the tolerant mantis parsers ingest without loss).
+    STRICT (strict=True): the required set plus record_ref + record_sha256 only.
+
+    `journaled_at` defaults to the record's own freeze timestamp (else its first-run
+    time), so the envelope is DETERMINISTIC -- no wall-clock, re-emit is byte-stable.
+    """
+    frozen = record.get('plan_frozen_at') if isinstance(record.get('plan_frozen_at'), dict) else {}
+    run = record.get('run') if isinstance(record.get('run'), dict) else {}
+    occurred_at = _iso(run['first_run_at']) if run.get('first_run_at') else None
+    timestamp = _iso(
+        journaled_at or frozen.get('timestamp') or occurred_at or '2026-01-01T00:00:00Z'
+    )
+    sha = record_sha256(record)
+    session = f'experiment-rigor-{_slug(record.get("experiment", "experiment"))}'
+
+    # `_record_ref` is a transient hint for _envelope_content only; never a schema field.
+    content = _envelope_content({**record, '_record_ref': record_ref}, strict=strict)
+
+    headers: list[tuple[str, str]] = [
+        ('type', entry_type),
+        ('author', author),
+        ('timestamp', str(timestamp)),
+    ]
+    if occurred_at and str(occurred_at) != str(timestamp):
+        headers.append(('occurred_at', str(occurred_at)))
+    headers.append(('area', area))
+    headers.append(('language', 'en'))
+    headers.append(('origin', 'code'))
+    headers.append(('session', session))
+
+    if strict:
+        # Minimal: the required set (plus occurred_at above) and the hash-pinned link.
+        headers.append(('record_ref', record_ref))
+        headers.append(('record_sha256', sha))
+    else:
+        updates = record.get('updates') if isinstance(record.get('updates'), dict) else {}
+        prior = updates.get('prior') if isinstance(updates.get('prior'), dict) else {}
+        posterior = updates.get('posterior') if isinstance(updates.get('posterior'), dict) else {}
+        certainty = updates.get('certainty')
+        confidence = _CERTAINTY_CONFIDENCE.get(str(certainty), 0.35)
+        headers.append(('visibility', 'private'))
+        headers.append(('domains', 'experiment_rigor, dispatch, ab_testing'))
+        headers.append(('confidence', f'{confidence}'))
+        if prior.get('source'):
+            headers.append(('refs', f'record:{record_ref}, prior:{prior["source"]}'))
+        else:
+            headers.append(('refs', f'record:{record_ref}'))
+        # The provenance superset (extra header fields the tolerant parsers ignore).
+        headers.append(('experiment', str(record.get('experiment', ''))))
+        headers.append(('tier', str(record.get('tier', ''))))
+        if certainty is not None:
+            headers.append(('certainty', str(certainty)))
+        if prior.get('source'):
+            headers.append(('prior_source', str(prior['source'])))
+        if posterior.get('method'):
+            headers.append(('posterior_method', str(posterior['method'])))
+        headers.append(('record_ref', record_ref))
+        headers.append(('record_sha256', sha))
+
+    lines = ['--- ENTRY_START ---']
+    lines += [f'{k}: {v}' for k, v in headers]
+    lines.append('--- CONTENT ---')
+    lines.append(content)
+    lines.append('--- ENTRY_END ---')
+    return '\n'.join(lines) + '\n'
+
+
 # --- the SCHEMA.md generator ------------------------------------------------
 
 
@@ -417,6 +601,16 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument(
         '--schema-md', action='store_true', help='print SCHEMA.md generated from schema.json'
     )
+    mode.add_argument(
+        '--emit-journal',
+        action='store_true',
+        help='print the record as a mantis journaling-sessions envelope',
+    )
+    ap.add_argument(
+        '--strict',
+        action='store_true',
+        help='with --emit-journal: the strict linking fallback (no provenance superset)',
+    )
     ap.add_argument(
         '--stdout', action='store_true', help='print the report instead of writing report.md'
     )
@@ -424,6 +618,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.schema_md:
         sys.stdout.write(schema_markdown(_load_schema_json()))
+        return 0
+
+    if args.emit_journal:
+        if not args.records:
+            ap.error('a record.yaml path is required for --emit-journal')
+        for record_arg in args.records:
+            record_path = Path(record_arg)
+            record = load_record(record_path)
+            sys.stdout.write(
+                journal_envelope(record, strict=args.strict, record_ref=record_path.name)
+            )
         return 0
 
     if not args.records:

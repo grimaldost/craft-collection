@@ -282,12 +282,30 @@ def _commit_date(cwd: Path, commit: str) -> datetime | None:
     return _parse_dt(proc.stdout.strip())
 
 
-def _repo_relpath(cwd: Path, path: Path) -> str | None:
+def _repo_toplevel(cwd: Path) -> Path | None:
+    """The git repository root for `cwd`, resolved, or None if `cwd` is not in a repo.
+
+    ALL commit-reconstruction git ops (ER-ANCHOR, ER-PREREG, and the amendment
+    chronology check) run with `-C <toplevel>`, never the record's own -- possibly
+    deeply nested -- directory. On Windows, git disambiguates a `<sha>:<relpath>` or
+    `<sha>^{commit}` argument by stat-ing `<cwd>/<sha>`; a long nested absolute cwd
+    overflows MAX_PATH, git fatals, `_show_at` / `_commit_in_history` return None, and
+    ER-PREREG would SILENTLY downgrade to a "record not in history" WARN at measurement
+    tier -- a gate quietly ceasing to check, against the loud-failing thesis. The
+    toplevel is the shortest cwd that still resolves the commit, so the gate stays loud.
+    The one op that legitimately runs from the nested dir is this `--show-toplevel`
+    lookup itself: it takes no rev/pathspec argument, so it cannot trip the overflow."""
     proc = _git(cwd, 'rev-parse', '--show-toplevel')
-    if proc.returncode != 0:
+    if proc.returncode != 0 or not proc.stdout.strip():
         return None
+    return Path(proc.stdout.strip()).resolve()
+
+
+def _repo_relpath(toplevel: Path, path: Path) -> str | None:
+    """`path` relative to the repo `toplevel`, POSIX-style (the form
+    `git show <commit>:<relpath>` expects), or None if it is not under the toplevel."""
     try:
-        return path.resolve().relative_to(Path(proc.stdout.strip()).resolve()).as_posix()
+        return path.resolve().relative_to(toplevel).as_posix()
     except ValueError:
         return None
 
@@ -732,12 +750,14 @@ def check_parity(record: dict, record_path: Path | None) -> list[Finding]:
 def check_anchor(record: dict, record_path: Path | None) -> list[Finding]:
     if record.get('tier') not in ('measurement', 'decision') or record_path is None:
         return []
-    cwd = record_path.parent
     commit = (record.get('plan_frozen_at') or {}).get('commit')
     if not commit or str(commit) in ('TBD', 'PENDING', 'tbd', 'pending'):
         return [
             _fail('ER-ANCHOR', 'plan_frozen_at.commit is absent; the freeze has no temporal anchor')
         ]
+    # Run the commit lookups from the repo toplevel, not the nested record dir (F: the
+    # Windows MAX_PATH overflow that would make git fatal and the gate silently pass).
+    cwd = _repo_toplevel(record_path.parent) or record_path.parent
     if not _commit_in_history(cwd, str(commit)):
         return [_fail('ER-ANCHOR', f'plan_frozen_at.commit {commit} is absent from git history')]
     cdate = _commit_date(cwd, str(commit))
@@ -869,7 +889,6 @@ def check_prereg(record: dict, record_path: Path | None) -> list[Finding]:
     tier = record.get('tier')
     if tier not in ('measurement', 'decision') or record_path is None:
         return []
-    cwd = record_path.parent
     commit = (record.get('plan_frozen_at') or {}).get('commit')
 
     def downgrade(msg: str) -> list[Finding]:
@@ -881,10 +900,18 @@ def check_prereg(record: dict, record_path: Path | None) -> list[Finding]:
         return downgrade(
             'plan_frozen_at.commit is absent; cannot reconstruct the frozen pre-registration'
         )
+    # Resolve the repo toplevel ONCE and run every git op from there, not the nested
+    # record dir (F: the Windows MAX_PATH overflow that would make `git show` fatal, so
+    # `_show_at` returns None and this gate silently downgrades to the not-in-history WARN).
+    cwd = _repo_toplevel(record_path.parent)
+    if cwd is None:
+        return downgrade(
+            'record is not under a git repo; cannot reconstruct the frozen pre-registration'
+        )
     relpath = _repo_relpath(cwd, record_path)
     if relpath is None:
         return downgrade(
-            'record is not under a git repo; cannot reconstruct the frozen pre-registration'
+            'record is not under the git repo toplevel; cannot reconstruct the pre-registration'
         )
     frozen = _show_at(cwd, str(commit), relpath)
     if frozen is None:

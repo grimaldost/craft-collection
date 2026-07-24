@@ -541,6 +541,62 @@ def test_er_prereg_not_in_history_downgrades_by_tier():
         assert 'ER-PREREG' in fail_codes(check(rec, path))
 
 
+# --- ER-PREREG / ER-ANCHOR run git from the repo toplevel (Windows MAX_PATH) --------
+
+
+def test_prereg_git_ops_run_from_repo_toplevel_not_nested_dir():
+    # FIX-1 regression (shape test). The commit-reconstruction git ops must run with
+    # -C <toplevel>, NOT the record's (deeply nested) dir: on Windows git disambiguates a
+    # <sha>:<relpath> argument by stat-ing <cwd>/<sha>, a long nested cwd overflows
+    # MAX_PATH, git fatals, and ER-PREREG silently downgrades to the not-in-history WARN.
+    # A true long-path repro is impractical in a unit test, so this asserts the shape:
+    # every rev/pathspec op targets the toplevel; only the --show-toplevel lookup itself
+    # may run from the nested dir (it takes no rev/pathspec argument, so it cannot overflow).
+    with tempfile.TemporaryDirectory() as td:
+        top = Path(td)
+        _git_init(top)
+        nested = top / 'plugins' / 'humblepowers' / 'skills' / 'experiment-rigor' / 'examples' / 'z'
+        nested.mkdir(parents=True)
+        assert nested.resolve() != top.resolve()
+        rec = _measurement_record()
+        path = write_record(nested, rec)
+        sha = _git_commit(top, '2026-01-01T00:00:00')  # commit staged from the repo root
+        rec['plan_frozen_at']['commit'] = sha  # only plan_frozen_at (outside the subset) drifts
+        write_record(nested, rec)
+
+        calls: list[tuple[Path, tuple[str, ...]]] = []
+        real_git = validate._git
+
+        def spy(cwd, *args):
+            calls.append((Path(cwd).resolve(), args))
+            return real_git(cwd, *args)
+
+        validate._git = spy
+        try:
+            report = validate.check_prereg(rec, path)
+            anchor = validate.check_anchor(rec, path)
+        finally:
+            validate._git = real_git
+
+        # The gate still verifies cleanly despite the nesting -- no silent downgrade.
+        assert [f for f in report if f.level == 'FAIL'] == [], report
+        assert anchor == [], anchor
+
+        top_resolved = top.resolve()
+        pathspec_ops = [
+            (cwd, args)
+            for cwd, args in calls
+            if args and (args[0] == 'show' or args[:2] == ('rev-parse', '--verify'))
+        ]
+        assert pathspec_ops, calls  # reconstruction actually happened
+        for cwd, args in pathspec_ops:
+            assert cwd == top_resolved, (args, cwd, top_resolved)
+        # The only op allowed to run from a non-toplevel cwd is the --show-toplevel lookup.
+        for cwd, args in calls:
+            if cwd != top_resolved:
+                assert args[:2] == ('rev-parse', '--show-toplevel'), (cwd, args)
+
+
 # --- ER-COMPREHEND (decision-tier comprehension block) ----------------------
 
 

@@ -1,123 +1,168 @@
-# The founding RG-2x2 register/gate factorial, reconstructed as a MEASUREMENT-tier
-# record and the chain-root node of the experiment-rigor update chain (spec section 5;
-# pre-mortem R3-2 pins this tier as measurement).
-#
-# THIS IS THE STAGE-1 FROZEN PRE-REGISTRATION (design + outcomes + analysis plan +
-# threats), committed FIRST so its commit becomes plan_frozen_at.commit. It carries NO
-# results, posterior, amendment, or observed disposition (only the planned total); those
-# are added by finalize.py after the freeze commit exists. See FREEZE.md for the two-stage
-# choreography. Until finalize runs, `validate.py record.yaml` exits 1 because ER-ANCHOR
-# FAILS (commit is PENDING); ER-PREREG is only a measurement-tier WARN (it cannot
-# reconstruct a plan not yet committed) and ER-XCHECK a WARN (source: hand).
-# `validate.py record.yaml --schema-only` passes. This is the freeze bootstrap, not a defect.
+# Finalized by finalize.py -- the frozen pre-registration plus results,
+# the wave-2 amendment, and the prior -> posterior update. Do not hand-edit;
+# re-run finalize.py to regenerate. See FREEZE.md for the choreography.
 schema_version: 1
 tier: measurement
 experiment: rg-2x2-register-gate
 design:
   shared_tasks: true
-  # 8 factor-level cells = 4 arms (ctrl / reg / gate / both) x 2 model tiers
-  # (haiku / sonnet). Each cell is 12 trials = 6 planted-bug tasks x 2 waves.
-  # The model tier is a named factor level, not a separate multiplier: 8 x 12 = 96.
   cells:
-    - name: ctrl_haiku
-      planned_n: 12
-    - name: reg_haiku
-      planned_n: 12
-    - name: gate_haiku
-      planned_n: 12
-    - name: both_haiku
-      planned_n: 12
-    - name: ctrl_sonnet
-      planned_n: 12
-    - name: reg_sonnet
-      planned_n: 12
-    - name: gate_sonnet
-      planned_n: 12
-    - name: both_sonnet
-      planned_n: 12
-# Planned N only (the observed completed / excluded are results -- finalize.py adds them).
+  - name: ctrl_haiku
+    planned_n: 12
+  - name: reg_haiku
+    planned_n: 12
+  - name: gate_haiku
+    planned_n: 12
+  - name: both_haiku
+    planned_n: 12
+  - name: ctrl_sonnet
+    planned_n: 12
+  - name: reg_sonnet
+    planned_n: 12
+  - name: gate_sonnet
+    planned_n: 12
+  - name: both_sonnet
+    planned_n: 12
 disposition:
   total: 96
+  completed: 96
+  excluded: 0
 outcomes:
-  - name: activation
-    role: confirmatory
-    operationalization: >-
-      the model invoked the Skill tool to LOAD the target skill (ingest its body),
-      measured from the raw event stream -- not the 'Skill check:' ritual declaration
-      line, which is a separate, weaker signal.
-    verifier:
-      path: verify_activation.py
-      hash: 1f0a9c7b2d4e6f8a0c1e3d5f709182a3b4c5d6e7f80912a3b4c5d6e7f8091a2b3
-  - name: footprint
-    role: exploratory
-    operationalization: >-
-      behavioral proxies measured by a deterministic verifier on the executed
-      workspace artifact -- a root-cause fix that also corrects a second latent point
-      never named in the prompt; the subtle data-output error caught; a regression test
-      left that goes red if the bug returns. Measures the named discipline, not generic care.
-    verifier:
-      path: verify_footprint.py
-      hash: 2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2
+- name: activation
+  role: confirmatory
+  operationalization: the model invoked the Skill tool to LOAD the target skill (ingest its body), measured
+    from the raw event stream -- not the 'Skill check:' ritual declaration line, which is a separate,
+    weaker signal.
+  verifier:
+    path: verify_activation.py
+    hash: 1f0a9c7b2d4e6f8a0c1e3d5f709182a3b4c5d6e7f80912a3b4c5d6e7f8091a2b3
+- name: footprint
+  role: exploratory
+  operationalization: behavioral proxies measured by a deterministic verifier on the executed workspace
+    artifact -- a root-cause fix that also corrects a second latent point never named in the prompt; the
+    subtle data-output error caught; a regression test left that goes red if the bug returns. Measures
+    the named discipline, not generic care.
+  verifier:
+    path: verify_footprint.py
+    hash: 2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2
 analysis_plan:
   ci_method: wilson
-  comparison: >-
-    with_gate (gate + both) vs without_gate (ctrl + reg), pooled across the two model
-    tiers, paired on the 6 shared tasks.
+  comparison: with_gate (gate + both) vs without_gate (ctrl + reg), pooled across the two model tiers,
+    paired on the 6 shared tasks.
   decision_rule:
     metric: rate_difference
     comparison: gte
     threshold: 0.1
     direction: higher
+  amendments:
+  - commit: ed3c5a0e02f4b1fe5d60047e1bc43b88a91be4b2
+    timestamp: '2026-07-24T00:00:00Z'
+    scope: wave-2
+    governs_first_run_at: '2026-07-24T18:00:00Z'
+    note: wave-2 confirmation bar (+4/12) for the exploratory footprint, fixed after the wave-1 post-hoc
+      signal and before wave-2. In this reconstruction the whole pre-registration is frozen at a single
+      commit, so the amendment anchors to the freeze commit (documented choice; a live sequential design
+      would carry a distinct between-waves commit).
 threats:
   contamination_familiarity:
     status: residual
-    statement: >-
-      models may have seen structurally similar planted-bug tasks in pretraining; not
-      controlled for.
+    statement: models may have seen structurally similar planted-bug tasks in pretraining; not controlled
+      for.
   prompt_format_sensitivity:
     status: controlled
-    statement: >-
-      one fixed task template across arms; the register factor rewrote only the skill
-      description field (bodies byte-identical, no new content words, length within 25%).
+    statement: one fixed task template across arms; the register factor rewrote only the skill description
+      field (bodies byte-identical, no new content words, length within 25%).
   judge_bias:
     status: controlled
     statement: a deterministic verifier on the executed artifact, no LLM-as-judge.
   model_version_drift:
     status: residual
-    statement: >-
-      two unpinned model snapshots (haiku, sonnet) over the measurement window; the
-      instrument can move underneath the run.
+    statement: two unpinned model snapshots (haiku, sonnet) over the measurement window; the instrument
+      can move underneath the run.
   nondeterminism:
     status: residual
     statement: sampling temperature above zero; one turn per trial, not repeated.
   construct_validity_proxy:
     status: residual
-    statement: >-
-      the proxy measures the named discipline (the correct plate), but the skills were
-      never loaded -- the behavior was auto-generated from the model's own priors, so the
-      positive footprint bypasses the skill machinery and holds only for disciplines within
-      the model's latent reach (the attentive-driver-watching-the-wrong-risk caveat).
+    statement: the proxy measures the named discipline (the correct plate), but the skills were never
+      loaded -- the behavior was auto-generated from the model's own priors, so the positive footprint
+      bypasses the skill machinery and holds only for disciplines within the model's latent reach (the
+      attentive-driver-watching-the-wrong-risk caveat).
   token_length_confound:
     status: residual
-    statement: >-
-      the gate arms carried roughly 90 more system-prompt words; no equal-length
-      no-decision control was run, so forced deliberation cannot be separated from any
-      preamble / extra reasoning tokens. Possibly fatal to the causal reading.
+    statement: the gate arms carried roughly 90 more system-prompt words; no equal-length no-decision
+      control was run, so forced deliberation cannot be separated from any preamble / extra reasoning
+      tokens. Possibly fatal to the causal reading.
   selection_exclusion:
     status: controlled
     statement: no trials excluded; the full 96 are in the disposition.
   generalization:
     status: residual
-    statement: >-
-      one task family, one turn, tested as system-prompt TEXT rather than the
-      per-prompt hook that would be built; 'validates the mechanism' would overclaim.
+    statement: one task family, one turn, tested as system-prompt TEXT rather than the per-prompt hook
+      that would be built; 'validates the mechanism' would overclaim.
 plan_frozen_at:
-  commit: PENDING
-  timestamp: 2026-07-24T00:00:00Z
+  commit: ed3c5a0e02f4b1fe5d60047e1bc43b88a91be4b2
+  timestamp: 2026-07-24 00:00:00+00:00
 run:
   source: hand
-  hand_reason: >-
-    the founding RG-2x2 was hand-orchestrated in fathom PR #15 (feat/rg-2x2) before this
-    discipline existed; reconstructed here as the chain-root fixture, so no machine-readable
-    ledger travels with it. ER-XCHECK is a measurement-tier WARN by design, not a defect.
-  first_run_at: 2026-07-24T12:00:00Z
+  hand_reason: 'the founding RG-2x2 was hand-orchestrated in fathom PR #15 (feat/rg-2x2) before this discipline
+    existed; reconstructed here as the chain-root fixture, so no machine-readable ledger travels with
+    it. ER-XCHECK is a measurement-tier WARN by design, not a defect.'
+  first_run_at: 2026-07-24 12:00:00+00:00
+results:
+  activation:
+    verdict: confirmatory_null
+    paired: true
+    arms:
+      with_gate:
+        numerator: 0
+        denominator: 48
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.0
+          high: 0.0741
+      without_gate:
+        numerator: 0
+        denominator: 48
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.0
+          high: 0.0741
+  footprint:
+    verdict: exploratory_signal
+    paired: true
+    arms:
+      with_gate:
+        numerator: 36
+        denominator: 48
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.6122
+          high: 0.8508
+      without_gate:
+        numerator: 18
+        denominator: 48
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.2522
+          high: 0.5164
+updates:
+  certainty: low
+  downgrade_reasons:
+  - token_length_confound
+  - nondeterminism
+  - generalization
+  prior:
+    belief: imperative-register descriptions activate skills ~20x more (a field study on Claude Code skills)
+    grade: low
+    source: dispatch-field-memo
+  posterior:
+    belief: register (R) is null -- reg == ctrl in both tiers; the gate's forced deliberation raised the
+      disciplinary footprint from 18/48 to 36/48 as an exploratory signal, even with a "none applies"
+      verdict and no skill loaded
+    grade: low
+    method: beta_binomial_within

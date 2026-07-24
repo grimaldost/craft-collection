@@ -5,6 +5,43 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.10.0 — 2026-07-24
+
+The decision tier and the founding-case regression fixture (spec
+`docs/specs/2026-07-24-experiment-rigor-skill.md`, section 5) close the
+`experiment-rigor` skill. The founding RG-2x2 register/gate factorial now travels as
+the chain-root dogfood record, and the whole discipline is regression-pinned against
+the six defects three fresh readers found in its prose write-up.
+
+### Added
+
+- **The RG-2x2 dogfood fixture** (`skills/experiment-rigor/examples/rg-2x2/`): the
+  founding case as a faithful measurement-tier `record.yaml` — 8 declared cells x 12 =
+  96, the confirmatory `activation` outcome that failed (`confirmatory_null`), the
+  quarantined exploratory `footprint` outcome carrying its within-experiment
+  Beta-Binomial posterior and the wave-2 pre-fixed bar as an `analysis_plan.amendments`
+  entry, the token-length confound named as a residual threat, and the field-belief
+  prior -> register-null / deliberation-signal posterior update. It ships FROZEN
+  (pre-results) with a two-stage freeze choreography (`FREEZE.md`, `finalize.py`) so its
+  own commit anchors `plan_frozen_at.commit`.
+- **The section-5 acceptance test** (`scripts/test_acceptance_rg2x2.py`): a seeded
+  six-defect variant makes `validate.py` exit 1 naming all six by code (`ER-RECON`,
+  `ER-SCHEMA` twice, `ER-STATS` twice, `ER-PREREG`), while the corrected record — the
+  real fixture through the real finalize step, against a real freeze commit — exits 0
+  with `render.py --check` showing no drift. Decision-tier fixtures cover the
+  comprehension gate: a missing block and a below-4/4 reader each exit 1
+  (`ER-COMPREHEND`), a complete record with resolving transcript files and a
+  second-party attestation exits 0.
+- **The mantis journal-envelope emit** (`render.py --emit-journal`): a record's belief
+  update rendered as a journaling-sessions envelope. The primary shape carries the
+  provenance as extra header fields (a superset both mantis parsers tolerate — verified
+  against `mantis.ingestion.journal` and `journal_v2`); a `--strict` fallback drops the
+  superset and links the record hash-pinned (`record_ref` + `record_sha256`) for a parser
+  that rejects unknown keys. `scripts/test_mantis_envelope.py` tests the tolerance (the
+  real parser when importable, else the documented envelope-schema contract, marking
+  which); `scripts/test_mantis_fallback.py` mocks a rejecting parser and asserts the
+  strict fallback is accepted, well-formed, and resolvable.
+
 ## 0.9.0 — 2026-07-24
 
 The `experiment-rigor` skill (spec `docs/specs/2026-07-24-experiment-rigor-skill.md`,

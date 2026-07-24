@@ -224,6 +224,31 @@ def test_chain_marks_an_unresolvable_link():
         assert any(not n['resolved'] for n in chain), chain
 
 
+# --- the mantis journal envelope emit (--emit-journal) ----------------------
+
+
+def test_cli_emit_journal_primary_and_strict():
+    with tempfile.TemporaryDirectory() as td:
+        rec = Path(td) / 'record.yaml'
+        rec.write_text(PROBE.read_text(encoding='utf-8'), encoding='utf-8')
+        primary = subprocess.run(  # noqa: S603 - fixed argv
+            [sys.executable, str(HERE / 'render.py'), '--emit-journal', str(rec)],
+            capture_output=True,
+            text=True,
+        )
+        assert primary.returncode == 0, primary.stderr
+        assert '--- ENTRY_START ---' in primary.stdout and '--- ENTRY_END ---' in primary.stdout
+        assert 'record_sha256:' in primary.stdout
+        strict = subprocess.run(  # noqa: S603 - fixed argv
+            [sys.executable, str(HERE / 'render.py'), '--emit-journal', '--strict', str(rec)],
+            capture_output=True,
+            text=True,
+        )
+        assert strict.returncode == 0, strict.stderr
+        # The strict fallback drops the provenance superset but keeps the hash-pinned link.
+        assert 'experiment:' not in strict.stdout and 'record_ref:' in strict.stdout
+
+
 if __name__ == '__main__':
     failed = 0
     for name, fn in sorted(globals().items()):
