@@ -55,6 +55,15 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: experiment-rigor-validate
+        name: experiment-rigor record validator (travelling records)
+        entry: uv run --no-project --with pyyaml -- python plugins/humblepowers/skills/experiment-rigor/scripts/validate.py
+        language: system
+        # Deliberately diverges from the always_run convention above (FM-6 / Q6): a
+        # files: regex plus pass_filenames selects only staged, tracked record.yaml
+        # paths, so gitignored docs/design/** records never reach the gate.
+        files: ^(plugins/humblepowers/skills/experiment-rigor/examples/.*/record\.yaml|evals/.*/record\.yaml)$
+        pass_filenames: true
       - id: run-tests
         name: run self-contained test suite
         entry: uv run --no-project -- python scripts/run_tests.py
