@@ -413,12 +413,17 @@ def test_er_anchor_clean_commit_predates_run():
 
 
 def _write_ledger(d: Path, cost: float, n_trials: int) -> Path:
+    # Real fathom row shape: the discriminator is `kind`, run rows carry cost_usd_est,
+    # trial rows carry verifier_results (a mapping) and status. The gate reads its
+    # ledger through from_fathom.summarize_ledger, so the fixture is real-shaped.
     ledger = d / 'ledger'
     ledger.mkdir(exist_ok=True)
     path = ledger / 'rg-2x2.jsonl'
-    lines = [f'{{"type": "run", "cost_usd_est": {cost}}}']
+    lines = [json.dumps({'kind': 'run', 'cost_usd_est': cost})]
     for _ in range(n_trials):
-        lines.append('{"type": "trial", "verifier_results": [{"passed": true}]}')
+        lines.append(
+            json.dumps({'kind': 'trial', 'status': 'completed', 'verifier_results': {'ok': True}})
+        )
     path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
     return path
 
@@ -689,6 +694,15 @@ def _record_hook() -> dict:
     raise AssertionError('experiment-rigor validate.py hook not found in .pre-commit-config.yaml')
 
 
+def _hook_by_id(hook_id: str) -> dict:
+    cfg = yaml.safe_load((_repo_root() / '.pre-commit-config.yaml').read_text(encoding='utf-8'))
+    for repo in cfg['repos']:
+        for hook in repo.get('hooks', []):
+            if hook.get('id') == hook_id:
+                return hook
+    raise AssertionError(f'hook {hook_id!r} not found in .pre-commit-config.yaml')
+
+
 def test_hook_uses_files_and_pass_filenames():
     import re
 
@@ -699,6 +713,29 @@ def test_hook_uses_files_and_pass_filenames():
     travelling = 'plugins/humblepowers/skills/experiment-rigor/examples/rg-2x2/record.yaml'
     assert re.search(regex, travelling), (regex, travelling)
     assert not re.search(regex, 'docs/design/some-experiment/record.yaml'), regex
+
+
+def test_run_tests_hook_carries_pyyaml():
+    # F1: the record-parsing suites hard-fail (never skip) without PyYAML, so the
+    # pre-push run-tests hook must run under --with pyyaml or the gate goes red.
+    hook = _hook_by_id('run-tests')
+    assert '--with pyyaml' in hook.get('entry', ''), hook.get('entry')
+
+
+def test_render_check_hook_matches_both_pair_members():
+    # F3: the render-check hook must reach a staged report.md whose record.yaml was
+    # not restaged, so its files: regex matches BOTH members of the travelling pair.
+    import re
+
+    hook = _hook_by_id('experiment-rigor-render-check')
+    assert hook.get('pass_filenames') is True, hook
+    assert hook.get('always_run') is not True, hook
+    regex = hook['files']
+    base = 'plugins/humblepowers/skills/experiment-rigor/examples/rg-2x2'
+    assert re.search(regex, f'{base}/record.yaml'), regex
+    assert re.search(regex, f'{base}/report.md'), regex
+    assert re.search(regex, 'evals/some-exp/report.md'), regex
+    assert not re.search(regex, 'docs/design/some-experiment/report.md'), regex
 
 
 # --- review-round regression fixtures (F1-F10; reviewer's exact mutations) ---

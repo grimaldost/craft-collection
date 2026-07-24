@@ -1,0 +1,90 @@
+# Measurement-tier skeleton. Adds a frozen pre-registration (analysis_plan with a
+# structured decision_rule) and a reported CI per arm. Passes `validate.py
+# --schema-only`. Under full validate.py it WARNs on ER-XCHECK (source: hand at
+# measurement) and, until you freeze the plan and set plan_frozen_at.commit to a real
+# SHA, flags ER-ANCHOR / ER-PREREG -- fill those in before you rely on the full gate.
+schema_version: 1
+tier: measurement
+experiment: my-measurement-experiment
+design:
+  shared_tasks: true
+  cells:
+    - name: with_gate
+      planned_n: 48
+    - name: without_gate
+      planned_n: 48
+disposition:
+  completed: 96
+  excluded: 0
+  total: 96
+outcomes:
+  - name: footprint
+    role: exploratory
+    operationalization: regex presence of the footprint marker in the run output
+    verifier:
+      path: verify.py
+      hash: REPLACE_WITH_VERIFIER_SHA256
+analysis_plan:
+  ci_method: wilson
+  comparison: with_gate vs without_gate
+  decision_rule:
+    metric: rate
+    comparison: gt
+    threshold: 0.1
+    direction: higher
+results:
+  footprint:
+    verdict: exploratory_signal
+    paired: true
+    arms:
+      with_gate:
+        numerator: 36
+        denominator: 48
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.6122
+          high: 0.8508
+      without_gate:
+        numerator: 18
+        denominator: 48
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.2522
+          high: 0.5164
+threats:
+  contamination_familiarity:
+    status: residual
+    statement: models may have seen structurally similar tasks in pretraining
+  prompt_format_sensitivity:
+    status: controlled
+    statement: one fixed prompt template across arms
+  judge_bias:
+    status: controlled
+    statement: deterministic regex verifier, no LLM judge
+  model_version_drift:
+    status: residual
+    statement: single unpinned snapshot for the measurement window
+  nondeterminism:
+    status: residual
+    statement: sampling temperature above zero
+  construct_validity_proxy:
+    status: residual
+    statement: marker presence is a proxy for the underlying behavior
+  token_length_confound:
+    status: controlled
+    statement: output token budget capped equally across arms
+  selection_exclusion:
+    status: controlled
+    statement: no trials excluded
+  generalization:
+    status: residual
+    statement: one task family only
+plan_frozen_at:
+  commit: REPLACE_WITH_FREEZE_COMMIT_SHA
+  timestamp: 2026-01-01T00:00:00
+run:
+  source: hand
+  hand_reason: replace with why no fathom ledger backs this run
+  first_run_at: 2026-02-01T00:00:00

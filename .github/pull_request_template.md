@@ -17,7 +17,7 @@
 ## Checklist
 
 - [ ] `uv tool run pre-commit run --all-files` passes (ruff lint + format, JSON/YAML, register linter, structural validator)
-- [ ] `uv run --no-project python scripts/run_tests.py` passes
+- [ ] `uv run --no-project --with pyyaml -- python scripts/run_tests.py` passes
 - [ ] New or changed scripts ship a `test_<name>.py` beside them
 - [ ] README / docs updated if commands or behavior changed
 - [ ] Bumped the affected plugin's `version` in its `plugin.json` (for release-worthy changes)

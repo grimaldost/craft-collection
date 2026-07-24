@@ -1,0 +1,91 @@
+# Decision-tier skeleton. Schema-clean (passes `validate.py --schema-only`), but
+# deliberately NOT context-complete: under full validate.py it fails the four decision
+# context gates by design -- ER-ANCHOR (no frozen commit), ER-XCHECK (source: hand at
+# decision with no ledger or attestation), ER-PREREG (no reconstructible pre-registration),
+# and ER-COMPREHEND (no comprehension block). Fill each in to graduate a real decision
+# record: freeze the plan to a real SHA, attach a fathom ledger or a second-party
+# attestation, and add the comprehension block with two fresh-context readers.
+schema_version: 1
+tier: decision
+experiment: my-decision-experiment
+design:
+  shared_tasks: true
+  cells:
+    - name: with_gate
+      planned_n: 48
+    - name: without_gate
+      planned_n: 48
+disposition:
+  completed: 96
+  excluded: 0
+  total: 96
+outcomes:
+  - name: activation
+    role: confirmatory
+    operationalization: regex presence of the activation marker in the run output
+    verifier:
+      path: verify.py
+      hash: REPLACE_WITH_VERIFIER_SHA256
+analysis_plan:
+  ci_method: wilson
+  comparison: with_gate vs without_gate
+  decision_rule:
+    metric: rate
+    comparison: gt
+    threshold: 0.1
+    direction: higher
+results:
+  activation:
+    verdict: confirmatory_supported
+    paired: true
+    arms:
+      with_gate:
+        numerator: 36
+        denominator: 48
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.6122
+          high: 0.8508
+      without_gate:
+        numerator: 18
+        denominator: 48
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.2522
+          high: 0.5164
+threats:
+  contamination_familiarity:
+    status: residual
+    statement: models may have seen structurally similar tasks in pretraining
+  prompt_format_sensitivity:
+    status: controlled
+    statement: one fixed prompt template across arms
+  judge_bias:
+    status: controlled
+    statement: deterministic regex verifier, no LLM judge
+  model_version_drift:
+    status: residual
+    statement: single unpinned snapshot for the decision window
+  nondeterminism:
+    status: residual
+    statement: sampling temperature above zero
+  construct_validity_proxy:
+    status: residual
+    statement: marker presence is a proxy for the underlying behavior
+  token_length_confound:
+    status: controlled
+    statement: output token budget capped equally across arms
+  selection_exclusion:
+    status: controlled
+    statement: no trials excluded
+  generalization:
+    status: residual
+    statement: one task family only
+plan_frozen_at:
+  commit: PENDING
+  timestamp: 2026-01-01T00:00:00
+run:
+  source: hand
+  first_run_at: 2026-02-01T00:00:00

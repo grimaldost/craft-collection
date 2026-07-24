@@ -49,6 +49,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
 
+import from_fathom
 import stats
 import yaml
 
@@ -306,28 +307,12 @@ def _show_at(cwd: Path, commit: str, relpath: str) -> dict | None:
 
 
 def _ledger_summary(path: Path) -> dict[str, Any]:
-    """Minimal fathom-ledger read for the ER-XCHECK cross-check: cost_usd_est from the
-    run row and n as the trial-row count.
-    TODO(§3): de-duplicate against from_fathom.py's authoritative ledger mapping — this
-    is the small inline reader §2 needs before §3 exists; from_fathom should own it then."""
-    cost: float | None = None
-    n = 0
-    for line in path.read_text(encoding='utf-8').splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
-        if not isinstance(row, dict):
-            continue
-        if row.get('type') == 'run':
-            if 'cost_usd_est' in row:
-                cost = row['cost_usd_est']
-        elif row.get('type') == 'trial':
-            n += 1
-    return {'cost_usd_est': cost, 'n': n}
+    """Fathom-ledger read for the ER-XCHECK cross-check: cost_usd_est summed over the
+    run rows and n as the trial-row count. Delegated to from_fathom.summarize_ledger
+    (the authoritative reader, §3) so the real ledger row-shape lives in exactly one
+    place; this gate consumes only the two fields the cross-check compares."""
+    summary = from_fathom.summarize_ledger(path)
+    return {'cost_usd_est': summary.cost_usd_est, 'n': summary.n}
 
 
 # --- schema-shape gates (run under --schema-only) ---------------------------

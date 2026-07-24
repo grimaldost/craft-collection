@@ -1,0 +1,72 @@
+# Probe-tier skeleton. Cheap, exploratory: no confirmatory verdict, no posterior.
+# Passes `validate.py --schema-only` AND full validate.py (source: hand is allowed
+# at probe). Copy this, fill in your own cells/outcomes/threats, keep it exploratory.
+schema_version: 1
+tier: probe
+experiment: my-probe-experiment
+design:
+  shared_tasks: false
+  cells:
+    - name: arm_a
+      planned_n: 12
+    - name: arm_b
+      planned_n: 12
+disposition:
+  completed: 24
+  excluded: 0
+  total: 24
+outcomes:
+  - name: signal
+    role: exploratory
+    operationalization: fraction of runs whose output contains the checklist item, by regex
+results:
+  signal:
+    verdict: exploratory_signal
+    paired: false
+    arms:
+      arm_a:
+        numerator: 9
+        denominator: 12
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.4677
+          high: 0.9111
+      arm_b:
+        numerator: 4
+        denominator: 12
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1381
+          high: 0.6094
+threats:
+  contamination_familiarity:
+    status: residual
+    statement: models may have seen structurally similar tasks in pretraining
+  prompt_format_sensitivity:
+    status: controlled
+    statement: one fixed prompt template across arms
+  judge_bias:
+    status: controlled
+    statement: deterministic regex verifier, no LLM judge
+  model_version_drift:
+    status: residual
+    statement: single unpinned snapshot for the probe window
+  nondeterminism:
+    status: residual
+    statement: sampling temperature above zero
+  construct_validity_proxy:
+    status: residual
+    statement: item presence is a proxy for the underlying discipline
+  token_length_confound:
+    status: controlled
+    statement: output token budget capped equally across arms
+  selection_exclusion:
+    status: controlled
+    statement: no trials excluded
+  generalization:
+    status: residual
+    statement: one task family only
+run:
+  source: hand

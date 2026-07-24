@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "known_versions": [1],
+  "tiers": ["probe", "measurement", "decision"],
+  "required_fields": {
+    "probe": ["schema_version", "tier", "experiment", "design", "outcomes", "threats"],
+    "measurement": [
+      "schema_version",
+      "tier",
+      "experiment",
+      "design",
+      "outcomes",
+      "threats",
+      "analysis_plan"
+    ],
+    "decision": [
+      "schema_version",
+      "tier",
+      "experiment",
+      "design",
+      "outcomes",
+      "threats",
+      "analysis_plan"
+    ]
+  },
+  "optional_fields": {
+    "probe": ["disposition", "results", "run", "updates"],
+    "measurement": ["disposition", "results", "run", "plan_frozen_at", "updates"],
+    "decision": ["disposition", "results", "run", "plan_frozen_at", "updates", "comprehension"]
+  },
+  "threat_enum": [
+    "contamination_familiarity",
+    "prompt_format_sensitivity",
+    "judge_bias",
+    "model_version_drift",
+    "nondeterminism",
+    "construct_validity_proxy",
+    "token_length_confound",
+    "selection_exclusion",
+    "generalization"
+  ],
+  "threat_status_enum": ["controlled", "residual"],
+  "role_enum": ["confirmatory", "exploratory"],
+  "verdict_enum": [
+    "confirmatory_supported",
+    "confirmatory_null",
+    "exploratory_signal",
+    "inconclusive"
+  ],
+  "confirmatory_verdicts": ["confirmatory_supported", "confirmatory_null"],
+  "ci_methods": ["wilson", "clopper_pearson", "beta_binomial"],
+  "certainty_enum": ["high", "moderate", "low", "very_low"],
+  "small_n_floor": 30,
+  "field_shapes": {
+    "outcome": [
+      "name",
+      "role",
+      "operationalization",
+      "verifier.path",
+      "verifier.hash",
+      "added_after_freeze"
+    ],
+    "rate": ["numerator", "denominator", "ci"],
+    "ci": ["method", "low", "high", "alpha"],
+    "decision_rule": ["metric", "comparison", "threshold", "direction"],
+    "amendment": ["commit", "timestamp", "scope"],
+    "run": [
+      "source",
+      "ledger_path",
+      "n",
+      "cost_usd_est",
+      "first_run_at",
+      "hand_reason",
+      "attestation"
+    ],
+    "update": ["certainty", "downgrade_reasons", "prior.source_id"],
+    "comprehension_reader": [
+      "identity",
+      "family",
+      "context",
+      "answers",
+      "correct",
+      "transcript_path"
+    ]
+  },
+  "prereg_fields": [
+    "prior_data_collected",
+    "question_hypothesis",
+    "dv_operationalization",
+    "conditions_factors",
+    "analysis_plan",
+    "exclusion_rules",
+    "n_and_rationale",
+    "other"
+  ],
+  "comprehension_questions": {
+    "manipulated": "What was manipulated -- the independent variable / intervention?",
+    "placement": "Where was the intervention text placed in the prompt?",
+    "operationalization": "How was each outcome operationalized -- the verifier and its check?",
+    "execution_real": "Was execution real -- runs actually spawned and graded, not narrated?"
+  },
+  "prior": {
+    "distribution": "Beta(1, 1)",
+    "note": "Uniform within-experiment prior; the prior-sensitivity note lives in small-n-stats.md."
+  }
+}
