@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover - exercised only on a broken toolchain
 
 import copy
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -36,7 +37,10 @@ import validate
 
 HERE = Path(__file__).resolve().parent
 EXAMPLE_DIR = HERE.parent / 'examples' / 'rg-2x2'
-FROZEN_RECORD = EXAMPLE_DIR / 'record.yaml'
+# The delivered record. Post-freeze-choreography this is the FINALIZED record; the frozen
+# pre-registration lives at plan_frozen_at.commit and is reconstructed below.
+DELIVERED_RECORD = EXAMPLE_DIR / 'record.yaml'
+FROZEN_RECORD = DELIVERED_RECORD  # back-compat alias for the temp-repo helpers below
 
 sys.path.insert(0, str(EXAMPLE_DIR))
 import finalize  # noqa: E402 - path inserted just above
@@ -124,18 +128,46 @@ def _tempdir():
 # --- the delivered fixture is a clean, frozen measurement record ------------
 
 
-def test_delivered_record_is_frozen_measurement_and_schema_clean():
-    frozen = _load_frozen()
-    assert frozen['tier'] == 'measurement', frozen['tier']  # R3-2: tier pinned to measurement
-    assert frozen['plan_frozen_at']['commit'] == 'PENDING', 'delivered record must ship frozen'
-    assert 'results' not in frozen, 'stage-1 record is pre-results (results are added by finalize)'
-    assert sum(c['planned_n'] for c in frozen['design']['cells']) == 96  # 8 cells x 12
-    # FIX-3: the frozen record carries only the planned total; the observed completed /
-    # excluded counts are results, added by finalize (no result-leak into the freeze).
+def test_delivered_record_is_finalized_with_reconstructible_freeze():
+    # Post-choreography truth: the freeze happened for real (stage 1 -> plan_frozen_at.commit,
+    # stage 2 -> the finalized pair on the branch), so the delivered record.yaml is FINALIZED.
+    # The frozen pre-registration now lives at the freeze commit; this test reconstructs it via
+    # the EXACT path ER-PREREG uses -- dogfooding that path -- and asserts the frozen invariants.
+    record = _load_frozen()  # the delivered (now finalized) record
+
+    # (a) a finalized measurement record with a REAL freeze SHA, not PENDING.
+    assert record['tier'] == 'measurement', record['tier']  # R3-2: tier pinned to measurement
+    commit = record['plan_frozen_at']['commit']
+    assert re.fullmatch(r'[0-9a-f]{40}', str(commit)), f'expected a real freeze SHA, got {commit!r}'
+    assert 'results' in record, 'delivered record is finalized (results present)'
+    assert record['disposition']['total'] == 96
+    assert sum(c['planned_n'] for c in record['design']['cells']) == 96  # 8 cells x 12
+
+    # (b) reconstruct the FROZEN state exactly as ER-PREREG does: git show
+    # <plan_frozen_at.commit>:<repo-relpath>, run from the repo toplevel. Fail LOUD (never
+    # skip) if the history is unavailable (shallow/broken clone), so a missing freeze is a
+    # hard failure, not a silent pass.
+    toplevel = validate._repo_toplevel(DELIVERED_RECORD.parent)
+    assert toplevel is not None, 'not under a git repo -- cannot reconstruct the frozen state'
+    relpath = validate._repo_relpath(toplevel, DELIVERED_RECORD)
+    assert relpath is not None, 'record is not under the repo toplevel'
+    frozen = validate._show_at(toplevel, str(commit), relpath)
+    assert frozen is not None, (
+        f'git show {commit}:{relpath} failed -- freeze history unavailable (fail loud, no skip)'
+    )
+    # The historical frozen version carries the pre-registration only.
+    assert 'results' not in frozen, frozen.get('results')
+    assert 'posterior' not in (frozen.get('updates') or {}), frozen.get('updates')
     assert frozen['disposition'] == {'total': 96}, frozen['disposition']
-    # The frozen pre-registration passes the schema-shape gate (context gates skipped).
-    report = validate.run_checks(frozen, FROZEN_RECORD, schema_only=True)
+
+    # (c) full validate on the delivered (finalized) record exits 0 with exactly the one
+    # source:hand WARN (the honest measurement-tier state), no failures.
+    report = validate.run_checks(record, DELIVERED_RECORD)
     assert report.failures == [], report.failures
+    assert _warn_codes(report) == {'ER-XCHECK'}, _warn_codes(report)
+
+    # (d) the committed report.md is in sync with the delivered record.
+    assert render.check_drift(DELIVERED_RECORD) is None
 
 
 # --- the corrected record exits 0 against a real freeze ----------------------
