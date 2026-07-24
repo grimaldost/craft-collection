@@ -1,0 +1,12 @@
+[
+  { "query": "Before this comparison runs, lock the hypothesis and the pass rule so I can't move them later.", "should_trigger": true, "note": "held-out: pre-registration by intent, no 'pre-register' token" },
+  { "query": "Turn this ad-hoc benchmark into a proper write-up where someone could redo the method from the record.", "should_trigger": true, "note": "held-out: methods-reconstruct write-up, novel wording" },
+  { "query": "These win rates have no uncertainty on them — put an interval on each before we conclude anything.", "should_trigger": true, "note": "held-out: confidence interval on a rate, intent phrasing" },
+  { "query": "One of these findings was decided after we saw the data; keep it out of the confirmatory column.", "should_trigger": true, "note": "held-out: post-hoc quarantine, exploratory vs confirmatory by intent" },
+  { "query": "Only 12 trials per arm — is a normal-approximation interval even valid here?", "should_trigger": true, "note": "held-out: small-n CLT refusal, lexical-adjacent" },
+
+  { "query": "Spin up the paid matrix and give me the scorecard once it settles.", "should_trigger": false, "note": "held-out near-miss: run the matrix — fathom-eval" },
+  { "query": "Benchmark whether my skill actually triggers on the prompts I care about.", "should_trigger": false, "note": "held-out near-miss: trigger measurement — evaluate-skill" },
+  { "query": "Green-light check: does this spec have everything it needs before we plan the PRs?", "should_trigger": false, "note": "held-out near-miss: spec readiness — keel Definition of Ready" },
+  { "query": "Just eyeball two runs and tell me which prompt felt better — nothing formal.", "should_trigger": false, "note": "held-out near-miss: throwaway spot-check, no decision" }
+]

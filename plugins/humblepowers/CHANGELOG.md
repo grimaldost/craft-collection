@@ -5,6 +5,48 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.9.0 — 2026-07-24
+
+The `experiment-rigor` skill (spec `docs/specs/2026-07-24-experiment-rigor-skill.md`,
+section 4). A rigid, thin skill over four stdlib-plus-PyYAML scripts that turn a
+typed `record.yaml` into a validated, derived report across a probe / measurement /
+decision tier ladder — every load-bearing rule a gate that exits non-zero, not a
+line of prose to remember. The founding case is a small register-by-gate A/B whose
+prose write-up three fresh readers could not reconstruct: the arithmetic never
+closed, the outcome was never operationalized, rates carried no denominators, a
+post-hoc finding was presented as pre-registered, and no uncertainty was reported.
+The discipline gates the disqualifying half (methods uncertainty) and structures the
+declarable half (effect uncertainty).
+
+### Added
+
+- **experiment-rigor** (rigid): the thin skill body routes to the scripts and states
+  the bright lines — the plan freeze and its `git show` drift gate, declared-cells
+  reconciliation (declared cells == disposition == denominators), the confirmatory /
+  exploratory partition with a post-freeze quarantine, the small-n CI refusal (no CLT
+  below a denominator of 30 — Wilson, Clopper-Pearson, or a within-experiment
+  Beta-Binomial), a rate that needs both a numerator and a denominator, record-is-source
+  with the report derived, and probe self-labeling. Binds keel's Definition of Ready
+  and fresh-context reader tooling role-generically.
+- **Two references:** `references/threats-catalog.md` (the nine-key closed threat
+  enum, one paragraph per key, kept in sync with `templates/schema.json` by
+  `test_threats_catalog.py`) and `references/small-n-stats.md` (Miller's five rules
+  adapted, the exact-methods rule, the Beta(1, 1) prior and its sensitivity, and the
+  within-experiment-only pooling boundary — cross-experiment belief moves through a
+  qualitative GRADE link, never pooled counts).
+- **Trigger dev set and sealed holdout** authored at one sitting
+  (`evals/trigger/experiment-rigor.json`, `evals/trigger/holdout/experiment-rigor.json`),
+  plus a correct-usage rubric (`evals/tasks/experiment-rigor/`) checking that a produced
+  record passes `validate.py` and the Methods reconstruct without the conversation. The
+  holdout was sealed the same day with its birth baseline in `holdout/BASELINES.md`:
+  recall 0.33 [0.15, 0.58] on pure intent paraphrases (the intent-category floor the
+  trigger-lexical-ceiling predicts, not a verdict), specificity 1.00 [0.76, 1.00] with
+  all four sibling near-misses silent; the description was never tuned against either set.
+- **Dispatch router row** (`choosing-tools/scripts/router_rules.json`): one conservative
+  entry keyed on unmistakable phrasings (pre-register, threats to validity, error bars,
+  the confirmatory/exploratory partition, a 2x2 factorial, declared cells, writing up an
+  experiment); dev recall 0.80 / specificity 1.00, both sealed router holdouts unchanged.
+
 ## 0.8.0 — 2026-07-23
 
 Dispatch retirement (redesign step R1). A 2026-07 content A/B (fathom

@@ -140,6 +140,23 @@
         "\\bhand (off )?[\\w\\s]{0,15}\\b(package|laptop|device|phone|keys|documents?|box|parcel|courier)\\b"
       ],
       "min_hits": 1
+    },
+    {
+      "id": "humblepowers:experiment-rigor",
+      "patterns": [
+        "\\bpre-?regist(er|ered|ering|ration)\\b",
+        "\\bthreats? to validity\\b",
+        "\\berror bars\\b",
+        "\\bconfirmatory\\b[\\w\\s]{0,40}\\bexploratory\\b|\\bexploratory\\b[\\w\\s]{0,40}\\bconfirmatory\\b",
+        "\\b2\\s?x\\s?2\\b|\\bfactorial (design|experiment)\\b",
+        "\\bdeclared cells\\b",
+        "\\bwrit(e|ing) up (the|this|our|my|an?) experiment\\b"
+      ],
+      "negative_patterns": [
+        "\\bpre-?regist\\w* (for|to attend) (the )?(event|webinar|conference|beta|waitlist|newsletter|launch|class|course|giveaway)\\b",
+        "\\b2\\s?x\\s?2 (grid|layout|table|image|pixel|tile|cell)s?\\b"
+      ],
+      "min_hits": 1
     }
   ]
 }
