@@ -5,6 +5,38 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.9.0 — 2026-07-25
+
+Subagent verification gate. The dispatch program's Phase-2/3 measurement
+(813 trials, pre-registered gates, paired null banks) found one mechanism that
+lifts discipline at zero false-positive cost: a `SubagentStop` hook that holds
+each subagent once before it finishes and asks it to satisfy itself the change
+works. Delegating work *loses* verification the parent would have applied
+(footprint 0.48/0.59 main-agent vs 0.44 delegated); the gate recovers it
+(+0.56 on both weak and mid tiers, 0.00 over-scope on trivial edits).
+
+### Added
+
+- **`SubagentStop` verification gate**
+  (`skills/verification-before-completion/scripts/subagent_gate.py`), off unless
+  `HUMBLEPOWERS_SUBAGENT_VERIFY_GATE=1`. Blocks once per (session, agent),
+  writing its guard *before* emitting the block so a crash leaves the subagent
+  un-blocked rather than looped. Skips read-only agent types (`Explore`,
+  `Plan`). Fails open on every path: disabled, malformed payload, missing ids,
+  unwritable guard.
+
+### Measured, and deliberately not generalized
+
+- The gate's wording **states the discipline and names no artifact**. A variant
+  prescribing one ("add a regression check now") scored higher on the primary
+  metric and then performed the work on **58% of trivial edits** — it was
+  rejected by the pre-registered false-positive constraint.
+- The benefit is **discipline-specific**: the same mechanism gave +0.11/+0.22
+  for root-cause debugging and +0.00/+0.00 for data correctness. A follow-up
+  (Phase 3) refuted the general "prescriptive wording over-triggers" rule that
+  a first read of the Phase-2 result suggested, so **no authoring rule was
+  promoted from it**. The gate ships for verification only.
+
 ## 0.8.0 — 2026-07-23
 
 Dispatch retirement (redesign step R1). A 2026-07 content A/B (fathom
