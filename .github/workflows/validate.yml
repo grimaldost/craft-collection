@@ -11,6 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: the experiment-rigor freeze gates reconstruct a frozen
+          # pre-registration with `git show <freeze commit>:<path>`, and the RG-2x2
+          # acceptance suite fails LOUD (never skips) when that object is absent. A
+          # depth-1 clone is expected to fail it; the fix is depth, not a skip.
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'

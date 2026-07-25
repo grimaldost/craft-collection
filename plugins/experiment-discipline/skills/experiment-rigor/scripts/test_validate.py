@@ -19,6 +19,7 @@ except ImportError:  # pragma: no cover - exercised only on a broken toolchain
     )
     raise SystemExit(1) from None
 
+import copy
 import json
 import os
 import subprocess
@@ -541,6 +542,102 @@ def test_er_prereg_not_in_history_downgrades_by_tier():
         assert 'ER-PREREG' in fail_codes(check(rec, path))
 
 
+# --- the frozen COORDINATE: plan_frozen_at.path through a rename -------------
+
+
+def _relocate(record: dict, old_path: Path, new_dir: Path) -> Path:
+    """Move a record to a new directory the way a re-home does, leaving the old
+    coordinate reachable only through history."""
+    new_dir.mkdir(parents=True, exist_ok=True)
+    old_path.unlink()
+    return write_record(new_dir, record)
+
+
+def test_er_prereg_pinned_path_reconstructs_after_a_rename():
+    # `git show <commit>:<path>` does not follow renames, so a record relocated after its
+    # freeze must pin the path it HAD at the freeze commit or the gate degrades to the
+    # not-in-history WARN on the very record that dogfoods it.
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _git_init(d)
+        old_dir = d / 'plugins' / 'old-home' / 'skills' / 'sk' / 'examples' / 'rg'
+        old_dir.mkdir(parents=True)
+        rec = _measurement_record()
+        old_path = write_record(old_dir, rec)
+        sha = _git_commit(d, '2026-01-01T00:00:00')
+        old_rel = 'plugins/old-home/skills/sk/examples/rg/record.yaml'
+
+        rec['plan_frozen_at'] = {
+            'commit': sha,
+            'path': old_rel,
+            'timestamp': '2026-01-01T00:00:00',
+        }
+        new_path = _relocate(rec, old_path, d / 'plugins' / 'new-home' / 'skills' / 'sk' / 'ex')
+        report = check(rec, new_path)
+        assert 'ER-PREREG' not in fail_codes(report), report.failures
+        assert 'ER-PREREG' not in warn_codes(report), report.warnings
+
+        # Without the pin the same relocated record cannot be reconstructed at all.
+        unpinned = copy.deepcopy(rec)
+        unpinned['plan_frozen_at'].pop('path')
+        write_record(new_path.parent, unpinned)
+        assert 'ER-PREREG' in warn_codes(check(unpinned, new_path))
+
+
+def test_er_prereg_without_a_pin_reconstructs_from_the_current_path():
+    # Every v1.0 record predates the field and must keep validating unchanged.
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _git_init(d)
+        rec = _measurement_record()
+        path = write_record(d, rec)
+        sha = _git_commit(d, '2026-01-01T00:00:00')
+        rec['plan_frozen_at'] = {'commit': sha, 'timestamp': '2026-01-01T00:00:00'}
+        write_record(d, rec)
+        report = check(rec, path)
+        assert 'path' not in rec['plan_frozen_at']
+        assert 'ER-PREREG' not in fail_codes(report), report.failures
+        assert 'ER-PREREG' not in warn_codes(report), report.warnings
+
+
+def test_er_prereg_falls_back_when_the_pinned_lookup_fails():
+    # The fallback fires on a FAILED lookup, not merely an absent field. A fixture that
+    # relocates a pinned record -- the acceptance suite builds its temp repo at the root
+    # while validating the delivered record, which carries the pin -- would otherwise go
+    # red. The trade: a WRONG pin resolves silently through the current path rather than
+    # failing loudly, so the pin is a durability aid, not a second integrity check.
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _git_init(d)
+        rec = _measurement_record()
+        path = write_record(d, rec)
+        sha = _git_commit(d, '2026-01-01T00:00:00')
+        rec['plan_frozen_at'] = {
+            'commit': sha,
+            'path': 'plugins/never-existed/examples/rg/record.yaml',
+            'timestamp': '2026-01-01T00:00:00',
+        }
+        write_record(d, rec)
+        report = check(rec, path)
+        assert 'ER-PREREG' not in fail_codes(report), report.failures
+        assert 'ER-PREREG' not in warn_codes(report), report.warnings
+
+
+def test_er_prereg_names_both_coordinates_when_neither_resolves():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _git_init(d)
+        rec = _measurement_record(frozen_commit='a' * 40)
+        rec['plan_frozen_at']['path'] = 'plugins/old-home/examples/rg/record.yaml'
+        path = write_record(d, rec)
+        _git_commit(d, '2026-01-01T00:00:00')
+        report = check(rec, path)
+        msgs = [f.message for f in report.warnings if f.code == 'ER-PREREG']
+        assert msgs, report.warnings
+        assert 'plugins/old-home/examples/rg/record.yaml' in msgs[0], msgs
+        assert msgs[0].rstrip().count('record.yaml') == 2, msgs
+
+
 # --- ER-PREREG / ER-ANCHOR run git from the repo toplevel (Windows MAX_PATH) --------
 
 
@@ -759,6 +856,14 @@ def _hook_by_id(hook_id: str) -> dict:
     raise AssertionError(f'hook {hook_id!r} not found in .pre-commit-config.yaml')
 
 
+TRAVELLING_BASE = 'plugins/experiment-discipline/skills/experiment-rigor/examples/rg-2x2'
+PRE_MOVE_RECORD = 'plugins/humblepowers/skills/experiment-rigor/examples/rg-2x2/record.yaml'
+# The evals alternative is what keeps a detector's own pre-registration inside the gate;
+# dropping it while repointing the plugin half would silence the gate with no error.
+EVALS_RECORD = 'evals/experiments/act-hint/record.yaml'
+EVALS_REPORT = 'evals/experiments/act-hint/report.md'
+
+
 def test_hook_uses_files_and_pass_filenames():
     import re
 
@@ -766,9 +871,22 @@ def test_hook_uses_files_and_pass_filenames():
     assert hook.get('pass_filenames') is True, hook
     assert hook.get('always_run') is not True, hook
     regex = hook['files']
-    travelling = 'plugins/humblepowers/skills/experiment-rigor/examples/rg-2x2/record.yaml'
-    assert re.search(regex, travelling), (regex, travelling)
+    for travelling in (f'{TRAVELLING_BASE}/record.yaml', EVALS_RECORD):
+        assert re.search(regex, travelling), (regex, travelling)
     assert not re.search(regex, 'docs/design/some-experiment/record.yaml'), regex
+    # The pre-move coordinate must NOT still be selected: a regex matching both homes
+    # would let the re-home read green while the gate points at a directory that is gone.
+    assert not re.search(regex, PRE_MOVE_RECORD), regex
+
+
+def test_both_record_hooks_run_the_moved_scripts():
+    for hook_id, script in (
+        ('experiment-rigor-validate', 'validate.py'),
+        ('experiment-rigor-render-check', 'render.py'),
+    ):
+        entry = _hook_by_id(hook_id).get('entry', '')
+        needle = f'plugins/experiment-discipline/skills/experiment-rigor/scripts/{script}'
+        assert needle in entry, (hook_id, entry)
 
 
 def test_run_tests_hook_carries_pyyaml():
@@ -787,11 +905,16 @@ def test_render_check_hook_matches_both_pair_members():
     assert hook.get('pass_filenames') is True, hook
     assert hook.get('always_run') is not True, hook
     regex = hook['files']
-    base = 'plugins/humblepowers/skills/experiment-rigor/examples/rg-2x2'
-    assert re.search(regex, f'{base}/record.yaml'), regex
-    assert re.search(regex, f'{base}/report.md'), regex
-    assert re.search(regex, 'evals/some-exp/report.md'), regex
+    for member in (
+        f'{TRAVELLING_BASE}/record.yaml',
+        f'{TRAVELLING_BASE}/report.md',
+        EVALS_RECORD,
+        EVALS_REPORT,
+        'evals/some-exp/report.md',
+    ):
+        assert re.search(regex, member), (regex, member)
     assert not re.search(regex, 'docs/design/some-experiment/report.md'), regex
+    assert not re.search(regex, PRE_MOVE_RECORD), regex
 
 
 # --- review-round regression fixtures (F1-F10; reviewer's exact mutations) ---

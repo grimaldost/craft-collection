@@ -885,6 +885,41 @@ def _check_amendments(record: dict, cwd: Path) -> list[Finding]:
     return out
 
 
+def frozen_coordinates(record: dict, relpath: str) -> list[str]:
+    """The repo-relative paths to try for `git show <freeze commit>:<path>`, in order.
+
+    `git show` does not follow renames, so a record that moved after its freeze pins the
+    path it HAD at the freeze commit in `plan_frozen_at.path`; the record's current path
+    is the fallback. Consumers that reconstruct a frozen pre-registration (the gate below
+    and the RG-2x2 acceptance suite) read the coordinate through this one function so the
+    two cannot drift.
+    """
+    pinned = (record.get('plan_frozen_at') or {}).get('path')
+    coords = [str(pinned)] if pinned else []
+    if relpath not in coords:
+        coords.append(relpath)
+    return coords
+
+
+def _reconstruct_frozen(
+    cwd: Path, commit: str, record: dict, relpath: str
+) -> tuple[dict | None, list[str]]:
+    """Return (frozen record or None, the coordinates tried).
+
+    Resolution falls back to the current path when the PINNED LOOKUP FAILS, not merely
+    when the field is absent: a fixture that relocates a pinned record would otherwise go
+    red. The trade is deliberate -- a WRONG pin resolves silently through the current path
+    instead of failing loudly, so the pin is a durability aid, not a second integrity
+    check (ADR-0008).
+    """
+    coords = frozen_coordinates(record, relpath)
+    for path in coords:
+        frozen = _show_at(cwd, commit, path)
+        if frozen is not None:
+            return frozen, coords
+    return None, coords
+
+
 def check_prereg(record: dict, record_path: Path | None) -> list[Finding]:
     tier = record.get('tier')
     if tier not in ('measurement', 'decision') or record_path is None:
@@ -913,11 +948,10 @@ def check_prereg(record: dict, record_path: Path | None) -> list[Finding]:
         return downgrade(
             'record is not under the git repo toplevel; cannot reconstruct the pre-registration'
         )
-    frozen = _show_at(cwd, str(commit), relpath)
+    frozen, tried = _reconstruct_frozen(cwd, str(commit), record, relpath)
     if frozen is None:
-        return downgrade(
-            f'record not in history at {commit}:{relpath}; cannot reconstruct pre-registration'
-        )
+        coords = ' / '.join(f'{commit}:{p}' for p in tried)
+        return downgrade(f'record not in history at {coords}; cannot reconstruct pre-registration')
 
     out: list[Finding] = []
     # design.cells compared as a whole subtree; analysis_plan compared WITHOUT its

@@ -144,16 +144,39 @@ def test_delivered_record_is_finalized_with_reconstructible_freeze():
     assert sum(c['planned_n'] for c in record['design']['cells']) == 96  # 8 cells x 12
 
     # (b) reconstruct the FROZEN state exactly as ER-PREREG does: git show
-    # <plan_frozen_at.commit>:<repo-relpath>, run from the repo toplevel. Fail LOUD (never
-    # skip) if the history is unavailable (shallow/broken clone), so a missing freeze is a
-    # hard failure, not a silent pass.
+    # <plan_frozen_at.commit>:<coordinate>, run from the repo toplevel, resolving the
+    # coordinate through validate.frozen_coordinates so the fixture and the gate cannot
+    # drift. `git show` does not follow renames, so the pinned path -- the path the record
+    # HAD at the freeze commit -- is what survives the re-home; the current path is only
+    # the fallback. Fail LOUD (never skip) if the history is unavailable (shallow/broken
+    # clone), so a missing freeze is a hard failure, not a silent pass.
     toplevel = validate._repo_toplevel(DELIVERED_RECORD.parent)
     assert toplevel is not None, 'not under a git repo -- cannot reconstruct the frozen state'
     relpath = validate._repo_relpath(toplevel, DELIVERED_RECORD)
     assert relpath is not None, 'record is not under the repo toplevel'
-    frozen = validate._show_at(toplevel, str(commit), relpath)
+    pinned = record['plan_frozen_at'].get('path')
+    assert pinned, 'the delivered record must pin its freeze-time coordinate'
+    coords = validate.frozen_coordinates(record, relpath)
+    assert coords[0] == pinned, coords
+    # Two different failures hide behind one lookup, so each gets its own message.
+    # (i) the freeze OBJECT is absent -- a shallow clone. That is a checkout-depth
+    # problem, not a bad pin. Expected to fail here, loudly: the fix is depth (CI pins
+    # fetch-depth: 0 and the keep-ref tag holds the commit reachable), never a skip.
+    assert validate._commit_in_history(toplevel, str(commit)), (
+        f'freeze commit {commit} is absent from this checkout -- a shallow clone cannot '
+        'reconstruct the freeze. The fix is depth (CI pins fetch-depth: 0; the keep-ref '
+        'tag keeps the commit reachable across a squash-merge), never a skip'
+    )
+    # (ii) the pin itself is wrong. It must resolve ON ITS OWN, not via the gate's
+    # lenient fallback: the gate tolerates a wrong pin, this fixture does not.
+    assert validate._show_at(toplevel, str(commit), pinned) is not None, (
+        f'plan_frozen_at.path {pinned!r} does not resolve at {commit} -- a wrong pin '
+        'resolves silently through the current path in the gate, so it is checked here'
+    )
+    frozen, tried = validate._reconstruct_frozen(toplevel, str(commit), record, relpath)
     assert frozen is not None, (
-        f'git show {commit}:{relpath} failed -- freeze history unavailable (fail loud, no skip)'
+        f'git show {commit}:{" / ".join(tried)} failed -- freeze history unavailable '
+        '(fail loud, no skip)'
     )
     # The historical frozen version carries the pre-registration only.
     assert 'results' not in frozen, frozen.get('results')

@@ -64,6 +64,7 @@
     "ci": ["method", "low", "high", "alpha"],
     "decision_rule": ["metric", "comparison", "threshold", "direction"],
     "amendment": ["commit", "timestamp", "scope"],
+    "plan_frozen_at": ["commit", "path", "timestamp"],
     "run": [
       "source",
       "ledger_path",

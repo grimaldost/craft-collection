@@ -49,7 +49,7 @@ changes behavior at router-realistic firing patterns.
   structure, frontmatter, caps, references, word budget; also marketplace/manifest
   description equality (`scripts/validate_plugins.py:78` `description differs from its`).
 - `ruff check .` and `ruff format --check .` — CI runs both before the register linter
-  and the tests (`.github/workflows/validate.yml:20` `run: ruff check .`), and pre-commit
+  and the tests (`.github/workflows/validate.yml:26` `run: ruff check .`), and pre-commit
   runs the autofixing pair locally. This wave adds six Python files, so the divergence
   would otherwise surface only as an unexpected reformat or a CI red on a branch whose
   checklist read green.
@@ -284,7 +284,7 @@ this repairs: the pin sits inert and `ER-PREREG` still degrades. So this section
 `templates/schema.json`, teaches `check_prereg` in `scripts/validate.py` to resolve it,
 adjusts the reconstruction in `test_acceptance_rg2x2.py` to read the pin the same way,
 and sets the value, for the moved record, to its **pre-move humblepowers path**. §4 later layers `contrasts[]` onto the same schema pair, so the order is PR01
-then PR04 and `SCHEMA.md`'s sync gate re-runs in both.
+then PR04 and `SCHEMA.md` is regenerated in both.
 Adding the field is legal under the freeze: the pre-registration diff subset is
 `design.cells`, the outcomes, and `analysis_plan` — `plan_frozen_at` is the *pointer*
 to the frozen content, never part of the pinned content, so writing it does not trip
@@ -313,12 +313,12 @@ Two criteria are stated as executed checks, because this section's central opera
 is a rename and renames are cheap to simulate and expensive to get wrong. **The move
 test**, run in a scratch clone, in two stages. *Before the move*, with the field, the
 reader and the fixture adjustment in place but nothing relocated, `scripts/run_tests.py`
-is **46/46** — this is the stage that catches a pin whose fallback fires only on an
+reports **zero failures** — this is the stage that catches a pin whose fallback fires only on an
 absent field, which turns three tests red inside the acceptance module without any move
 at all. *After* `git mv` **and** the `AGENTS.md` regeneration this section already
-assigns, the suite is **46/46** again and `validate.py` on the moved chain-root record
+assigns, the suite reports **zero failures** again and `validate.py` on the moved chain-root record
 reports **exactly one WARN** (the pre-existing `ER-XCHECK` hand-source posture), not
-two. Without the pin the moved suite is 44/46 and `ER-PREREG` degrades, which is the
+two. Without the pin the moved suite goes red and `ER-PREREG` degrades, which is the
 failure this mechanism exists to prevent. **The
 depth-1 check:** `run_tests.py` is green on a **full-depth** checkout, which is what
 `fetch-depth: 0` guarantees in CI, and the keep-ref tag preserves the freeze commit
@@ -636,7 +636,7 @@ compares against it.
   `scripts/word_budget.json` (`word_budget.py`, bumped in §1 for the path key, §2 for
   the rung, and §3 for the emission rule — three PRs edit this shared key, in that
   order); `scripts/ascii_lint_baseline.json` (unchanged — new files stay at zero);
-  `templates/SCHEMA.md` regenerated from `schema.json` (its sync gate, §4);
+  `templates/SCHEMA.md` regenerated from `schema.json` (its sync gate, §1 and §4);
   **`validate._EMBEDDED_SCHEMA`, the in-code mirror of `schema.json`** — its
   `known_versions` moves with §4's bump and the schema sync test is its freshness gate,
   reddening if either copy moves alone; and the

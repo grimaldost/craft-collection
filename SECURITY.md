@@ -8,6 +8,7 @@ latest released line of each plugin; older tags are not patched.
 | Plugin                 | Supported                  |
 | ---------------------- | -------------------------- |
 | engineering-discipline | ✅ latest release on `main` |
+| experiment-discipline  | ✅ latest release on `main` |
 | session-workflow       | ✅ latest release on `main` |
 | humblepowers           | ✅ latest release on `main` |
 

@@ -5,84 +5,24 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
-## 0.10.0 — 2026-07-24
+## Unreleased
 
-The decision tier and the founding-case regression fixture (spec
-`docs/specs/2026-07-24-experiment-rigor-skill.md`, section 5) close the
-`experiment-rigor` skill. The founding RG-2x2 register/gate factorial now travels as
-the chain-root dogfood record, and the whole discipline is regression-pinned against
-the six defects three fresh readers found in its prose write-up.
+The `experiment-rigor` skill shipped on this branch as 0.9.0 and 0.10.0 and is
+extracted into its own plugin before either was released
+(`docs/adr/0008-experiment-discipline-plugin.md`); both entries moved with it to
+`plugins/experiment-discipline/CHANGELOG.md` as that plugin's 0.1.0 birth entry,
+and this plugin's version rolls back to **0.8.0**. What remains here is the one
+change humblepowers actually owns.
 
-### Added
+### Changed
 
-- **The RG-2x2 dogfood fixture** (`skills/experiment-rigor/examples/rg-2x2/`): the
-  founding case as a faithful measurement-tier `record.yaml` — 8 declared cells x 12 =
-  96, the confirmatory `activation` outcome that failed (`confirmatory_null`), the
-  quarantined exploratory `footprint` outcome carrying its within-experiment
-  Beta-Binomial posterior and the wave-2 pre-fixed bar as an `analysis_plan.amendments`
-  entry, the token-length confound named as a residual threat, and the field-belief
-  prior -> register-null / deliberation-signal posterior update. It ships FROZEN
-  (pre-results) with a two-stage freeze choreography (`FREEZE.md`, `finalize.py`) so its
-  own commit anchors `plan_frozen_at.commit`.
-- **The section-5 acceptance test** (`scripts/test_acceptance_rg2x2.py`): a seeded
-  six-defect variant makes `validate.py` exit 1 naming all six by code (`ER-RECON`,
-  `ER-SCHEMA` twice, `ER-STATS` twice, `ER-PREREG`), while the corrected record — the
-  real fixture through the real finalize step, against a real freeze commit — exits 0
-  with `render.py --check` showing no drift. Decision-tier fixtures cover the
-  comprehension gate: a missing block and a below-4/4 reader each exit 1
-  (`ER-COMPREHEND`), a complete record with resolving transcript files and a
-  second-party attestation exits 0.
-- **The mantis journal-envelope emit** (`render.py --emit-journal`): a record's belief
-  update rendered as a journaling-sessions envelope. The primary shape carries the
-  provenance as extra header fields (a superset both mantis parsers tolerate — verified
-  against `mantis.ingestion.journal` and `journal_v2`); a `--strict` fallback drops the
-  superset and links the record hash-pinned (`record_ref` + `record_sha256`) for a parser
-  that rejects unknown keys. `scripts/test_mantis_envelope.py` tests the tolerance (the
-  real parser when importable, else the documented envelope-schema contract, marking
-  which); `scripts/test_mantis_fallback.py` mocks a rejecting parser and asserts the
-  strict fallback is accepted, well-formed, and resolvable.
-
-## 0.9.0 — 2026-07-24
-
-The `experiment-rigor` skill (spec `docs/specs/2026-07-24-experiment-rigor-skill.md`,
-section 4). A rigid, thin skill over four stdlib-plus-PyYAML scripts that turn a
-typed `record.yaml` into a validated, derived report across a probe / measurement /
-decision tier ladder — every load-bearing rule a gate that exits non-zero, not a
-line of prose to remember. The founding case is a small register-by-gate A/B whose
-prose write-up three fresh readers could not reconstruct: the arithmetic never
-closed, the outcome was never operationalized, rates carried no denominators, a
-post-hoc finding was presented as pre-registered, and no uncertainty was reported.
-The discipline gates the disqualifying half (methods uncertainty) and structures the
-declarable half (effect uncertainty).
-
-### Added
-
-- **experiment-rigor** (rigid): the thin skill body routes to the scripts and states
-  the bright lines — the plan freeze and its `git show` drift gate, declared-cells
-  reconciliation (declared cells == disposition == denominators), the confirmatory /
-  exploratory partition with a post-freeze quarantine, the small-n CI refusal (no CLT
-  below a denominator of 30 — Wilson, Clopper-Pearson, or a within-experiment
-  Beta-Binomial), a rate that needs both a numerator and a denominator, record-is-source
-  with the report derived, and probe self-labeling. Binds keel's Definition of Ready
-  and fresh-context reader tooling role-generically.
-- **Two references:** `references/threats-catalog.md` (the nine-key closed threat
-  enum, one paragraph per key, kept in sync with `templates/schema.json` by
-  `test_threats_catalog.py`) and `references/small-n-stats.md` (Miller's five rules
-  adapted, the exact-methods rule, the Beta(1, 1) prior and its sensitivity, and the
-  within-experiment-only pooling boundary — cross-experiment belief moves through a
-  qualitative GRADE link, never pooled counts).
-- **Trigger dev set and sealed holdout** authored at one sitting
-  (`evals/trigger/experiment-rigor.json`, `evals/trigger/holdout/experiment-rigor.json`),
-  plus a correct-usage rubric (`evals/tasks/experiment-rigor/`) checking that a produced
-  record passes `validate.py` and the Methods reconstruct without the conversation. The
-  holdout was sealed the same day with its birth baseline in `holdout/BASELINES.md`:
-  recall 0.33 [0.15, 0.58] on pure intent paraphrases (the intent-category floor the
-  trigger-lexical-ceiling predicts, not a verdict), specificity 1.00 [0.76, 1.00] with
-  all four sibling near-misses silent; the description was never tuned against either set.
-- **Dispatch router row** (`choosing-tools/scripts/router_rules.json`): one conservative
-  entry keyed on unmistakable phrasings (pre-register, threats to validity, error bars,
-  the confirmatory/exploratory partition, a 2x2 factorial, declared cells, writing up an
-  experiment); dev recall 0.80 / specificity 1.00, both sealed router holdouts unchanged.
+- **The dispatch router row for `experiment-rigor` is now cross-plugin**:
+  `humblepowers:experiment-rigor` -> `experiment-discipline:experiment-rigor` in
+  `skills/choosing-tools/scripts/router_rules.json`. Router ids are opaque
+  `plugin:skill` strings and the dataset lookup splits the prefix off, so a routed
+  skill living in another plugin is supported by construction; the patterns are
+  byte-unchanged and both sealed router holdouts are unmoved (they contain no
+  experiment-rigor case). This row doubles as the pointer to the new plugin.
 
 ## 0.8.0 — 2026-07-23
 

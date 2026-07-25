@@ -57,16 +57,16 @@ repos:
         always_run: true
       - id: experiment-rigor-validate
         name: experiment-rigor record validator (travelling records)
-        entry: uv run --no-project --with pyyaml -- python plugins/humblepowers/skills/experiment-rigor/scripts/validate.py
+        entry: uv run --no-project --with pyyaml -- python plugins/experiment-discipline/skills/experiment-rigor/scripts/validate.py
         language: system
         # Deliberately diverges from the always_run convention above (FM-6 / Q6): a
         # files: regex plus pass_filenames selects only staged, tracked record.yaml
         # paths, so gitignored docs/design/** records never reach the gate.
-        files: ^(plugins/humblepowers/skills/experiment-rigor/examples/.*/record\.yaml|evals/.*/record\.yaml)$
+        files: ^(plugins/experiment-discipline/skills/experiment-rigor/examples/.*/record\.yaml|evals/.*/record\.yaml)$
         pass_filenames: true
       - id: experiment-rigor-render-check
         name: experiment-rigor report drift gate (record.yaml <-> report.md)
-        entry: uv run --no-project --with pyyaml -- python plugins/humblepowers/skills/experiment-rigor/scripts/render.py --check
+        entry: uv run --no-project --with pyyaml -- python plugins/experiment-discipline/skills/experiment-rigor/scripts/render.py --check
         language: system
         # Same FM-6 / Q6 divergence as the validator hook: a files: regex plus
         # pass_filenames selects only staged, tracked travelling paths. The regex
@@ -74,7 +74,7 @@ repos:
         # report.md with an unrestaged record still reaches the gate (F3); render.py
         # --check resolves either member to the pair. Gitignored docs/design/** records
         # never reach the gate.
-        files: ^(plugins/humblepowers/skills/experiment-rigor/examples/.*/(record\.yaml|report\.md)|evals/.*/(record\.yaml|report\.md))$
+        files: ^(plugins/experiment-discipline/skills/experiment-rigor/examples/.*/(record\.yaml|report\.md)|evals/.*/(record\.yaml|report\.md))$
         pass_filenames: true
       - id: run-tests
         name: run self-contained test suite

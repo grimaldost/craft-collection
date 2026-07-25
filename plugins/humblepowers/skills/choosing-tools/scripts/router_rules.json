@@ -142,7 +142,7 @@
       "min_hits": 1
     },
     {
-      "id": "humblepowers:experiment-rigor",
+      "id": "experiment-discipline:experiment-rigor",
       "patterns": [
         "\\bpre-?regist(er|ered|ering|ration)\\b",
         "\\bthreats? to validity\\b",

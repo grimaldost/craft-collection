@@ -10,6 +10,13 @@
       "keywords": ["python", "uv", "ruff", "ty", "data-engineering", "data-contract", "pipeline"]
     },
     {
+      "name": "experiment-discipline",
+      "source": "./plugins/experiment-discipline",
+      "category": "development",
+      "description": "Discipline for evaluation acts: structure an experiment and its write-up so the Methods reconstruct without the conversation and the uncertainty is declared, not hidden — a typed record.yaml across a probe / measurement / decision tier ladder, with every load-bearing rule a script that exits non-zero rather than a line of prose.",
+      "keywords": ["experiment", "pre-registration", "measurement", "small-n", "evaluation", "statistics", "rigor"]
+    },
+    {
       "name": "session-workflow",
       "source": "./plugins/session-workflow",
       "category": "productivity",

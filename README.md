@@ -1,10 +1,13 @@
 # craft-collection
 
-A Claude Code plugin marketplace with three plugins:
+A Claude Code plugin marketplace with four plugins:
 
 - **engineering-discipline** — modern Python engineering standards + stack-agnostic
   data-engineering discipline, with mechanical enforcement (ruff/uv hooks),
   runnable scripts, and a self-refreshing toolchain.
+- **experiment-discipline** — discipline for evaluation acts: a typed `record.yaml`
+  across a probe / measurement / decision tier ladder, with a validator, a derived
+  report, small-n statistics that refuse the CLT, and a pre-registration freeze.
 - **session-workflow** — capture session knowledge and distill it into durable
   guidance, author paste-ready hand-off briefs, convene fresh-eyes review panels,
   behaviorally evaluate skills, keep a live inventory of the installed toolkit,
@@ -25,6 +28,7 @@ session-start hook fails to spawn.
 ```text
 /plugin marketplace add grimaldost/craft-collection
 /plugin install engineering-discipline@craft-collection
+/plugin install experiment-discipline@craft-collection
 /plugin install session-workflow@craft-collection
 /plugin install humblepowers@craft-collection
 ```
@@ -32,7 +36,7 @@ session-start hook fails to spawn.
 Local development (no marketplace needed):
 
 ```text
-claude --plugin-dir ./plugins/engineering-discipline --plugin-dir ./plugins/session-workflow --plugin-dir ./plugins/humblepowers
+claude --plugin-dir ./plugins/engineering-discipline --plugin-dir ./plugins/experiment-discipline --plugin-dir ./plugins/session-workflow --plugin-dir ./plugins/humblepowers
 ```
 
 **Other agents (Codex, Gemini CLI, Cursor, any agents.md reader):** clone this
@@ -46,6 +50,14 @@ enforcement ladder, and what is (and is not) measured off Claude Code.
 `data-engineering-discipline`, and `/refresh-stack`; scripts for scaffolding,
 auditing, version-checking, schema-diffing, parity, and contract validation;
 hooks for ruff-format and uv enforcement; a `stack.toml`-based freshness loop.
+
+**experiment-discipline** — skill `experiment-rigor` (rigid); the mechanism spine
+in `skills/experiment-rigor/scripts/` (`validate.py` central gate with stable
+`ER-*` codes, `render.py` report/schema generator and drift gate, `stats.py`
+small-n intervals, `from_fathom.py` ledger adapter); tier templates plus a
+machine-readable `schema.json` and its generated field guide; the founding RG-2x2
+dogfood record and its freeze choreography. Two repo pre-commit hooks gate every
+travelling `record.yaml` / `report.md` pair.
 
 **session-workflow** — skills `journaling-sessions`, `consolidate-knowledge`,
 `context-handoff`, `review-panel`, `evaluate-skill`, `toolkit-awareness`,
@@ -114,6 +126,7 @@ linter, the structural validator, and the full test suite on push/PR;
 .claude-plugin/marketplace.json
 plugins/
   engineering-discipline/   .claude-plugin/  skills/  hooks/
+  experiment-discipline/    .claude-plugin/  skills/
   session-workflow/         .claude-plugin/  skills/  hooks/  output-styles/
   humblepowers/             .claude-plugin/  skills/  hooks/
 scripts/                    validate_plugins.py  run_tests.py  lint_register.py

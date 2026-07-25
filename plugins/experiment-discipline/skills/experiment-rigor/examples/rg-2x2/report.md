@@ -73,6 +73,7 @@ outcomes:
     path: verify_footprint.py
 plan_frozen_at:
   commit: ed3c5a0e02f4b1fe5d60047e1bc43b88a91be4b2
+  path: plugins/humblepowers/skills/experiment-rigor/examples/rg-2x2/record.yaml
   timestamp: 2026-07-24 00:00:00+00:00
 results:
   activation:
