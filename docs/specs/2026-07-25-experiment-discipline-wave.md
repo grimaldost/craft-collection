@@ -206,7 +206,8 @@ derived-artifact integrity, the ASCII runtime ratchet, and the sealed router bud
   than from an enumeration an implementer could under-copy: the format-category strip,
   the 4000-character truncation, lowercasing, the order-preserving dedup and
   three-word cap on echoed matches, the ASCII collapse that only bites the PT-BR half,
-  and the join across candidates are the router's own behavior, not a checklist.
+  and the join across candidates (vacuous under single-row arm files, at no cost) are
+  the router's own behavior, not a checklist.
   It emits a per-arm × per-prompt **firing table**: whether an
   injection fires, which candidate ids the arm produces (so displacement is visible,
   not silent), the injected text id, and its estimated token count. A prompt too short
@@ -473,7 +474,9 @@ execution/lookup decoys**, authored against §2's boundary rule, every prompt at
 above the hook's word and character floor, half EN and half PT-BR within each class,
 with the genuine half carrying the direct-register phrasings the arms can actually
 match (a pure-paraphrase bank would be null on this instrument); the four arm rule
-files under `evals/experiments/act-hint/rules/`; `firing_table.py` and its frozen
+files under `evals/experiments/act-hint/rules/` — **each arm's rules file carries
+the evaluation-act row alone (control carries none), so the shipped nine-row
+competition is out of frame** (C1); `firing_table.py` and its frozen
 `firing_table.json`; `verify.py` — the oracle; and `oracle_labels.json`. Then freeze: commit the materials and the
 record (stage 1, with the one-commit hook skip named in Gate commands), then fill
 `plan_frozen_at.commit` and every material SHA.
@@ -521,8 +524,11 @@ Threats, written per contrast rather than blanket: `token_length_confound` is
 **residual**, its statement recording that the token-matched inert arm controls it
 for `wide − inert` only, that no arm is length-matched to narrow so `narrow − control`
 re-inherits the founding case's confound, and that the package contrasts make no
-mechanism claim; `custom_candidate_displacement` is controlled by the firing table
-recording each arm's candidate list per prompt; `custom_language_delivery` is
+mechanism claim; `custom_candidate_displacement` is **residual** (C1), its statement
+naming that the offline table exhibits no displacement because no competing rows are
+present under single-row arm files, and that displacement under the live nine-row
+rules stands with live-hook delivery as an unmeasured production precondition;
+`custom_language_delivery` is
 residual, naming the uncalibrated PT-BR patterns, with the pre-registered fallback
 that if the frozen table shows PT-BR firing below half the EN rate the primary
 analysis restricts to EN — a decision taken from the table, which contains no outcome
@@ -540,9 +546,11 @@ reconciles `sum(design.cells[].planned_n) == disposition.total == 192` (the
 arm-denominator half of `ER-RECON` is a no-op until results exist and is claimed by
 §6); the frozen firing table shows, per arm and per prompt, whether an injection
 fires and which candidates that arm produces, with every bank prompt above the hook's
-floor and wide and inert firing on an identical row set; **a parity test asserts every
-frozen row's candidate list and injected text equal the real router's output for that
-prompt under that arm's rules**, which is what makes "router-realistic" a checked
+floor and wide and inert firing on an identical row set; **for the router-derived arms (`narrow`,
+`wide`) a parity test asserts every frozen row's candidate list and injected text
+equal the real router's output for that prompt under that arm's rules; `inert` is
+asserted against wide's row set and its authored neutral text, and `control` against
+an empty candidate list** (C2), which is what makes "router-realistic" a checked
 property rather than an asserted one; tests assert inert's estimated token count is
 within ±5% of wide's per row, and that neither any injected text **nor any bank
 prompt** contains the activation-line format or a skeleton element name; the oracle
@@ -577,8 +585,11 @@ moves and inert does not, so the hint's content carries the effect; wide and ine
 both move alike, so the effect is preamble cost and the content is irrelevant;
 **inert moves and wide does not**, likewise a preamble effect with content
 contributing nothing, and ship no row; or nothing moves beyond its interval, a
-recorded null. If the ceiling halts the run, the pre-registered fallback is to
-analyze complete prompt-pairs only and report the reduced precision.
+recorded null. A null with control at or near ceiling on the genuine half is
+recorded as **no headroom, not as no effect**, and the pre-registered read then
+rests on the decoy side and `wide − inert` (C3). If the ceiling halts the run, the
+pre-registered fallback is to analyze complete prompt-pairs only and report the
+reduced precision.
 **Reuse:** `plugins/humblepowers/skills/experiment-rigor/examples/rg-2x2/finalize.py::finalize_record`
 (pre-move coordinate; §1 relocates it under `plugins/experiment-discipline/`)
 **Acceptance criterion:** the completed record passes `validate.py` at measurement
@@ -713,17 +724,21 @@ compares against it.
   scores. Control therefore measures **the skill's own trigger surface with no hint**,
   and `wide − control` is the hint's **marginal** effect over a loaded, unhinted skill,
   not "convention versus nothing". The repo holds a measured number for that surface:
-  this skill's sealed holdout put its description at 0.33 recall [0.15, 0.58], with the
-  lexically adjacent positive at 3/3 (`evals/trigger/holdout/BASELINES.md:18`
-  `experiment-rigor`) — measured on the direct evaluation-act register the genuine half
-  is deliberately authored in, because that is the register the arms' patterns must
-  match. So control is expected **materially above zero** on the genuine half, low but
-  not structurally floored, and the hint's effect is incremental over that.
+  this skill's sealed holdout put its description at 0.33 recall [0.15, 0.58]
+  (`evals/trigger/holdout/BASELINES.md:18` `experiment-rigor`) — but that aggregate
+  was measured on a holdout whose four of five positives are **pure intent
+  paraphrases**, and the single same-register positive — the direct evaluation-act
+  register the genuine half is deliberately authored in, because that is the register
+  the arms' patterns must match — hit 3/3 (C3). So the genuine-side prior is **wide
+  rather than low**: control is expected materially above zero, the hint's effect is
+  incremental over that, and the prior's upper tail is a **ceiling risk**, a different
+  failure from the compression named below.
   Two consequences are pre-registered rather than discovered. **The genuine-side
   decision rule is two-sided**: the corrected prior no longer licenses a directional
   bet, and a treated arm can land *below* control if the injected hint displaces the
-  model's own dispatch — the router keeps at most two candidates on a hits-descending
-  sort, which is the `custom_candidate_displacement` threat this section already names.
+  model's own dispatch — a behavioral claim that stands on its own; displacement under
+  the live nine-row rules is the residual `custom_candidate_displacement` threat, an
+  unmeasured production precondition (C1).
   And a non-zero control **compresses the contrast** against a MEWD already declared
   large, which is a spend risk stated up front rather than discovered in §6. The decoy
   side stays two-sided as before: control near perfect, treated arms able to lose
@@ -746,6 +761,14 @@ compares against it.
   statements the frozen record makes about itself
 - **Operator:** session orchestrator (accepts C1–C4 and folds each at its named PR
   boundary, from the round-4 artifact's evidence rather than its wording)
+- **Condition discharge:** C4 folded in PR01 (`09a2d3c`, the SCHEMA.md regeneration).
+  C1–C3 folded 2026-07-25 at the PR05 boundary, before the §5 freeze commit, in the
+  spec edits marked (C1)/(C2)/(C3) above: the arm-file composition pinned and
+  `custom_candidate_displacement` demoted to residual (C1, also unhooking Part B's
+  two-sided justification from the router clause); the parity criterion scoped to the
+  router-derived arms (C2); the control prior's transport stated honestly with the
+  ceiling risk named and §6's null leg reading a control-at-ceiling null as no
+  headroom (C3).
 - **Certification artifact:** `docs/specs/2026-07-25-experiment-discipline-wave.premortem-r4.md`
 - **Date:** 2026-07-25
 - **Reviewed against:** the worktree at `feat/experiment-rigor-skill` @ 113cc06; keel
@@ -788,8 +811,8 @@ compares against it.
   corrected prior and the two-sided genuine-side rule, R3-3 the generator driving the
   real router read-only, R3-4 the embedded-schema mirror, R3-5 the sign test's tie
   rule, and R3-6 the primeability constraint binding the bank — one fold-ledger row
-  each below. Round 4 added four MINOR modes that are **named conditions, not yet
-  folded**: R4-1 the arm rule files' composition and `custom_candidate_displacement`
+  each below. Round 4 added four MINOR modes that are **named conditions**
+  (discharged — see the Condition discharge line above): R4-1 the arm rule files' composition and `custom_candidate_displacement`
   demoted to residual, R4-2 the parity criterion scoped to the router-derived arms,
   R4-3 the control prior's 0.33 transported from a paraphrase-dominated holdout (with
   the no-headroom read added to §6's null leg), and R4-4 the `SCHEMA.md` regeneration
