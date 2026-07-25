@@ -295,6 +295,213 @@ def test_paired_difference_on_shared_tasks():
 
 
 # ---------------------------------------------------------------------------
+# The counts -> trials adapter (schema v1.1)
+# ---------------------------------------------------------------------------
+
+
+def test_expand_cluster_counts_reproduces_the_known_clustered_se():
+    # The adapter is the bridge between the record's `clusters` block (per-cluster
+    # counts) and clustered_se (per-trial 0/1 outcomes). Expanding the same fixture
+    # the hand-built helper above expands must give the same trial list AND reproduce
+    # the SE pinned independently in test_clustered_se_exceeds_naive_se.
+    outcomes, ids = stats.expand_cluster_counts(_WITH_GATE_BY_TASK, [_TASK_SIZE] * 6)
+    hand_outcomes, hand_ids = _outcomes_and_clusters(_WITH_GATE_BY_TASK, _TASK_SIZE)
+    assert outcomes == hand_outcomes, (outcomes, hand_outcomes)
+    assert list(ids) == hand_ids, (ids, hand_ids)
+    assert stats.clustered_se(outcomes, ids) == 0.12909944487358055
+
+
+def test_expand_cluster_counts_is_lossless_under_re_collapse():
+    # Losslessness stated as a round trip: re-collapsing the trial list by label
+    # recovers the (successes, size) pair of every cluster, including a 0/n cluster
+    # and unequal cluster sizes.
+    numerators, sizes = [3, 0, 4, 2], [4, 5, 4, 2]
+    labels = ['p1', 'p2', 'p3', 'p4']
+    outcomes, ids = stats.expand_cluster_counts(numerators, sizes, labels=labels)
+    assert len(outcomes) == sum(sizes) == len(ids)
+    collapsed: dict[str, list[int]] = {}
+    for o, c in zip(outcomes, ids, strict=True):
+        cell = collapsed.setdefault(c, [0, 0])
+        cell[0] += o
+        cell[1] += 1
+    assert collapsed == {'p1': [3, 4], 'p2': [0, 5], 'p3': [4, 4], 'p4': [2, 2]}
+
+
+def test_expand_cluster_counts_validates_its_input():
+    for args in ([[1], [2, 3]], [[5], [4]], [[-1], [4]], [[1], [0]], [[], []]):
+        try:
+            stats.expand_cluster_counts(*args)
+        except ValueError:
+            continue
+        raise AssertionError(f'expand_cluster_counts accepted {args}')
+    try:
+        stats.expand_cluster_counts([1, 2], [4, 4], labels=['only_one'])
+    except ValueError:
+        return
+    raise AssertionError('expand_cluster_counts accepted a short label list')
+
+
+def test_cluster_deltas_is_the_one_definition_paired_difference_averages():
+    a, b, sizes = [4, 3, 1], [2, 2, 2], [4, 4, 4]
+    deltas = stats.cluster_deltas(a, sizes, b, sizes)
+    assert deltas == [0.5, 0.25, -0.25], deltas
+    assert _approx(stats.paired_difference(a, sizes, b, sizes).mean_diff, sum(deltas) / 3)
+
+
+# ---------------------------------------------------------------------------
+# Student-t: the stdlib-only quantile behind paired_interval (schema v1.1)
+# ---------------------------------------------------------------------------
+
+# Published two-sided 95% critical values t(0.975, df) as printed in any statistics
+# table -- an external anchor, independent of anything stats.py computes.
+_T_975 = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    10: 2.228,
+    24: 2.064,
+    30: 2.042,
+    60: 2.000,
+    100: 1.984,
+}
+
+
+def test_student_t_quantile_matches_the_published_table():
+    for df, ref in _T_975.items():
+        q = stats.student_t_quantile(0.975, df)
+        assert math.isclose(q, ref, abs_tol=5e-4), f't(0.975, {df}) = {q} vs published {ref}'
+
+
+def test_student_t_cdf_matches_independent_closed_forms():
+    # df=1 is Cauchy: F(t) = 1/2 + atan(t)/pi. df=2 has the elementary closed form
+    # F(t) = 1/2 + t / (2*sqrt(2 + t^2)). Both written here from first principles,
+    # so the recursion's two base cases are checked against something outside it.
+    for t in (-3.4, -0.7, 0.0, 0.9, 5.2):
+        assert _approx(stats._t_cdf(t, 1), 0.5 + math.atan(t) / math.pi), t
+        assert _approx(stats._t_cdf(t, 2), 0.5 + t / (2 * math.sqrt(2 + t * t))), t
+
+
+def test_student_t_quantile_symmetry_and_normal_limit():
+    assert stats.student_t_quantile(0.5, 5) == 0.0
+    assert _approx(stats.student_t_quantile(0.025, 5), -stats.student_t_quantile(0.975, 5))
+    # Heavier tails on fewer df, converging DOWN to the normal quantile from above.
+    z = NormalDist().inv_cdf(0.975)
+    assert stats.student_t_quantile(0.975, 2) > stats.student_t_quantile(0.975, 30)
+    assert stats.student_t_quantile(0.975, 500) > z
+    assert stats.student_t_quantile(0.975, 500) - z < 0.01
+
+
+def test_student_t_quantile_validates_its_input():
+    for p, df in [(0.0, 5), (1.0, 5), (-0.2, 5), (0.975, 0), (0.975, -1), (0.975, 2.5)]:
+        try:
+            stats.student_t_quantile(p, df)
+        except ValueError:
+            continue
+        raise AssertionError(f'student_t_quantile accepted ({p}, {df})')
+
+
+def test_student_t_quantile_refuses_a_p_it_cannot_bracket():
+    # The bracket search is bounded. A p so close to 1 that the quantile sits past
+    # that bound must RAISE rather than return the bracket end, which would be a
+    # wrong number wearing the shape of an answer (it returned 1099511627776.0).
+    try:
+        stats.student_t_quantile(1 - 1e-13, 1)
+    except ValueError as exc:
+        assert 'bracket' in str(exc), exc
+        return
+    raise AssertionError('student_t_quantile returned a value it could not bracket')
+
+
+def test_student_t_cdf_never_leaves_the_unit_interval():
+    # The summed series lands a few ulp outside [0, 1] in the far tails at large df
+    # (measured -2.2e-16 and 1.0000000000000002); a CDF must not report a
+    # probability outside its own range.
+    for df in (1, 2, 7, 200, 999, 1000):
+        for t in (-1e6, -60.0, -1.0, 0.0, 1.0, 60.0, 1e6):
+            value = stats._t_cdf(t, df)
+            assert 0.0 <= value <= 1.0, (df, t, value)
+
+
+# ---------------------------------------------------------------------------
+# paired_interval and the exact sign test (schema v1.1)
+# ---------------------------------------------------------------------------
+
+
+def test_paired_interval_is_estimate_plus_or_minus_t_times_se():
+    diff = stats.paired_difference(
+        [8, 8, 8, 6, 4, 2], [_TASK_SIZE] * 6, [4, 4, 3, 3, 2, 2], [_TASK_SIZE] * 6
+    )
+    band = stats.paired_interval(diff.mean_diff, diff.se, diff.n_clusters)
+    assert band.df == 5
+    assert math.isclose(band.quantile, _T_975[5], abs_tol=5e-4), band.quantile
+    half = band.quantile * diff.se
+    assert _approx(band.low, diff.mean_diff - half)
+    assert _approx(band.high, diff.mean_diff + half)
+    # Wider than the normal interval it deliberately is not: the whole point of the
+    # t reference on 6 clusters is that it does not pretend to large-sample precision.
+    assert band.high - band.low > 2 * NormalDist().inv_cdf(0.975) * diff.se
+
+
+def test_paired_interval_bounds_are_not_clamped():
+    # A rate difference lives in [-1, 1], but clamping would silently redefine the
+    # stated interval; a bound outside the range is left visible instead.
+    band = stats.paired_interval(0.9, 0.4, 3)
+    assert band.high > 1.0, band
+
+
+def test_paired_interval_validates_its_input():
+    bad_args = [
+        (0.1, 0.05, 1),  # one cluster: no df
+        (0.1, 0.05, 0),
+        (0.1, 0.05, 2.0),  # a float cluster count
+        (0.1, -0.05, 5),  # a negative SE
+        (0.1, True, 5),  # a bool SE -- rejected like a bool cluster count
+        (0.1, float('nan'), 5),  # NaN compares false against every bound
+        (0.1, float('inf'), 5),
+    ]
+    for args in bad_args:
+        try:
+            stats.paired_interval(*args)
+        except ValueError:
+            continue
+        raise AssertionError(f'paired_interval accepted {args}')
+    try:
+        stats.paired_interval(0.1, 0.05, 5, alpha=0.0)
+    except ValueError:
+        return
+    raise AssertionError('paired_interval accepted alpha 0.0')
+
+
+def test_sign_test_drops_ties_and_reports_the_effective_n():
+    # Deltas: 4 positive, 1 negative, 1 zero. The tie rule drops the zero, so the
+    # exact test is Binomial(5, 1/2) at 4 positives:
+    #   p = 2 * P(X >= 4) = 2 * (C(5,4) + C(5,5)) / 2^5 = 2 * 6/32 = 0.375.
+    result = stats.sign_test([0.5, 0.25, 0.0, 0.25, 0.5, -0.25])
+    assert result.effective_n == 5 and result.positive == 4, result
+    assert _approx(result.p_value, 2 * 6 / 32), result.p_value
+
+
+def test_sign_test_unanimous_and_fully_tied():
+    # Six unanimous clusters: p = 2 * (1/2)^6 = 0.03125.
+    assert _approx(stats.sign_test([0.5] * 6).p_value, 2 / 64)
+    assert _approx(stats.sign_test([-0.5] * 6).p_value, 2 / 64)
+    # Everything tied: nothing survives, so the honest answer is p = 1 on n_eff = 0,
+    # not a pass.
+    assert stats.sign_test([0.0, 0.0, 0.0]) == stats.SignTest(1.0, 0, 0)
+
+
+def test_sign_test_is_hand_derivable_from_the_recorded_counts():
+    # The bound needs no gate because a reader can redo it: effective n and the
+    # positive count are both recoverable from the per-cluster counts.
+    a, b, sizes = [4, 3, 4, 2, 3, 1], [2, 2, 4, 1, 1, 2], [4] * 6
+    result = stats.sign_test(stats.cluster_deltas(a, sizes, b, sizes))
+    assert (result.effective_n, result.positive) == (5, 4), result
+    assert _approx(result.p_value, 0.375), result.p_value
+
+
+# ---------------------------------------------------------------------------
 # Power / precision helper (Miller's before-spend sizing)
 # ---------------------------------------------------------------------------
 

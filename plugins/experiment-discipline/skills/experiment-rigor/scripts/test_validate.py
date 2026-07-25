@@ -37,6 +37,10 @@ def schema() -> dict:
 HERE = Path(__file__).resolve().parent
 FIXTURES = HERE / 'fixtures'
 CLEAN_PROBE = FIXTURES / 'clean_probe.yaml'
+# Schema v1.1: the clean paired-contrast record and its defect twin, whose stated
+# contrast disagrees with the very clusters block it claims to summarize.
+PAIRED_CONTRAST = FIXTURES / 'paired_contrast.yaml'
+PAIRED_CONTRAST_MISMATCH = FIXTURES / 'paired_contrast_mismatch.yaml'
 
 ALL_THREATS = {
     'contamination_familiarity',
@@ -280,6 +284,264 @@ def test_er_stats_unpaired_shared_tasks_needs_cluster():
     assert 'ER-STATS' in fail_codes(check(rec))
     rec['results']['signal']['unclustered_reason'] = 'arms drew disjoint task samples'
     assert 'ER-STATS' not in fail_codes(check(rec))
+
+
+# --- ER-STATS: the schema v1.1 paired contrasts ------------------------------
+
+
+def base_contrast() -> dict:
+    return yaml.safe_load(PAIRED_CONTRAST.read_text(encoding='utf-8'))
+
+
+def _contrast(rec: dict) -> dict:
+    return rec['results']['signal']['contrasts'][0]
+
+
+def test_v11_paired_contrast_fixture_passes_every_gate():
+    rec = base_contrast()
+    with tempfile.TemporaryDirectory() as td:
+        path = write_record(Path(td), rec)
+        report = check(rec, path)
+        assert report.failures == [], report.failures
+        assert report.warnings == [], report.warnings
+
+
+def test_v10_record_still_validates_under_the_v11_schema():
+    # The extension is ADDITIVE: known_versions carries both, and a record that
+    # declares neither clusters nor contrasts is untouched by every new rule.
+    rec = base_probe()
+    assert rec['schema_version'] == 1
+    assert 1 in schema()['known_versions'] and 1.1 in schema()['known_versions']
+    assert check(rec).failures == []
+    assert validate.check_contrasts(rec) == []
+    assert validate.check_cluster_recon(rec) == []
+
+
+def test_contrast_disagreeing_with_its_clusters_fails_naming_the_contrast():
+    rec = yaml.safe_load(PAIRED_CONTRAST_MISMATCH.read_text(encoding='utf-8'))
+    report = check(rec)
+    assert 'ER-STATS' in fail_codes(report), fail_codes(report)
+    messages = [f.message for f in report.failures if f.code == 'ER-STATS']
+    # The offending contrast is NAMED (outcome, index and its own name), and the
+    # message reconciles: the record's independent-trials SE against the paired one.
+    assert all("contrasts[0] 'with_hint_minus_control'" in m for m in messages), messages
+    assert any('stated se 0.1379' in m and '0.1193' in m for m in messages), messages
+
+
+def test_cli_exits_one_on_the_mismatch_and_zero_on_the_corrected_twin():
+    proc = _run_cli(PAIRED_CONTRAST_MISMATCH)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert 'ER-STATS' in proc.stdout, proc.stdout
+    assert 'with_hint_minus_control' in proc.stdout, proc.stdout
+    ok = _run_cli(PAIRED_CONTRAST)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+
+
+def test_stated_interval_disagreeing_with_paired_interval_fails():
+    for field, bad in (('low', -0.2), ('high', 0.9), ('t_quantile', 1.96)):
+        rec = base_contrast()
+        _contrast(rec)['interval'][field] = bad
+        messages = [f.message for f in check(rec).failures if f.code == 'ER-STATS']
+        assert any(f'interval {field}' in m for m in messages), (field, messages)
+    # And through the CLI, on a record whose only defect is the stated interval.
+    rec = base_contrast()
+    _contrast(rec)['interval']['high'] = 0.9
+    with tempfile.TemporaryDirectory() as td:
+        path = write_record(Path(td), rec)
+        proc = _run_cli(path)
+        assert proc.returncode == 1, proc.stdout
+        assert 'ER-STATS' in proc.stdout and 'interval high' in proc.stdout, proc.stdout
+
+
+def test_missing_interval_bound_or_quantile_fails():
+    for field in ('low', 'high', 't_quantile'):
+        rec = base_contrast()
+        del _contrast(rec)['interval'][field]
+        messages = [f.message for f in check(rec).failures if f.code == 'ER-STATS']
+        assert any(f'interval {field} missing' in m for m in messages), (field, messages)
+
+
+def test_contrast_without_a_clusters_block_fails_rather_than_passing():
+    # A stated statistic the gate cannot recompute is the vacuous-gate case; it
+    # fails loudly instead of being believed.
+    rec = base_contrast()
+    del rec['results']['signal']['clusters']
+    messages = [f.message for f in check(rec).failures if f.code == 'ER-STATS']
+    assert any('no clusters block' in m for m in messages), messages
+
+
+def test_contrast_arm_missing_from_the_clusters_block_fails():
+    rec = base_contrast()
+    del rec['results']['signal']['clusters']['p4']['control']
+    messages = [f.message for f in check(rec).failures if f.code == 'ER-STATS']
+    assert any("'p4'" in m and "arm 'control'" in m for m in messages), messages
+
+
+def test_stated_sign_test_is_required_on_every_contrast():
+    # Fail-closed: the distribution-free bound is not optional decoration beside an
+    # approximate interval. Dropping it, or any of its three fields, is ER-SCHEMA.
+    rec = base_contrast()
+    del _contrast(rec)['sign_test']
+    assert 'ER-SCHEMA' in fail_codes(check(rec)), fail_codes(check(rec))
+    for field in ('p_value', 'effective_n', 'positive'):
+        rec = base_contrast()
+        del _contrast(rec)['sign_test'][field]
+        messages = [f.message for f in check(rec).failures if f.code == 'ER-SCHEMA']
+        assert any('sign_test' in m for m in messages), (field, messages)
+    for field, bad in (('p_value', 'about 0.4'), ('effective_n', -1), ('positive', '4')):
+        rec = base_contrast()
+        _contrast(rec)['sign_test'][field] = bad
+        assert 'ER-SCHEMA' in fail_codes(check(rec)), (field, bad)
+
+
+def test_stated_sign_test_is_recomputed_from_the_clusters_block():
+    # The whole point of stating it: the number sits inside the typed block the gates
+    # read, so a flattering p-value cannot survive. Each field fails on its own.
+    for field, bad, phrase in (
+        ('p_value', 0.01, 'sign_test p_value 0.01'),
+        ('effective_n', 6, 'sign_test effective_n 6'),
+        ('positive', 6, 'sign_test positive 6'),
+    ):
+        rec = base_contrast()
+        _contrast(rec)['sign_test'][field] = bad
+        messages = [f.message for f in check(rec).failures if f.code == 'ER-STATS']
+        assert any(phrase in m for m in messages), (field, messages)
+        assert all("contrasts[0] 'with_hint_minus_control'" in m for m in messages), messages
+
+
+def test_a_fabricated_sign_test_cannot_hide_in_report_prose():
+    # The hole this closes: the p-value used to live only in report.md prose, which
+    # the drift gate ignores (it re-parses the embedded typed block only). Now it is
+    # IN the block -- so a fabricated value fails the record gate, and a prose edit
+    # that disagrees with the block is drift.
+    import render
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        path = write_record(d, base_contrast())
+        (d / 'report.md').write_text(render.render_report(base_contrast()), encoding='utf-8')
+        assert render.check_drift(path) is None
+        assert check(base_contrast(), path).failures == []
+        tampered = (d / 'report.md').read_text(encoding='utf-8').replace('0.375', '0.01')
+        (d / 'report.md').write_text(tampered, encoding='utf-8')
+        assert render.check_drift(path) is not None
+        assert 'ER-PARITY' in fail_codes(check(base_contrast(), path))
+
+
+def test_sign_test_note_confirms_the_recomputation_beside_every_contrast():
+    rec = base_contrast()
+    report = check(rec)
+    notes = [f for f in report.notes if 'sign test' in f.message]
+    assert len(notes) == 1, report.notes
+    # The note shows the arithmetic the gate did -- p-value, the effective count left
+    # by the tie rule, the positives -- which is what an in-progress record writes down.
+    assert 'p=0.3750' in notes[0].message, notes[0].message
+    assert '5 effective cluster(s) of 6' in notes[0].message, notes[0].message
+    assert '4 positive' in notes[0].message, notes[0].message
+    assert report.failures == []
+    # It rides beside a FAILING contrast too: when the stated triple is wrong, the
+    # note is what tells the author the right one.
+    broken = yaml.safe_load(PAIRED_CONTRAST_MISMATCH.read_text(encoding='utf-8'))
+    broken_report = check(broken)
+    assert any('sign test' in f.message for f in broken_report.notes)
+    assert broken_report.failures != []
+
+
+def test_cli_prints_the_sign_test_beside_the_contrast():
+    proc = _run_cli(PAIRED_CONTRAST)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert 'INFO [ER-STATS]' in proc.stdout, proc.stdout
+    assert 'sign test p=0.3750' in proc.stdout, proc.stdout
+    assert '5 effective cluster(s)' in proc.stdout, proc.stdout
+
+
+def test_subset_scoped_outcome_carries_no_arms_block_at_all():
+    # The distinguisher between a full-cell-set outcome and a subset-scoped one is
+    # the PRESENCE of `arms`: without it no full-cell-set rule applies, and the
+    # outcome states only its clusters and its contrasts.
+    rec = base_contrast()
+    del rec['results']['signal']['arms']
+    report = check(rec)
+    assert report.failures == [], report.failures
+    assert any('sign test' in f.message for f in report.notes)
+    # ER-RECON's denominator sum is an arms rule; it must not fire on the subset.
+    assert validate.check_recon(rec) == []
+
+
+def test_clusters_disagreeing_with_the_arms_block_fails_er_recon():
+    rec = base_contrast()
+    rec['results']['signal']['clusters']['p1']['with_hint']['numerator'] = 3
+    messages = [f.message for f in check(rec).failures if f.code == 'ER-RECON']
+    assert any('clusters block sums to 16/24' in m and '17/24' in m for m in messages), messages
+
+
+def test_cluster_cell_shape_is_gated():
+    for mutate in (
+        lambda r: r['results']['signal']['clusters']['p2'].__setitem__('control', {'numerator': 2}),
+        lambda r: r['results']['signal']['clusters']['p2']['control'].__setitem__('numerator', 9),
+        lambda r: r['results']['signal']['clusters']['p2']['control'].__setitem__('denominator', 0),
+        lambda r: r['results']['signal']['clusters'].__setitem__('p2', 'not a mapping'),
+        lambda r: r['results']['signal'].__setitem__('clusters', []),
+    ):
+        rec = base_contrast()
+        mutate(rec)
+        assert 'ER-SCHEMA' in fail_codes(check(rec)), mutate
+
+
+def test_contrast_shape_is_gated():
+    for field, bad in (
+        ('name', ''),
+        ('arms', ['with_hint']),
+        ('arms', 'with_hint - control'),
+        ('estimator', 'unpaired_difference'),
+        ('estimate', 'about a fifth'),
+        ('n_clusters', '6'),
+        ('interval', 'roughly -0.10 to 0.52'),
+    ):
+        rec = base_contrast()
+        _contrast(rec)[field] = bad
+        assert 'ER-SCHEMA' in fail_codes(check(rec)), (field, bad)
+    rec = base_contrast()
+    _contrast(rec)['interval']['method'] = 'normal'
+    assert 'ER-SCHEMA' in fail_codes(check(rec))
+    rec = base_contrast()
+    rec['results']['signal']['contrasts'] = []
+    assert 'ER-SCHEMA' in fail_codes(check(rec))
+
+
+def test_non_numeric_interval_alpha_is_a_sentence_not_a_python_error():
+    # Without the shape gate a string alpha reaches stats.py and surfaces as
+    # "'<' not supported between instances of 'float' and 'str'" -- a stack-shaped
+    # message about Python, not a sentence about the record.
+    rec = base_contrast()
+    _contrast(rec)['interval']['alpha'] = 'ninety-five percent'
+    report = check(rec)
+    messages = [f.message for f in report.failures if f.code == 'ER-SCHEMA']
+    assert any('interval alpha must be a number' in m for m in messages), messages
+    assert not any("'<' not supported" in f.message for f in report.failures), report.failures
+
+
+def test_an_estimator_without_a_recomputation_path_fails_loudly():
+    # ER-SCHEMA rejects an estimator outside the enum. This is the other direction:
+    # were a second estimator added to the enum without a path in check_contrasts,
+    # the gate must refuse rather than check it as if it were a paired difference.
+    rec = base_contrast()
+    _contrast(rec)['estimator'] = 'ratio_of_rates'
+    patched = dict(schema())
+    patched['contrast_estimators'] = ['paired_difference', 'ratio_of_rates']
+    report = validate.run_checks(rec, schema=patched)
+    assert 'ER-SCHEMA' not in fail_codes(report), fail_codes(report)
+    messages = [f.message for f in report.failures if f.code == 'ER-STATS']
+    assert any('no recomputation path' in m for m in messages), messages
+
+
+def test_per_arm_wilson_survives_and_stays_recomputed_beside_a_contrast():
+    # The per-arm interval is DEMOTED to descriptive, not dropped: it is still
+    # recomputed, so a wrong per-arm bound still fails even when the contrast is right.
+    rec = base_contrast()
+    rec['results']['signal']['arms']['with_hint']['ci']['high'] = 0.99
+    messages = [f.message for f in check(rec).failures if f.code == 'ER-STATS']
+    assert any('arms.with_hint' in m and 'CI high' in m for m in messages), messages
 
 
 # --- ER-THREAT --------------------------------------------------------------

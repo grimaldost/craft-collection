@@ -17,8 +17,16 @@ Public API
       prior_alpha=1, prior_beta=1)          -> Interval        (dispatch + refusal)
   naive_se(successes, n)                     -> float
   clustered_se(outcomes, cluster_ids)        -> float           (cluster-robust)
+  expand_cluster_counts(numerators, sizes,
+      labels=None)                           -> (outcomes, cluster_ids)  (adapter)
+  cluster_deltas(a_successes, a_sizes,
+      b_successes, b_sizes)                  -> list[float]     (per-cluster deltas)
   paired_difference(a_successes, a_sizes,
       b_successes, b_sizes)                  -> PairedDiff       (shared-task path)
+  paired_interval(estimate, se, n_clusters,
+      alpha=0.05)                            -> PairedInterval  (t-interval, v1.1)
+  sign_test(deltas)                          -> SignTest        (exact, zeros dropped)
+  student_t_quantile(p, df)                  -> float           (stdlib closed form)
   min_detectable_effect(n, baseline=0.5,
       alpha=0.05, power=0.80,
       alternative='two-sided')              -> PowerResult      (before-spend sizing)
@@ -28,6 +36,13 @@ Conventions
   alpha is the two-sided miss rate; intervals carry mass 1 - alpha, alpha/2 per tail.
   cluster_ids: one label per trial (len == denominator); tasks reused across arms.
   Equality tolerances the validator recomputes against: ATOL / RTOL below.
+
+The paired scale (schema v1.1). `paired_interval` is the one APPROXIMATION in this
+module and is labelled as such: it is a t-interval on the per-cluster deltas, so it
+assumes roughly symmetric deltas and a t reference distribution on few clusters. It
+is not exact the way wilson / clopper_pearson / beta_binomial are, which is why every
+contrast also carries `sign_test` -- the exact, distribution-free robustness bound.
+See references/small-n-stats.md.
 """
 
 from __future__ import annotations
@@ -44,6 +59,9 @@ RTOL = 1e-6
 # every returned bound is stable well inside what the validator compares against.
 BISECT_TOL = 1e-14
 BISECT_MAX_ITER = 200
+# Largest t the quantile inverse will bracket; past it, p is indistinguishable
+# from 1 in double precision and the request is refused rather than answered.
+_QUANTILE_BRACKET_MAX = 1e12
 
 
 class Interval(NamedTuple):
@@ -63,6 +81,19 @@ class PairedDiff(NamedTuple):
     mean_diff: float  # mean over shared tasks of (arm_a rate - arm_b rate)
     se: float  # task-level standard error of that mean difference
     n_clusters: int
+
+
+class PairedInterval(NamedTuple):
+    low: float
+    high: float
+    quantile: float  # t(1 - alpha/2, df) -- recorded so the interval is hand-checkable
+    df: int  # n_clusters - 1
+
+
+class SignTest(NamedTuple):
+    p_value: float  # exact two-sided sign-test p-value
+    effective_n: int  # clusters surviving the tie rule (a zero delta is dropped)
+    positive: int  # surviving clusters whose delta is > 0
 
 
 class PowerResult(NamedTuple):
@@ -300,6 +331,69 @@ def clustered_se(outcomes: Sequence[int], cluster_ids: Sequence[Hashable]) -> fl
     return math.sqrt(var)
 
 
+def expand_cluster_counts(
+    numerators: Sequence[int],
+    sizes: Sequence[int],
+    labels: Sequence[Hashable] | None = None,
+) -> tuple[list[int], list[Hashable]]:
+    """LOSSLESS expansion of a per-cluster counts block into the per-trial form
+    `clustered_se` consumes: (outcomes, cluster_ids).
+
+    The record's `clusters` block stores per prompt id, per arm, a numerator and a
+    denominator; `clustered_se(outcomes, cluster_ids)` wants one 0/1 outcome and one
+    cluster label per trial. This is the adapter between the two, and it is lossless
+    by construction: cluster g contributes numerators[g] ones then
+    sizes[g] - numerators[g] zeros, all labelled labels[g], so re-collapsing the
+    output by label recovers the input counts exactly. Trial ORDER inside a cluster
+    is not recoverable from counts and is not information the SE uses -- the
+    sandwich variance depends only on the per-cluster (successes, size) pair.
+
+    labels default to the cluster index; pass the prompt ids to keep the record's
+    own labels on the trials.
+    """
+    n_g = len(numerators)
+    if len(sizes) != n_g:
+        raise ValueError(f'numerators ({n_g}) and sizes ({len(sizes)}) must be equal length')
+    if n_g == 0:
+        raise ValueError('need at least one cluster')
+    ids: Sequence[Hashable] = range(n_g) if labels is None else labels
+    if len(ids) != n_g:
+        raise ValueError(f'labels ({len(ids)}) must carry one label per cluster ({n_g})')
+    outcomes: list[int] = []
+    cluster_ids: list[Hashable] = []
+    for g in range(n_g):
+        k, m = numerators[g], sizes[g]
+        if not isinstance(m, int) or isinstance(m, bool) or m < 1:
+            raise ValueError(
+                f'cluster {ids[g]!r}: denominator must be a positive integer, got {m!r}'
+            )
+        if not isinstance(k, int) or isinstance(k, bool) or k < 0 or k > m:
+            raise ValueError(f'cluster {ids[g]!r}: numerator {k!r} out of [0, {m}]')
+        outcomes += [1] * k + [0] * (m - k)
+        cluster_ids += [ids[g]] * m
+    return outcomes, cluster_ids
+
+
+def cluster_deltas(
+    a_successes: Sequence[int],
+    a_sizes: Sequence[int],
+    b_successes: Sequence[int],
+    b_sizes: Sequence[int],
+) -> list[float]:
+    """The per-cluster rate differences d_g = a_g/m_g - b_g/n_g, in input order.
+
+    The one place the delta is defined; `paired_difference` averages it and
+    `sign_test` counts its signs, so the estimate and its robustness bound cannot
+    disagree about what a delta is.
+    """
+    n_g = len(a_successes)
+    if not (len(a_sizes) == len(b_successes) == len(b_sizes) == n_g):
+        raise ValueError('per-cluster arrays must share one length (the same tasks in both arms)')
+    if any(s <= 0 for s in a_sizes) or any(s <= 0 for s in b_sizes):
+        raise ValueError('cluster sizes must be positive')
+    return [a_successes[g] / a_sizes[g] - b_successes[g] / b_sizes[g] for g in range(n_g)]
+
+
 def paired_difference(
     a_successes: Sequence[int],
     a_sizes: Sequence[int],
@@ -314,16 +408,144 @@ def paired_difference(
     removes between-task variance that an unpaired two-sample SE would carry.
     """
     n_g = len(a_successes)
-    if not (len(a_sizes) == len(b_successes) == len(b_sizes) == n_g):
-        raise ValueError('per-cluster arrays must share one length (the same tasks in both arms)')
     if n_g < 2:
         raise ValueError('paired difference needs at least 2 shared clusters')
-    if any(s <= 0 for s in a_sizes) or any(s <= 0 for s in b_sizes):
-        raise ValueError('cluster sizes must be positive')
-    diffs = [a_successes[g] / a_sizes[g] - b_successes[g] / b_sizes[g] for g in range(n_g)]
+    diffs = cluster_deltas(a_successes, a_sizes, b_successes, b_sizes)
     mean = math.fsum(diffs) / n_g
     var = math.fsum((d - mean) ** 2 for d in diffs) / (n_g - 1)
     return PairedDiff(mean, math.sqrt(var / n_g), n_g)
+
+
+# --- the paired scale: t-interval and the exact sign test (schema v1.1) ------
+
+
+def _t_cdf(t: float, df: int) -> float:
+    """Student-t CDF P(T <= t) for a POSITIVE INTEGER df, in CLOSED FORM.
+
+    The stdlib carries no Student-t distribution, and scipy/numpy are outside this
+    module's contract, so the CDF is summed here from the finite elementary series
+    that exists for integer df (Abramowitz & Stegun 26.7.3 for odd df, 26.7.4 for
+    even df). With theta = atan(t / sqrt(df)):
+
+        odd  df: 1/2 + (theta + sin(theta) * SUM_j a_j cos^(2j+1)(theta)) / pi,
+                 a_0 = 1, a_j = a_(j-1) * 2j/(2j+1),   j = 0 .. (df-3)/2
+        even df: 1/2 + sin(theta) * SUM_j b_j cos^(2j)(theta) / 2,
+                 b_0 = 1, b_j = b_(j-1) * (2j-1)/(2j), j = 0 .. (df-2)/2
+
+    df = 1 degenerates to the Cauchy CDF 1/2 + atan(t)/pi (the odd sum is empty),
+    which is the tightest check on the recursion's base case. No approximation and
+    no df ceiling: the series is finite and exact at every integer df, so nothing
+    here has to fail loudly outside a tabled range.
+    """
+    if not isinstance(df, int) or isinstance(df, bool) or df < 1:
+        raise ValueError(f'df must be a positive integer, got {df!r}')
+    if t < 0:
+        return 1.0 - _t_cdf(-t, df)
+    theta = math.atan(t / math.sqrt(df))
+    sin_t, cos_t = math.sin(theta), math.cos(theta)
+    cos2 = cos_t * cos_t
+    if df % 2 == 1:
+        term, acc = cos_t, 0.0
+        for j in range((df - 1) // 2):
+            if j > 0:
+                term *= (2 * j) / (2 * j + 1) * cos2
+            acc += term
+        value = 0.5 + (theta + sin_t * acc) / math.pi
+    else:
+        term, acc = 1.0, 0.0
+        for j in range(df // 2):
+            if j > 0:
+                term *= (2 * j - 1) / (2 * j) * cos2
+            acc += term
+        value = 0.5 + 0.5 * sin_t * acc
+    # A summed series lands a few ulp outside [0, 1] in the far tails at large df
+    # (measured -2.2e-16 and 1.0000000000000002). A CDF must not report a
+    # probability outside its own range, so the residue is clamped here.
+    return min(1.0, max(0.0, value))
+
+
+def student_t_quantile(p: float, df: int) -> float:
+    """The p-quantile of Student's t on `df` degrees of freedom.
+
+    Inverts `_t_cdf` by the module's fixed bisection, so the value is deterministic
+    across platforms and needs no pinned table (and therefore no df ceiling to fail
+    loudly at). Symmetric: q(p) = -q(1-p), and q(0.5) = 0.
+
+    The bracket search is bounded at 1e12. A p so close to 1 that the quantile sits
+    past that bound RAISES rather than returning the bracket end, which would be a
+    silently wrong number wearing the shape of an answer.
+    """
+    if not 0.0 < p < 1.0:
+        raise ValueError(f'p must be in (0, 1), got {p!r}')
+    if not isinstance(df, int) or isinstance(df, bool) or df < 1:
+        raise ValueError(f'df must be a positive integer, got {df!r}')
+    if p == 0.5:
+        return 0.0
+    if p < 0.5:
+        return -student_t_quantile(1.0 - p, df)
+    hi = 1.0
+    while _t_cdf(hi, df) < p and hi < _QUANTILE_BRACKET_MAX:
+        hi *= 2.0
+    if _t_cdf(hi, df) < p:
+        raise ValueError(
+            f'cannot bracket the t quantile for p={p!r} at df={df}: it lies beyond '
+            f't={_QUANTILE_BRACKET_MAX:g}, so p is indistinguishable from 1 here'
+        )
+    return _bisect(lambda t: _t_cdf(t, df), p, increasing=True, lo=0.0, hi=hi)
+
+
+def paired_interval(
+    estimate: float,
+    se: float,
+    n_clusters: int,
+    alpha: float = 0.05,
+) -> PairedInterval:
+    """t-interval on the per-cluster deltas: estimate +/- t(1 - alpha/2, G-1) * se.
+
+    This is the headline precision for a paired contrast, quoted on the clustered
+    scale rather than the per-arm one. It is an APPROXIMATION, unlike every other
+    interval in this module: it assumes the per-cluster deltas are roughly symmetric
+    and takes a t reference distribution on few clusters. `sign_test` is the exact,
+    distribution-free bound that travels beside it for exactly that reason.
+
+    The bounds are NOT clamped to [-1, 1]. A rate difference cannot leave that range,
+    but clamping would silently redefine the interval the record states it computed;
+    a bound outside it is a visible signal that the t approximation is straining.
+    """
+    if not isinstance(n_clusters, int) or isinstance(n_clusters, bool) or n_clusters < 2:
+        raise ValueError(f'paired interval needs at least 2 clusters, got {n_clusters!r}')
+    if isinstance(se, bool) or not isinstance(se, (int, float)) or not math.isfinite(se) or se < 0:
+        # NaN in particular: it compares false against every bound, so without the
+        # isfinite guard it would slide through and return NaN bounds as if computed.
+        raise ValueError(f'se must be a finite non-negative number, got {se!r}')
+    _validate_alpha(alpha)
+    df = n_clusters - 1
+    q = student_t_quantile(1 - alpha / 2, df)
+    half = q * float(se)
+    return PairedInterval(float(estimate) - half, float(estimate) + half, q, df)
+
+
+def sign_test(deltas: Sequence[float]) -> SignTest:
+    """Exact two-sided sign test over per-cluster deltas -- the distribution-free
+    robustness bound beside `paired_interval`.
+
+    TIE RULE (fixed by the schema, not by the analyst, and not after seeing the
+    data): a ZERO delta is DROPPED, and the surviving effective cluster count is
+    reported so the reader sees how much of the design the test actually spoke for.
+    Under the null the surviving signs are Binomial(effective_n, 1/2), so
+    p = min(1, 2 * min(P(X <= positives), P(X >= positives))) is exact.
+
+    With every delta zero there is nothing left to test and p is 1.0 on 0 effective
+    clusters -- an honest "this says nothing", not a pass.
+    """
+    surviving = [d for d in deltas if d != 0]
+    n_eff = len(surviving)
+    positive = sum(1 for d in surviving if d > 0)
+    if n_eff == 0:
+        return SignTest(1.0, 0, 0)
+    lower = _lower_tail(positive, n_eff, 0.5)
+    upper = _upper_tail(positive, n_eff, 0.5)
+    return SignTest(min(1.0, 2.0 * min(lower, upper)), n_eff, positive)
 
 
 # --- power / precision (Miller: power analysis before spend) ----------------

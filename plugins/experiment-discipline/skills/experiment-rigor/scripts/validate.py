@@ -11,12 +11,19 @@ Error-code catalog (ERROR_CODES):
                  denominator; a missing required field for the tier; an unknown
                  schema_version, the message naming the versions it knows; a bad enum)
   ER-RECON       declared-cells reconciliation: N_expected = sum(design.cells[].planned_n)
-                 == disposition total == every outcome's sum of arm denominators
+                 == disposition total == every outcome's sum of arm denominators, and
+                 (schema v1.1) a `clusters` block sums, per arm, to that arm's counts
   ER-ANCHOR      temporal anchor: plan_frozen_at.commit exists in git history and
                  predates the earliest run (chronology, not proof of no backdating)
   ER-XCHECK      run cross-check vs the fathom ledger, with the Q5 per-tier hand policy
   ER-STATS       stats integrity: every stated CI recomputes via stats.py within
-                 ATOL/RTOL; no CLT/normal below a cell denominator of 30; paired rules
+                 ATOL/RTOL; no CLT/normal below a cell denominator of 30; paired rules;
+                 and (schema v1.1) every stated `contrasts[]` entry -- estimate, se,
+                 cluster count, interval with its t quantile, and the required
+                 sign_test triple -- recomputes from the outcome's `clusters` block.
+                 Beside each contrast the gate also emits one INFO line carrying the
+                 recomputed sign test: confirmation of the arithmetic just done (and
+                 the values to write down while authoring), never the check itself
   ER-PARITY      no typed field embedded in a committed report.md contradicts the record
   ER-LINK        updates.prior.source_id resolves to a record
   ER-THREAT      threat coverage over the closed enum (a silent core key fails)
@@ -82,7 +89,7 @@ CONTEXT_CODES: tuple[str, ...] = ('ER-ANCHOR', 'ER-XCHECK', 'ER-PREREG', 'ER-COM
 # sync gate). No rework to this module is required — it already reads schema.json first.
 
 _EMBEDDED_SCHEMA: dict[str, Any] = {
-    'known_versions': [1],
+    'known_versions': [1, 1.1],
     'tiers': ['probe', 'measurement', 'decision'],
     'required_fields': {
         'probe': ['schema_version', 'tier', 'experiment', 'design', 'outcomes', 'threats'],
@@ -126,6 +133,8 @@ _EMBEDDED_SCHEMA: dict[str, Any] = {
     ],
     'confirmatory_verdicts': ['confirmatory_supported', 'confirmatory_null'],
     'ci_methods': ['wilson', 'clopper_pearson', 'beta_binomial'],
+    'contrast_estimators': ['paired_difference'],
+    'contrast_interval_methods': ['paired_t'],
     'certainty_enum': ['high', 'moderate', 'low', 'very_low'],
     'small_n_floor': 30,
 }
@@ -147,6 +156,8 @@ _SCHEMA_LIST_KEYS = (
     'verdict_enum',
     'confirmatory_verdicts',
     'ci_methods',
+    'contrast_estimators',
+    'contrast_interval_methods',
 )
 
 
@@ -197,7 +208,7 @@ def load_schema(override: str | Path | None = None) -> dict[str, Any]:
 
 
 class Finding(NamedTuple):
-    level: str  # 'FAIL' or 'WARN'
+    level: str  # 'FAIL', 'WARN' or 'INFO'
     code: str
     message: str
 
@@ -214,6 +225,14 @@ class Report(NamedTuple):
     def warnings(self) -> list[Finding]:
         return [f for f in self.findings if f.level == 'WARN']
 
+    @property
+    def notes(self) -> list[Finding]:
+        """Confirming emissions (schema v1.1: the recomputed per-contrast sign test).
+        A note never affects the exit code: the corresponding gate is the FAIL beside
+        it, and the note exists to show the arithmetic and to hand an in-progress
+        record the values it has to state."""
+        return [f for f in self.findings if f.level == 'INFO']
+
 
 def _fail(code: str, message: str) -> Finding:
     return Finding('FAIL', code, message)
@@ -221,6 +240,10 @@ def _fail(code: str, message: str) -> Finding:
 
 def _warn(code: str, message: str) -> Finding:
     return Finding('WARN', code, message)
+
+
+def _info(code: str, message: str) -> Finding:
+    return Finding('INFO', code, message)
 
 
 # --- small helpers ----------------------------------------------------------
@@ -251,6 +274,53 @@ def _arms(record: dict) -> list[tuple[str, str, dict]]:
                 if isinstance(arm, dict):
                     out.append((oname, aname, arm))
     return out
+
+
+def _outcome_results(record: dict) -> list[tuple[str, dict]]:
+    """(outcome_name, results-block) for every well-formed outcome result."""
+    results = record.get('results')
+    if not isinstance(results, dict):
+        return []
+    return [(oname, ores) for oname, ores in results.items() if isinstance(ores, dict)]
+
+
+def _cluster_cell(cell: object) -> tuple[int, int] | None:
+    """(numerator, denominator) for a well-formed cluster cell, else None."""
+    if not isinstance(cell, dict):
+        return None
+    num, den = cell.get('numerator'), cell.get('denominator')
+    if not (_is_int(num) and _is_int(den)) or den < 1 or not 0 <= num <= den:
+        return None
+    return num, den
+
+
+def cluster_arrays(
+    clusters: dict, arm_a: str, arm_b: str
+) -> tuple[tuple[list[str], list[int], list[int], list[int], list[int]] | None, str | None]:
+    """Per-cluster count arrays for an ordered arm pair, or (None, reason).
+
+    The record's `clusters` block is prompt id -> arm -> {numerator, denominator};
+    `stats.paired_difference` wants four parallel per-cluster arrays. Prompt ids are
+    walked in sorted order so the arrays -- and any message naming a cluster -- are
+    deterministic; the paired mean and its SE are order-invariant, so the sort is for
+    reproducibility, not arithmetic.
+    """
+    pids = sorted(clusters, key=str)
+    a_num: list[int] = []
+    a_den: list[int] = []
+    b_num: list[int] = []
+    b_den: list[int] = []
+    for pid in pids:
+        per_arm = clusters[pid]
+        if not isinstance(per_arm, dict):
+            return None, f'cluster {pid!r} is not a mapping of arm -> counts'
+        for arm, nums, dens in ((arm_a, a_num, a_den), (arm_b, b_num, b_den)):
+            counts = _cluster_cell(per_arm.get(arm))
+            if counts is None:
+                return None, f'cluster {pid!r} carries no well-formed cell for arm {arm!r}'
+            nums.append(counts[0])
+            dens.append(counts[1])
+    return ([str(p) for p in pids], a_num, a_den, b_num, b_den), None
 
 
 def _parse_dt(s: str) -> datetime:
@@ -431,6 +501,173 @@ def check_schema(record: dict, schema: dict) -> list[Finding]:
                 )
             )
 
+    # Schema v1.1: the shapes of the paired-contrast machinery. The blocks are
+    # ADDITIVE, so a record carrying neither is untouched by these rules. The rules
+    # key off the BLOCKS, not the declared schema_version: a record that states a
+    # contrast is fully gated whichever version it declares, because a gate that a
+    # version string could switch off is a gate an author can switch off.
+    out += _check_cluster_shape(record)
+    out += _check_contrast_shape(record, schema)
+    return out
+
+
+# --- schema v1.1: the paired-contrast shapes --------------------------------
+#
+# How the validator tells a FULL-CELL-SET outcome from a SUBSET-SCOPED one: the
+# presence of `arms`. An outcome carrying `arms` is scored over the full declared
+# cell set -- ER-RECON already holds its arm denominators to N_expected, and the
+# per-arm Wilson interval stays, DESCRIPTIVE (an upper bound on precision, since it
+# prices independent trials on a design whose unit is the prompt cluster). An
+# outcome scored over a subset carries no `arms` block at all: it states its
+# `clusters` and its `contrasts[]`, no full-cell-set rule is applied to it, and no
+# per-arm interval is asked for or believed. Nothing new is declared to mark the
+# distinction -- the absent block IS the mark.
+
+
+def _check_cluster_shape(record: dict) -> list[Finding]:
+    out: list[Finding] = []
+    for oname, ores in _outcome_results(record):
+        clusters = ores.get('clusters')
+        if clusters is None:
+            continue
+        if not isinstance(clusters, dict) or not clusters:
+            out.append(
+                _fail(
+                    'ER-SCHEMA',
+                    f'results.{oname}.clusters must be a non-empty mapping of prompt id -> arm -> '
+                    f'{{numerator, denominator}} (got {clusters!r})',
+                )
+            )
+            continue
+        for pid, per_arm in clusters.items():
+            if not isinstance(per_arm, dict) or not per_arm:
+                out.append(
+                    _fail(
+                        'ER-SCHEMA',
+                        f'results.{oname}.clusters.{pid}: each prompt id maps arm -> '
+                        f'{{numerator, denominator}} (got {per_arm!r})',
+                    )
+                )
+                continue
+            for aname, cell in per_arm.items():
+                if _cluster_cell(cell) is None:
+                    out.append(
+                        _fail(
+                            'ER-SCHEMA',
+                            f'results.{oname}.clusters.{pid}.{aname}: a cluster cell needs an '
+                            f'integer numerator in [0, denominator] and a positive integer '
+                            f'denominator (got {cell!r})',
+                        )
+                    )
+    return out
+
+
+def _check_contrast_shape(record: dict, schema: dict) -> list[Finding]:
+    out: list[Finding] = []
+    estimators = schema['contrast_estimators']
+    methods = schema['contrast_interval_methods']
+    for oname, ores in _outcome_results(record):
+        contrasts = ores.get('contrasts')
+        if contrasts is None:
+            continue
+        if not isinstance(contrasts, list) or not contrasts:
+            out.append(
+                _fail(
+                    'ER-SCHEMA',
+                    f'results.{oname}.contrasts must be a non-empty list of contrast entries '
+                    f'(got {contrasts!r})',
+                )
+            )
+            continue
+        for i, contrast in enumerate(contrasts):
+            where = f'results.{oname}.contrasts[{i}]'
+            if not isinstance(contrast, dict):
+                out.append(_fail('ER-SCHEMA', f'{where}: a contrast must be a mapping'))
+                continue
+            if not str(contrast.get('name') or '').strip():
+                out.append(_fail('ER-SCHEMA', f'{where}: a contrast needs a non-empty name'))
+            arms = contrast.get('arms')
+            if not (
+                isinstance(arms, list) and len(arms) == 2 and all(isinstance(a, str) for a in arms)
+            ):
+                out.append(
+                    _fail(
+                        'ER-SCHEMA',
+                        f'{where}: arms must be the ORDERED pair [minuend, subtrahend] of arm '
+                        f'names (got {arms!r})',
+                    )
+                )
+            estimator = contrast.get('estimator')
+            if estimator not in estimators:
+                out.append(
+                    _fail('ER-SCHEMA', f'{where}: estimator {estimator!r} not in {estimators}')
+                )
+            for field in ('estimate', 'se'):
+                if not isinstance(contrast.get(field), (int, float)) or isinstance(
+                    contrast.get(field), bool
+                ):
+                    out.append(
+                        _fail(
+                            'ER-SCHEMA', f'{where}: {field} must be a number (got no usable value)'
+                        )
+                    )
+            if not _is_int(contrast.get('n_clusters')):
+                out.append(_fail('ER-SCHEMA', f'{where}: n_clusters must be an integer'))
+
+            # The sign test is REQUIRED on every contrast, not optional. It is the
+            # distribution-free bound on the t interval's optimism, so a contrast
+            # that omits it states an approximation with nothing holding it honest.
+            signs = contrast.get('sign_test')
+            if not isinstance(signs, dict):
+                out.append(
+                    _fail(
+                        'ER-SCHEMA',
+                        f'{where}: every contrast states a sign_test mapping with p_value, '
+                        f'effective_n and positive (got {signs!r})',
+                    )
+                )
+            else:
+                if isinstance(signs.get('p_value'), bool) or not isinstance(
+                    signs.get('p_value'), (int, float)
+                ):
+                    out.append(_fail('ER-SCHEMA', f'{where}: sign_test p_value must be a number'))
+                for field in ('effective_n', 'positive'):
+                    if not _is_int(signs.get(field)) or signs[field] < 0:
+                        out.append(
+                            _fail(
+                                'ER-SCHEMA',
+                                f'{where}: sign_test {field} must be a non-negative integer',
+                            )
+                        )
+
+            interval = contrast.get('interval')
+            if not isinstance(interval, dict):
+                out.append(
+                    _fail(
+                        'ER-SCHEMA',
+                        f'{where}: interval must be a structured mapping with method, low, high '
+                        f'(got {interval!r})',
+                    )
+                )
+                continue
+            method = interval.get('method')
+            if method not in methods:
+                out.append(
+                    _fail('ER-SCHEMA', f'{where}: interval method {method!r} not in {methods}')
+                )
+            # A non-numeric alpha would otherwise reach stats.py and surface as a raw
+            # Python comparison error instead of a sentence about the record.
+            if 'alpha' in interval and (
+                isinstance(interval['alpha'], bool)
+                or not isinstance(interval['alpha'], (int, float))
+            ):
+                out.append(
+                    _fail(
+                        'ER-SCHEMA',
+                        f'{where}: interval alpha must be a number in (0, 1) '
+                        f'(got {interval["alpha"]!r})',
+                    )
+                )
     return out
 
 
@@ -482,6 +719,51 @@ def check_recon(record: dict) -> list[Finding]:
                             f'outcome {oname!r}: sum of arm denominators {s} != N_expected {n_expected}',
                         )
                     )
+    out += check_cluster_recon(record)
+    return out
+
+
+def check_cluster_recon(record: dict) -> list[Finding]:
+    """Schema v1.1: an outcome carrying BOTH a `clusters` block and an `arms` block
+    must have the clusters sum, per arm, to that arm's numerator and denominator.
+
+    Without this the two blocks are free to disagree and the record carries two
+    different answers to the same question -- the headline rate from `arms` and the
+    contrast from `clusters` -- which is the founding defect in a new place. Arms the
+    clusters block does not cover are left alone (a subset-scoped clusters block is
+    legal); the rule fires only where both blocks speak about the same arm.
+    """
+    out: list[Finding] = []
+    for oname, ores in _outcome_results(record):
+        clusters, arms = ores.get('clusters'), ores.get('arms')
+        if not (isinstance(clusters, dict) and isinstance(arms, dict)):
+            continue
+        totals: dict[str, list[int]] = {}
+        for per_arm in clusters.values():
+            if not isinstance(per_arm, dict):
+                continue
+            for aname, cell in per_arm.items():
+                counts = _cluster_cell(cell)
+                if counts is None:
+                    continue  # malformed cells are ER-SCHEMA's concern
+                running = totals.setdefault(str(aname), [0, 0])
+                running[0] += counts[0]
+                running[1] += counts[1]
+        for aname, arm in arms.items():
+            summed = totals.get(str(aname))
+            if summed is None or not isinstance(arm, dict):
+                continue
+            num, den = arm.get('numerator'), arm.get('denominator')
+            if not (_is_int(num) and _is_int(den)):
+                continue  # ER-SCHEMA owns a malformed arm
+            if [num, den] != summed:
+                out.append(
+                    _fail(
+                        'ER-RECON',
+                        f'outcome {oname!r} arm {aname!r}: the clusters block sums to '
+                        f'{summed[0]}/{summed[1]} but the arm reports {num}/{den}',
+                    )
+                )
     return out
 
 
@@ -592,6 +874,205 @@ def check_stats(record: dict, schema: dict) -> list[Finding]:
                     'ER-STATS',
                     f'outcome {oname!r}: paired:false on a shared-task design needs a '
                     'clustered_se or an explicit unclustered_reason',
+                )
+            )
+    out += check_contrasts(record)
+    return out
+
+
+# --- schema v1.1: recomputing the paired contrasts (ER-STATS) ---------------
+
+# The one estimator this gate knows how to recompute. It is checked against the
+# record rather than assumed, so adding a second estimator to the schema's enum
+# without a path here fails loudly instead of being checked as a paired difference.
+_PAIRED_ESTIMATOR = 'paired_difference'
+
+
+def _recompute_mismatch(stated: object, computed: float) -> str | None:
+    """None when a stated 4-decimal value agrees with the recomputation at the
+    module's existing tolerances, else the reconciling arithmetic as a phrase."""
+    if not isinstance(stated, (int, float)) or isinstance(stated, bool):
+        return None  # a missing or ill-typed value is ER-SCHEMA's concern
+    recomputed = round(computed, 4)
+    if math.isclose(recomputed, float(stated), abs_tol=stats.ATOL, rel_tol=stats.RTOL):
+        return None
+    return f'{stated} != recomputed {recomputed}'
+
+
+def check_contrasts(record: dict) -> list[Finding]:
+    """Recompute every stated `contrasts[]` entry from the outcome's `clusters` block.
+
+    This is the fix the v1.1 extension exists for: the per-arm interval prices
+    independent trials, but the randomization unit is the prompt cluster, so the
+    HEADLINE precision is quoted on the paired/clustered scale and recomputed here
+    from the per-cluster counts -- estimate and SE through `stats.paired_difference`,
+    the interval through `stats.paired_interval`, at the same ATOL/RTOL the per-arm
+    intervals already answer to.
+
+    A contrast with no clusters block behind it FAILS rather than passing quietly: a
+    stated statistic the gate cannot recompute is exactly the vacuous gate this
+    discipline deletes on sight.
+
+    The stated `sign_test` triple (p_value, effective_n, positive) is recomputed the
+    same way, against the fixed tie rule. It is stated rather than only derived
+    because a number that lives only in prose is a number nothing checks: the drift
+    gate re-parses the embedded typed block, so a p-value that exists only in the
+    report's sentences can be edited to anything and still pass. Stating it puts it
+    inside the block the gates read.
+
+    Beside every contrast the gate also emits the recomputed triple as an INFO note.
+    That is confirmation, not the check -- it shows the arithmetic the gate just did,
+    and it gives a record still being authored the exact values to write down.
+    """
+    out: list[Finding] = []
+    for oname, ores in _outcome_results(record):
+        contrasts = ores.get('contrasts')
+        if not isinstance(contrasts, list):
+            continue
+        clusters = ores.get('clusters')
+        for i, contrast in enumerate(contrasts):
+            if not isinstance(contrast, dict):
+                continue  # ER-SCHEMA named the shape
+            arms = contrast.get('arms')
+            where = f'results.{oname}.contrasts[{i}] {str(contrast.get("name"))!r}'
+            if not (
+                isinstance(arms, list) and len(arms) == 2 and all(isinstance(a, str) for a in arms)
+            ):
+                continue  # ER-SCHEMA named the shape
+            if contrast.get('estimator') != _PAIRED_ESTIMATOR:
+                # ER-SCHEMA rejects an estimator outside the enum; this catches the
+                # other direction -- a future estimator ADDED to the enum without a
+                # recomputation path here would otherwise be silently checked as if
+                # it were a paired difference.
+                out.append(
+                    _fail(
+                        'ER-STATS',
+                        f'{where}: no recomputation path for estimator '
+                        f'{contrast.get("estimator")!r}; this gate recomputes '
+                        f'{_PAIRED_ESTIMATOR!r} only',
+                    )
+                )
+                continue
+            if not isinstance(clusters, dict) or not clusters:
+                out.append(
+                    _fail(
+                        'ER-STATS',
+                        f'{where}: the outcome carries no clusters block, so the stated contrast '
+                        'cannot be recomputed; a stated statistic nothing can check is not a '
+                        'contrast',
+                    )
+                )
+                continue
+            arrays, reason = cluster_arrays(clusters, arms[0], arms[1])
+            if arrays is None:
+                out.append(
+                    _fail(
+                        'ER-STATS', f'{where}: cannot recompute from the clusters block: {reason}'
+                    )
+                )
+                continue
+            _pids, a_num, a_den, b_num, b_den = arrays
+            try:
+                diff = stats.paired_difference(a_num, a_den, b_num, b_den)
+            except ValueError as exc:
+                out.append(_fail('ER-STATS', f'{where}: paired difference recompute failed: {exc}'))
+                continue
+
+            stated_g = contrast.get('n_clusters')
+            if _is_int(stated_g) and stated_g != diff.n_clusters:
+                out.append(
+                    _fail(
+                        'ER-STATS',
+                        f'{where}: stated n_clusters {stated_g} != {diff.n_clusters} prompt '
+                        'cluster(s) in the clusters block',
+                    )
+                )
+            for field, computed in (('estimate', diff.mean_diff), ('se', diff.se)):
+                mismatch = _recompute_mismatch(contrast.get(field), computed)
+                if mismatch is not None:
+                    out.append(
+                        _fail(
+                            'ER-STATS',
+                            f'{where}: stated {field} {mismatch} (paired_difference over the '
+                            f'{diff.n_clusters} cluster(s) of the clusters block)',
+                        )
+                    )
+
+            interval = contrast.get('interval')
+            alpha = interval.get('alpha', 0.05) if isinstance(interval, dict) else 0.05
+            # An ill-typed alpha is ER-SCHEMA's to name; recomputing through it here
+            # would only add a second, Python-shaped message about the same defect.
+            if isinstance(interval, dict) and not (
+                isinstance(alpha, bool) or not isinstance(alpha, (int, float))
+            ):
+                try:
+                    band = stats.paired_interval(diff.mean_diff, diff.se, diff.n_clusters, alpha)
+                except ValueError as exc:
+                    out.append(
+                        _fail('ER-STATS', f'{where}: paired_interval recompute failed: {exc}')
+                    )
+                else:
+                    for field, computed in (
+                        ('low', band.low),
+                        ('high', band.high),
+                        ('t_quantile', band.quantile),
+                    ):
+                        stated = interval.get(field)
+                        if not isinstance(stated, (int, float)) or isinstance(stated, bool):
+                            out.append(
+                                _fail(
+                                    'ER-STATS',
+                                    f'{where}: interval {field} missing (a paired_t interval '
+                                    'states low, high and the t_quantile it used)',
+                                )
+                            )
+                            continue
+                        mismatch = _recompute_mismatch(stated, computed)
+                        if mismatch is not None:
+                            out.append(
+                                _fail(
+                                    'ER-STATS',
+                                    f'{where}: stated interval {field} {mismatch} '
+                                    f'(paired_interval: estimate +/- t(1 - alpha/2, {band.df}) x '
+                                    f'se, alpha {alpha})',
+                                )
+                            )
+
+            deltas = stats.cluster_deltas(a_num, a_den, b_num, b_den)
+            signs = stats.sign_test(deltas)
+            ties = len(deltas) - signs.effective_n
+            stated_signs = contrast.get('sign_test')
+            if isinstance(stated_signs, dict):
+                mismatch = _recompute_mismatch(stated_signs.get('p_value'), signs.p_value)
+                if mismatch is not None:
+                    out.append(
+                        _fail(
+                            'ER-STATS',
+                            f'{where}: stated sign_test p_value {mismatch} (exact sign test on '
+                            f'the {signs.effective_n} cluster(s) surviving the tie rule)',
+                        )
+                    )
+                for field, computed in (
+                    ('effective_n', signs.effective_n),
+                    ('positive', signs.positive),
+                ):
+                    stated = stated_signs.get(field)
+                    if _is_int(stated) and stated != computed:
+                        out.append(
+                            _fail(
+                                'ER-STATS',
+                                f'{where}: stated sign_test {field} {stated} != recomputed '
+                                f'{computed} (from the clusters block, {ties} zero delta(s) '
+                                'dropped by the tie rule)',
+                            )
+                        )
+            out.append(
+                _info(
+                    'ER-STATS',
+                    f'{where}: sign test p={signs.p_value:.4f} on {signs.effective_n} effective '
+                    f'cluster(s) of {len(deltas)} ({ties} zero delta(s) dropped), '
+                    f'{signs.positive} positive - the exact distribution-free bound recomputed '
+                    'from the clusters block, which the stated sign_test is checked against',
                 )
             )
     return out
@@ -1110,7 +1591,12 @@ def run_checks(
 def _emit(path: Path, report: Report) -> None:
     print(f'== {path} ==')
     for f in report.findings:
-        prefix = f.code if f.level == 'FAIL' else f'WARN [{f.code}]'
+        if f.level == 'FAIL':
+            prefix = f.code
+        elif f.level == 'WARN':
+            prefix = f'WARN [{f.code}]'
+        else:
+            prefix = f'INFO [{f.code}]'
         print(f'{prefix}: {f.message}')
     for code, reason in report.skips:
         print(f'SKIP {code}: {reason}')

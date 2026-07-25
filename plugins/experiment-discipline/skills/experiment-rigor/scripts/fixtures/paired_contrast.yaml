@@ -1,0 +1,142 @@
+# Probe-tier record exercising the schema v1.1 paired-contrast machinery: a
+# `clusters` block (per prompt id, per arm: a numerator and a denominator) and a
+# `contrasts[]` entry that ER-STATS recomputes from it. Six shared prompts, four
+# runs per prompt per arm, so the randomization unit is the prompt cluster and the
+# per-arm Wilson intervals below are DESCRIPTIVE -- an upper bound on precision --
+# while the headline number is the contrast.
+#
+# Passes the full validate.py (a probe engages no context gate). The test suite
+# derives its one-defect variants from this base by a single mutation, and
+# paired_contrast_mismatch.yaml is the committed twin whose stated contrast
+# disagrees with these clusters.
+schema_version: 1.1
+tier: probe
+experiment: paired-contrast-demo
+design:
+  shared_tasks: true
+  cells:
+    - name: with_hint
+      planned_n: 24
+    - name: control
+      planned_n: 24
+disposition:
+  completed: 48
+  excluded: 0
+  total: 48
+outcomes:
+  - name: signal
+    role: exploratory
+    operationalization: fraction of runs whose output contains the checklist item, by regex
+results:
+  signal:
+    verdict: exploratory_signal
+    paired: true
+    arms:
+      with_hint:
+        numerator: 17
+        denominator: 24
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.5083
+          high: 0.8509
+      control:
+        numerator: 12
+        denominator: 24
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.3143
+          high: 0.6857
+    clusters:
+      p1:
+        with_hint:
+          numerator: 4
+          denominator: 4
+        control:
+          numerator: 2
+          denominator: 4
+      p2:
+        with_hint:
+          numerator: 3
+          denominator: 4
+        control:
+          numerator: 2
+          denominator: 4
+      p3:
+        with_hint:
+          numerator: 4
+          denominator: 4
+        control:
+          numerator: 4
+          denominator: 4
+      p4:
+        with_hint:
+          numerator: 2
+          denominator: 4
+        control:
+          numerator: 1
+          denominator: 4
+      p5:
+        with_hint:
+          numerator: 3
+          denominator: 4
+        control:
+          numerator: 1
+          denominator: 4
+      p6:
+        with_hint:
+          numerator: 1
+          denominator: 4
+        control:
+          numerator: 2
+          denominator: 4
+    contrasts:
+      - name: with_hint_minus_control
+        arms: [with_hint, control]
+        estimator: paired_difference
+        estimate: 0.2083
+        se: 0.1193
+        n_clusters: 6
+        interval:
+          method: paired_t
+          alpha: 0.05
+          low: -0.0984
+          high: 0.515
+          t_quantile: 2.5706
+        # p3 is a tie (4/4 against 4/4), so the fixed tie rule drops it and the exact
+        # test runs on 5 surviving clusters, 4 of them positive.
+        sign_test:
+          p_value: 0.375
+          effective_n: 5
+          positive: 4
+threats:
+  contamination_familiarity:
+    status: residual
+    statement: models may have seen structurally similar tasks in pretraining
+  prompt_format_sensitivity:
+    status: controlled
+    statement: one fixed prompt template across arms
+  judge_bias:
+    status: controlled
+    statement: deterministic regex verifier, no LLM judge
+  model_version_drift:
+    status: residual
+    statement: single unpinned snapshot for the probe window
+  nondeterminism:
+    status: residual
+    statement: sampling temperature above zero; four runs per prompt per arm
+  construct_validity_proxy:
+    status: residual
+    statement: item presence is a proxy for the underlying discipline
+  token_length_confound:
+    status: controlled
+    statement: output token budget capped equally across arms
+  selection_exclusion:
+    status: controlled
+    statement: no trials excluded
+  generalization:
+    status: residual
+    statement: six prompts from one task family
+run:
+  source: hand

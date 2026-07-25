@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE.parent / 'templates'
 PROBE = TEMPLATES / 'probe.yaml'
 RG2X2 = HERE.parent / 'examples' / 'rg-2x2' / 'record.yaml'
+PAIRED_CONTRAST = HERE / 'fixtures' / 'paired_contrast.yaml'
 
 
 def _load(path: Path) -> dict:
@@ -74,6 +75,55 @@ def test_report_has_lf_and_single_trailing_newline():
     text = render.render_report(_load(PROBE))
     assert '\r' not in text
     assert text.endswith('\n') and not text.endswith('\n\n')
+
+
+# --- the paired contrast in the derived report (schema v1.1) ----------------
+
+
+def test_report_carries_the_contrast_and_its_stated_sign_test():
+    text = render.render_report(_load(PAIRED_CONTRAST))
+    line = next(ln for ln in text.splitlines() if 'with_hint_minus_control' in ln)
+    assert 'paired_difference' in line, line
+    assert 'estimate=0.2083' in line and 'se=0.1193' in line, line
+    assert '6 cluster(s)' in line, line
+    assert 'paired_t CI [-0.0984, 0.515]' in line, line
+    assert 'sign test p=0.375 on 5 effective cluster(s), 4 positive' in line, line
+
+
+def test_contrast_line_quotes_the_record_and_never_recomputes():
+    # Record-is-source: the renderer reads the stated numbers and validate.py's
+    # ER-STATS is what holds them to the clusters block. Were render.py to recompute
+    # instead, the prose and the embedded block would be two answers with nothing
+    # reconciling them -- so a changed stated value, clusters untouched, must move
+    # the line.
+    record = _load(PAIRED_CONTRAST)
+    record['results']['signal']['contrasts'][0]['sign_test']['p_value'] = 0.01
+    line = next(
+        ln for ln in render.render_report(record).splitlines() if 'with_hint_minus_control' in ln
+    )
+    assert 'sign test p=0.01' in line, line
+
+
+def test_per_arm_interval_is_marked_descriptive_beside_a_contrast():
+    record = _load(PAIRED_CONTRAST)
+    text = render.render_report(record)
+    arm_line = next(ln for ln in text.splitlines() if 'signal / with_hint:' in ln)
+    assert 'wilson CI [0.5083, 0.8509] (descriptive' in arm_line, arm_line
+    # Without a contrast the same arm line carries no demotion: the marker tracks
+    # the presence of a headline on the paired scale, not the arm.
+    del record['results']['signal']['contrasts']
+    plain = render.render_report(record)
+    plain_line = next(ln for ln in plain.splitlines() if 'signal / with_hint:' in ln)
+    assert 'descriptive' not in plain_line, plain_line
+
+
+def test_contrast_reporting_does_not_disturb_the_embedded_block():
+    # The contrast lines are derived prose; the drift digest reads only the embedded
+    # YAML block, which must still equal the record exactly.
+    record = _load(PAIRED_CONTRAST)
+    blocks = render._YAML_FENCE.findall(render.render_report(record))
+    assert len(blocks) == 1
+    assert yaml.safe_load(blocks[0]) == record
 
 
 # --- the drift gate ---------------------------------------------------------

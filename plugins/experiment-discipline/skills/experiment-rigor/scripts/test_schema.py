@@ -57,6 +57,38 @@ def test_schema_json_loads_without_weakening_the_gate():
         assert loaded[key] == value, key
 
 
+def test_known_versions_is_bumped_in_both_copies():
+    # The v1.1 extension is additive, so known_versions carries BOTH: a v1.0 record
+    # keeps validating and a v1.1 one is recognized. The sync test above is what makes
+    # bumping one copy alone red; this names the value the bump had to land on.
+    assert validate._EMBEDDED_SCHEMA['known_versions'] == [1, 1.1]
+    assert _schema_json()['known_versions'] == [1, 1.1]
+    assert _schema_json()['schema_version'] == 1.1
+
+
+def test_v11_contrast_keys_are_present_and_readable():
+    data = _schema_json()
+    assert data['contrast_estimators'] == ['paired_difference']
+    assert data['contrast_interval_methods'] == ['paired_t']
+    for shape in ('cluster_cell', 'contrast', 'contrast_interval', 'contrast_sign_test'):
+        assert shape in data['field_shapes'], shape
+    assert data['field_shapes']['contrast'] == [
+        'name',
+        'arms',
+        'estimator',
+        'estimate',
+        'se',
+        'n_clusters',
+        'interval',
+        'sign_test',
+    ]
+    assert data['field_shapes']['contrast_sign_test'] == ['p_value', 'effective_n', 'positive']
+    # Both keys are in the completeness set, so a schema.json that emptied either
+    # would raise rather than silently disable the gate that reads it.
+    assert 'contrast_estimators' in validate._SCHEMA_LIST_KEYS
+    assert 'contrast_interval_methods' in validate._SCHEMA_LIST_KEYS
+
+
 def test_schema_json_is_the_loaded_default():
     # With schema.json on disk, the default load must come from it (not the embedded
     # fallback) -- proven by a key schema.json adds that the embedded copy lacks.

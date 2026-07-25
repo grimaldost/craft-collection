@@ -26,6 +26,8 @@ Adapted for LLM evals from Evan Miller's guidance on adding error bars to evals.
    within each shared task and average the per-task differences
    (`paired_difference`); this removes between-task variance that an unpaired
    two-sample comparison leaves in, tightening the interval on the same data.
+   The record states this as a `contrasts[]` entry over a `clusters` block, and
+   the validator recomputes it — see "The paired scale" below.
 4. **Buy repeats before precision — epochs and resampling.** Nondeterminism is
    measured, not assumed away: draw each condition several times (epochs) so
    sampling variance enters the interval. Resampling over tasks and draws
@@ -53,6 +55,63 @@ allowed methods are exact at any n:
 
 The floor of 30 lives in `schema.json` as `small_n_floor`; the validator names
 the small-n rule when a refused method is requested at a denominator under it.
+
+## The paired scale — and the one approximation in the module
+
+A per-arm interval prices independent trials. When the same prompts are scored in
+every arm the randomization unit is the prompt cluster, not the trial, so
+recomputing each arm from raw counts forces an independent-trials interval onto a
+clustered design — a Wilson band that is systematically too narrow. Schema v1.1
+records the clustered scale directly: `results.<outcome>.clusters` holds a
+numerator and a denominator per prompt id per arm, and
+`results.<outcome>.contrasts[]` states the comparison over it — the ordered arm
+pair, the estimator, the estimate, its SE, the cluster count, an interval, and a
+sign test. `ER-STATS` recomputes every stated contrast from the cluster block.
+
+**The per-arm Wilson interval stays, demoted to descriptive.** For an outcome
+scored over the full cell set it still recomputes and still fails when wrong; it
+is simply not the headline. Read it as an *upper bound on precision* — the
+tightest band the data could support if every trial were independent, which they
+are not — and quote the contrast's interval as the result.
+
+**`paired_interval` is an approximation, and the only one here.** It is the
+t-interval on the per-cluster deltas, `estimate ± t(0.975, clusters − 1) × se`,
+and the interval records the `t_quantile` it used so the arithmetic is checkable
+by hand. Its assumptions are worth naming because at these sizes they are not
+free: the per-cluster deltas are taken to be roughly symmetric, and a t reference
+distribution is taken to hold on very few clusters. Neither assumption is needed
+by `clopper_pearson` (exact-conservative, by binomial-tail inversion) or by the
+Beta-Binomial credible interval (exact for integer priors). With two repeats per
+prompt a per-cluster delta lives in {−1, −0.5, 0, 0.5, 1}, which is about as far
+from a smooth symmetric distribution as a quantity gets.
+
+**So an exact sign test is required beside every contrast.** It is
+distribution-free — it assumes only that clusters are independent and that, under
+the null, each is as likely to move one way as the other — and it is therefore the
+robustness bound on the t-interval's optimism. Its tie rule is fixed by the schema
+rather than chosen after seeing the deltas, which is the whole point of naming both
+statistics up front: **a zero per-cluster delta is dropped**, and the surviving
+effective cluster count is reported beside the p-value. Ties are expected to be the
+modal cluster — most prompts will not move at all — so the effective n is
+load-bearing information, not a footnote: a p-value on 3 surviving clusters out of
+12 is a different claim from the same p-value on 12 of 12.
+
+The record **states** the triple — `sign_test.p_value`, `sign_test.effective_n`,
+`sign_test.positive` — and `ER-STATS` recomputes all three from the cluster block.
+Stated rather than merely printed, because a number that lives only in a report's
+prose is a number no gate reads: the drift and parity gates re-parse the embedded
+typed block, so a p-value outside that block can be edited to anything and still
+pass. `validate.py` also echoes the recomputed triple as an `INFO` line, which
+confirms the arithmetic and hands a record still being authored the values it has
+to write down — but the check is the recomputation, not the echo. It stays
+hand-checkable either way: the effective n and the count of positive deltas both
+follow from the recorded per-cluster counts.
+
+An outcome scored over only *some* of the declared cells carries **no `arms` block
+at all** — just its clusters and its contrasts. The presence of `arms` is how the
+validator tells the two scopes apart: with it, the outcome is held to the
+full-cell-set reconciliation; without it, no full-cell-set rule applies and no
+per-arm rate is stated to be believed.
 
 ## The Beta(1, 1) prior and its sensitivity
 

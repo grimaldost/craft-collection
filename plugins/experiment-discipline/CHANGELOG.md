@@ -95,6 +95,50 @@ the declarable half (effect uncertainty).
   only checkable item at tier-0, where the other four are vacuous), while the
   tier-specific spelling and the ASCII rationale stay in the templates' comments and the
   tier-0 form's reasoning in `references/report-skeleton.md`, out of the eager body.
+- **Schema v1.1 — the paired-contrast machinery** (`templates/schema.json`,
+  `validate._EMBEDDED_SCHEMA`, `scripts/stats.py`, `scripts/validate.py`,
+  `scripts/render.py`, `templates/SCHEMA.md`, `templates/measurement.yaml`,
+  `references/small-n-stats.md`). The
+  shipped `ER-STATS` branch recomputed each arm's interval from raw per-arm counts,
+  which mechanically forces an independent-trials Wilson interval onto a design whose
+  unit is the prompt cluster. Two additive blocks fix it: `results.<outcome>.clusters`
+  (per prompt id, per arm: a numerator and a denominator) and
+  `results.<outcome>.contrasts[]` (a `name`, the ordered `arms` pair, an `estimator`,
+  the `estimate`, its `se`, `n_clusters`, an `interval`, and a `sign_test`). `ER-STATS`
+  recomputes every stated contrast from the cluster block at the existing ATOL/RTOL
+  tolerances and names the offending contrast; a contrast with no cluster block behind
+  it fails rather than passing unchecked. The per-arm Wilson interval stays and is still recomputed,
+  demoted to **descriptive** — an upper bound on precision — with the headline quoted
+  on the clustered scale, and the derived report marks the demotion in the line itself.
+  An outcome scored over a subset of the cells carries **no `arms` block at all**;
+  that absence is how the validator tells the two scopes apart, so no new field was
+  added to declare it. `stats.py` gains `paired_interval` (the t-interval
+  `estimate +/- t(1 - alpha/2, clusters - 1) * se`, with the quantile recorded in the
+  record and recomputed by the gate), `student_t_quantile` (the stdlib has no
+  Student-t inverse, so the CDF is summed from the finite elementary series that
+  exists for integer df and inverted by the module's fixed bisection — exact at every
+  df; a p so close to 1 that the quantile cannot be bracketed raises rather than
+  returning the bracket end), `sign_test` (exact,
+  distribution-free, with the tie rule fixed here before the freeze: a zero
+  per-cluster delta is dropped and the surviving effective cluster count is reported),
+  `expand_cluster_counts` (the lossless counts-to-trial-list adapter `clustered_se`
+  needs, tested by round trip and against a known SE), and `cluster_deltas` (the one
+  definition `paired_difference` averages and `sign_test` counts signs of). The sign
+  test is **stated in the record and recomputed by the gate**: every contrast carries
+  `sign_test` (`p_value`, `effective_n`, `positive`) and `ER-STATS` checks all three
+  against the cluster block. It is a record field rather than only an emission because
+  the drift and parity gates re-parse the embedded typed block — a p-value living only
+  in the report's prose could be edited to anything and still pass both. `validate.py`
+  additionally echoes the recomputed triple as an `INFO` line, which confirms the
+  arithmetic and hands a record still being authored the values to write down; the
+  check is the recomputation, not the echo, and `render.py` quotes the record rather
+  than deriving a second answer. `ER-RECON` gains one rule: where an outcome carries both blocks, the clusters
+  must sum per arm to that arm's counts, so the record cannot hold two answers to the
+  same question. `known_versions` moves to `[1, 1.1]` in **both** `schema.json` and
+  `validate._EMBEDDED_SCHEMA` (the sync test reddens on either one alone, verified in
+  both directions), and the extension is purely additive: the RG-2x2 example record
+  and both other tier templates are unchanged and still validate. `SCHEMA.md` was
+  regenerated through its generator, not hand-edited.
 - **Trigger dev set and sealed holdout** authored at one sitting
   (`evals/trigger/experiment-rigor.json`, `evals/trigger/holdout/experiment-rigor.json`),
   plus a correct-usage rubric (`evals/tasks/experiment-rigor/`) checking that a produced

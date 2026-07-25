@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "known_versions": [1],
+  "schema_version": 1.1,
+  "known_versions": [1, 1.1],
   "tiers": ["probe", "measurement", "decision"],
   "required_fields": {
     "probe": ["schema_version", "tier", "experiment", "design", "outcomes", "threats"],
@@ -49,6 +49,8 @@
   ],
   "confirmatory_verdicts": ["confirmatory_supported", "confirmatory_null"],
   "ci_methods": ["wilson", "clopper_pearson", "beta_binomial"],
+  "contrast_estimators": ["paired_difference"],
+  "contrast_interval_methods": ["paired_t"],
   "certainty_enum": ["high", "moderate", "low", "very_low"],
   "small_n_floor": 30,
   "field_shapes": {
@@ -62,6 +64,19 @@
     ],
     "rate": ["numerator", "denominator", "ci"],
     "ci": ["method", "low", "high", "alpha"],
+    "cluster_cell": ["numerator", "denominator"],
+    "contrast": [
+      "name",
+      "arms",
+      "estimator",
+      "estimate",
+      "se",
+      "n_clusters",
+      "interval",
+      "sign_test"
+    ],
+    "contrast_interval": ["method", "alpha", "low", "high", "t_quantile"],
+    "contrast_sign_test": ["p_value", "effective_n", "positive"],
     "decision_rule": ["metric", "comparison", "threshold", "direction"],
     "amendment": ["commit", "timestamp", "scope"],
     "plan_frozen_at": ["commit", "path", "timestamp"],

@@ -22,7 +22,9 @@ sha256 over each parsed block re-serialized through the canonical policy. A cosm
 edit to the report's prose is invisible; a changed value in the embedded block, or a
 record that moved on without regenerating its report, is drift and exits 1.
 
-Depends on PyYAML; stdlib otherwise. Python 3.13+.
+Depends on PyYAML; stdlib otherwise. Python 3.13+. Nothing here recomputes a
+statistic: every number in a derived line is read from the record, and validate.py's
+ER-STATS is what holds the record's numbers to the counts behind them.
 """
 
 from __future__ import annotations
@@ -85,16 +87,52 @@ def load_record(path: str | Path) -> dict[str, Any]:
 # --- report derivation ------------------------------------------------------
 
 
-def _rate_line(oname: str, aname: str, arm: dict) -> str:
+def _rate_line(oname: str, aname: str, arm: dict, *, descriptive: bool = False) -> str:
     num, den = arm.get('numerator'), arm.get('denominator')
     ci = arm.get('ci') if isinstance(arm.get('ci'), dict) else None
     frac = f'{num}/{den}' if num is not None and den is not None else '(no rate)'
     if ci and isinstance(ci.get('low'), (int, float)) and isinstance(ci.get('high'), (int, float)):
         method = ci.get('method', 'wilson')
         span = f'{method} CI [{ci["low"]}, {ci["high"]}]'
+        # Schema v1.1: once the outcome states a paired contrast, the per-arm interval
+        # is an UPPER BOUND on precision (it prices independent trials on a design whose
+        # unit is the prompt cluster) and the headline number is the contrast's. The
+        # demotion is written into the derived line rather than left to the reader.
+        if descriptive:
+            span += ' (descriptive; headline precision is the contrast below)'
     else:
         span = 'no CI'
     return f'- {oname} / {aname}: {frac}, {span}'
+
+
+def _contrast_line(oname: str, contrast: dict) -> str:
+    """One derived line per stated contrast: the paired estimate, its t-interval, and
+    the sign test that rides beside it as the distribution-free bound.
+
+    Every number here is READ from the record, never recomputed. The record is the
+    source and validate.py's ER-STATS is what holds each of these values to the
+    clusters block; a second derivation in the renderer would be a second answer with
+    nothing reconciling the two. It also keeps the prose and the embedded typed block
+    quoting one number, so a hand-edit to either is drift the gates see.
+    """
+    name = contrast.get('name', '(unnamed)')
+    arms = contrast.get('arms') if isinstance(contrast.get('arms'), list) else []
+    pair = ' - '.join(str(a) for a in arms) if len(arms) == 2 else '(no arm pair)'
+    parts = [f'- {oname} / {name} ({pair}): {contrast.get("estimator", "(no estimator)")}']
+    parts.append(f'estimate={contrast.get("estimate")}, se={contrast.get("se")}')
+    parts.append(f'{contrast.get("n_clusters")} cluster(s)')
+    interval = contrast.get('interval')
+    if isinstance(interval, dict):
+        parts.append(
+            f'{interval.get("method", "paired_t")} CI [{interval["low"]}, {interval["high"]}]'
+        )
+    signs = contrast.get('sign_test')
+    if isinstance(signs, dict):
+        parts.append(
+            f'sign test p={signs.get("p_value")} on {signs.get("effective_n")} effective '
+            f'cluster(s), {signs.get("positive")} positive'
+        )
+    return ', '.join(parts)
 
 
 def render_report(record: dict[str, Any]) -> str:
@@ -141,9 +179,15 @@ def render_report(record: dict[str, Any]) -> str:
             verdict = ores.get('verdict')
             if verdict is not None:
                 lines.append(f'  - {oname}: verdict={verdict}, paired={ores.get("paired")}')
+            contrasts = ores.get('contrasts')
+            has_contrasts = isinstance(contrasts, list) and bool(contrasts)
             for aname, arm in (ores.get('arms') or {}).items():
                 if isinstance(arm, dict):
-                    lines.append('  ' + _rate_line(oname, aname, arm))
+                    lines.append('  ' + _rate_line(oname, aname, arm, descriptive=has_contrasts))
+            if has_contrasts:
+                for contrast in contrasts:
+                    if isinstance(contrast, dict):
+                        lines.append('  ' + _contrast_line(oname, contrast))
 
     threats = record.get('threats')
     if isinstance(threats, dict):
@@ -600,6 +644,8 @@ def schema_markdown(schema: dict[str, Any]) -> str:
         ('Verdict', 'verdict_enum'),
         ('Confirmatory verdicts (probe-refused)', 'confirmatory_verdicts'),
         ('CI method (no CLT/normal path)', 'ci_methods'),
+        ('Contrast estimator (v1.1, the clustered/paired scale)', 'contrast_estimators'),
+        ('Contrast interval method (v1.1)', 'contrast_interval_methods'),
         ('Certainty (cross-experiment GRADE)', 'certainty_enum'),
     ]
     for title, key in enum_specs:
@@ -614,6 +660,53 @@ def schema_markdown(schema: dict[str, Any]) -> str:
     for name in sorted(schema['field_shapes']):
         fields = ', '.join(f'`{f}`' for f in schema['field_shapes'][name])
         lines.append(f'- **{name}**: {fields}')
+    lines.append('')
+
+    lines.append('## The paired contrast (schema v1.1)')
+    lines.append('')
+    lines.append(
+        'A per-arm interval prices independent trials. When the randomization unit is the '
+        'prompt cluster -- the same prompts scored in every arm -- that is the wrong unit, '
+        'and recomputing each arm from raw counts forces an independent-trials interval onto '
+        'a clustered design. Two additive blocks fix it, and a v1.0 record that carries '
+        'neither is unaffected.'
+    )
+    lines.append('')
+    lines.append(
+        '`results.<outcome>.clusters` holds, per prompt id and per arm, a `numerator` and a '
+        '`denominator`. `results.<outcome>.contrasts[]` states the comparison on that scale: '
+        'a `name`, the ORDERED `arms` pair `[minuend, subtrahend]`, an `estimator`, the '
+        '`estimate`, its `se`, the `n_clusters` behind it, an `interval`, and a `sign_test`. '
+        '`ER-STATS` recomputes every stated contrast from the clusters block -- estimate and '
+        'SE through `stats.paired_difference`, the interval through `stats.paired_interval`, '
+        'the sign test through `stats.sign_test` -- at the same tolerances the per-arm '
+        'intervals answer to, and a contrast with no clusters block behind it fails rather '
+        'than passing unchecked.'
+    )
+    lines.append('')
+    lines.append(
+        'The `paired_t` interval is `estimate +/- t(1 - alpha/2, n_clusters - 1) * se`, and '
+        'the interval records the `t_quantile` it used so the arithmetic is checkable by '
+        'hand. It is an APPROXIMATION -- it assumes roughly symmetric per-cluster deltas and '
+        'a t reference distribution on few clusters -- so an exact, distribution-free sign '
+        'test is REQUIRED beside it on every contrast: `p_value`, the `effective_n` left '
+        'after the tie rule (a zero per-cluster delta is dropped), and the count of '
+        '`positive` deltas. It is stated in the record rather than only printed, because a '
+        'number that lives only in a report sentence is a number no gate reads -- the drift '
+        'and parity gates re-parse the embedded typed block. `validate.py` recomputes the '
+        'triple from the clusters block and also echoes it as an INFO line, which is '
+        'confirmation of the arithmetic (and the values to write down while authoring), not '
+        'the check. See `references/small-n-stats.md`.'
+    )
+    lines.append('')
+    lines.append(
+        'Scope is read from the `arms` block, not from a new field. An outcome carrying '
+        '`arms` is scored over the FULL declared cell set: its arm denominators still have '
+        'to reconcile to N_expected, and its per-arm Wilson interval stays -- DESCRIPTIVE, '
+        'an upper bound on precision, with the headline precision quoted from the contrast. '
+        'An outcome scored over a subset of the cells carries no `arms` block at all; it '
+        'states its clusters and its contrasts, and no full-cell-set rule is applied to it.'
+    )
     lines.append('')
 
     lines.append('## Pre-registration content (Q4, measurement tier)')
