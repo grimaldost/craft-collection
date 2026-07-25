@@ -32,8 +32,9 @@ and CHANGELOGs belong to the tool's release process.
 
 ## The pipeline — run in order
 
-1. **Scope.** Resolve the tool from the `feedback-targets` table in loaded context
-   (ask once if absent; never hunt). Rebuild the dir's `INDEX.md` first (run
+1. **Scope.** Resolve the tool from the feedback-targets binding in the precedence
+   `tool-feedback` defines; its `triage_template` registers step 8's tool-owned
+   template. Rebuild the dir's `INDEX.md` first (run
    `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`):
    its `### Untriaged` section is the input list — reports in no triage doc's
    **Inputs**, detection by input lists, not dates — and the `extends`-lookup in
@@ -128,8 +129,9 @@ and CHANGELOGs belong to the tool's release process.
    Close by re-running the index builder: just-triaged stems still under
    `### Untriaged` mean the Inputs did not parse (fragmented stems) — fix
    before ending.
-8. **Defer to a tool-owned template.** If the binding's `extras` registers a
-   triage template (keel's `reflection-triage`), follow *its* structure and homes;
+8. **Defer to a tool-owned template.** If the binding registers a triage template
+   (`triage_template`, or an `extras` line — keel's `reflection-triage`), follow
+   *its* structure and homes;
    otherwise the template below is authoritative — don't hunt for one. Triaging
    "everything" when one tool owns its own flow? That tool's slice is a
    **digest-for-handoff**: extracted, clustered, owner-tagged (per step 4)

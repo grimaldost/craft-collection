@@ -51,14 +51,20 @@ tool-dogfooding feedback loop (capture + triage).
   registered in-development tool the session exercised, into that tool's own
   feedback directory: what worked, severity-tagged friction, misses with the
   phase that should have caught them, vacuous gates, and proposals with stable
-  finding IDs (`<file-stem>#<n>`). Targets come from a user-supplied
-  `feedback-targets` table — the skill never hunts the filesystem. Offer-first
-  when self-activated.
+  finding IDs (`<file-stem>#<n>`). Targets come from a declared binding, in
+  precedence: a TOML file at `FEEDBACK_TARGETS_FILE=<path>`, else
+  `<claude home>/feedback-targets.toml`, else a `feedback-targets` table supplied
+  in context (e.g. CLAUDE.md), else it asks once — the skill never hunts the
+  filesystem. The file form lets the binding differ per machine without being
+  retyped as prose; format in
+  `skills/tool-feedback/references/feedback-targets-file.md`. Offer-first when
+  self-activated.
 - **feedback-triage** (`/feedback-triage`) — the downstream pass: cluster a
   tool's accumulated feedback reports by underlying cause, reconcile what
   already shipped, assign dispositions (ATTACK / ROUTE OUT / DECLINE), apply a
   promotion gate (reinforced · specific · actionable), and emit a
-  leverage-ordered, status-tracked backlog doc. Defers to a tool-registered
+  leverage-ordered, status-tracked backlog doc. Resolves its target through the
+  same declared binding as `tool-feedback`, and defers to a tool-registered
   triage template (e.g. keel's reflection-triage) when one exists.
 - **compaction-survival** — maintain a persisted, re-readable control anchor
   (mission, plan pointer, live cursor, invariants, exact resume steps) so a

@@ -10,8 +10,10 @@ description: >
   direct imperative naming one tool ("write a dogfooding feedback report for keel")
   is this skill too, since writing that report IS the skill; route it here rather
   than drafting the report freehand — and offer once, unprompted, when a session
-  that exercised a registered tool is winding down. Registered tools come from a feedback-targets table the user supplies (e.g.
-  in CLAUDE.md) — never hunt the filesystem for targets. Design-only or
+  that exercised a registered tool is winding down. Registered tools come from a
+  declared feedback-targets binding — `$FEEDBACK_TARGETS_FILE`, else
+  `<claude home>/feedback-targets.toml`, else a table the user supplies in context
+  (e.g. in CLAUDE.md) — never hunt the filesystem for targets. Design-only or
   authoring-only use of a tool still counts as use. Not for feedback on code or PRs
   (that is code review), not for capturing general session knowledge into a memory
   store (that is journaling-sessions), and not for product feedback to a third-party
@@ -22,37 +24,40 @@ user-invocable: true
 # Tool Feedback
 
 Tools in active development improve only if every session that uses them reports
-back. This skill writes that report — one per tool per distinct concern, into the
-tool's own repo — in a format the downstream `feedback-triage` pass can cluster:
-severity-tagged findings, stable IDs, the phase that missed, explicit links for
-repeats. One tool exercised across distinct phases, concerns, or surfaces (a
-library vs its consumer plugin) takes one report each, under distinct slugs. The
-quality bar: a maintainer can act on it cold.
+back. This skill writes that report — one per tool per distinct concern, into that
+tool's registered feedback directory — in a format the downstream `feedback-triage`
+pass can cluster: severity-tagged findings, stable IDs, the phase that missed,
+explicit links for repeats. One tool exercised across distinct phases, concerns,
+or surfaces (a library vs its consumer plugin) takes one report each, under
+distinct slugs. The quality bar: a maintainer can act on it cold.
 
 ## Registered tools — the feedback-targets binding
 
-A tool is **registered** iff a `feedback-targets` table is in loaded context (e.g.
-the user's CLAUDE.md) or the user points you at one. Shape:
+A tool is **registered** iff the binding names it. Resolve in precedence, first hit
+wins:
 
-| tool | repo | feedback dir | extras |
-|------|------|--------------|--------|
-| keel | C:\Users\me\Documents\keel | docs/feedback | format: that dir's README.md |
+1. `$FEEDBACK_TARGETS_FILE`, if readable — TOML, spec in
+   `references/feedback-targets-file.md`.
+2. else `<claude home>/feedback-targets.toml` — same format.
+3. else a `feedback-targets` table in loaded context (e.g. CLAUDE.md) — a row per
+   tool: repo, feedback dir, `extras`.
+4. else **ask once**.
 
-- **No table in context → ask once** for it (or an inline binding). **Never hunt the
-  filesystem** for candidate repos.
-- `extras` carries per-tool obligations — a format README that stays authoritative
-  for that directory, a registered triage template, "include cost table for engine
-  runs". Read and honor it; if it cites a README that does not exist, fall back to
-  this skill's template and note the gap in the report.
+Reading a **declared** path is not hunting; inferring one is. **Never hunt the
+filesystem** for candidate repos, and never widen the set past what the binding
+names — a missing named path is a finding, not a licence to search.
+
+- `extras` carries per-tool obligations — a format README authoritative for that
+  directory, a registered triage template, "include cost table for engine runs".
+  Honor them; a cited doc that is missing means this skill's template plus a noted gap.
 - The session **used** a tool if it invoked any of its skills/agents/commands, ran
   its engine or CLI, or substantively applied its templates/doctrine.
   **Design-only use, authoring-only use, and maintaining the tool's own repo all
   count.**
-- When the tool is a skill in a repo you are also developing, its authoritative
-  body is the working-tree `SKILL.md` — the installed cache can run *behind* or
-  *ahead* of it. Read the working-tree file before reporting on the skill's
-  current behavior, and **record which copy you actually exercised**, flagging
-  any skew (`references/mechanics.md` has the two directions).
+- When the tool is a skill in a repo you are also developing, the working-tree
+  `SKILL.md` is authoritative — the installed cache can run *behind* or *ahead* of
+  it. Read it before reporting on current behavior, and **record which copy you
+  actually exercised**, flagging any skew (`references/mechanics.md`).
 
 ## Were you asked, or did you notice?
 
@@ -68,8 +73,8 @@ the user's CLAUDE.md) or the user points you at one. Shape:
 
 ## Workflow
 
-1. **Resolve targets and destination.** From the bindings table (or an inline
-   ask), list every registered tool the session **used** (per the binding
+1. **Resolve targets and destination.** From the resolved binding (§ *Registered
+   tools*), list every registered tool the session **used** (per the binding
    section's definition); one report per tool, plus one per additional distinct
    concern or surface where that applies. A tool named but never exercised
    gets a one-line "no report" back to the user — not an empty file. Destination
