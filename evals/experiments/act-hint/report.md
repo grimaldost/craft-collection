@@ -205,6 +205,10 @@ outcomes:
   verifier:
     hash: 68ce9df4a8f578efd18e1f88050c8a6cfd57106bcb8033ce583b0732481c0762
     path: verify.py
+plan_frozen_at:
+  commit: b8307b70dfca69b0accf1a4010d4ed36d19fae89
+  path: evals/experiments/act-hint/record.yaml
+  timestamp: '2026-07-25T20:38:57-03:00'
 run:
   first_run_at: 2026-08-05 00:00:00+00:00
   hand_reason: no fathom ledger produces these rows. The detector runs on the in-repo craft harness (evals/harness/claude_runner.py) because the outcomes are properties of the response text and the isolation primitives -- one isolated credentials-only CLAUDE_CONFIG_DIR for the run set, a fresh spawn per run, a tool allowlist, a --plugin-dir -- already exist there; a fathom bank would rebuild them cross-repo. ER-XCHECK's measurement-tier WARN is therefore a declared posture, not an accident. run_arms.py appends every run to runs.jsonl, which travels with the record as the reconstructible trace.
