@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "max_candidates": 2,
+  "comment": "Arm: inert -- the confound control. Its patterns are wide's, byte for byte, so its firing ROW SET is identical to wide's by construction rather than by an assertion someone has to keep true. What differs is the injected TEXT: inert delivers a per-prompt neutral house-style line that names no experiment, no evaluation, no rigor and no tier, authored by firing_table.py and matched to THAT prompt's wide text within 5 percent on estimated tokens. The router is therefore used here only to decide WHERE inert fires, never WHAT it says. Frozen: the record hashes this file.",
+  "skills": [
+    {
+      "id": "experiment-discipline:experiment-rigor",
+      "patterns": [
+        "\\bis (it|this|that) effective\\b",
+        "\\bwhich (one )?is better\\b",
+        "\\bis (it|this|that) worth it\\b",
+        "\\bcompare\\b[\\w\\s'-]{0,40}\\bwith\\b",
+        "\\b(isso |isto )?[eé] eficaz\\b",
+        "\\bqual [eé] (o |a )?melhor\\b",
+        "\\bvale a pena\\b",
+        "\\bcompare\\b[\\w\\s'-]{0,40}\\bcom\\b",
+        "\\btests?\\b|\\btesting\\b",
+        "\\bevaluate[sd]?\\b|\\bevaluating\\b|\\bevaluation\\b",
+        "\\btestes?\\b|\\btestar\\b|\\btestando\\b",
+        "\\bavali(a|e|ar|am|ando)\\b|\\bavalia[cç][aã]o\\b"
+      ],
+      "min_hits": 1
+    }
+  ]
+}

@@ -1,0 +1,154 @@
+{
+  "comment": "Hand-labeled synthetic responses used to validate the oracle BEFORE it scores a paid run: twelve items spanning both languages and all four 2x2 states, three per state and six per language. Each label pins four independent calls -- the activation line, the five-element skeleton, the resulting 2x2 state, and skeleton wellformedness -- so a pattern edit that quietly loosens one of them reddens test_oracle.py rather than silently changing what the confirmatory outcome means. Two items are adversarial on purpose: en-skeleton-02 carries all five elements behind a MALFORMED line (round brackets) and an inconsistent 9/3 figure, and pt-neither-02 carries one element name and a valid denominator in an ordinary execution answer. The responses are synthetic; no model produced them, and none was drawn from a run. Frozen: the record hashes this file.",
+  "positive_class": "both",
+  "labels": [
+    {
+      "id": "en-both-01",
+      "language": "en",
+      "expected_line": true,
+      "expected_skeleton": true,
+      "expected_state": "both",
+      "expected_wellformed": true,
+      "text": "[experiment-rigor | check -> inline]\n\nMethod — ran both prompts over the same 40 tickets, one pass each, same model and settings.\nMetric — exact match on the assigned queue.\nResults — prompt A 31/40, prompt B 35/40.\nConclusion — B is ahead by 4 of 40 on one pass over a single shared batch.\nWhat this updates — enough to keep drafting with B, not enough to retire A."
+    },
+    {
+      "id": "en-line-01",
+      "language": "en",
+      "expected_line": true,
+      "expected_skeleton": false,
+      "expected_state": "line_only",
+      "expected_wellformed": false,
+      "text": "[experiment-rigor | check -> inline]\n\nB looks better to me. I would go with B and move on."
+    },
+    {
+      "id": "en-skeleton-01",
+      "language": "en",
+      "expected_line": false,
+      "expected_skeleton": true,
+      "expected_state": "skeleton_only",
+      "expected_wellformed": true,
+      "text": "Method — timed the same 12-file fixture three times before and three times after.\nMetric — wall-clock seconds for a full import.\nResults — before 41, 39, 44 s; after 38, 42, 37 s, so 3/3 runs on each side.\nConclusion — the two ranges overlap at three runs each, so this cannot separate a real gain from noise.\nWhat this updates — nothing yet."
+    },
+    {
+      "id": "en-neither-01",
+      "language": "en",
+      "expected_line": false,
+      "expected_skeleton": false,
+      "expected_state": "neither",
+      "expected_wellformed": false,
+      "text": "Renamed load_config across the package and fixed the 9 call sites. The suite is green and nothing else moved."
+    },
+    {
+      "id": "en-both-02",
+      "language": "en",
+      "expected_line": true,
+      "expected_skeleton": true,
+      "expected_state": "both",
+      "expected_wellformed": true,
+      "text": "[experiment-rigor | probe -> evals/experiments/act-hint/record.yaml]\n\nHow I checked it — read both loaders side by side over the same three call sites.\nCriteria — fewer failure paths, no silent fallbacks, one place to add a key.\nFindings — the old loader swallows 2/2 of the error cases the new one surfaces.\nVerdict — better on the named criteria, by inspection only, not a measured effect.\nWhat changes now — enough to prefer the new loader here."
+    },
+    {
+      "id": "en-skeleton-02",
+      "language": "en",
+      "expected_line": false,
+      "expected_skeleton": true,
+      "expected_state": "skeleton_only",
+      "expected_wellformed": false,
+      "text": "(experiment-rigor | check -> inline)\n\nMethod — compared the two configs by reading them side by side.\nMetric — number of failure paths reachable from a bad key.\nResults — 9/3 of the checks came back clean, which cannot be right.\nConclusion — cannot separate the two at this sample.\nWhat this updates — nothing yet."
+    },
+    {
+      "id": "pt-both-01",
+      "language": "pt",
+      "expected_line": true,
+      "expected_skeleton": true,
+      "expected_state": "both",
+      "expected_wellformed": true,
+      "text": "[experiment-rigor | check -> inline]\n\nMétodo — rodei os dois prompts sobre os mesmos 40 chamados, uma passada cada.\nMétrica — correspondência exata da fila atribuída.\nResultados — prompt A 31/40, prompt B 35/40.\nConclusão — B está à frente por 4 de 40 em uma passada só.\nO que isso atualiza — o suficiente para seguir com B, não para aposentar A."
+    },
+    {
+      "id": "pt-line-01",
+      "language": "pt",
+      "expected_line": true,
+      "expected_skeleton": false,
+      "expected_state": "line_only",
+      "expected_wellformed": false,
+      "text": "[experiment-rigor | check -> inline]\n\nAcho que o B é melhor. Vamos de B e seguimos."
+    },
+    {
+      "id": "pt-skeleton-01",
+      "language": "pt",
+      "expected_line": false,
+      "expected_skeleton": true,
+      "expected_state": "skeleton_only",
+      "expected_wellformed": true,
+      "text": "Método — medi o mesmo conjunto de 12 arquivos três vezes antes e três vezes depois.\nMétrica — segundos de relógio para a importação completa.\nResultados — antes 41, 39, 44 s; depois 38, 42, 37 s, ou seja 3/3 execuções de cada lado.\nConclusão — as faixas se sobrepõem, então isso não separa ganho real de ruído.\nO que isso atualiza — nada por enquanto."
+    },
+    {
+      "id": "pt-neither-01",
+      "language": "pt",
+      "expected_line": false,
+      "expected_skeleton": false,
+      "expected_state": "neither",
+      "expected_wellformed": false,
+      "text": "Renomeei carregar_config em todo o pacote e ajustei as 9 chamadas. A suíte está verde e nada mais mudou."
+    },
+    {
+      "id": "pt-line-02",
+      "language": "pt",
+      "expected_line": true,
+      "expected_skeleton": false,
+      "expected_state": "line_only",
+      "expected_wellformed": false,
+      "text": "> [experiment-rigor | check -> inline]\n\nVou de B mesmo. Parece mais rápido no dia a dia e ninguém reclamou."
+    },
+    {
+      "id": "pt-neither-02",
+      "language": "pt",
+      "expected_line": false,
+      "expected_skeleton": false,
+      "expected_state": "neither",
+      "expected_wellformed": true,
+      "text": "Rodei os testes do módulo de cobrança: 18/18 passaram. O resultado está colado abaixo."
+    },
+    {
+      "id": "en-both-03",
+      "language": "en",
+      "expected_line": true,
+      "expected_skeleton": true,
+      "expected_state": "both",
+      "expected_wellformed": true,
+      "note": "the PLUGIN-QUALIFIED activation line, which is the exact id every narrow/wide injection hands the model",
+      "text": "[experiment-discipline:experiment-rigor | check -> inline]\n\nMethod — ran the two retry settings over the same 20 imports, one pass each.\nMetric — imports that finished without a manual replay.\nResults — fixed backoff 12/20, exponential 17/20.\nConclusion — exponential is ahead by 5 of 20 on a single pass.\nWhat this updates — enough to keep exponential on, not enough to close the question."
+    },
+    {
+      "id": "en-skeleton-03",
+      "language": "en",
+      "expected_line": false,
+      "expected_skeleton": true,
+      "expected_state": "skeleton_only",
+      "expected_wellformed": false,
+      "note": "the inconsistent figure is SENTENCE-FINAL; an earlier fraction pattern dropped it and passed wellformedness on arithmetic it exists to fail",
+      "text": "Method — compared the two loaders over the same batch of 40.\nMetric — batches that finished without a manual retry.\nResults — old loader 31/40, new loader 45/40.\nConclusion — the second figure cannot be right, so this settles nothing.\nWhat this updates — nothing yet; the counts need redoing."
+    },
+    {
+      "id": "pt-neither-03",
+      "language": "pt",
+      "expected_line": false,
+      "expected_skeleton": false,
+      "expected_state": "neither",
+      "expected_wellformed": false,
+      "note": "a DATE must not parse as a rate; 2026/07/25 would otherwise read as 2026 over 07 and fail wellformedness on a response stating no rate at all",
+      "text": "Rodei o script na branch de cobrança em 2026/07/25 e colei a saída no arquivo de log."
+    },
+    {
+      "id": "en-neither-02",
+      "language": "en",
+      "expected_line": false,
+      "expected_skeleton": false,
+      "expected_state": "neither",
+      "expected_wellformed": false,
+      "note": "declines the shape and QUOTES the convention inside a fence: showing it, not doing it, so it must not score as a line",
+      "text": "I am not going to wrap this in the reporting shape — you asked me to run something, so here is what came back. If you did want the shape, it opens with a line like:\n\n```\n[experiment-rigor | check -> inline]\n```\n\nThe suite finished and nothing failed."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "max_candidates": 2,
+  "comment": "Arm: wide -- narrow's direct-register class plus the bare 'test / evaluate' class, which is the habituation question: a row that fires on a common verb reaches execution and lookup asks too, so the hint arrives constantly and its cost lands on the decoy half. Per condition C1 the file carries the evaluation-act row ALONE. Same bounded spans as narrow, same reason. Frozen: the record hashes this file.",
+  "skills": [
+    {
+      "id": "experiment-discipline:experiment-rigor",
+      "patterns": [
+        "\\bis (it|this|that) effective\\b",
+        "\\bwhich (one )?is better\\b",
+        "\\bis (it|this|that) worth it\\b",
+        "\\bcompare\\b[\\w\\s'-]{0,40}\\bwith\\b",
+        "\\b(isso |isto )?[eé] eficaz\\b",
+        "\\bqual [eé] (o |a )?melhor\\b",
+        "\\bvale a pena\\b",
+        "\\bcompare\\b[\\w\\s'-]{0,40}\\bcom\\b",
+        "\\btests?\\b|\\btesting\\b",
+        "\\bevaluate[sd]?\\b|\\bevaluating\\b|\\bevaluation\\b",
+        "\\btestes?\\b|\\btestar\\b|\\btestando\\b",
+        "\\bavali(a|e|ar|am|ando)\\b|\\bavalia[cç][aã]o\\b"
+      ],
+      "min_hits": 1
+    }
+  ]
+}

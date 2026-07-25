@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "max_candidates": 2,
+  "comment": "Arm: control. A complete router document carrying NO skill rows, so router.route() returns an empty candidate list for every prompt and router.hint_line() returns '' -- no injection anywhere, in a shape router.load_rules() consumes like any other rules file. Control is NOT a no-treatment baseline: every arm loads plugins/experiment-discipline with the Skill tool available, so this arm measures the skill's own trigger surface with no hint. Frozen: the record hashes this file.",
+  "skills": []
+}

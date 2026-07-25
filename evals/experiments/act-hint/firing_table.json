@@ -1,0 +1,1796 @@
+{
+  "generator": "firing_table.py",
+  "comment": "Frozen firing table: per arm x per prompt, whether an injection fires, the candidate ids the arm produces, and the injected text VERBATIM. The paid run delivers this text; it is never regenerated at run time. Regenerate with `python firing_table.py`; `--check` fails when the committed table is stale.",
+  "hook_floor": {
+    "min_words": 4,
+    "min_chars": 15,
+    "synthetic_prefixes": [
+      "[SYSTEM NOTIFICATION",
+      "<task-notification>"
+    ],
+    "slash_command_skip": true,
+    "source": "plugins/humblepowers/skills/choosing-tools/scripts/inject_dispatch.py"
+  },
+  "router_source": "plugins/humblepowers/skills/choosing-tools/scripts/router.py",
+  "token_estimate": {
+    "rule": "characters / 4",
+    "declared_approximation": true,
+    "tolerance_wide_vs_inert": 0.05
+  },
+  "arms": [
+    "control",
+    "narrow",
+    "wide",
+    "inert"
+  ],
+  "summary": {
+    "control": {
+      "rows": 24,
+      "fired": 0,
+      "genuine": {
+        "fired": 0,
+        "rows": 12,
+        "rate": 0.0
+      },
+      "decoy": {
+        "fired": 0,
+        "rows": 12,
+        "rate": 0.0
+      },
+      "en": {
+        "fired": 0,
+        "rows": 12,
+        "rate": 0.0
+      },
+      "pt": {
+        "fired": 0,
+        "rows": 12,
+        "rate": 0.0
+      }
+    },
+    "narrow": {
+      "rows": 24,
+      "fired": 12,
+      "genuine": {
+        "fired": 12,
+        "rows": 12,
+        "rate": 1.0
+      },
+      "decoy": {
+        "fired": 0,
+        "rows": 12,
+        "rate": 0.0
+      },
+      "en": {
+        "fired": 6,
+        "rows": 12,
+        "rate": 0.5
+      },
+      "pt": {
+        "fired": 6,
+        "rows": 12,
+        "rate": 0.5
+      }
+    },
+    "wide": {
+      "rows": 24,
+      "fired": 18,
+      "genuine": {
+        "fired": 12,
+        "rows": 12,
+        "rate": 1.0
+      },
+      "decoy": {
+        "fired": 6,
+        "rows": 12,
+        "rate": 0.5
+      },
+      "en": {
+        "fired": 9,
+        "rows": 12,
+        "rate": 0.75
+      },
+      "pt": {
+        "fired": 9,
+        "rows": 12,
+        "rate": 0.75
+      }
+    },
+    "inert": {
+      "rows": 24,
+      "fired": 18,
+      "genuine": {
+        "fired": 12,
+        "rows": 12,
+        "rate": 1.0
+      },
+      "decoy": {
+        "fired": 6,
+        "rows": 12,
+        "rate": 0.5
+      },
+      "en": {
+        "fired": 9,
+        "rows": 12,
+        "rate": 0.75
+      },
+      "pt": {
+        "fired": 9,
+        "rows": 12,
+        "rate": 0.75
+      }
+    }
+  },
+  "wide_vs_inert": [
+    {
+      "prompt_id": "g-en-01",
+      "wide_est_tokens": 42.5,
+      "inert_est_tokens": 42.5,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-en-02",
+      "wide_est_tokens": 42.5,
+      "inert_est_tokens": 42.5,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-en-03",
+      "wide_est_tokens": 42.25,
+      "inert_est_tokens": 42.25,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-en-04",
+      "wide_est_tokens": 47.25,
+      "inert_est_tokens": 47.25,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-en-05",
+      "wide_est_tokens": 42.5,
+      "inert_est_tokens": 42.5,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-en-06",
+      "wide_est_tokens": 42.25,
+      "inert_est_tokens": 42.25,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-pt-01",
+      "wide_est_tokens": 42.0,
+      "inert_est_tokens": 42.0,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-pt-02",
+      "wide_est_tokens": 42.0,
+      "inert_est_tokens": 42.0,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-pt-03",
+      "wide_est_tokens": 41.5,
+      "inert_est_tokens": 41.5,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-pt-04",
+      "wide_est_tokens": 47.25,
+      "inert_est_tokens": 47.25,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-pt-05",
+      "wide_est_tokens": 42.0,
+      "inert_est_tokens": 42.0,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "g-pt-06",
+      "wide_est_tokens": 41.5,
+      "inert_est_tokens": 41.5,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "d-en-01",
+      "wide_est_tokens": 39.75,
+      "inert_est_tokens": 39.75,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "d-en-04",
+      "wide_est_tokens": 40.0,
+      "inert_est_tokens": 40.0,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "d-en-05",
+      "wide_est_tokens": 40.75,
+      "inert_est_tokens": 40.75,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "d-pt-01",
+      "wide_est_tokens": 40.25,
+      "inert_est_tokens": 40.25,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "d-pt-04",
+      "wide_est_tokens": 40.25,
+      "inert_est_tokens": 40.25,
+      "deviation": 0.0
+    },
+    {
+      "prompt_id": "d-pt-05",
+      "wide_est_tokens": 40.25,
+      "inert_est_tokens": 40.25,
+      "deviation": 0.0
+    }
+  ],
+  "rows": [
+    {
+      "arm": "control",
+      "prompt_id": "g-en-01",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-en-02",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-en-03",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-en-04",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-en-05",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-en-06",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-pt-01",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-pt-02",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-pt-03",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-pt-04",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-pt-05",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "g-pt-06",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-en-01",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-en-02",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-en-03",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-en-04",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-en-05",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-en-06",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-pt-01",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-pt-02",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-pt-03",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-pt-04",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-pt-05",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "control",
+      "prompt_id": "d-pt-06",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-en-01",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "is it effective"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: is it effective). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-en-02",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "which is better"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: which is better). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-en-03",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "is it worth it"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: is it worth it). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 169,
+      "est_tokens": 42.25
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-en-04",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "compare the new caching layer with"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: compare the new caching layer with). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 189,
+      "est_tokens": 47.25
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-en-05",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "which is better"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: which is better). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-en-06",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "is it worth it"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: is it worth it). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 169,
+      "est_tokens": 42.25
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-pt-01",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "isso é eficaz"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: isso ? eficaz). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-pt-02",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "qual é melhor"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: qual ? melhor). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-pt-03",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "vale a pena"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: vale a pena). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 166,
+      "est_tokens": 41.5
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-pt-04",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "compare a nova camada de cache com"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: compare a nova camada de cache com). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 189,
+      "est_tokens": 47.25
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-pt-05",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "qual é melhor"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: qual ? melhor). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "g-pt-06",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "vale a pena"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: vale a pena). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 166,
+      "est_tokens": 41.5
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-en-01",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-en-02",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-en-03",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-en-04",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-en-05",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-en-06",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-pt-01",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-pt-02",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-pt-03",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-pt-04",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-pt-05",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "narrow",
+      "prompt_id": "d-pt-06",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-en-01",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "is it effective"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: is it effective). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-en-02",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "which is better"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: which is better). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-en-03",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "is it worth it"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: is it worth it). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 169,
+      "est_tokens": 42.25
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-en-04",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "compare the new caching layer with"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: compare the new caching layer with). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 189,
+      "est_tokens": 47.25
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-en-05",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "which is better"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: which is better). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-en-06",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "is it worth it"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: is it worth it). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 169,
+      "est_tokens": 42.25
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-pt-01",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "isso é eficaz"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: isso ? eficaz). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-pt-02",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "qual é melhor"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: qual ? melhor). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-pt-03",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "vale a pena"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: vale a pena). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 166,
+      "est_tokens": 41.5
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-pt-04",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "compare a nova camada de cache com"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: compare a nova camada de cache com). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 189,
+      "est_tokens": 47.25
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-pt-05",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "qual é melhor"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: qual ? melhor). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "g-pt-06",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "vale a pena"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: vale a pena). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 166,
+      "est_tokens": 41.5
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-en-01",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "test"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: test). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 159,
+      "est_tokens": 39.75
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-en-02",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-en-03",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-en-04",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "tests"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: tests). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 160,
+      "est_tokens": 40.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-en-05",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "evaluate"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: evaluate). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 163,
+      "est_tokens": 40.75
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-en-06",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-pt-01",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "testes"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: testes). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 161,
+      "est_tokens": 40.25
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-pt-02",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-pt-03",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-pt-04",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "testes"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: testes). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 161,
+      "est_tokens": 40.25
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-pt-05",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [
+        [
+          "avalie"
+        ]
+      ],
+      "text": "Prompt wording matches triggers for: experiment-discipline:experiment-rigor (matched: avalie). Check fit before starting; 'nothing fits' remains a valid outcome.",
+      "text_source": "router.hint_line",
+      "chars": 161,
+      "est_tokens": 40.25
+    },
+    {
+      "arm": "wide",
+      "prompt_id": "d-pt-06",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-en-01",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The folder layout stays exactly as it stands today. The usual file names hold. As before.",
+      "text_source": "authored_neutral",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-en-02",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The folder layout stays exactly as it stands today. The usual file names hold. As before.",
+      "text_source": "authored_neutral",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-en-03",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. Paths stay as they are. As before.",
+      "text_source": "authored_neutral",
+      "chars": 169,
+      "est_tokens": 42.25
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-en-04",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. The same paths as before apply. Same folder as before.",
+      "text_source": "authored_neutral",
+      "chars": 189,
+      "est_tokens": 47.25
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-en-05",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The folder layout stays exactly as it stands today. The usual file names hold. As before.",
+      "text_source": "authored_neutral",
+      "chars": 170,
+      "est_tokens": 42.5
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-en-06",
+      "prompt_class": "genuine",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. Paths stay as they are. As before.",
+      "text_source": "authored_neutral",
+      "chars": 169,
+      "est_tokens": 42.25
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-pt-01",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. Same folder as before. As before.",
+      "text_source": "authored_neutral",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-pt-02",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. Same folder as before. As before.",
+      "text_source": "authored_neutral",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-pt-03",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. The same paths as before apply.",
+      "text_source": "authored_neutral",
+      "chars": 166,
+      "est_tokens": 41.5
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-pt-04",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. The same paths as before apply. Same folder as before.",
+      "text_source": "authored_neutral",
+      "chars": 189,
+      "est_tokens": 47.25
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-pt-05",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. Same folder as before. As before.",
+      "text_source": "authored_neutral",
+      "chars": 168,
+      "est_tokens": 42.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "g-pt-06",
+      "prompt_class": "genuine",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. The same paths as before apply.",
+      "text_source": "authored_neutral",
+      "chars": 166,
+      "est_tokens": 41.5
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-en-01",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The folder layout stays exactly as it stands today. The usual file names hold.",
+      "text_source": "authored_neutral",
+      "chars": 159,
+      "est_tokens": 39.75
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-en-02",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-en-03",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-en-04",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. Name the files you touch along the way. Paths stay as they are. Files stay put.",
+      "text_source": "authored_neutral",
+      "chars": 160,
+      "est_tokens": 40.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-en-05",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. Name the files you touch along the way. The same paths as before apply. As before.",
+      "text_source": "authored_neutral",
+      "chars": 163,
+      "est_tokens": 40.75
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-en-06",
+      "prompt_class": "decoy",
+      "language": "en",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-pt-01",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. The usual file names hold.",
+      "text_source": "authored_neutral",
+      "chars": 161,
+      "est_tokens": 40.25
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-pt-02",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-pt-03",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-pt-04",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. The usual file names hold.",
+      "text_source": "authored_neutral",
+      "chars": 161,
+      "est_tokens": 40.25
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-pt-05",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": true,
+      "candidates": [
+        "experiment-discipline:experiment-rigor"
+      ],
+      "matched": [],
+      "text": "Session note: keep the working files where they are and name each file you open. The working copy sits where it was left this morning. The usual file names hold.",
+      "text_source": "authored_neutral",
+      "chars": 161,
+      "est_tokens": 40.25
+    },
+    {
+      "arm": "inert",
+      "prompt_id": "d-pt-06",
+      "prompt_class": "decoy",
+      "language": "pt",
+      "hook_skip": null,
+      "fires": false,
+      "candidates": [],
+      "matched": [],
+      "text": "",
+      "text_source": "none",
+      "chars": 0,
+      "est_tokens": 0.0
+    }
+  ]
+}

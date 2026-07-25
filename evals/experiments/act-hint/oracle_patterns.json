@@ -1,0 +1,48 @@
+{
+  "comment": "The oracle's language-specific patterns, held in JSON data rather than in verify.py's own literals so the module stays ASCII under scripts/ascii_runtime_lint.py (new files are held at zero findings). Every pattern is compiled case-insensitively; the activation-line pattern additionally compiles MULTILINE. These same patterns are the primeability ban list: a test asserts that no arm's injected text and no bank prompt matches any of them, because the router echoes literal spans of the prompt into the treatment and the oracle must not be able to read its own answer back out of the prompt it scored. Frozen: the record hashes this file.",
+  "activation_line": "^[\\s>`*_-]*\\[(?:[\\w-]+:)?experiment-rigor\\s*\\|\\s*[^|\\]]+?\\s*->\\s*[^\\]]+\\][\\s`*_]*$",
+  "activation_line_comment": "The optional (?:[\\w-]+:) prefix accepts the PLUGIN-QUALIFIED id, [experiment-discipline:experiment-rigor | check -> inline]. Without it the pattern rejected the qualified form -- and every narrow/wide injection hands the model exactly that qualified id, so the treatment would have raised the probability of a spelling the oracle scored as no line at all. That is an ARM-DIFFERENTIAL false negative on the primary contrast, which is the worst place a scoring gap can sit.",
+  "fenced_code": "```.*?(?:```|\\Z)",
+  "fenced_code_comment": "Fenced blocks are stripped before the activation line is searched for, and only for that search: a decoy answer that declines the shape and then QUOTES the convention inside a fence would otherwise score line=True on the decoy half. Inline backticks still match, because a real response may format its own line that way. Element detection does NOT strip fences -- an element inside a fence is still substance, whereas the line is a convention marker whose quoting is the known confusion.",
+  "elements": {
+    "method": [
+      "\\bmethods?\\b",
+      "\\bmethodology\\b",
+      "\\bm[eé]todo(s|logia)?\\b",
+      "\\bhow i (checked|compared|ran|measured) it\\b",
+      "\\bcomo (eu )?(verifiquei|comparei|medi|rodei)\\b"
+    ],
+    "metric": [
+      "\\bmetrics?\\b",
+      "\\bm[eé]tricas?\\b",
+      "\\bcriteri(on|a)\\b",
+      "\\bcrit[eé]rios?\\b",
+      "\\bwhat counts as success\\b",
+      "\\bo que conta como sucesso\\b"
+    ],
+    "results": [
+      "\\bresults?\\b",
+      "\\bresultados?\\b",
+      "\\bfindings\\b",
+      "\\bnumbers? observed\\b",
+      "\\bn[uú]meros observados\\b"
+    ],
+    "conclusion": [
+      "\\bconclusions?\\b",
+      "\\bconclus[aã]o\\b",
+      "\\bconcluding\\b",
+      "\\bverdict\\b",
+      "\\bveredito\\b"
+    ],
+    "updates": [
+      "\\bwhat this (updates|changes)\\b",
+      "\\bo que (isso|isto) (atualiza|muda)\\b",
+      "\\bwhat to believe now\\b",
+      "\\bwhat changes now\\b",
+      "\\bo que muda agora\\b",
+      "\\bo que passar a acreditar\\b"
+    ]
+  },
+  "fraction": "(?<![\\d./])(\\d+)\\s*/\\s*(\\d+)(?![\\d/]|\\.\\d)",
+  "fraction_comment": "The lookahead rejects a further digit, a further slash, and a DECIMAL continuation, but allows a sentence period. The earlier (?![\\d.]) dropped every sentence-final figure, so 'prompt B 35/40.' matched nothing and 'A 31/40, B 45/40.' silently lost the inconsistent one -- wellformedness would have passed on exactly the arithmetic it exists to fail. The slash in both the lookbehind and the lookahead kills the date false positive: 2026/07/25 would otherwise parse as 2026 over 07 and fail wellformedness on a response that stated no rate at all. Verified: '35/40.' and '9/3.' match; '3/4.5', '1.5/3' and '2026/07/25' do not."
+}

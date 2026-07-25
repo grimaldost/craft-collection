@@ -186,3 +186,36 @@ the declarable half (effect uncertainty).
   out at `fetch-depth: 0` so the freeze objects `ER-PREREG` and the acceptance suite read
   are present. A depth-1 clone is expected to fail the reconstruction loudly; no skip
   exists to make it pass.
+- **The act-hint detector, frozen before its run.** The plugin itself gains no code
+  here: the experiment lives under `evals/experiments/act-hint/` — a 24-prompt bank
+  (12 genuine evaluation acts, 12 execution/lookup decoys, half EN and half PT-BR
+  within each class, authored against `references/report-skeleton.md`'s boundary), four
+  arm rules files, an offline firing-table generator and its frozen table, the oracle
+  and its language patterns, a hand-labeled oracle-validation set, the arm runner, the
+  freeze-stage `record.yaml` with its derived `report.md`, and `FREEZE.md` +
+  `freeze_fill.py` for the two-stage choreography. What the plugin contributes is the
+  discipline the experiment is held to. The frozen record carries no results, so it
+  exercises schema v1.1 as a **plan**: it is the first record whose `analysis_plan`
+  names `contrasts[]` as the reporting shape, and the pre-spend gate drives synthetic
+  `clusters` + `contrasts[]` + `sign_test` blocks past `validate.py` in both the
+  zero-exclusion and the with-exclusion shape. The end-to-end exercise on real counts
+  belongs to the run and its finalize step. Firing is decomposed from
+  effect: `firing_table.py` drives the real humblepowers router **read-only** (it
+  imports `router.load_rules` / `route` / `hint_line` and the dispatch hook's own floor
+  constants) over the frozen bank and freezes, per arm and per prompt, whether an
+  injection fires, the candidate ids, and the injected text **verbatim** — so exposure
+  is auditable for free before a cent is spent, and the paid run delivers frozen bytes
+  rather than a recomputation. The shipped `router_rules.json` is untouched and pinned
+  byte-for-byte by a test. Every load-bearing property is a check rather than a claim:
+  parity of both router-derived arms against the real router, wide-vs-inert row-set
+  identity with a per-row token match (0.00% worst-row deviation against a 5%
+  tolerance), primeability over **both** the injected texts and the bank (the router
+  echoes literal prompt spans, so the constraint binds the bank too), the hook floor
+  over every prompt, the oracle reproducing all twelve hand labels, and a **pre-spend
+  shape gate** that drives the complete record — the freeze stage and two fully
+  populated final stages — past `validate.py` before any spend. That gate earned its
+  keep immediately: it observed that `ER-RECON` holds every outcome's arm denominators
+  to `N_expected`, so a record stating per-arm counts alongside a non-zero
+  `disposition.excluded` cannot reconcile. The rule is therefore pre-registered rather
+  than discovered — the confirmatory outcome states its `arms` block only when nothing
+  was excluded, and any exclusion moves both outcomes to the contrasts-only shape.
