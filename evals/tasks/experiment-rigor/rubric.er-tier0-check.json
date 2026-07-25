@@ -1,0 +1,10 @@
+[
+  { "id": "five-elements", "weight": 3,
+    "text": "The reply carries all five elements of the tier-0 check skeleton, in any order and any wording: the method (the two templates over the same 24 tickets, one pass each, hand-graded against the resolved category), the metric (what counted as right), the result(s), a conclusion sized to what the numbers support (a conclusion heading over a claim the numbers cannot carry does not count as the element), and a one-line 'what this updates'. A reply missing any one of the five — most often the 'what this updates' line — does not meet this criterion." },
+  { "id": "denominators-carried", "weight": 2,
+    "text": "Every rate is reported with both a numerator and a denominator (17/24 and 20/24, or the same numbers with the denominator stated beside them). A bare percentage, a bare 'B did better', or a difference quoted without the base it is a difference over does not meet this criterion." },
+  { "id": "stays-inline", "weight": 2,
+    "text": "The answer stays at tier-0: it is delivered in the response itself, with no record.yaml created, no tier template copied, and no validator run. Naming the record tier as the next step if a decision later rides on the result is fine and does not violate this; actually opening a record for this question does." },
+  { "id": "claim-fits-the-evidence", "weight": 1,
+    "text": "The conclusion is proportionate to what 24 shared tickets at one pass per template can support — a direction rather than an established effect — and it does not assert a confirmatory verdict, quote a confidence interval it did not compute, or state a p-value out of nowhere. Saying plainly that a 3-ticket gap on 24 items is thin evidence meets this criterion." }
+]

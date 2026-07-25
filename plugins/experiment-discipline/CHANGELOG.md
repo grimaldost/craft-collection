@@ -35,12 +35,32 @@ the declarable half (effect uncertainty).
   Beta-Binomial), a rate that needs both a numerator and a denominator, record-is-source
   with the report derived, and probe self-labeling. Binds keel's Definition of Ready
   and fresh-context reader tooling role-generically.
-- **Two references:** `references/threats-catalog.md` (the nine-key closed threat
+- **References:** `references/threats-catalog.md` (the nine-key closed threat
   enum, one paragraph per key, kept in sync with `templates/schema.json` by
   `test_threats_catalog.py`) and `references/small-n-stats.md` (Miller's five rules
   adapted, the exact-methods rule, the Beta(1, 1) prior and its sensitivity, and the
   within-experiment-only pooling boundary — cross-experiment belief moves through a
   qualitative GRADE link, never pooled counts).
+- **The tier-0 `check` rung** (the skill body's ladder plus a third reference,
+  `references/report-skeleton.md`): an evaluation act answered inline — no file, no
+  record, no gate, and never a `tier:` value. The reference carries the five-element
+  shape (method, metric, result(s) with denominators, conclusion, and a one-line
+  "what this updates"), three worked micro-examples (the third for an evaluation
+  act with nothing measured, whose result element is the explicit absence), and
+  the boundary the widened scope makes load-bearing: an evaluation act asks a
+  question whose correct answer is a valuative claim, an execution or lookup
+  request asks for an action or a fact and owes nothing here, and a correctness
+  question is a fact even when phrased valuatively. The rung is guidance by design
+  (`docs/adr/0008-experiment-discipline-plugin.md`), so it is reviewed and measured
+  rather than gated: `evals/tasks/experiment-rigor/` gains a
+  dedicated tier-0 task (`er-tier0-check`) with its own
+  `rubric.er-tier0-check.json`, since the bank's only other task mandates a record
+  and a shared-rubric item for the rung could score nothing but false. The body's
+  word budget moves 827 -> 950 (`scripts/word_budget.json`); nothing is removed —
+  the diff is pure addition, and the growth buys only the rung's name, its entry
+  rule, and one sentence of boundary, while the five elements, the worked
+  examples, and the boundary's edge cases stay lazy in the reference rather than
+  in the eager body.
 - **Trigger dev set and sealed holdout** authored at one sitting
   (`evals/trigger/experiment-rigor.json`, `evals/trigger/holdout/experiment-rigor.json`),
   plus a correct-usage rubric (`evals/tasks/experiment-rigor/`) checking that a produced

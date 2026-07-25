@@ -17,8 +17,18 @@ result.
 ## The tier ladder
 
 `tier` is a field, not a second skill. It selects the required fields and which
-gates apply.
+gates apply. Tier-0 is the exception: it names no artifact, so it never appears
+as a `tier:` value.
 
+- **check** (tier-0) — the structured check. An evaluation act answered inline in
+  the response: no file, no record, no gate. An *evaluation act* asks a question
+  whose correct answer is a valuative claim ("is this effective", "which is
+  better"); an *execution or lookup request* asks for an action or a fact and
+  owes nothing here. The five-element shape — method, metric, result(s) with
+  denominators, conclusion, and a one-line "what this updates" — the boundary,
+  and two worked examples live in `references/report-skeleton.md`. This rung is
+  guidance, not a bright line, and entry above it is unchanged: a record is owed
+  when a decision rides on the result.
 - **probe** — cheap and exploratory. Refuses a confirmatory verdict or any
   posterior; a probe that wants either graduates to measurement.
 - **measurement** — a frozen pre-registration and a reported interval on every
