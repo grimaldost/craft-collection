@@ -1,6 +1,15 @@
 # Probe-tier skeleton. Cheap, exploratory: no confirmatory verdict, no posterior.
 # Passes `validate.py --schema-only` AND full validate.py (source: hand is allowed
 # at probe). Copy this, fill in your own cells/outcomes/threats, keep it exploratory.
+#
+# Activation line -- the work product this record backs opens with it, generated from
+# the record rather than typed so the claim cannot drift from the artifact:
+# `python scripts/render.py --activation-line <record>` prints
+#   [experiment-rigor | probe -> <record path, relative to the repo root>]
+# and `render.py --check-activation-line "<line>" <record>` exits 1 when the pasted
+# line's tier or path disagrees with the record. The generated format is ASCII by
+# construction (its literals sit under the ASCII ratchet); a glyph-prefixed variant is
+# a hand-written annotation only, never generated.
 schema_version: 1
 tier: probe
 experiment: my-probe-experiment

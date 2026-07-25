@@ -5,6 +5,15 @@
 # and ER-COMPREHEND (no comprehension block). Fill each in to graduate a real decision
 # record: freeze the plan to a real SHA, attach a fathom ledger or a second-party
 # attestation, and add the comprehension block with two fresh-context readers.
+#
+# Activation line -- the work product this record backs opens with it, generated from
+# the record rather than typed so the claim cannot drift from the artifact:
+# `python scripts/render.py --activation-line <record>` prints
+#   [experiment-rigor | decision -> <record path, relative to the repo root>]
+# and `render.py --check-activation-line "<line>" <record>` exits 1 when the pasted
+# line's tier or path disagrees with the record. The generated format is ASCII by
+# construction (its literals sit under the ASCII ratchet); a glyph-prefixed variant is
+# a hand-written annotation only, never generated.
 schema_version: 1
 tier: decision
 experiment: my-decision-experiment

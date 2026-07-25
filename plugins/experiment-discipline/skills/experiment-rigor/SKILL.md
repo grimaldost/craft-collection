@@ -51,6 +51,20 @@ as a `tier:` value.
    `report.md`; `render.py --check` is the drift gate over a committed pair. Never
    hand-edit `report.md`.
 
+## The activation line
+
+Whenever the frame engages, one plain line opens the work product, naming the
+tier and the artifact behind it. At `probe` and above it is generated, not typed:
+`render.py --activation-line <record>` prints it, and `--check-activation-line
+"<line>" <record>` exits non-zero when the tier or the path disagrees — the line
+is a claim tied to the artifact, not a badge. At tier-0 the artifact reference is
+the literal `inline`, which nothing resolves.
+
+```text
+[experiment-rigor | check -> inline]
+[experiment-rigor | measurement -> evals/experiments/act-hint/record.yaml]
+```
+
 ## Bright lines
 
 Each is a gate in `validate.py`; the error code is named so a failure points at
@@ -123,3 +137,5 @@ spot-check you will decide nothing on needs none of this.
 - [ ] Every reported rate carries a recomputable interval; no CLT below 30.
 - [ ] `report.md` is derived (`render.py`), not hand-edited (`render.py --check`
       clean).
+- [ ] The work product opens with the activation line — `inline` at tier-0, and at
+      `probe` and above the generated line, `--check-activation-line` clean.

@@ -3,8 +3,9 @@
 
 The record.yaml is the single source of truth; report.md is derived and never
 hand-edited. This module derives report.md, checks a committed report against its
-record for drift, walks the cross-experiment update chain, and generates the
-human field guide SCHEMA.md from the machine-readable templates/schema.json.
+record for drift, walks the cross-experiment update chain, generates the human
+field guide SCHEMA.md from the machine-readable templates/schema.json, and emits
+(and verifies) the activation line that opens a work product.
 
 Canonical serialization policy (the E3 fold -- deterministic bytes so a re-render
 of the same record is identical and the drift digest is stable across platforms):
@@ -208,6 +209,103 @@ def check_drift(path: str | Path) -> str | None:
     if _digest(committed) != _digest(fresh):
         return 'report.md embedded block drifted from record.yaml (regenerate with render.py)'
     return None
+
+
+# --- the activation line ----------------------------------------------------
+#
+# Whenever the frame engages, one austere line opens the work product. At probe and
+# above it names the record behind the claim and is GENERATED here rather than typed:
+# --activation-line prints the canonical line for a record, --check-activation-line
+# verifies a pasted line against that record, and both build through activation_line()
+# so the format string exists once. A line whose tier or path disagrees with the record
+# is a drifted claim and exits 1.
+#
+# At tier-0 (`check`) the artifact reference is the literal `inline` -- nothing resolves
+# it, so that rung's line is review-only and no generator emits it.
+#
+# The format is pure ASCII ('|' and '->'): these literals are runtime-reachable under
+# the ASCII ratchet, which is why the generated form carries no glyph.
+
+_ACTIVATION_RE = re.compile(r'^\[experiment-rigor \| (?P<tier>[^|\]]+?) -> (?P<artifact>[^\]]+)\]$')
+
+
+def activation_line(tier: str, artifact: str) -> str:
+    """Build the canonical activation line. The one place the format lives."""
+    return f'[experiment-rigor | {tier} -> {artifact}]'
+
+
+def _repo_root(start: Path) -> Path | None:
+    """The nearest ancestor holding a `.git` entry (a directory in a clone, a file in
+    a worktree), or None outside a repository."""
+    for parent in [start, *start.parents]:
+        if (parent / '.git').exists():
+            return parent
+    return None
+
+
+def artifact_ref(record_path: str | Path) -> str:
+    """How the line names a record. INSIDE a repository: the path relative to the
+    repository root, POSIX separators -- so the same record yields the same line on
+    every machine and checkout, from any working directory. OUTSIDE one there is no
+    such anchor, so the RESOLVED ABSOLUTE path is used (CWD-independent, so the line
+    still round-trips) and a note goes to stderr: an absolute path is machine-local,
+    and a line naming one cannot be checked anywhere else."""
+    resolved = Path(record_path).resolve()
+    root = _repo_root(resolved.parent)
+    if root is not None:
+        try:
+            return resolved.relative_to(root).as_posix()
+        except ValueError:
+            pass
+    print(
+        f'{record_path}: outside a git repository; the line names an absolute path '
+        'and is not portable',
+        file=sys.stderr,
+    )
+    return resolved.as_posix()
+
+
+def record_activation_line(record_path: str | Path) -> str:
+    """The canonical activation line for a record: its own tier, its own path."""
+    record = load_record(record_path)
+    tier = record.get('tier')
+    if not tier:
+        raise ValueError(f'{record_path}: record declares no tier')
+    if str(tier) == 'check':
+        raise ValueError(
+            f'{record_path}: tier-0 `check` names no artifact; its line is written by '
+            'hand as `inline`'
+        )
+    return activation_line(str(tier), artifact_ref(record_path))
+
+
+def check_activation_line(line: str, record_path: str | Path) -> str | None:
+    """Return None when a pasted line agrees with the record, else the disagreement.
+    The comparison is exact after strip(): tier and path must both match, so a line
+    copied from another experiment -- or kept after the record moved or graduated a
+    tier -- is caught rather than believed. A path spelled with Windows separators
+    disagrees and is reported as one; the canonical form is POSIX."""
+    expected = record_activation_line(record_path)
+    pasted = line.strip()
+    if pasted == expected:
+        return None
+    match = _ACTIVATION_RE.match(pasted)
+    if match is None:
+        return f'not an activation line: {pasted!r} (expected {expected})'
+    want = _ACTIVATION_RE.match(expected)
+    if want is None:  # a tier or a path carrying the format's own delimiters
+        return f'{pasted!r} != {expected!r}'
+    want_tier, want_artifact = want['tier'], want['artifact']
+    got_tier = match['tier'].strip()
+    got_artifact = match['artifact'].strip()
+    problems: list[str] = []
+    if got_tier != want_tier:
+        problems.append(f'tier {got_tier!r} != record tier {want_tier!r}')
+    if got_artifact != want_artifact:
+        problems.append(f'artifact {got_artifact!r} != record path {want_artifact!r}')
+    if not problems:
+        problems.append(f'{pasted!r} != {expected!r}')
+    return '; '.join(problems)
 
 
 # --- the update chain -------------------------------------------------------
@@ -589,6 +687,11 @@ def _load_schema_json() -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A pasted activation line can carry any bytes (a hand-written glyph variant, a
+    # path with accents); a cp1252 stdout would raise on the way out and lose the
+    # designed message. Emit UTF-8 regardless of the platform default.
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     ap = argparse.ArgumentParser(description='Derive and drift-check experiment-rigor reports.')
     ap.add_argument('records', nargs='*', help='record.yaml path(s)')
     mode = ap.add_mutually_exclusive_group()
@@ -606,6 +709,16 @@ def main(argv: list[str] | None = None) -> int:
         action='store_true',
         help='print the record as a mantis journaling-sessions envelope',
     )
+    mode.add_argument(
+        '--activation-line',
+        action='store_true',
+        help="print the record's activation line (the generated form is the only one)",
+    )
+    mode.add_argument(
+        '--check-activation-line',
+        metavar='LINE',
+        help='verify a pasted activation line against the record (tier and path must match)',
+    )
     ap.add_argument(
         '--strict',
         action='store_true',
@@ -618,6 +731,33 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.schema_md:
         sys.stdout.write(schema_markdown(_load_schema_json()))
+        return 0
+
+    if args.activation_line:
+        if not args.records:
+            ap.error('a record.yaml path is required for --activation-line')
+        for record_arg in args.records:
+            # An unreadable record or a tier-0 record is a reported failure, not a
+            # traceback (the same shape as --check's DRIFT line).
+            try:
+                print(record_activation_line(record_arg))
+            except (OSError, ValueError) as exc:
+                print(f'ERROR {record_arg}: {exc}')
+                return 1
+        return 0
+
+    if args.check_activation_line is not None:
+        if len(args.records) != 1:
+            ap.error('exactly one record.yaml path is required for --check-activation-line')
+        try:
+            reason = check_activation_line(args.check_activation_line, args.records[0])
+        except (OSError, ValueError) as exc:
+            print(f'ERROR {args.records[0]}: {exc}')
+            return 1
+        if reason is not None:
+            print(f'MISMATCH {args.records[0]}: {reason}')
+            return 1
+        print(f'OK {args.check_activation_line.strip()}')
         return 0
 
     if args.emit_journal:

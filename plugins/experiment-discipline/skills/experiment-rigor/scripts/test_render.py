@@ -24,6 +24,7 @@ import render
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE.parent / 'templates'
 PROBE = TEMPLATES / 'probe.yaml'
+RG2X2 = HERE.parent / 'examples' / 'rg-2x2' / 'record.yaml'
 
 
 def _load(path: Path) -> dict:
@@ -247,6 +248,188 @@ def test_cli_emit_journal_primary_and_strict():
         assert strict.returncode == 0, strict.stderr
         # The strict fallback drops the provenance superset but keeps the hash-pinned link.
         assert 'experiment:' not in strict.stdout and 'record_ref:' in strict.stdout
+
+
+# --- the activation line ----------------------------------------------------
+
+
+def test_activation_line_names_the_records_tier_and_path():
+    line = render.record_activation_line(RG2X2)
+    assert line.startswith('[experiment-rigor | measurement -> '), line
+    assert line.endswith('examples/rg-2x2/record.yaml]'), line
+    assert line.isascii(), line  # the generated form carries no glyph (ASCII ratchet)
+    artifact = render._ACTIVATION_RE.match(line)['artifact']
+    assert '\\' not in artifact, artifact  # POSIX separators, stable across machines
+    # The path is not decoration and not machine-local: it is exactly this record's
+    # path relative to the repository root. Asserted as a string, since joining an
+    # ABSOLUTE artifact to the root would silently discard the root (pathlib) and let
+    # the CWD-relative fallback pass this test.
+    root = render._repo_root(RG2X2.parent)
+    assert root is not None
+    assert not Path(artifact).is_absolute(), artifact
+    assert artifact == RG2X2.relative_to(root).as_posix(), artifact
+
+
+def test_check_activation_line_accepts_the_generated_line():
+    assert render.check_activation_line(render.record_activation_line(RG2X2), RG2X2) is None
+
+
+def test_check_activation_line_rejects_a_disagreeing_tier():
+    line = render.record_activation_line(RG2X2).replace('measurement', 'probe')
+    reason = render.check_activation_line(line, RG2X2)
+    assert reason is not None and 'tier' in reason, reason
+
+
+def test_check_activation_line_rejects_a_disagreeing_path():
+    line = render.activation_line('measurement', 'evals/experiments/other/record.yaml')
+    reason = render.check_activation_line(line, RG2X2)
+    assert reason is not None and 'artifact' in reason, reason
+
+
+def test_check_activation_line_rejects_a_line_that_is_not_one():
+    assert render.check_activation_line('experiment-rigor: measurement', RG2X2) is not None
+
+
+def test_check_activation_line_reports_a_windows_spelled_path():
+    # The comparison is exact: a backslash spelling of the right file is a
+    # disagreement, and it is reported as one (naming both spellings) rather than
+    # falling through to a bare repr mismatch.
+    posix = render.artifact_ref(RG2X2)
+    reason = render.check_activation_line(
+        render.activation_line('measurement', posix.replace('/', '\\')), RG2X2
+    )
+    assert reason is not None
+    assert reason.startswith('artifact '), reason
+    assert posix in reason, reason  # the record's canonical spelling
+    assert repr(posix.replace('/', '\\')) in reason, reason  # and the pasted one
+
+
+def test_activation_line_refuses_a_tier0_check_record():
+    # `check` names no artifact and never appears as a tier: value; the generator
+    # refuses rather than inventing a path for it.
+    with tempfile.TemporaryDirectory() as td:
+        rec = Path(td) / 'record.yaml'
+        rec.write_text('schema_version: 1\ntier: check\nexperiment: x\n', encoding='utf-8')
+        try:
+            render.record_activation_line(rec)
+        except ValueError as exc:
+            assert 'inline' in str(exc), exc
+        else:
+            raise AssertionError('a tier-0 `check` record must not yield a generated line')
+
+
+def test_activation_line_round_trips_outside_a_repository():
+    # Outside a checkout there is no root to anchor to: the line names the resolved
+    # ABSOLUTE path (so it round-trips from any working directory) and says so on
+    # stderr. Under a repo-hosted temp dir the in-repo branch is taken instead, and
+    # only the round trip is asserted.
+    with tempfile.TemporaryDirectory() as td:
+        rec = Path(td) / 'record.yaml'
+        rec.write_text(PROBE.read_text(encoding='utf-8'), encoding='utf-8')
+        line = render.record_activation_line(rec)
+        assert '| probe -> ' in line, line
+        assert render.check_activation_line(line, rec) is None
+        if render._repo_root(rec.resolve().parent) is None:
+            artifact = render._ACTIVATION_RE.match(line)['artifact']
+            assert Path(artifact).is_absolute(), artifact
+            assert artifact == rec.resolve().as_posix(), artifact
+            # Invoked from the record's own directory, by its bare relative name: the
+            # line must still be the same one (a CWD- or spelling-dependent artifact
+            # would make a line generated here read as drifted from anywhere else).
+            note = subprocess.run(  # noqa: S603 - fixed argv
+                [sys.executable, str(HERE / 'render.py'), '--activation-line', 'record.yaml'],
+                capture_output=True,
+                text=True,
+                cwd=td,
+            )
+            assert note.returncode == 0, note.stderr
+            assert 'outside a git repository' in note.stderr, note.stderr
+            assert note.stdout.strip() == line, note.stdout
+
+
+def test_cli_activation_line_exit_codes_both_directions():
+    generated = subprocess.run(  # noqa: S603 - fixed argv
+        [sys.executable, str(HERE / 'render.py'), '--activation-line', str(RG2X2)],
+        capture_output=True,
+        text=True,
+    )
+    assert generated.returncode == 0, generated.stderr
+    line = generated.stdout.strip()
+    assert line == render.record_activation_line(RG2X2), line
+    agrees = subprocess.run(  # noqa: S603 - fixed argv
+        [sys.executable, str(HERE / 'render.py'), '--check-activation-line', line, str(RG2X2)],
+        capture_output=True,
+        text=True,
+    )
+    assert agrees.returncode == 0, agrees.stdout + agrees.stderr
+    for drifted in (
+        line.replace('measurement', 'decision'),
+        render.activation_line('measurement', 'examples/elsewhere/record.yaml'),
+    ):
+        proc = subprocess.run(  # noqa: S603 - fixed argv
+            [
+                sys.executable,
+                str(HERE / 'render.py'),
+                '--check-activation-line',
+                drifted,
+                str(RG2X2),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 1, drifted + proc.stdout + proc.stderr
+        assert 'MISMATCH' in proc.stdout, proc.stdout
+
+
+def test_cli_check_activation_line_survives_cp1252_stdout():
+    # A hand-written format-(b) line (glyph prefix, middot, arrow) is exactly the
+    # non-ASCII input the checker must reject *with its message*. Under a cp1252
+    # stdout -- the ordinary Windows default -- printing it used to raise
+    # UnicodeEncodeError, so the exit 1 was a crash rather than the verdict.
+    import os
+
+    glyph_line = '◇ experiment-rigor · measurement → examples/rg-2x2/record.yaml'
+    proc = subprocess.run(  # noqa: S603 - fixed argv
+        [
+            sys.executable,
+            str(HERE / 'render.py'),
+            '--check-activation-line',
+            glyph_line,
+            str(RG2X2),
+        ],
+        capture_output=True,
+        env={**os.environ, 'PYTHONIOENCODING': 'cp1252'},
+        encoding='utf-8',
+        errors='replace',
+    )
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert 'MISMATCH' in proc.stdout, proc.stdout + proc.stderr
+    assert 'Traceback' not in proc.stderr, proc.stderr
+
+
+def test_cli_activation_line_reports_a_bad_record_without_a_traceback():
+    # F5: an unreadable record and a tier-0 record are reported like --check reports
+    # DRIFT -- one ERROR line, exit 1 -- not as a raw traceback.
+    missing = subprocess.run(  # noqa: S603 - fixed argv
+        [sys.executable, str(HERE / 'render.py'), '--activation-line', 'no-such-record.yaml'],
+        capture_output=True,
+        text=True,
+    )
+    assert missing.returncode == 1, missing.stdout + missing.stderr
+    assert missing.stdout.startswith('ERROR '), missing.stdout
+    assert 'Traceback' not in missing.stderr, missing.stderr
+
+    with tempfile.TemporaryDirectory() as td:
+        rec = Path(td) / 'record.yaml'
+        rec.write_text('schema_version: 1\ntier: check\nexperiment: x\n', encoding='utf-8')
+        tier0 = subprocess.run(  # noqa: S603 - fixed argv
+            [sys.executable, str(HERE / 'render.py'), '--activation-line', str(rec)],
+            capture_output=True,
+            text=True,
+        )
+        assert tier0.returncode == 1, tier0.stdout + tier0.stderr
+        assert tier0.stdout.startswith('ERROR ') and 'inline' in tier0.stdout, tier0.stdout
+        assert 'Traceback' not in tier0.stderr, tier0.stderr
 
 
 if __name__ == '__main__':

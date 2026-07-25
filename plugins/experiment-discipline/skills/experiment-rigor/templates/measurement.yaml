@@ -3,6 +3,15 @@
 # --schema-only`. Under full validate.py it WARNs on ER-XCHECK (source: hand at
 # measurement) and, until you freeze the plan and set plan_frozen_at.commit to a real
 # SHA, flags ER-ANCHOR / ER-PREREG -- fill those in before you rely on the full gate.
+#
+# Activation line -- the work product this record backs opens with it, generated from
+# the record rather than typed so the claim cannot drift from the artifact:
+# `python scripts/render.py --activation-line <record>` prints
+#   [experiment-rigor | measurement -> <record path, relative to the repo root>]
+# and `render.py --check-activation-line "<line>" <record>` exits 1 when the pasted
+# line's tier or path disagrees with the record. The generated format is ASCII by
+# construction (its literals sit under the ASCII ratchet); a glyph-prefixed variant is
+# a hand-written annotation only, never generated.
 schema_version: 1
 tier: measurement
 experiment: my-measurement-experiment

@@ -10,6 +10,13 @@ The rung exists because the alternative to a cheap shape is not a rigorous one,
 it is an unstructured assertion — "it seems faster", "B is better" — which
 carries no method, no denominator, and nothing a later reader can re-check.
 
+The response opens with the activation line in its tier-0 form,
+`[experiment-rigor | check -> inline]`. The artifact reference is the literal
+`inline` because there is no artifact: nothing resolves it and no checker
+verifies it, which is why this rung's line is reviewed rather than gated. At
+`probe` and above the line names the record instead and is generated from it
+(`render.py --activation-line`), so the claim there is tied to a file.
+
 ## When the shape is owed — the evaluation-act boundary
 
 An **evaluation act** asks a question whose correct answer is a valuative claim:

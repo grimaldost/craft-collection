@@ -61,6 +61,40 @@ the declarable half (effect uncertainty).
   rule, and one sentence of boundary, while the five elements, the worked
   examples, and the boundary's edge cases stay lazy in the reference rather than
   in the eager body.
+- **The activation line and its generator** (`render.py --activation-line` and
+  `--check-activation-line`, the skill body, `references/report-skeleton.md`, and all
+  three tier templates): whenever the frame engages, one plain line opens the work
+  product naming the tier and the artifact behind it. At `probe` and above it is
+  generated from the record rather than typed —
+  `[experiment-rigor | measurement -> <record path>]` — and the checker exits 1 when a
+  pasted line's tier **or** path disagrees with the record, so the claim cannot drift
+  from the artifact it names. Inside a repository the path is relative to the repository
+  root with POSIX separators, so the same record yields the same line on every machine
+  and checkout; outside one there is no anchor, so the line names the resolved absolute
+  path and `artifact_ref` says so on stderr — round-trippable but not portable. The
+  comparison is exact after `strip()`: a backslash spelling of the right file is a
+  disagreement and is reported as one. Both flags build through one `activation_line()`
+  builder: the format string exists in exactly one place. At tier-0 the artifact
+  reference is the literal `inline` — nothing resolves it, so that rung's line is
+  reviewed and measured rather than gated, and the generator refuses a record declaring
+  `tier: check` rather than inventing a path for it. The generated form is ASCII (`|`
+  and `->`) because the generator's literals are runtime-reachable strings under the
+  ASCII ratchet and `render.py` is held at zero findings; a glyph-prefixed variant is
+  therefore available only as a hand-written annotation, a mechanical consequence rather
+  than a taste ruling — and the CLI reconfigures stdout to UTF-8 so that pasting such a
+  line under a cp1252 console yields the `MISMATCH` verdict instead of an encoding
+  crash. `scripts/test_render.py` covers both directions of the checker, the exact
+  repo-relative path, the Windows-spelled path, the tier-0 refusal, an unreadable record
+  (reported as `ERROR`, exit 1, no traceback), the cp1252 console, the absolute-path
+  fallback with its stderr note, and the CLI round trip. The leading line is not yet
+  emitted into a derived `report.md`: `render_report` is unchanged here and §5 of the
+  wave spec, which re-renders the RG-2x2 example, owns that. The body's word budget
+  moves 950 -> 1062 (`scripts/word_budget.json`); nothing is removed — the growth is
+  pure addition, and it buys the emission rule, the two command names, the two example
+  lines (the tier-0 form and a record-backed one), and one correct-usage checkbox (the
+  only checkable item at tier-0, where the other four are vacuous), while the
+  tier-specific spelling and the ASCII rationale stay in the templates' comments and the
+  tier-0 form's reasoning in `references/report-skeleton.md`, out of the eager body.
 - **Trigger dev set and sealed holdout** authored at one sitting
   (`evals/trigger/experiment-rigor.json`, `evals/trigger/holdout/experiment-rigor.json`),
   plus a correct-usage rubric (`evals/tasks/experiment-rigor/`) checking that a produced
