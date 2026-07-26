@@ -1,7 +1,16 @@
 # Spec — the experiment-discipline wave: re-home, tier-0, visibility, and the detector experiment
 
 - **Date:** 2026-07-25
-- **Status:** ready (DoR passed, CONDITIONAL-CERTIFY r4; operator accepts C1-C4 at their named PRs)
+- **Status:** superseded in part (2026-07-26) — see "Scope correction" below
+- **Scope correction (2026-07-26):** §5 and §6 were built, run, and then **removed**
+  (`27e39fd`). The detector measured whether a lexical hint improves this skill's own
+  activation; the owner ruled that activation and tool discovery belong to the dispatch
+  development, not to this plugin. The experiment answered its question first — a
+  recorded null, 192 runs for $17.87, written up in the craft-collection feedback report
+  `2026-07-26-expdisc-wave2-detector` — and the work stays reachable in history at
+  `7d33684` with its pre-registration tagged `freeze/act-hint-stage1`. **§1–§4 shipped and
+  stand.** Read §5, §6, and Part B as the record of an experiment that ran and was
+  retired, not as a description of the current tree.
 - **Audience:** implementing agents + reviewer
 - **Output artifact(s):** `plugins/experiment-discipline/` (manifest, README, CHANGELOG, `FREEZE.md`, and the re-homed `skills/experiment-rigor/` tree); edits to `.claude-plugin/marketplace.json`, `README.md`, `.pre-commit-config.yaml`, `.github/workflows/validate.yml`, `evals/config.json`, `scripts/word_budget.json`, `AGENTS.md`, `evals/trigger/holdout/BASELINES.md`, `plugins/humblepowers/CHANGELOG.md`, `plugins/humblepowers/.claude-plugin/plugin.json`, and `plugins/humblepowers/skills/choosing-tools/scripts/router_rules.json`; the new `references/report-skeleton.md`; the activation-line generator and checker in `render.py`; the schema v1.1 `contrasts[]` extension across `schema.json`, `validate.py`, and `SCHEMA.md`; a new tier-0 task and rubric under `evals/tasks/experiment-rigor/`; and the detector experiment under `evals/experiments/act-hint/` (bank, rules, firing-table generator and frozen table, oracle, labeled oracle-validation set, runner, frozen `record.yaml`, derived `report.md`).
 
