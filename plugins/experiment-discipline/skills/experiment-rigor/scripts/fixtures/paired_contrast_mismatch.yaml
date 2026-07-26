@@ -1,0 +1,143 @@
+# The defect twin of paired_contrast.yaml: identical clusters, a contrast that
+# disagrees with them. The disagreement is the exact one schema v1.1 exists to
+# catch -- the SE and the interval were computed on the INDEPENDENT-TRIALS scale
+# (two-proportion SE, a 1.96 normal quantile) while the record's own clusters block
+# says the unit is the prompt. The aggregate estimate happens to agree, because the
+# cluster sizes are equal, which is precisely why a per-arm eyeball misses this.
+#
+# The sign_test triple is fabricated the same way -- a flattering p-value on a made-up
+# effective n and a unanimous positive count, over a clusters block that contains a tie
+# and a negative cluster. It is here because a stated robustness bound that no gate
+# recomputes is a decorative one.
+#
+# validate.py exits 1 on this file naming ER-STATS and the offending contrast; the
+# corrected twin (paired_contrast.yaml) exits 0 on the same clusters.
+schema_version: 1.1
+tier: probe
+experiment: paired-contrast-demo
+design:
+  shared_tasks: true
+  cells:
+    - name: with_hint
+      planned_n: 24
+    - name: control
+      planned_n: 24
+disposition:
+  completed: 48
+  excluded: 0
+  total: 48
+outcomes:
+  - name: signal
+    role: exploratory
+    operationalization: fraction of runs whose output contains the checklist item, by regex
+results:
+  signal:
+    verdict: exploratory_signal
+    paired: true
+    arms:
+      with_hint:
+        numerator: 17
+        denominator: 24
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.5083
+          high: 0.8509
+      control:
+        numerator: 12
+        denominator: 24
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.3143
+          high: 0.6857
+    clusters:
+      p1:
+        with_hint:
+          numerator: 4
+          denominator: 4
+        control:
+          numerator: 2
+          denominator: 4
+      p2:
+        with_hint:
+          numerator: 3
+          denominator: 4
+        control:
+          numerator: 2
+          denominator: 4
+      p3:
+        with_hint:
+          numerator: 4
+          denominator: 4
+        control:
+          numerator: 4
+          denominator: 4
+      p4:
+        with_hint:
+          numerator: 2
+          denominator: 4
+        control:
+          numerator: 1
+          denominator: 4
+      p5:
+        with_hint:
+          numerator: 3
+          denominator: 4
+        control:
+          numerator: 1
+          denominator: 4
+      p6:
+        with_hint:
+          numerator: 1
+          denominator: 4
+        control:
+          numerator: 2
+          denominator: 4
+    contrasts:
+      - name: with_hint_minus_control
+        arms: [with_hint, control]
+        estimator: paired_difference
+        estimate: 0.2083
+        se: 0.1379
+        n_clusters: 6
+        interval:
+          method: paired_t
+          alpha: 0.05
+          low: -0.062
+          high: 0.4786
+          t_quantile: 1.96
+        sign_test:
+          p_value: 0.01
+          effective_n: 6
+          positive: 6
+threats:
+  contamination_familiarity:
+    status: residual
+    statement: models may have seen structurally similar tasks in pretraining
+  prompt_format_sensitivity:
+    status: controlled
+    statement: one fixed prompt template across arms
+  judge_bias:
+    status: controlled
+    statement: deterministic regex verifier, no LLM judge
+  model_version_drift:
+    status: residual
+    statement: single unpinned snapshot for the probe window
+  nondeterminism:
+    status: residual
+    statement: sampling temperature above zero; four runs per prompt per arm
+  construct_validity_proxy:
+    status: residual
+    statement: item presence is a proxy for the underlying discipline
+  token_length_confound:
+    status: controlled
+    statement: output token budget capped equally across arms
+  selection_exclusion:
+    status: controlled
+    statement: no trials excluded
+  generalization:
+    status: residual
+    statement: six prompts from one task family
+run:
+  source: hand

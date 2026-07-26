@@ -5,6 +5,25 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## Unreleased
+
+The `experiment-rigor` skill shipped on this branch as 0.9.0 and 0.10.0 and is
+extracted into its own plugin before either was released
+(`docs/adr/0008-experiment-discipline-plugin.md`); both entries moved with it to
+`plugins/experiment-discipline/CHANGELOG.md` as that plugin's 0.1.0 birth entry,
+and this plugin's version rolls back to **0.8.0**. What remains here is the one
+change humblepowers actually owns.
+
+### Changed
+
+- **The dispatch router row for `experiment-rigor` is now cross-plugin**:
+  `humblepowers:experiment-rigor` -> `experiment-discipline:experiment-rigor` in
+  `skills/choosing-tools/scripts/router_rules.json`. Router ids are opaque
+  `plugin:skill` strings and the dataset lookup splits the prefix off, so a routed
+  skill living in another plugin is supported by construction; the patterns are
+  byte-unchanged and both sealed router holdouts are unmoved (they contain no
+  experiment-rigor case). This row doubles as the pointer to the new plugin.
+
 ## 0.8.0 — 2026-07-23
 
 Dispatch retirement (redesign step R1). A 2026-07 content A/B (fathom

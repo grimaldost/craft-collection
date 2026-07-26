@@ -1,0 +1,10 @@
+{
+  "name": "experiment-discipline",
+  "displayName": "Experiment Discipline",
+  "version": "0.1.0",
+  "description": "Discipline for evaluation acts: structure an experiment and its write-up so the Methods reconstruct without the conversation and the uncertainty is declared, not hidden — a typed record.yaml across a probe / measurement / decision tier ladder, with every load-bearing rule a script that exits non-zero rather than a line of prose.",
+  "author": { "name": "Grimaldo Stanzani", "email": "grimaldosj93@gmail.com" },
+  "repository": "https://github.com/grimaldost/craft-collection",
+  "license": "MIT",
+  "keywords": ["experiment", "pre-registration", "measurement", "small-n", "evaluation", "statistics", "rigor"]
+}

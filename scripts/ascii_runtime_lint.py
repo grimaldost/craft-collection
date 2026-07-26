@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -61,12 +62,26 @@ def iter_target_files(root: Path) -> list[Path]:
     return out
 
 
+def _git_env() -> dict[str, str]:
+    """The environment minus every GIT_* variable, so `-C` is authoritative.
+
+    Git exports the repository-location variables (GIT_DIR, GIT_WORK_TREE,
+    GIT_INDEX_FILE, ...) into every hook it runs, and an ambient GIT_DIR takes
+    PRECEDENCE over `git -C <dir>`. This lint IS a pre-commit hook, so without the
+    scrub `--root <other tree>` silently listed the HOOK repo's tracked files: every
+    file in the pointed-at tree read as untracked and the scan returned nothing --
+    a gate that passes by scanning zero files. Found the hard way: the suite was
+    green run directly and red inside `git push`."""
+    return {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+
+
 def _git_tracked(root: Path) -> set[Path] | None:
     try:
         proc = subprocess.run(  # noqa: S603 - fixed argv
             ['git', '-C', str(root), 'ls-files', '-z', '--', *SCAN_DIRS],  # noqa: S607 - PATH git
             capture_output=True,
             timeout=30,
+            env=_git_env(),
         )
         if proc.returncode != 0:
             return None

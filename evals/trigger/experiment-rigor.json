@@ -1,0 +1,21 @@
+[
+  { "query": "Pre-register this A/B before I run it — freeze the plan, the outcomes, and the decision rule.", "should_trigger": true, "note": "prereg moment, direct" },
+  { "query": "Help me write up this experiment so the Methods reconstruct without the chat log.", "should_trigger": true, "note": "write-up moment, methods reconstruct" },
+  { "query": "Add error bars to these pass rates before I put them in the report.", "should_trigger": true, "note": "report moment, uncertainty on a rate" },
+  { "query": "What are the threats to validity in this bare-vs-armed comparison?", "should_trigger": true, "note": "design, threat coverage" },
+  { "query": "Separate the confirmatory outcome from the exploratory ones in this write-up.", "should_trigger": true, "note": "confirmatory/exploratory partition" },
+  { "query": "Design the 2x2 for this register-by-gate factorial.", "should_trigger": true, "note": "factorial design" },
+  { "query": "The declared cells don't add up to the runs that actually happened — reconcile the arithmetic.", "should_trigger": true, "note": "declared-cells reconciliation, founding case" },
+  { "query": "Freeze the pre-registration and mark which outcomes are confirmatory before wave 1.", "should_trigger": true, "note": "freeze + role marking, measurement tier" },
+  { "query": "Does this skill actually help, and how would I show it rigorously enough to act on?", "should_trigger": true, "note": "the rigor question (design side, not the fathom run)" },
+  { "query": "I'm reporting 36 out of 48 with the gate — what confidence interval should sit on that rate?", "should_trigger": true, "note": "small-n interval on a reported rate" },
+
+  { "query": "Run the scenario matrix against the task bank and render the blind scorecard.", "should_trigger": false, "note": "near-miss: running the matrix — fathom-eval" },
+  { "query": "A/B this skill across sonnet and haiku and score the bank.", "should_trigger": false, "note": "near-miss: paid eval run — fathom-eval" },
+  { "query": "Measure whether my skill auto-activates on the prompts it should and stays quiet on near-misses.", "should_trigger": false, "note": "near-miss: single-skill trigger measurement — evaluate-skill" },
+  { "query": "Does my skill description fire on the right queries — check its trigger recall.", "should_trigger": false, "note": "near-miss: trigger recall — evaluate-skill" },
+  { "query": "Is this spec ready to decompose into PRs — run the Definition of Ready gate.", "should_trigger": false, "note": "near-miss: spec readiness — keel Definition of Ready" },
+  { "query": "Check whether the spec passes readiness before we start building.", "should_trigger": false, "note": "near-miss: readiness gate — keel" },
+  { "query": "Rename this variable across the module and update the callers.", "should_trigger": false, "note": "plain implementation, no experiment" },
+  { "query": "I ran the prompt twice by hand and it looked better — good enough, nothing to write up formally.", "should_trigger": false, "note": "throwaway spot-check, no decision rides on it" }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "id": "er-measurement-record",
+    "prompt": "You ran a small measurement-tier A/B in the current directory: an intervention arm and a control arm, the same 6 tasks shared across both arms, 8 trials per task per arm (a pass/fail verifier per trial). One outcome — the pass rate — is your confirmatory outcome; you also noticed a secondary pattern in the logs after seeing the data. Produce a typed `record.yaml` for this experiment using the experiment-rigor discipline, working in the directory for real: copy the measurement skeleton, fill it in, and run the validator, showing each step in order. Report each pass rate with a confidence interval, reconcile the declared cells against the trials that ran, keep the after-the-fact pattern out of the confirmatory column, and cover the threats. Use only the Python standard library plus PyYAML for the scripts (invoke them exactly as the skill body shows)."
+  },
+  {
+    "id": "er-tier0-check",
+    "prompt": "Quick one, no project scaffolding for this please — I want the answer in your reply. This morning I compared our two ticket-triage prompts on the same 24 support tickets from last week: template A got 17 of them right, template B got 20, and I checked each one by hand against the resolved category. Both ran once, same model, same settings. Is B actually better? Nothing is riding on this yet — I am not switching anything over today, I just want to know where we stand and whether the comparison is worth anything."
+  }
+]

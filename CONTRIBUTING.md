@@ -33,6 +33,7 @@ To try the plugins locally without publishing a marketplace:
 
 ```bash
 claude --plugin-dir ./plugins/engineering-discipline \
+       --plugin-dir ./plugins/experiment-discipline \
        --plugin-dir ./plugins/session-workflow \
        --plugin-dir ./plugins/humblepowers
 ```

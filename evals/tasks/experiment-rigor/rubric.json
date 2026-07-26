@@ -1,0 +1,12 @@
+[
+  { "id": "record-validates", "weight": 3,
+    "text": "The produced record.yaml was actually run through validate.py at its declared tier and shown to exit 0 (clean) — the validator's passing output appears in the transcript, not merely a claim that the record is valid." },
+  { "id": "methods-reconstruct", "weight": 2,
+    "text": "The Methods reconstruct from the record alone, without the conversation: what was manipulated (the two arms), where the intervention was applied, how the outcome was operationalized (a named verifier and its pass check), and that execution was real (trials actually run and graded)." },
+  { "id": "uncertainty-declared", "weight": 1,
+    "text": "Every reported rate carries a structured confidence interval using an allowed method (wilson, clopper_pearson, or beta_binomial); no CLT/normal/Wald interval is used, and the small denominators (48 per arm, or fewer per cell) are respected." },
+  { "id": "reconciliation-closes", "weight": 1,
+    "text": "The declared cells reconcile: the sum of design.cells planned_n equals the disposition total and equals each outcome's sum of arm denominators (here 6 tasks x 8 trials x 2 arms = 96, or the arithmetic the record actually declares — the numbers close rather than being asserted)." },
+  { "id": "partition-respected", "weight": 1,
+    "text": "The after-the-fact secondary pattern is quarantined — marked exploratory (and added_after_freeze where applicable) and never carrying a confirmatory verdict; only the pre-registered confirmatory outcome may carry a confirmatory verdict." }
+]
