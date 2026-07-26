@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="207" height="45" viewBox="-1.2 -1.2 103.4 22.4" role="img" aria-label="convoy">
+  <title>convoy wordmark</title>
+  <g fill="none" stroke="#FBFBFA" stroke-width="3.6">
+    <path d="M11.06 3.59 A5.3 5.3 0 1 0 11.06 10.41"></path>
+    <circle cx="23.9" cy="7" r="5.3"></circle>
+    <path d="M36.6 0 V14 M36.6 5.4 A5.3 5.3 0 0 1 47.2 5.4 V14"></path>
+    <circle cx="75.9" cy="7" r="5.3"></circle>
+  </g>
+  <g fill="#FBFBFA">
+    <path d="M52.6 0 H56.4 L59.1 8.22 L61.8 0 H65.6 L61 14 H57.2 Z"></path>
+    <path d="M95.5 0 H99.29 L92.89 19.5 H89.11 Z M86.3 0 H90.1 L94.7 14 H90.9 Z"></path>
+  </g>
+</svg>

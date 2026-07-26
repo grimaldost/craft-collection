@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="240" viewBox="0 0 1280 240" role="img" aria-label="convoy">
+  <title>convoy</title>
+  <rect x="0.5" y="0.5" width="1279" height="239" rx="8" fill="#0E1114" stroke="#2A3238"></rect>
+  <g transform="translate(390.5 74.4) scale(3.8)">
+  <path fill="#C17930" fill-rule="evenodd" d="M5 2 H19 A3 3 0 0 1 22 5 V19 A3 3 0 0 1 19 22 H5 A3 3 0 0 1 2 19 V5 A3 3 0 0 1 5 2 Z M6.4 6 L12.4 12 L6.4 18 L6.4 14.2 L8.6 12 L6.4 9.8 Z M12.2 6 L18.2 12 L12.2 18 L12.2 14.2 L14.4 12 L12.2 9.8 Z"></path>
+  <g transform="translate(32 5)">
+  <g fill="none" stroke="#FBFBFA" stroke-width="3.6">
+    <path d="M11.06 3.59 A5.3 5.3 0 1 0 11.06 10.41"></path>
+    <circle cx="23.9" cy="7" r="5.3"></circle>
+    <path d="M36.6 0 V14 M36.6 5.4 A5.3 5.3 0 0 1 47.2 5.4 V14"></path>
+    <circle cx="75.9" cy="7" r="5.3"></circle>
+  </g>
+  <g fill="#FBFBFA">
+    <path d="M52.6 0 H56.4 L59.1 8.22 L61.8 0 H65.6 L61 14 H57.2 Z"></path>
+    <path d="M95.5 0 H99.29 L92.89 19.5 H89.11 Z M86.3 0 H90.1 L94.7 14 H90.9 Z"></path>
+  </g>
+  </g>
+  </g>
+</svg>

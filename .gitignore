@@ -18,10 +18,12 @@ __pycache__/
 dist/
 
 # Internal design/build history & review notes — kept local, never published.
-# Exception: the keel-method artifacts (ADRs, specs, template kit) are the
-# durable coordinate system the method requires committed — tracked below.
+# Exceptions, tracked below: the keel-method artifacts (ADRs, specs, template
+# kit) — the durable coordinate system the method requires committed — and the
+# house brand kit (docs/brand/), the derivation source for every sibling kit.
 docs/*
 !docs/adr/
+!docs/brand/
 !docs/specs/
 !docs/method/
 !docs/feedback/
