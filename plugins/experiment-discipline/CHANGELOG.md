@@ -219,3 +219,71 @@ the declarable half (effect uncertainty).
   `disposition.excluded` cannot reconcile. The rule is therefore pre-registered rather
   than discovered — the confirmatory outcome states its `arms` block only when nothing
   was excluded, and any exclusion moves both outcomes to the contrasts-only shape.
+- **The derived report grew the sections the drift gate cannot see** (`scripts/render.py`,
+  `scripts/test_render.py`, and the re-rendered `examples/rg-2x2/report.md`).
+  `render_report` now emits, for every block a record actually carries: the contrast table
+  on the clustered scale with each row's stated interval, its half-width and the sign test
+  beside it; the achieved precision of the contrast the plan named primary, quoted against
+  the declared MEWD; the 2×2 state breakdown with the line-only rate as its own column; the
+  descriptive turn and cost tax; and the pre-committed interpretation the data selected
+  with the precondition a rollout still owes. Every number is READ from the record — the
+  renderer quotes, `ER-STATS` recomputes — and a row labels itself (the A/A calibration
+  names itself the noise floor) rather than the renderer knowing which contrast is which. A
+  record with none of those blocks renders none of those sections: absence produces
+  absence, not a header over an empty table. `render_report` also takes the record's path
+  now, and with it the report opens with the **generated** activation line from §3's
+  `record_activation_line` rather than a typed one; tier-0 `check` records name no artifact
+  and get no line. Because one renderer serves every record and the drift gate digests only
+  the embedded YAML, extending it would have staled the committed RG-2×2 prose while
+  `--check` stayed green — so that report is re-rendered in the same change (its diff is
+  exactly the leading line) and its `finalize.py` passes the path, so a re-run cannot drop
+  the line silently.
+- **`finalize.py` for the act-hint detector** (`evals/experiments/act-hint/finalize.py`,
+  `test_finalize.py`): the other end of the freeze choreography, deterministic and
+  idempotent. It re-verifies every frozen material SHA before writing anything (an edit to
+  bank, rules, table or oracle after the freeze fails loudly rather than quietly changing
+  what was measured), scores every run through the frozen oracle, and applies the
+  pre-registered rules as READ from the record: the exclusion rule verbatim (excluded iff
+  the harness errored or the response text is empty — a decline for lack of a tool is
+  scored as written), the fully-excluded-prompt drop-out with the surviving cluster count
+  recorded, the stricter complete-prompt-pairs fallback whenever a planned run never
+  started (a ceiling halt declines a prompt left with one repeat, which the ordinary
+  drop-out would have kept), and the arms-block rule (per-arm counts and their descriptive
+  Wilson intervals only when nothing was excluded). It fills the observed disposition with
+  per-reason counts, the per-cluster blocks, every contrast through
+  `stats.paired_difference` / `paired_interval` with the recomputed sign-test triple beside
+  it, the 2×2 state breakdown, the descriptive tax, the observed first-run timestamp in
+  place of the pre-run placeholder, and the prior → posterior update linking the founding
+  RG-2×2 as its chain prior.
+  Both frozen filtering rules are CONTRAST-scoped, as the plan writes them — "a prompt whose
+  runs are all excluded in either arm of a contrast drops out of THAT contrast" — so each
+  contrast lives in its own pair-scoped results key holding only that pair's two arms and
+  only the prompts that survive for it. A prompt dead in `narrow` therefore costs the
+  narrow contrasts a cluster and costs the wide−control primary nothing. The two declared
+  outcomes keep their own keys, carry the verdicts and a descriptive full-arm cluster block
+  (which the arms block reconciles against), and state no contrasts of their own.
+  The interpretation is selected MECHANICALLY: the four pre-committed legs partition the
+  2×2 of (the primary contrast moved, `inert − control` moved), and a contrast moves when
+  its two-sided interval excludes 0 **and** its estimate reaches the declared MEWD — so no
+  fifth leg is reachable. Two frozen qualifiers ride on that lookup without adding a leg:
+  the second leg's own word **alike** is decided by the frozen secondary (`wide − inert`,
+  the only pair in the design that isolates content from preamble), and where the secondary
+  does move, the leg is recorded with `alike: false` and its "the content is irrelevant"
+  reading is suppressed rather than quoted, replaced by the size of the content component
+  the secondary separated; and **no headroom** is scoped to the recorded null exactly as the
+  frozen text scopes it, since under any other leg something moved, which is itself proof
+  there was room. The A/A calibration is held out of every signal test — an A/A that moves
+  is a diagnostic failure, and it is recorded as a named `instrument_noise` flag.
+  The tests drive it end to end on synthetic runs in a staged throwaway repo, so
+  `ER-ANCHOR`, `ER-PREREG` and `ER-LINK` do their real work: both disposition branches reach
+  a clean `validate.py` and `render.py --check`, twice through is byte-identical in both
+  members of the pair, a tampered material is refused before anything is written, data
+  built for each of the four legs selects that leg, and the measured F2 scenarios are
+  pinned (a prompt dead in narrow leaves the primary at 24 clusters; a ceiling halt drops
+  prompts only from the contrasts whose arms it touched). The producer → consumer interface
+  is held by a test that drives `run_arms.execute` through its real spawn with the harness
+  stubbed and scores the row it wrote, and the exclusion rule's load-bearing half — a
+  decline for lack of a tool is scored, not excluded — has its own case, since that is the
+  modal decoy response rather than an edge case. `finalize.py` loads `stats`, `validate` and
+  `render` by explicit path: a bare `import stats` can resolve to the harness module of the
+  same name that sits at the front of `sys.path`.

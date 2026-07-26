@@ -22,6 +22,15 @@ sha256 over each parsed block re-serialized through the canonical policy. A cosm
 edit to the report's prose is invisible; a changed value in the embedded block, or a
 record that moved on without regenerating its report, is drift and exits 1.
 
+A derived report opens with the generated activation line (when the caller passes the
+record's path) and carries, for every block the record actually has, the contrast table
+with its achieved precision on the clustered scale, the 2x2 state breakdown including
+the line-only rate, the descriptive turn/cost tax, and the pre-committed interpretation
+the data selected with the precondition a rollout still owes. Each section is emitted
+only when its block exists -- a record without contrasts gets no empty scaffolding --
+because the drift gate digests the embedded YAML alone and would not notice prose that
+went stale or prose that was never derived at all.
+
 Depends on PyYAML; stdlib otherwise. Python 3.13+. Nothing here recomputes a
 statistic: every number in a derived line is read from the record, and validate.py's
 ER-STATS is what holds the record's numbers to the counts behind them.
@@ -135,13 +144,318 @@ def _contrast_line(oname: str, contrast: dict) -> str:
     return ', '.join(parts)
 
 
-def render_report(record: dict[str, Any]) -> str:
+def _num(value: Any) -> str:
+    """A number as the record spells it, or a placeholder. Never rounded here: the
+    record's own value is the one the gates checked."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return '(none)'
+    return f'{value}'
+
+
+def _cell(text: Any) -> str:
+    """One free-text table cell. A pipe or a newline inside a record value would break the
+    row it lands in, so both are neutralized here rather than trusted not to appear."""
+    return str(text).replace('|', '\\|').replace('\n', ' ').strip() or '-'
+
+
+def _half_width(interval: Any) -> str:
+    """The achieved precision of a stated interval: half its width, on the clustered
+    scale. Arithmetic on the two bounds the record states -- not a re-derivation from
+    the cluster block, which is ER-STATS's job."""
+    if not isinstance(interval, dict):
+        return '(none)'
+    low, high = interval.get('low'), interval.get('high')
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in (low, high)):
+        return '(none)'
+    return f'+/- {round((float(high) - float(low)) / 2, 4)}'
+
+
+def _block_outcome(key: str, block: dict[str, Any]) -> str:
+    """Which declared outcome a results block speaks for. A block that scopes one contrast
+    pair says so in `outcome`; a block that IS the outcome is named by its key."""
+    declared = block.get('outcome')
+    return str(declared) if isinstance(declared, str) and declared.strip() else str(key)
+
+
+def _contrast_rows(record: dict[str, Any]) -> list[list[str]]:
+    """One table row per stated contrast, across every result block, in record order.
+
+    Every cell is QUOTED from the record (PR04's convention): the estimate, the SE, the
+    interval and the sign test are the values validate.py's ER-STATS recomputed from the
+    cluster block, so the table and the embedded block cannot say two different things.
+    The trailing note column carries whatever label the record put on the row -- the A/A
+    calibration names itself the noise floor there rather than the renderer knowing which
+    contrast is one.
+    """
+    rows: list[list[str]] = []
+    for oname, ores in (record.get('results') or {}).items():
+        if not isinstance(ores, dict):
+            continue
+        contrasts = ores.get('contrasts')
+        if not isinstance(contrasts, list):
+            continue
+        for contrast in contrasts:
+            if not isinstance(contrast, dict):
+                continue
+            arms = contrast.get('arms') if isinstance(contrast.get('arms'), list) else []
+            pair = ' - '.join(str(a) for a in arms) if len(arms) == 2 else '(no arm pair)'
+            interval = (
+                contrast.get('interval') if isinstance(contrast.get('interval'), dict) else {}
+            )
+            band = (
+                f'[{_num(interval.get("low"))}, {_num(interval.get("high"))}]'
+                if interval
+                else '(none)'
+            )
+            signs = contrast.get('sign_test') if isinstance(contrast.get('sign_test'), dict) else {}
+            sign_cell = (
+                f'p={_num(signs.get("p_value"))}, {_num(signs.get("positive"))}/'
+                f'{_num(signs.get("effective_n"))} positive'
+                if signs
+                else '(none)'
+            )
+            note = str(contrast.get('note') or '').strip()
+            role = str(contrast.get('role') or '').strip()
+            movement = contrast.get('moved')
+            rows.append(
+                [
+                    _cell(_block_outcome(oname, ores)),
+                    _cell(ores.get('class_scope') or 'all'),
+                    _cell(contrast.get('name', '(unnamed)')),
+                    _cell(pair),
+                    _cell(role),
+                    _num(contrast.get('estimate')),
+                    _num(contrast.get('se')),
+                    band,
+                    _half_width(interval),
+                    sign_cell,
+                    _num(contrast.get('n_clusters')),
+                    'yes' if movement is True else ('no' if movement is False else '-'),
+                    _cell(note),
+                ]
+            )
+    return rows
+
+
+def _primary_precision(record: dict[str, Any]) -> str | None:
+    """The achieved precision line for the contrast the frozen plan named primary.
+
+    The plan names it (`analysis_plan.primary_contrast`), so the renderer does not have
+    to know which row that is; a record without a named primary gets no line rather than
+    an empty one."""
+    plan = record.get('analysis_plan')
+    named = plan.get('primary_contrast') if isinstance(plan, dict) else None
+    if not isinstance(named, dict):
+        return None
+    want_name, want_outcome = named.get('name'), named.get('outcome')
+    for oname, ores in (record.get('results') or {}).items():
+        # Match on the DECLARED outcome: a pair-scoped block lives under its own key and
+        # names the outcome it belongs to, so the plan's `outcome` still resolves.
+        if not isinstance(ores, dict) or (
+            want_outcome and _block_outcome(oname, ores) != want_outcome
+        ):
+            continue
+        for contrast in ores.get('contrasts') or []:
+            if not isinstance(contrast, dict) or contrast.get('name') != want_name:
+                continue
+            interval = (
+                contrast.get('interval') if isinstance(contrast.get('interval'), dict) else {}
+            )
+            threshold = (plan.get('decision_rule') or {}).get('threshold')
+            tail = f', declared MEWD {threshold}' if threshold is not None else ''
+            return (
+                f'- Achieved precision (clustered scale): '
+                f'{_block_outcome(oname, ores)} / {want_name} '
+                f'{_half_width(interval)} on {_num(contrast.get("n_clusters"))} cluster(s) at '
+                f'alpha {_num(interval.get("alpha"))}{tail}'
+            )
+    return None
+
+
+def _state_rows(record: dict[str, Any]) -> list[list[str]]:
+    """The 2x2 state breakdown, arm by arm and class by class, with the line-only rate
+    as its own column -- the first-class number the outcome exists to make visible."""
+    block = record.get('state_breakdown')
+    arms = block.get('arms') if isinstance(block, dict) else None
+    if not isinstance(arms, dict):
+        return []
+    rows: list[list[str]] = []
+    for aname, per_class in arms.items():
+        if not isinstance(per_class, dict):
+            continue
+        for cname, counts in per_class.items():
+            if not isinstance(counts, dict):
+                continue
+            rows.append(
+                [
+                    _cell(aname),
+                    _cell(cname),
+                    _num(counts.get('scored')),
+                    _num(counts.get('both')),
+                    _num(counts.get('line_only')),
+                    _num(counts.get('skeleton_only')),
+                    _num(counts.get('neither')),
+                    _num(counts.get('line_only_rate')),
+                ]
+            )
+    return rows
+
+
+def _economy_rows(record: dict[str, Any]) -> list[list[str]]:
+    """The descriptive turn and cost tax per arm. Descriptive: no interval is quoted on
+    it and no contrast rests on it."""
+    block = record.get('run_economy')
+    per_arm = block.get('per_arm') if isinstance(block, dict) else None
+    if not isinstance(per_arm, dict):
+        return []
+    return [
+        [
+            _cell(aname),
+            _num(row.get('runs')),
+            _num(row.get('mean_turns')),
+            _num(row.get('total_cost_usd')),
+            _num(row.get('mean_cost_usd')),
+        ]
+        for aname, row in per_arm.items()
+        if isinstance(row, dict)
+    ]
+
+
+def _interpretation_lines(record: dict[str, Any]) -> list[str]:
+    """The pre-committed interpretation the data selected, plus the precondition any
+    production rollout of a row still owes. Both are RECORD fields -- finalize selects
+    the leg mechanically and writes it down; the renderer quotes it."""
+    conclusion = record.get('conclusion')
+    if not isinstance(conclusion, dict) or not conclusion.get('interpretation'):
+        return []
+    lines = ['## Interpretation (pre-committed; selected mechanically)', '']
+    lines.append(f'- Selected: `{conclusion.get("interpretation")}`')
+    for label, key in (
+        ('Condition', 'condition'),
+        ('Read', 'read'),
+        ('Basis', 'basis'),
+    ):
+        value = str(conclusion.get(key) or '').strip()
+        if value:
+            lines.append(f'- {label}: {value}')
+    # The frozen word "alike" qualifies the second leg, and where it does not hold the
+    # leg's own "the content is irrelevant" sentence is SUPPRESSED rather than quoted --
+    # `read` above already carries the qualified text, so nothing here restates it.
+    if conclusion.get('alike') is False and conclusion.get('frozen_read_suppressed'):
+        lines.append(
+            '- Alike: NO. The leg is still the pre-committed cell, but its own reading is '
+            'suppressed on this data (Read above is the qualified one; the suppressed text '
+            'stays in the record as `frozen_read_suppressed`).'
+        )
+    alike_basis = str(conclusion.get('alike_basis') or '').strip()
+    if alike_basis and conclusion.get('interpretation') == 'preamble_only':
+        lines.append(f'- Alike basis: {alike_basis}')
+    if conclusion.get('no_headroom') is True:
+        lines.append(
+            '- Recorded as NO HEADROOM, not as no effect: control sits at or near ceiling '
+            'on the genuine half, so the instrument had nowhere to move.'
+        )
+    if conclusion.get('instrument_noise') is True:
+        lines.append(
+            f'- INSTRUMENT NOISE: {conclusion.get("instrument_noise_note", "the A/A moved")}'
+        )
+    precondition = str(conclusion.get('rollout_precondition') or '').strip()
+    if precondition:
+        lines.append(f'- Precondition for any production rollout of a row: {precondition}')
+    lines.append('')
+    return lines
+
+
+def _derived_sections(record: dict[str, Any]) -> list[str]:
+    """The derived tables. Each one is emitted only when the record carries the block
+    behind it -- a record with no contrasts gets no empty scaffolding, which is what
+    keeps one shared renderer usable by every tier."""
+    lines: list[str] = []
+    rows = _contrast_rows(record)
+    if rows:
+        lines.append('## Contrasts (paired, on the clustered scale)')
+        lines.append('')
+        lines += _table(
+            [
+                'outcome',
+                'scope',
+                'contrast',
+                'arms',
+                'role',
+                'estimate',
+                'se',
+                'interval',
+                'half-width',
+                'sign test',
+                'clusters',
+                'moved',
+                'note',
+            ],
+            rows,
+        )
+        lines.append('')
+        precision = _primary_precision(record)
+        if precision is not None:
+            lines.append(precision)
+            lines.append('')
+    states = _state_rows(record)
+    if states:
+        lines.append('## 2x2 states by arm (the line-only rate is first-class)')
+        lines.append('')
+        lines += _table(
+            [
+                'arm',
+                'class',
+                'scored',
+                'both',
+                'line_only',
+                'skeleton_only',
+                'neither',
+                'line-only rate',
+            ],
+            states,
+        )
+        lines.append('')
+    economy = _economy_rows(record)
+    if economy:
+        lines.append('## Turn and cost tax (descriptive)')
+        lines.append('')
+        lines += _table(['arm', 'runs', 'mean turns', 'total USD', 'mean USD'], economy)
+        lines.append('')
+    lines += _interpretation_lines(record)
+    return lines
+
+
+def _leading_activation_line(record: dict[str, Any], record_path: str | Path | None) -> list[str]:
+    """The line that opens the work product, GENERATED from the record's own tier and
+    path (section 3) rather than typed here, so the report cannot claim a coordinate the
+    record does not have.
+
+    Emitted at probe and above only: tier-0 `check` names no artifact, and a record whose
+    file is not on disk (an in-memory render) has no path to name.
+    """
+    if record_path is None or str(record.get('tier') or '') in ('', 'check'):
+        return []
+    try:
+        return [record_activation_line(record_path), '']
+    except (OSError, ValueError):
+        return []
+
+
+def render_report(record: dict[str, Any], record_path: str | Path | None = None) -> str:
     """Derive the report.md text for a record. Exactly one fenced YAML block -- the
     canonical record -- is embedded; everything else is derived human prose the drift
-    gate ignores."""
+    gate ignores.
+
+    `record_path` is optional and only ever adds prose: with it the report opens with
+    the generated activation line naming the record. The drift digest reads the embedded
+    block alone, so the line is invisible to `--check` -- which is exactly why every
+    caller that writes a report.md passes the path.
+    """
     experiment = record.get('experiment', '(unnamed)')
     tier = record.get('tier', '(no tier)')
-    lines: list[str] = [f'# Experiment: {experiment} ({tier} tier)', '']
+    lines: list[str] = _leading_activation_line(record, record_path)
+    lines += [f'# Experiment: {experiment} ({tier} tier)', '']
     lines.append('_Derived from record.yaml by render.py -- do not hand-edit._')
     lines.append('')
 
@@ -204,6 +518,7 @@ def render_report(record: dict[str, Any]) -> str:
         )
 
     lines.append('')
+    lines += _derived_sections(record)
     lines.append(f'## {_RECORD_BLOCK_TITLE}')
     lines.append('')
     lines.append('```yaml')
@@ -249,6 +564,9 @@ def check_drift(path: str | Path) -> str | None:
     committed = _embedded_blocks(report.read_text(encoding='utf-8'))
     if not committed:
         return 'committed report.md carries no embedded ```yaml block'
+    # No record_path here on purpose: the digest covers the embedded block alone, so the
+    # leading activation line would only be built, thrown away, and -- for a record
+    # outside a repository -- print a portability note the gate has no reason to emit.
     fresh = _embedded_blocks(render_report(record))
     if _digest(committed) != _digest(fresh):
         return 'report.md embedded block drifted from record.yaml (regenerate with render.py)'
@@ -893,7 +1211,7 @@ def main(argv: list[str] | None = None) -> int:
 
     for record_arg in args.records:
         record_path = Path(record_arg)
-        text = render_report(load_record(record_path))
+        text = render_report(load_record(record_path), record_path)
         if args.stdout:
             sys.stdout.write(text)
         else:

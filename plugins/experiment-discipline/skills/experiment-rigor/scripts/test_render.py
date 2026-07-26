@@ -126,6 +126,137 @@ def test_contrast_reporting_does_not_disturb_the_embedded_block():
     assert yaml.safe_load(blocks[0]) == record
 
 
+# --- the derived sections (section 6) ---------------------------------------
+#
+# The drift gate digests the embedded YAML alone, so a section the renderer does not
+# emit is a silent gap rather than a red gate. These are the sections the acceptance
+# criterion names, tested on the shapes a finalized record actually carries.
+
+
+def _finalized_shape() -> dict:
+    """The paired-contrast fixture grown into the shape a finalized record has: a labeled
+    contrast row, the 2x2 breakdown, the descriptive tax and a selected interpretation."""
+    record = _load(PAIRED_CONTRAST)
+    contrast = record['results']['signal']['contrasts'][0]
+    contrast['role'] = 'confirmatory'
+    record['results']['signal']['contrasts'].append(
+        {
+            **dict(contrast),
+            'name': 'aa_calibration',
+            'role': 'exploratory',
+            'note': 'A/A calibration -- the instrument noise floor',
+        }
+    )
+    record['analysis_plan'] = {
+        'primary_contrast': {'name': 'with_hint_minus_control', 'outcome': 'signal'},
+        'decision_rule': {'threshold': 0.15},
+    }
+    # A pair-scoped block: it lives under its own key and DECLARES which outcome it speaks
+    # for, which is how the primary-precision line and the table's grouping still resolve.
+    record['results']['signal__aa'] = {
+        'outcome': 'signal',
+        'class_scope': 'genuine',
+        'clusters': record['results']['signal']['clusters'],
+        'contrasts': [record['results']['signal']['contrasts'].pop(1)],
+    }
+    record['state_breakdown'] = {
+        'arms': {
+            'with_hint': {
+                'all': {
+                    'scored': 24,
+                    'both': 17,
+                    'line_only': 3,
+                    'skeleton_only': 1,
+                    'neither': 3,
+                    'line_only_rate': 0.125,
+                }
+            }
+        }
+    }
+    record['run_economy'] = {
+        'per_arm': {
+            'with_hint': {
+                'runs': 24,
+                'mean_turns': 3.5,
+                'total_cost_usd': 2.4,
+                'mean_cost_usd': 0.1,
+            }
+        }
+    }
+    record['conclusion'] = {
+        'interpretation': 'content_carries',
+        'condition': 'the treated arm moves and the inert arm does not',
+        'read': 'the content carries the effect',
+        'basis': 'with_hint_minus_control = 0.2083 [-0.0984, 0.515]',
+        'rollout_precondition': 'live-hook delivery is unmeasured here',
+    }
+    return record
+
+
+def test_the_derived_sections_carry_the_table_precision_states_tax_and_leg():
+    text = render.render_report(_finalized_shape())
+    assert '## Contrasts (paired, on the clustered scale)' in text
+    row = next(ln for ln in text.splitlines() if '| with_hint_minus_control |' in ln)
+    # Quoted, never recomputed: the estimate, the interval and the sign test as stated.
+    assert '| 0.2083 |' in row and '[-0.0984, 0.515]' in row
+    assert 'p=0.375, 4/5 positive' in row
+    # The achieved precision is the stated interval's half-width, named against the MEWD.
+    assert (
+        '- Achieved precision (clustered scale): signal / with_hint_minus_control +/- 0.3067'
+        in text
+    )
+    assert 'declared MEWD 0.15' in text
+    # The A/A row labels itself the noise floor; the renderer quotes the label.
+    aa = next(ln for ln in text.splitlines() if '| aa_calibration |' in ln)
+    assert 'A/A calibration -- the instrument noise floor' in aa
+    # The pair-scoped block DECLARES its outcome, so the table groups by the outcome and
+    # not by the key the block happens to live under.
+    assert aa.startswith('| signal | genuine |'), aa
+    assert '## 2x2 states by arm (the line-only rate is first-class)' in text
+    assert '| with_hint | all | 24 | 17 | 3 | 1 | 3 | 0.125 |' in text
+    assert '## Turn and cost tax (descriptive)' in text
+    assert '| with_hint | 24 | 3.5 | 2.4 | 0.1 |' in text
+    assert 'Selected: `content_carries`' in text
+    assert 'Precondition for any production rollout of a row: live-hook delivery' in text
+    # Still exactly one embedded block, still equal to the record.
+    blocks = render._YAML_FENCE.findall(text)
+    assert len(blocks) == 1 and yaml.safe_load(blocks[0]) == _finalized_shape()
+
+
+def test_the_new_sections_degrade_to_nothing_without_their_blocks():
+    """A record with no contrasts renders no empty scaffolding -- one shared renderer
+    serves every tier, so an absent block must produce absence, not a header over a
+    header row."""
+    text = render.render_report(_load(PROBE))
+    for heading in ('## Contrasts', '## 2x2 states', '## Turn and cost tax', '## Interpretation'):
+        assert heading not in text, heading
+    # The RG-2x2 fixture has contrasts nowhere either, and its committed pair stays clean.
+    rg = render.render_report(_load(RG2X2), RG2X2)
+    assert '## Contrasts' not in rg
+    assert render.check_drift(RG2X2) is None
+
+
+def test_the_report_opens_with_the_generated_activation_line():
+    """Section 3's generator, not a typed string: the line names the record's own tier and
+    path, so it cannot drift from the artifact. Without a path there is nothing to name and
+    the report opens with its title instead."""
+    text = render.render_report(_load(RG2X2), RG2X2)
+    assert text.splitlines()[0] == render.record_activation_line(RG2X2)
+    assert text.splitlines()[0].startswith('[experiment-rigor | measurement -> ')
+    assert text.splitlines()[2].startswith('# Experiment:')
+    assert render.render_report(_load(RG2X2)).splitlines()[0].startswith('# Experiment:')
+
+
+def test_a_tier0_record_gets_no_activation_line():
+    with tempfile.TemporaryDirectory() as td:
+        rec = Path(td) / 'record.yaml'
+        rec.write_text(
+            'schema_version: 1\ntier: check\nexperiment: x\n', encoding='utf-8', newline='\n'
+        )
+        text = render.render_report(_load(rec), rec)
+        assert text.splitlines()[0].startswith('# Experiment:'), text.splitlines()[0]
+
+
 # --- the drift gate ---------------------------------------------------------
 
 

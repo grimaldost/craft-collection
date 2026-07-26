@@ -1,3 +1,5 @@
+[experiment-rigor | measurement -> plugins/experiment-discipline/skills/experiment-rigor/examples/rg-2x2/record.yaml]
+
 # Experiment: rg-2x2-register-gate (measurement tier)
 
 _Derived from record.yaml by render.py -- do not hand-edit._

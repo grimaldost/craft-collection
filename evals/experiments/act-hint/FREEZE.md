@@ -121,6 +121,27 @@ re-runs the material check itself and exits 2 rather than spawning if any frozen
 material has moved, and it halts *before* a spawn whose own cap could take the total
 past the ceiling — so the ceiling is never crossed and then noticed.
 
+## If the run breaks partway — do NOT re-run it
+
+`runs.jsonl` is **append-only and has no resume**. A second `run_arms.py` invocation
+replays the plan from the start and appends a second copy of every row it reaches, and
+`finalize.py` HARD-REFUSES a log carrying duplicate `(arm, prompt_id, repeat)` keys rather
+than guessing which spawn was the measured one. So a crash, a dropped connection, or a
+Ctrl-C is not a reason to start over — starting over is what forces a full re-spend.
+
+Run `finalize.py` on the partial log instead. Runs that never started reconcile as
+`not_run`, which is a non-zero `disposition.excluded`, which moves both outcomes to the
+contrasts-only shape and switches the analysis to the pre-registered ceiling-halt fallback
+(complete prompt-pairs only, scoped per contrast). That path is mechanical and tested; the
+reduced precision is reported on the clustered scale rather than papered over.
+
+    uv run --no-project --with pyyaml -- python "$DIR/finalize.py" --check   # writes nothing
+    uv run --no-project --with pyyaml -- python "$DIR/finalize.py"
+
+If a partial run must genuinely be extended rather than analyzed, move `runs.jsonl` aside
+first and treat the two logs as separate runs — never let a second pass append into the
+first one's file.
+
 ## What stays, and why
 
 `freeze_fill.py` stays after the freeze: `test_record_shape.py` imports its SHA logic as

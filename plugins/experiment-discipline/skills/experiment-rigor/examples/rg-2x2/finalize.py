@@ -190,7 +190,12 @@ def main(argv: list[str] | None = None) -> int:
         yaml.safe_dump(finalized, fh, sort_keys=False, allow_unicode=False, width=100)
 
     report_path = record_path.parent / 'report.md'
-    report_path.write_text(render.render_report(finalized), encoding='utf-8', newline='\n')
+    # The record path goes in: it is what the leading activation line is generated from,
+    # and the drift gate reads the embedded block alone -- so a re-render without it would
+    # quietly drop the line while --check stayed green.
+    report_path.write_text(
+        render.render_report(finalized, record_path), encoding='utf-8', newline='\n'
+    )
 
     report = validate.run_checks(finalized, record_path)
     for finding in report.findings:
