@@ -27,15 +27,22 @@ works. Delegating work *loses* verification the parent would have applied
 
 ### Measured, and deliberately not generalized
 
-- The gate's wording **states the discipline and names no artifact**. A variant
-  prescribing one ("add a regression check now") scored higher on the primary
-  metric and then performed the work on **58% of trivial edits** — it was
-  rejected by the pre-registered false-positive constraint.
+- **Confirmed on all three tiers** (Phase 4, opus added after the initial
+  release note): +0.56 weak, +0.56 mid, **+0.44 strong**, zero over-scope
+  throughout. A stronger model does not close the delegation gap — an opus
+  subagent still skips verification on 44% of delegated tasks without the gate.
 - The benefit is **discipline-specific**: the same mechanism gave +0.11/+0.22
-  for root-cause debugging and +0.00/+0.00 for data correctness. A follow-up
-  (Phase 3) refuted the general "prescriptive wording over-triggers" rule that
-  a first read of the Phase-2 result suggested, so **no authoring rule was
-  promoted from it**. The gate ships for verification only.
+  for root-cause debugging and +0.00/+0.00 for data correctness. The gate ships
+  for verification only.
+- **No authoring rule was promoted**, and two attempts to derive one both
+  failed. A variant prescribing an artifact ("add a regression check now") was
+  rejected by the pre-registered false-positive constraint after performing the
+  work on 58% of trivial edits — but the general readings of that result (first
+  "the prescriptive register over-triggers", then "an always-producible artifact
+  over-triggers") were each refuted by a pre-registered follow-up. The 58%
+  remains real, isolated, and unexplained; the gate's wording is therefore
+  treated as measured-and-fixed, and the paired null bank is mandatory for any
+  future gate.
 
 ## 0.8.0 — 2026-07-23
 

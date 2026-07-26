@@ -64,18 +64,30 @@ hands off to it the moment work wants gates and dependency DAGs.
 
 ### The subagent verification gate — what it is for, and what it costs
 
-Delegated work loses verification the parent would have applied. Measured on the same
-tasks: footprint 0.48 (weak) / 0.59 (mid) when the main agent does the work, **0.44
-when it is handed to a subagent**. The gate recovers that and more — **+0.56 on both
-tiers, with zero over-triggering** on trivial edits (paired null measurement).
+Delegated work loses verification the parent would have applied, and **a stronger model
+does not fix it**: an opus subagent still skips verification on nearly half of
+delegated tasks (0.56). The gate recovers it on every tier measured, at **zero
+over-triggering** on trivial edits (paired null measurement each time):
+
+| tier | subagent without gate | with gate | lift |
+|---|---|---|---|
+| haiku-4.5 | 0.44 | 1.00 | +0.56 |
+| sonnet-5 | 0.44 | 1.00 | +0.56 |
+| opus-5 | 0.56 | 1.00 | +0.44 |
+
+For reference, the main agent doing the same tasks itself scores 0.48 (weak) / 0.59
+(mid) — so delegation is where the discipline is lost, not the model.
 
 Two things about it are load-bearing:
 
-- **It states the discipline and names no artifact.** An earlier variant that
-  prescribed one ("add a regression check now") scored *higher* on the primary metric
-  and then performed the work on **58% of trivial edits**. Sharpening the wording into
-  an instruction is a regression, not an improvement; re-run the paired null
-  measurement before touching it.
+- **The wording is measured, and we cannot yet predict which wordings misbehave.** A
+  variant that prescribed an artifact ("add a regression check now") scored *higher*
+  on the primary metric and then performed the work on **58% of trivial edits**. Two
+  follow-up experiments tried to explain that — the prescriptive register, then
+  artifact-producibility — and **both explanations were refuted**; other prescriptive
+  gates over-triggered zero times. So the failure is real, isolated, and unexplained.
+  Treat this text as measured-and-fixed: if you change it, **re-run the paired null
+  measurement**, because that is currently the only way to find out.
 - **The benefit is discipline-specific.** The same mechanism worded for other
   disciplines gave +0.11/+0.22 (root-cause debugging) and +0.00/+0.00 (data
   correctness). This gate is for verification-before-completion; it is not a general
