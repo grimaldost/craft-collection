@@ -54,12 +54,52 @@ Deduplicated against craft-collection and the Claude Code harness:
 Governed multi-PR machinery stays out of the pack by design; planned-execution
 hands off to it the moment work wants gates and dependency DAGs.
 
-## Optional hook (off by default)
+## Optional hooks (off by default)
 
 | behaviour | enable with |
 |---|---|
 | Per-prompt lexical dispatch router: a UserPromptSubmit hook runs deterministic word-boundary regexes (`router_rules.json`, calibrated against `evals/trigger/*.json`) over a substantive human prompt and injects a short `<toolkit-dispatch>` block naming at most two candidate skills, with the matched words shown; silent on no match, on slash-commands, on short follow-ups, and on subagent-completion notices. | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1` |
-| Disable the router — with nothing else to inject, this silences the hook entirely. | `HUMBLEPOWERS_DISPATCH_ROUTER=0` |
+| Disable the router — with nothing else to inject, this silences the UserPromptSubmit hook entirely. | `HUMBLEPOWERS_DISPATCH_ROUTER=0` |
+| Subagent verification gate: a SubagentStop hook holds each subagent **once** before it finishes and asks it to satisfy itself the change works. Skips read-only agent types (`Explore`, `Plan`). | `HUMBLEPOWERS_SUBAGENT_VERIFY_GATE=1` |
+
+### The subagent verification gate — what it is for, and what it costs
+
+Delegated work loses verification the parent would have applied, and **a stronger model
+does not fix it**: an opus subagent still skips verification on nearly half of
+delegated tasks (0.56). The gate recovers it on every tier measured, at **zero
+over-triggering** on trivial edits (paired null measurement each time):
+
+| tier | subagent without gate | with gate | lift |
+|---|---|---|---|
+| haiku-4.5 | 0.44 | 1.00 | +0.56 |
+| sonnet-5 | 0.44 | 1.00 | +0.56 |
+| opus-5 | 0.56 | 1.00 | +0.44 |
+
+For reference, the main agent doing the same tasks itself scores 0.48 (weak) / 0.59
+(mid) — so delegation is where the discipline is lost, not the model.
+
+Two things about it are load-bearing:
+
+- **The wording is measured, and we cannot yet predict which wordings misbehave.** A
+  variant that prescribed an artifact ("add a regression check now") scored *higher*
+  on the primary metric and then performed the work on **58% of trivial edits**. Two
+  follow-up experiments tried to explain that — the prescriptive register, then
+  artifact-producibility — and **both explanations were refuted**; other prescriptive
+  gates over-triggered zero times. So the failure is real, isolated, and unexplained.
+  Treat this text as measured-and-fixed: if you change it, **re-run the paired null
+  measurement**, because that is currently the only way to find out.
+- **The benefit is discipline-specific.** The same mechanism worded for other
+  disciplines gave +0.11/+0.22 (root-cause debugging) and +0.00/+0.00 (data
+  correctness). This gate is for verification-before-completion; it is not a general
+  discipline-delivery mechanism, and the evidence does not support marketing it as one.
+
+Costs and limits, plainly: it adds **one extra turn per delegated subagent**, so a
+heavily parallel session pays for it repeatedly. The read-only skip-list is a
+conservative addition — the measurement covered general-purpose subagents making code
+edits, not research subagents. Like the router, it **fails open**: any error,
+malformed payload, or unwritable guard means silence, never a blocked subagent.
+Evidence: `docs/design/2026-07-24-dispatch-phase2-preregistration.md` and the Phase-2/3
+findings (813 trials, pre-registered gates, paired null banks).
 
 The hook fails open (any error or timeout means silence, never a blocked
 prompt), keeps payloads ASCII, and logs each decision (router hits, whether a

@@ -24,6 +24,33 @@ change humblepowers actually owns.
   byte-unchanged and both sealed router holdouts are unmoved (they contain no
   experiment-rigor case). This row doubles as the pointer to the new plugin.
 
+### Added
+
+- **`SubagentStop` verification gate**
+  (`skills/verification-before-completion/scripts/subagent_gate.py`), off unless
+  `HUMBLEPOWERS_SUBAGENT_VERIFY_GATE=1`. Delegated work loses verification the
+  parent would have applied — footprint 0.48 (weak) / 0.59 (mid) when the main
+  agent does the task, 0.44 when it is handed to a subagent, and an opus subagent
+  still skips on 44%. The hook holds each subagent once before it finishes and
+  asks it to satisfy itself the change works: **+0.56 / +0.56 / +0.44** across
+  weak/mid/strong, **zero** over-scope on trivial edits (paired null measurement
+  each time; 1053 trials over four pre-registered phases).
+  Blocks once per (session, agent), writing its guard *before* emitting the block
+  so a crash leaves the subagent un-blocked rather than looped. Skips read-only
+  agent types (`Explore`, `Plan`). Fails open on every path: disabled, malformed
+  payload, missing ids, unwritable guard.
+
+  Two things deliberately **not** done, because the measurement says not to. The
+  wording states the discipline and names no artifact — a variant prescribing one
+  ("add a regression check now") scored higher on the primary metric and then
+  performed the work on 58% of trivial edits, and was rejected by the
+  pre-registered false-positive constraint. And no authoring rule was promoted
+  from that contrast: two pre-registered follow-ups tried to explain it (the
+  prescriptive register, then artifact-producibility) and both were refuted, so
+  the 58% stays a real but unexplained observation. The gate ships for
+  verification only; the same mechanism gave +0.11/+0.22 for root-cause debugging
+  and +0.00/+0.00 for data correctness.
+
 ## 0.8.0 — 2026-07-23
 
 Dispatch retirement (redesign step R1). A 2026-07 content A/B (fathom
