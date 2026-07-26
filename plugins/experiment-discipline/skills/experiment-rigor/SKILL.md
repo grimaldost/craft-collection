@@ -62,7 +62,7 @@ the literal `inline`, which nothing resolves.
 
 ```text
 [experiment-rigor | check -> inline]
-[experiment-rigor | measurement -> evals/experiments/act-hint/record.yaml]
+[experiment-rigor | measurement -> experiments/retry-backoff/record.yaml]
 ```
 
 ## Bright lines

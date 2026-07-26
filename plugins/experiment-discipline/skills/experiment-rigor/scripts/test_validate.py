@@ -1120,10 +1120,12 @@ def _hook_by_id(hook_id: str) -> dict:
 
 TRAVELLING_BASE = 'plugins/experiment-discipline/skills/experiment-rigor/examples/rg-2x2'
 PRE_MOVE_RECORD = 'plugins/humblepowers/skills/experiment-rigor/examples/rg-2x2/record.yaml'
-# The evals alternative is what keeps a detector's own pre-registration inside the gate;
-# dropping it while repointing the plugin half would silence the gate with no error.
-EVALS_RECORD = 'evals/experiments/act-hint/record.yaml'
-EVALS_REPORT = 'evals/experiments/act-hint/report.md'
+# The evals alternative keeps a record living outside the plugin inside the gate. No
+# such record ships today, so the path below is a shape, not a file: the assertion is
+# that the hook's regex would select one, which is what stops a later repoint of the
+# plugin half from silently narrowing the gate to the example fixture alone.
+EVALS_RECORD = 'evals/experiments/some-experiment/record.yaml'
+EVALS_REPORT = 'evals/experiments/some-experiment/report.md'
 
 
 def test_hook_uses_files_and_pass_filenames():
