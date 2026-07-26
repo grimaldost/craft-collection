@@ -49,6 +49,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -333,11 +334,34 @@ def _parse_dt(s: str) -> datetime:
 # --- git helpers ------------------------------------------------------------
 
 
+def _git_env() -> dict[str, str]:
+    """The environment minus every GIT_* variable, so `-C` is authoritative.
+
+    Git exports the repository-location variables (GIT_DIR, GIT_WORK_TREE,
+    GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES,
+    GIT_COMMON_DIR, GIT_NAMESPACE) into the environment of every hook it runs, and
+    an ambient GIT_DIR takes PRECEDENCE over `git -C <dir>`. This validator runs
+    from hooks, and the RECORD's repository is not always the HOOK's -- a
+    submodule, a sibling worktree, or (concretely) the temp repositories its own
+    suite builds. Unscrubbed, every reconstruction op below resolved against the
+    hook's repository instead: ER-ANCHOR read that repo's HEAD date and ER-PREREG
+    looked the frozen record up in its history, both downgrading to a silent WARN
+    -- a gate quietly ceasing to check, against the loud-failing thesis. Found the
+    hard way: the suite was green run directly and red inside `git push`.
+
+    The whole GIT_* prefix goes rather than an enumerated list: git keeps adding
+    location knobs (GIT_CEILING_DIRECTORIES, GIT_DISCOVERY_ACROSS_FILESYSTEM), and
+    every op here is local, needing nothing else from the ambient git environment.
+    """
+    return {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+
+
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(  # noqa: S603 - fixed argv, no shell
         ['git', '-C', str(cwd), *args],  # noqa: S607 - git resolved from PATH
         capture_output=True,
         text=True,
+        env=_git_env(),
     )
 
 

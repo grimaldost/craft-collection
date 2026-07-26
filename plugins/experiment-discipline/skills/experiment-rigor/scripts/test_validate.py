@@ -85,7 +85,13 @@ def check(record: dict, path: Path | None = None, *, schema_only: bool = False) 
 
 
 def _git(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    full_env = dict(os.environ)
+    # Ambient GIT_* is dropped, then everything this helper needs is put back
+    # explicitly: git exports GIT_DIR and friends into every hook it runs, and an
+    # ambient GIT_DIR takes PRECEDENCE over `git -C <dir>`. Under `git push` these
+    # fixtures were therefore built in the OUTER repo -- `git -C <tmp> init` even
+    # re-initialised it -- and every gate below was then verified against the wrong
+    # history. Nothing ambient, everything intentional.
+    full_env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
     full_env['GIT_CONFIG_GLOBAL'] = os.devnull
     full_env['GIT_CONFIG_SYSTEM'] = os.devnull
     if env:
@@ -954,6 +960,50 @@ def test_prereg_git_ops_run_from_repo_toplevel_not_nested_dir():
         for cwd, args in calls:
             if cwd != top_resolved:
                 assert args[:2] == ('rev-parse', '--show-toplevel'), (cwd, args)
+
+
+# --- the git helpers ignore an inherited GIT_DIR ----------------------------
+
+
+def test_git_ops_resolve_the_records_repo_under_an_inherited_git_dir():
+    # Regression: fails without validate._git_env(). Git exports GIT_DIR (and
+    # GIT_WORK_TREE, GIT_INDEX_FILE, ...) into the environment of every hook it runs,
+    # and an ambient GIT_DIR takes PRECEDENCE over `git -C <dir>` -- so this validator,
+    # run from its own pre-commit hook, resolved every reconstruction op against the
+    # HOOK's repository: ER-ANCHOR read that repo's HEAD date and ER-PREREG looked the
+    # record up in its history, both downgrading to a silent WARN. The suite was green
+    # run directly and red inside `git push`, which is how it was found.
+    with tempfile.TemporaryDirectory() as td_rec, tempfile.TemporaryDirectory() as td_hook:
+        record_repo, hook_repo = Path(td_rec), Path(td_hook)
+        _git_init(record_repo)
+        rec = _measurement_record()
+        path = write_record(record_repo, rec)
+        sha = _git_commit(record_repo, '2026-01-01T00:00:00')
+        rec['plan_frozen_at']['commit'] = sha
+        write_record(record_repo, rec)
+
+        # A second, unrelated repository: the stand-in for the repo the hook runs in.
+        _git_init(hook_repo)
+        (hook_repo / 'unrelated.txt').write_text('x\n', encoding='utf-8')
+        hook_sha = _git_commit(hook_repo, '2026-06-01T00:00:00')
+        assert hook_sha and hook_sha != sha
+
+        prior = os.environ.get('GIT_DIR')
+        os.environ['GIT_DIR'] = str(hook_repo / '.git')  # exactly what a hook leaks in
+        try:
+            assert validate._repo_toplevel(record_repo) == record_repo.resolve()
+            assert validate._commit_in_history(record_repo, sha)
+            # The decoy's HEAD is not in the record's history; unscrubbed, it resolves.
+            assert not validate._commit_in_history(record_repo, hook_sha)
+            assert validate._show_at(record_repo, sha, 'record.yaml') is not None
+            # ... and the two gates built on those helpers stay clean.
+            assert 'ER-ANCHOR' not in fail_codes(check(rec, path))
+            assert [f for f in validate.check_prereg(rec, path) if f.level == 'FAIL'] == []
+        finally:
+            if prior is None:
+                os.environ.pop('GIT_DIR', None)
+            else:
+                os.environ['GIT_DIR'] = prior
 
 
 # --- ER-COMPREHEND (decision-tier comprehension block) ----------------------

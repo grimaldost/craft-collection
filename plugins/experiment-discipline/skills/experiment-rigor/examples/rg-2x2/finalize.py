@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -149,11 +150,26 @@ def finalize_record(record: dict[str, Any], freeze_sha: str) -> dict[str, Any]:
     return out
 
 
+def _git_env() -> dict[str, str]:
+    """The environment minus every GIT_* variable, so `-C` is authoritative.
+
+    Git exports the repository-location variables (GIT_DIR, GIT_WORK_TREE,
+    GIT_INDEX_FILE, ...) into every hook it runs, and an ambient GIT_DIR takes
+    PRECEDENCE over `git -C <dir>`. The record is located by `--record`, so it need
+    not live in the repo a hook is running in: unscrubbed, finalizing from a hook
+    (or any shell that inherited one) stamps the HOOK repo's HEAD into the record
+    as the freeze commit -- a wrong SHA that ER-ANCHOR and ER-PREREG then verify
+    against the wrong history. Found the hard way: the suite was green run directly
+    and red inside `git push`."""
+    return {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+
+
 def _git_head(cwd: Path) -> str:
     proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
         ['git', '-C', str(cwd), 'rev-parse', 'HEAD'],  # noqa: S607 - git from PATH
         capture_output=True,
         text=True,
+        env=_git_env(),
     )
     if proc.returncode != 0:
         raise SystemExit(f'could not read HEAD in {cwd}: {proc.stderr.strip()}')

@@ -13,6 +13,7 @@ at act time. Exposed to consumer repos via this repo's `.pre-commit-hooks.yaml`
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +29,20 @@ def is_uv_project(root: Path) -> bool:
     return False
 
 
+def _git_env() -> dict[str, str]:
+    """The environment minus every GIT_* variable, so `-C` is authoritative.
+
+    Git exports the repository-location variables (GIT_DIR, GIT_WORK_TREE,
+    GIT_INDEX_FILE, ...) into every hook it runs, and an ambient GIT_DIR takes
+    PRECEDENCE over `git -C <dir>`. This check IS a pre-commit hook, and it takes
+    the tree to check as an argument, so the two can differ: unscrubbed it asks the
+    HOOK's repository whether some OTHER tree has a venv committed -- an answer of
+    "no" that means nothing, and the residue ships. It hides when the two coincide,
+    which is how it survived. Found the hard way: the suite was green run directly
+    and red inside `git push`."""
+    return {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+
+
 def _tracked_venvs(root: Path) -> list[str]:
     """Names of venv dirs committed to git; falls back to directory presence
     (a `pyvenv.cfg` marker) when git is unavailable — absence of git is not
@@ -39,6 +54,7 @@ def _tracked_venvs(root: Path) -> list[str]:
             capture_output=True,
             text=True,
             timeout=10,
+            env=_git_env(),
         )
         if proc.returncode == 0:
             return sorted({ln.split('/', 1)[0] for ln in proc.stdout.splitlines() if ln.strip()})

@@ -55,7 +55,12 @@ EXPECTED_DEFECT_CODES = {'ER-RECON', 'ER-SCHEMA', 'ER-STATS', 'ER-PREREG'}
 
 
 def _git(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    full_env = dict(os.environ)
+    # Ambient GIT_* is dropped, then everything this helper needs is put back
+    # explicitly: git exports GIT_DIR and friends into every hook it runs, and an
+    # ambient GIT_DIR takes PRECEDENCE over `git -C <dir>`. Under `git push` this
+    # freeze commit was therefore made in the OUTER repo, and ER-ANCHOR / ER-PREREG
+    # were verified against the wrong history. Nothing ambient, everything intentional.
+    full_env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
     full_env['GIT_CONFIG_GLOBAL'] = os.devnull
     full_env['GIT_CONFIG_SYSTEM'] = os.devnull
     if env:
@@ -372,6 +377,43 @@ def test_decision_complete_record_exits_zero():
         assert report.failures == [], report.failures
         assert render.check_drift(path) is None
         assert _run_cli(path).returncode == 0
+
+
+def test_finalize_reads_head_from_the_records_repo_under_an_inherited_git_dir():
+    # Regression: fails without finalize._git_env(). Git exports GIT_DIR into every hook
+    # it runs and it takes PRECEDENCE over `git -C <dir>`, so the default freeze SHA was
+    # read from the HOOK's repository -- a wrong SHA stamped into the record, which
+    # ER-ANCHOR and ER-PREREG then verify against the wrong history.
+    with _tempdir() as td_rec, _tempdir() as td_hook:
+        record_repo, hook_repo = Path(td_rec), Path(td_hook)
+        record_sha = _freeze_commit(record_repo, _load_frozen())[1]
+        _git(hook_repo, 'init', '-q')
+        (hook_repo / 'unrelated.txt').write_text('x\n', encoding='utf-8')
+        _git(hook_repo, 'add', '-A')
+        _git(
+            hook_repo,
+            '-c',
+            'user.name=t',
+            '-c',
+            'user.email=t@e',
+            'commit',
+            '-q',
+            '-m',
+            'decoy',
+            env={'GIT_AUTHOR_DATE': FREEZE_DATE, 'GIT_COMMITTER_DATE': FREEZE_DATE},
+        )
+        hook_sha = _git(hook_repo, 'rev-parse', 'HEAD').stdout.strip()
+        assert record_sha and hook_sha and record_sha != hook_sha
+
+        prior = os.environ.get('GIT_DIR')
+        os.environ['GIT_DIR'] = str(hook_repo / '.git')  # exactly what a hook leaks in
+        try:
+            assert finalize._git_head(record_repo) == record_sha
+        finally:
+            if prior is None:
+                os.environ.pop('GIT_DIR', None)
+            else:
+                os.environ['GIT_DIR'] = prior
 
 
 if __name__ == '__main__':
