@@ -350,10 +350,20 @@ def _interpretation_lines(record: dict[str, Any]) -> list[str]:
     alike_basis = str(conclusion.get('alike_basis') or '').strip()
     if alike_basis and conclusion.get('interpretation') == 'preamble_only':
         lines.append(f'- Alike basis: {alike_basis}')
+    # The frozen null leg's own text states the no-headroom rule conditionally, so a reader
+    # meets the words "NO HEADROOM" whichever way the data fell. Resolve it here, both ways:
+    # a null WITH room is the stronger finding and must not be left looking like the weaker one.
     if conclusion.get('no_headroom') is True:
         lines.append(
             '- Recorded as NO HEADROOM, not as no effect: control sits at or near ceiling '
             'on the genuine half, so the instrument had nowhere to move.'
+        )
+    elif conclusion.get('no_headroom') is False and conclusion.get('headroom') is not None:
+        lines.append(
+            f'- Headroom: the no-headroom qualifier does NOT apply. Control sits at '
+            f'{_num(conclusion.get("control_genuine_rate"))} on the genuine half, leaving '
+            f'{_num(conclusion.get("headroom"))} of room. The instrument had room to move '
+            f'and did not, which is the stronger reading of a null, not the weaker one.'
         )
     if conclusion.get('instrument_noise') is True:
         lines.append(

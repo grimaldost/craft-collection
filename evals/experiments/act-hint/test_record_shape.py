@@ -6,9 +6,18 @@ by running a synthetic record past `validate.py`, not by reading the spec. A
 reconciliation or stats-shape defect that surfaces here costs nothing; the same defect
 found at finalize costs the whole 25-60 USD run.
 
+The run has since happened, so `record.yaml` on disk is the FINALIZED record and no
+longer the pre-registration these shapes are built from. The pre-registration is still
+reachable in git, at the commit the record's own `plan_frozen_at` names, and that is
+where the synthetic shapes below get their template: they are pre-spend gates about the
+FROZEN plan's shape, so reading them off a working copy whose stage they do not control
+was always the weaker arrangement. `RECORD` is the finalized pair on disk; `FROZEN` is
+the stage-1 record as committed.
+
 Four records go through, all of them shapes this experiment will actually produce:
 
-  1. the REAL frozen record as committed -- zero failures under the shape gates;
+  1. the REAL frozen record as committed AND the finalized record on disk -- zero
+     failures under the shape gates, either way;
   2. a synthetic FINAL stage with zero exclusions: both outcomes populated, the
      confirmatory one with `arms` + `clusters` + `contrasts[]`, the genuine-scoped
      secondary with `clusters` + `contrasts[]` and NO `arms` block;
@@ -27,7 +36,10 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
+import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -62,22 +74,75 @@ RECORD: dict[str, Any] = yaml.safe_load(RECORD_PATH.read_text(encoding='utf-8'))
 BANK = run_arms.load_bank()
 ARMS = ('control', 'narrow', 'wide', 'inert')
 
+# The freeze the record points at, and the record and report AS COMMITTED there. The
+# coordinates come from the record's own anchor rather than a literal SHA, so the frozen
+# material is always read at exactly the commit this record claims to be frozen at.
+FREEZE_SHA = str(RECORD['plan_frozen_at']['commit'])
+FREEZE_RELPATH = str(RECORD['plan_frozen_at']['path'])
+FREEZE_RELDIR = FREEZE_RELPATH.rsplit('/', 1)[0]
 
-def _failures(record: dict[str, Any], *, schema_only: bool = True) -> list[str]:
-    report = validate.run_checks(record, RECORD_PATH, schema_only=schema_only)
+
+def _git_show(spec: str) -> str:
+    """A blob as committed, newline-normalized the way freeze_fill reads the record."""
+    proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ['git', '-C', str(REPO), 'show', spec],  # noqa: S607 - git resolved from PATH
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        detail = proc.stderr.decode('utf-8', 'replace').strip()
+        raise AssertionError(f'git show {spec} failed: {detail}')
+    return proc.stdout.decode('utf-8').replace('\r\n', '\n')
+
+
+FROZEN_TEXT = _git_show(f'{FREEZE_SHA}:{FREEZE_RELPATH}')
+FROZEN: dict[str, Any] = yaml.safe_load(FROZEN_TEXT)
+FROZEN_REPORT = _git_show(f'{FREEZE_SHA}:{FREEZE_RELDIR}/report.md')
+
+
+def _moment(stamp: str | datetime) -> datetime:
+    """A timestamp from the record or from git, as one comparable aware datetime. PyYAML
+    hands back a datetime for an unquoted stamp and a string for a quoted one, and the two
+    records here differ on that, so both readings go through the same door."""
+    text = stamp.isoformat() if isinstance(stamp, datetime) else str(stamp)
+    return datetime.fromisoformat(text.replace('Z', '+00:00'))
+
+
+def _failures(
+    record: dict[str, Any], path: Path = RECORD_PATH, *, schema_only: bool = True
+) -> list[str]:
+    report = validate.run_checks(record, path, schema_only=schema_only)
     return [f'{f.code}: {f.message}' for f in report.failures]
+
+
+def _shape_failures(record: dict[str, Any]) -> list[str]:
+    """The shape gates on a record that is NOT the committed pair, with the frozen report
+    staged beside it. ER-PARITY reads a record's sibling report.md, and the one on disk
+    now describes the real run; against a synthetic shape it would report contradictions
+    about a report neither the shape nor the gate is asking about. Staging the freeze-stage
+    report keeps that gate doing its real work on the pair these shapes belong to."""
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / 'report.md').write_text(FROZEN_REPORT, encoding='utf-8', newline='\n')
+        return _failures(record, Path(tmp) / 'record.yaml')
 
 
 # --- 1. the frozen record as committed ---------------------------------------
 
 
 def test_the_frozen_record_passes_every_shape_gate():
-    """Only the git-context gates may be outstanding pre-freeze; nothing structural."""
+    """Both readings of the record: the pre-registration as committed at the freeze, and
+    the finalized pair on disk that the run turned it into. Only the git-context gates
+    were ever outstanding pre-freeze; nothing structural, in either."""
+    assert _shape_failures(FROZEN) == []
     assert _failures(RECORD) == []
 
 
 def test_the_freeze_stage_disposition_carries_total_alone():
-    assert RECORD['disposition'] == {'total': 192}
+    """Read AT the freeze commit: `completed` and `excluded` are results, and stating them
+    in the pre-registration would have been the defect. The record on disk carries them
+    now for the opposite reason -- the run happened and finalize wrote what it observed."""
+    assert FROZEN['disposition'] == {'total': 192}
+    assert RECORD['disposition']['total'] == 192
+    assert {'completed', 'excluded'} <= set(RECORD['disposition'])
 
 
 def test_design_is_arm_by_class_and_reconciles():
@@ -160,12 +225,20 @@ def test_run_config_matches_the_runner_it_describes():
 
 
 def test_first_run_at_cannot_be_outrun_by_the_freeze_commit():
-    """ER-ANCHOR fails when the freeze commit postdates the first run, so a near-term
-    placeholder is a fuse on a clock: it would redden a stage-1 commit made hours
-    later, through no change to anything."""
+    """ER-ANCHOR fails when the freeze commit postdates the first run: the goalpost would
+    have moved after the run began.
+
+    Pre-run this could only be guarded indirectly, by holding the PLACEHOLDER first_run_at
+    far enough out that a stage-1 commit made hours later could not overtake it. That
+    guard is retired -- its premise was the placeholder, and the placeholder is spent. The
+    OBSERVED first run makes the invariant itself directly checkable against reality: the
+    run began after the freeze commit was made, which is exactly what the gate requires,
+    so the gate is also run here rather than approximated.
+    """
     first_run = RECORD['run']['first_run_at']
-    stamp = first_run if isinstance(first_run, str) else first_run.isoformat()
-    assert stamp >= '2026-08-01', f'{stamp} leaves too little room before the freeze commit'
+    freeze_date = freeze_fill.commit_date(FREEZE_SHA)
+    assert _moment(first_run) > _moment(freeze_date), (first_run, freeze_date)
+    assert validate.check_anchor(RECORD, RECORD_PATH) == []
 
 
 # --- the record cannot describe a reality it does not have -------------------
@@ -292,8 +365,12 @@ def _arms_block(clusters: dict, arms: tuple[str, ...]) -> dict:
 
 def final_record_no_exclusions() -> dict[str, Any]:
     """The expected shape: everything completed, the confirmatory outcome carrying its
-    descriptive per-arm block beside the clustered contrasts."""
-    record = copy.deepcopy(RECORD)
+    descriptive per-arm block beside the clustered contrasts.
+
+    Built on the FROZEN record, not the working copy: this is a pre-spend gate about the
+    shape the frozen plan will grow into, and the working copy is now one particular
+    finalized instance of it."""
+    record = copy.deepcopy(FROZEN)
     all_pids = [p['id'] for p in BANK]
     genuine = [p['id'] for p in BANK if p['class'] == 'genuine']
     full = _cluster_block(all_pids, ARMS)
@@ -323,8 +400,8 @@ def final_record_no_exclusions() -> dict[str, Any]:
 def final_record_with_exclusions() -> dict[str, Any]:
     """The pre-registered fallback shape: one prompt fully excluded and dropped from
     every contrast, some clusters at a single surviving repeat, and NO arms block on
-    either outcome."""
-    record = copy.deepcopy(RECORD)
+    either outcome. On the FROZEN record, for the same reason as above."""
+    record = copy.deepcopy(FROZEN)
     all_pids = [p['id'] for p in BANK][1:]  # the first prompt dropped out entirely
     genuine = [p['id'] for p in BANK if p['class'] == 'genuine'][1:]
     full = _cluster_block(all_pids, ARMS)
@@ -353,11 +430,11 @@ def final_record_with_exclusions() -> dict[str, Any]:
 
 
 def test_the_complete_final_shape_validates():
-    assert _failures(final_record_no_exclusions()) == []
+    assert _shape_failures(final_record_no_exclusions()) == []
 
 
 def test_the_excluded_fallback_shape_validates():
-    assert _failures(final_record_with_exclusions()) == []
+    assert _shape_failures(final_record_with_exclusions()) == []
 
 
 def test_the_scoped_secondary_carries_no_arms_block():
@@ -373,7 +450,7 @@ def test_the_scoped_secondary_carries_no_arms_block():
 def test_a_contrast_that_disagrees_with_its_clusters_fails():
     broken = final_record_no_exclusions()
     broken['results']['rigor_disposition']['contrasts'][0]['estimate'] += 0.1
-    failures = _failures(broken)
+    failures = _shape_failures(broken)
     assert any('ER-STATS' in f and 'wide_minus_control' in f for f in failures), failures
 
 
@@ -385,7 +462,7 @@ def test_per_arm_counts_beside_an_exclusion_cannot_reconcile():
     outcome = broken['results']['rigor_disposition']
     outcome['arms'] = _arms_block(outcome['clusters'], ARMS)
     outcome['paired'] = True
-    failures = _failures(broken)
+    failures = _shape_failures(broken)
     assert any('ER-RECON' in f for f in failures), failures
     assert RECORD['analysis_plan']['exclusions']['arms_block_rule'].strip()
 
@@ -419,10 +496,25 @@ def test_an_edited_material_is_a_loud_failure_not_a_rewrite():
 
 
 def test_filling_the_freeze_region_anchors_the_record():
-    """End to end against a real commit in this repository: after the fill, the record
-    carries a resolvable plan_frozen_at and ER-ANCHOR is clean. Nothing is written."""
-    text, failures = freeze_fill.fill(RECORD_PATH, 'HEAD')
+    """End to end against the real commit this record was frozen at: after the fill, the
+    record carries a resolvable plan_frozen_at and ER-ANCHOR is clean. Nothing is written.
+
+    The delimited region lives in the STAGE-1 text. finalize.py rewrote the working record
+    through PyYAML's dumper -- accepted, documented behavior, the RG-2x2 precedent -- and
+    the dumper drops the authored comments the region is made of, so the region half of the
+    fill is exercised where the region still is, and the record on disk is then held to the
+    block that fill produces. The materials half still goes through `fill` on the live
+    record, which is the entry point the region half can no longer reach through.
+    """
+    assert freeze_fill.REGION_START in FROZEN_TEXT
+    assert 'plan_frozen_at' not in FROZEN, 'a commit cannot name its own SHA'
+    _live_text, failures = freeze_fill.fill(RECORD_PATH)
     assert failures == []
+
+    relpath = freeze_fill.repo_relpath(RECORD_PATH)
+    assert relpath == FREEZE_RELPATH, 'git show does not follow renames; the record moved'
+    block = freeze_fill.frozen_block(FREEZE_SHA, relpath, freeze_fill.commit_date(FREEZE_SHA))
+    text = freeze_fill.replace_region(FROZEN_TEXT, block)
     filled = yaml.safe_load(text)
     pin = filled['plan_frozen_at']
     assert len(pin['commit']) == 40, pin
@@ -434,6 +526,10 @@ def test_filling_the_freeze_region_anchors_the_record():
         text, freeze_fill.frozen_block(pin['commit'], pin['path'], pin['timestamp'])
     )
     assert again == text
+    # and the record on disk carries that block verbatim: the anchor the fill produced
+    # survived the run and the finalize rewrite.
+    assert RECORD['plan_frozen_at'] == pin
+    assert validate.check_anchor(RECORD, RECORD_PATH) == []
 
 
 if __name__ == '__main__':

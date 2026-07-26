@@ -11,6 +11,7 @@ Runnable with pytest or `python test_run_arms.py`. Stdlib only.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import shutil
 import sys
@@ -33,6 +34,14 @@ import run_arms  # noqa: E402 - after the path fix
 BANK = run_arms.load_bank()
 TABLE = run_arms.load_table()
 PLAN = run_arms.build_plan(BANK, TABLE)
+RUN_LOG = HERE / 'runs.jsonl'
+
+
+def _run_log_state() -> str | None:
+    """The run log's exact contents, as a hash, or None when there is no log yet. The log
+    now exists -- it is the paid experiment's data -- so "the dry run did not write" can no
+    longer mean "the file is absent"; it means these two readings are equal."""
+    return hashlib.sha256(RUN_LOG.read_bytes()).hexdigest() if RUN_LOG.exists() else None
 
 
 def test_the_plan_is_192_runs_across_the_declared_cells():
@@ -101,9 +110,19 @@ def test_the_projection_sits_inside_the_declared_band_and_under_the_ceiling():
 
 
 def test_dry_run_prints_the_plan_and_spends_nothing():
+    """A dry run spawns nothing and writes no results.
+
+    The write half used to be checked as "the run log does not exist", which the real run
+    has spent: runs.jsonl is on disk now and is never deleted. The invariant is restated
+    over the log's BYTES -- unchanged if it exists, still absent if it does not -- which is
+    the stronger reading, since it also covers the case the original could not: a dry run
+    APPENDING to a log that is already there.
+    """
+
     def explode(*_args, **_kwargs):
         raise AssertionError('--dry-run spawned a run')
 
+    before = _run_log_state()
     original = run_arms.run_agent
     run_arms.run_agent = explode
     try:
@@ -122,7 +141,7 @@ def test_dry_run_prints_the_plan_and_spends_nothing():
     assert 'frozen materials verified' in out, 'the dry run must check materials too; it is free'
     for arm in TABLE['arms']:
         assert arm in out
-    assert not (HERE / 'runs.jsonl').exists(), 'a dry run must not open the run log'
+    assert _run_log_state() == before, 'a dry run must not write to the run log'
 
 
 def test_the_frozen_materials_match_the_record_before_any_spend():

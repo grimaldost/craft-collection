@@ -1,13 +1,85 @@
+[experiment-rigor | measurement -> evals/experiments/act-hint/record.yaml]
+
 # Experiment: act-hint-detector (measurement tier)
 
 _Derived from record.yaml by render.py -- do not hand-edit._
 
 - Design: 8 cell(s) (control_genuine=24, control_decoy=24, narrow_genuine=24, narrow_decoy=24, wide_genuine=24, wide_decoy=24, inert_genuine=24, inert_decoy=24); shared_tasks=True
-- Disposition: total=192, completed=None, excluded=None
+- Disposition: total=192, completed=189, excluded=3
 - Outcomes:
   - rigor_disposition (role=confirmatory): the response's 2x2 state under verify.py, which reads the response TEXT and no arm label. `line` is the format-(a) activation line present verbatim in shape on a line of its own; `skeleton` is all five tier-0 elements present (method, metric, results, conclusion, and the one-line "what this updates"), detected by the label patterns in oracle_patterns.json. On a GENUINE evaluation act correct means BOTH -- a line emitted without the substance scores zero, which is the founding RG-2x2 declaration-without-behavior pattern made measurable rather than rewarded. On a DECOY correct means NEITHER, which prices the cheapest way to game the genuine half. The full 2x2 state is recorded per run, so the line-only rate is a first-class number.
   - skeleton_wellformedness (role=exploratory): on the GENUINE cells only: at least one numerator-over-denominator figure is present in the response AND every such figure is numerically consistent with itself (numerator <= denominator, denominator >= 1). This is the weaker, SECONDARY question -- whether the element most often dropped actually carries a denominator -- and it is scoped to a subset of the declared cells, so it is reported through `clusters` and `contrasts[]` ONLY and carries no `arms` block: ER-RECON holds every arm block's denominators to N_expected, which a subset-scoped outcome cannot satisfy. The enum has no "secondary", so the role field reads `exploratory` and this sentence is what says which kind of exploratory it is: pre-registered and scoped, not post-hoc.
+- Results:
+  - rigor_disposition: verdict=confirmatory_null, paired=True
+  - skeleton_wellformedness: verdict=inconclusive, paired=True
+  - rigor_disposition__wide_minus_control / wide_minus_control (wide - control): paired_difference, estimate=0.0208, se=0.0208, 24 cluster(s), paired_t CI [-0.0223, 0.0639], sign test p=1.0 on 1 effective cluster(s), 1 positive
+  - rigor_disposition__wide_minus_inert / wide_minus_inert (wide - inert): paired_difference, estimate=0.0, se=0.0301, 24 cluster(s), paired_t CI [-0.0623, 0.0623], sign test p=1.0 on 2 effective cluster(s), 1 positive
+  - rigor_disposition__narrow_minus_control / narrow_minus_control (narrow - control): paired_difference, estimate=0.0417, se=0.0417, 24 cluster(s), paired_t CI [-0.0445, 0.1279], sign test p=1.0 on 1 effective cluster(s), 1 positive
+  - rigor_disposition__narrow_minus_inert / narrow_minus_inert (narrow - inert): paired_difference, estimate=0.0208, se=0.0474, 24 cluster(s), paired_t CI [-0.0772, 0.1189], sign test p=1.0 on 2 effective cluster(s), 1 positive
+  - rigor_disposition__inert_minus_control / inert_minus_control (inert - control): paired_difference, estimate=0.0208, se=0.0208, 24 cluster(s), paired_t CI [-0.0223, 0.0639], sign test p=1.0 on 1 effective cluster(s), 1 positive
+  - rigor_disposition__wide_minus_control_genuine / wide_minus_control_genuine (wide - control): paired_difference, estimate=0.0417, se=0.0417, 12 cluster(s), paired_t CI [-0.05, 0.1334], sign test p=1.0 on 1 effective cluster(s), 1 positive
+  - rigor_disposition__wide_minus_inert_genuine / wide_minus_inert_genuine (wide - inert): paired_difference, estimate=0.0, se=0.0615, 12 cluster(s), paired_t CI [-0.1355, 0.1355], sign test p=1.0 on 2 effective cluster(s), 1 positive
+  - rigor_disposition__narrow_minus_wide_genuine / narrow_minus_wide_genuine (narrow - wide): paired_difference, estimate=0.0417, se=0.0417, 12 cluster(s), paired_t CI [-0.05, 0.1334], sign test p=1.0 on 1 effective cluster(s), 1 positive
+  - rigor_disposition__wide_minus_control_decoy / wide_minus_control_decoy (wide - control): paired_difference, estimate=0.0, se=0.0, 12 cluster(s), paired_t CI [0.0, 0.0], sign test p=1.0 on 0 effective cluster(s), 0 positive
+  - rigor_disposition__wide_minus_inert_decoy / wide_minus_inert_decoy (wide - inert): paired_difference, estimate=0.0, se=0.0, 12 cluster(s), paired_t CI [0.0, 0.0], sign test p=1.0 on 0 effective cluster(s), 0 positive
+  - skeleton_wellformedness__wide_minus_control_wellformed / wide_minus_control_wellformed (wide - control): paired_difference, estimate=0.0, se=0.0, 12 cluster(s), paired_t CI [0.0, 0.0], sign test p=1.0 on 0 effective cluster(s), 0 positive
+  - skeleton_wellformedness__wide_minus_inert_wellformed / wide_minus_inert_wellformed (wide - inert): paired_difference, estimate=0.0, se=0.0, 12 cluster(s), paired_t CI [0.0, 0.0], sign test p=1.0 on 0 effective cluster(s), 0 positive
 - Threats: 12 declared, 9 residual
+- Update: certainty=low, prior=../../../plugins/experiment-discipline/skills/experiment-rigor/examples/rg-2x2/record.yaml
+
+## Contrasts (paired, on the clustered scale)
+
+| outcome | scope | contrast | arms | role | estimate | se | interval | half-width | sign test | clusters | moved | note |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| rigor_disposition | all | wide_minus_control | wide - control | confirmatory | 0.0208 | 0.0208 | [-0.0223, 0.0639] | +/- 0.0431 | p=1.0, 1/1 positive | 24 | no | the pre-named PRIMARY: the deployable-package question, tokens included |
+| rigor_disposition | all | wide_minus_inert | wide - inert | exploratory | 0.0 | 0.0301 | [-0.0623, 0.0623] | +/- 0.0623 | p=1.0, 1/2 positive | 24 | no | pre-registered SECONDARY (the enum has no such value): confound separation on an identical row set with token-matched text, and the pair that decides ALIKE |
+| rigor_disposition | all | narrow_minus_control | narrow - control | exploratory | 0.0417 | 0.0417 | [-0.0445, 0.1279] | +/- 0.0862 | p=1.0, 1/1 positive | 24 | no | exploratory package contrast; no arm is length-matched to narrow, so it re-inherits the founding case confound intact |
+| rigor_disposition | all | narrow_minus_inert | narrow - inert | exploratory | 0.0208 | 0.0474 | [-0.0772, 0.1189] | +/- 0.098 | p=1.0, 1/2 positive | 24 | no | exploratory, named in the frozen exploratory_contrasts |
+| rigor_disposition | all | inert_minus_control | inert - control | exploratory | 0.0208 | 0.0208 | [-0.0223, 0.0639] | +/- 0.0431 | p=1.0, 1/1 positive | 24 | no | the leg selector: whether the preamble alone moves the disposition |
+| rigor_disposition | genuine | wide_minus_control_genuine | wide - control | exploratory | 0.0417 | 0.0417 | [-0.05, 0.1334] | +/- 0.0917 | p=1.0, 1/1 positive | 12 | no | the pre-registered class decomposition, exploratory |
+| rigor_disposition | genuine | wide_minus_inert_genuine | wide - inert | exploratory | 0.0 | 0.0615 | [-0.1355, 0.1355] | +/- 0.1355 | p=1.0, 1/2 positive | 12 | no | the pre-registered class decomposition, exploratory |
+| rigor_disposition | genuine | narrow_minus_wide_genuine | narrow - wide | exploratory | 0.0417 | 0.0417 | [-0.05, 0.1334] | +/- 0.0917 | p=1.0, 1/1 positive | 12 | no | A/A CALIBRATION -- the instrument noise floor. narrow and wide deliver byte-identical text on all 12 genuine prompts, so the expected value is exactly 0 and a contrast no larger than this spread is not an effect |
+| rigor_disposition | decoy | wide_minus_control_decoy | wide - control | exploratory | 0.0 | 0.0 | [0.0, 0.0] | +/- 0.0 | p=1.0, 0/0 positive | 12 | no | the pre-registered class decomposition, exploratory -- the habituation cost |
+| rigor_disposition | decoy | wide_minus_inert_decoy | wide - inert | exploratory | 0.0 | 0.0 | [0.0, 0.0] | +/- 0.0 | p=1.0, 0/0 positive | 12 | no | the pre-registered class decomposition, exploratory |
+| skeleton_wellformedness | genuine | wide_minus_control_wellformed | wide - control | exploratory | 0.0 | 0.0 | [0.0, 0.0] | +/- 0.0 | p=1.0, 0/0 positive | 12 | no | the scoped secondary outcome: does the denominator actually arrive |
+| skeleton_wellformedness | genuine | wide_minus_inert_wellformed | wide - inert | exploratory | 0.0 | 0.0 | [0.0, 0.0] | +/- 0.0 | p=1.0, 0/0 positive | 12 | no | the scoped secondary outcome, confound-separated |
+
+- Achieved precision (clustered scale): rigor_disposition / wide_minus_control +/- 0.0431 on 24 cluster(s) at alpha 0.05, declared MEWD 0.15
+
+## 2x2 states by arm (the line-only rate is first-class)
+
+| arm | class | scored | both | line_only | skeleton_only | neither | line-only rate |
+|---|---|---|---|---|---|---|---|
+| control | all | 47 | 0 | 0 | 0 | 47 | 0.0 |
+| control | genuine | 24 | 0 | 0 | 0 | 24 | 0.0 |
+| control | decoy | 23 | 0 | 0 | 0 | 23 | 0.0 |
+| narrow | all | 46 | 2 | 1 | 0 | 43 | 0.0217 |
+| narrow | genuine | 24 | 2 | 1 | 0 | 21 | 0.0417 |
+| narrow | decoy | 22 | 0 | 0 | 0 | 22 | 0.0 |
+| wide | all | 48 | 1 | 2 | 0 | 45 | 0.0417 |
+| wide | genuine | 24 | 1 | 2 | 0 | 21 | 0.0833 |
+| wide | decoy | 24 | 0 | 0 | 0 | 24 | 0.0 |
+| inert | all | 48 | 1 | 0 | 1 | 46 | 0.0 |
+| inert | genuine | 24 | 1 | 0 | 1 | 22 | 0.0 |
+| inert | decoy | 24 | 0 | 0 | 0 | 24 | 0.0 |
+
+## Turn and cost tax (descriptive)
+
+| arm | runs | mean turns | total USD | mean USD |
+|---|---|---|---|---|
+| control | 48 | 3.1875 | 4.2189 | 0.0879 |
+| narrow | 48 | 2.7708 | 4.4 | 0.0917 |
+| wide | 48 | 2.7083 | 4.2963 | 0.0895 |
+| inert | 48 | 3.5208 | 4.9549 | 0.1032 |
+
+## Interpretation (pre-committed; selected mechanically)
+
+- Selected: `recorded_null`
+- Condition: nothing moves beyond its interval
+- Read: a recorded null. A null with control AT OR NEAR CEILING on the genuine half is recorded as NO HEADROOM, not as no effect -- the instrument had nowhere to move, which is a different finding and a different follow-up. The read then rests on the DECOY side, where the habituation cost is visible whatever the genuine ceiling does, and on wide - inert.
+- Basis: wide_minus_control = 0.0208 [-0.0223, 0.0639] over 24 cluster(s); inert_minus_control = 0.0208 [-0.0223, 0.0639]; wide_minus_inert = 0.0 [-0.0623, 0.0623]. A contrast moves when its two-sided interval excludes 0 and its estimate reaches the declared MEWD of 0.15. Moved: wide_minus_control=False, inert_minus_control=False, wide_minus_inert=False.
+- Headroom: the no-headroom qualifier does NOT apply. Control sits at 0.0 on the genuine half, leaving 1.0 of room. The instrument had room to move and did not, which is the stronger reading of a null, not the weaker one.
+- Precondition for any production rollout of a row: whether the live UserPromptSubmit hook delivers this same text inside a production spawn is NOT measured here, and neither is candidate displacement under the live nine-row router_rules.json. Both are named preconditions for any production rollout of a row, not results of this run.
 
 ## Record (canonical, machine-checked)
 
@@ -86,6 +158,23 @@ baseline_expectation:
   decoy_side: control near perfect and the treated arms able to lose ground -- the habituation cost the wide arm exists to price, and the half the read falls back to if the genuine side is at ceiling.
   measured_number: 'the repo holds one number for that surface: the sealed holdout put this skill''s description at 0.33 recall [0.15, 0.58] (evals/trigger/holdout/BASELINES.md). It transports POORLY to this bank. Four of that holdout''s five positives are pure intent paraphrases, which is the register the lexical ceiling predicts near-zero recall on; the single SAME-REGISTER positive -- the direct evaluation-act register this bank''s genuine half is deliberately written in, because that is the register the arms'' patterns must match -- hit 3/3.'
   prior: the genuine-side prior is therefore WIDE RATHER THAN LOW. Control is expected materially above zero and the hint's effect is incremental over that; 0.33 is not carried across as a point estimate.
+conclusion:
+  alike: true
+  alike_basis: 'ALIKE is decided by the frozen secondary: wide_minus_inert = 0.0 [-0.0623, 0.0623], which does NOT clear the declared MEWD of 0.15 with an interval covering 0. It qualifies the `preamble_only` leg only; the other three legs do not use the word.'
+  basis: 'wide_minus_control = 0.0208 [-0.0223, 0.0639] over 24 cluster(s); inert_minus_control = 0.0208 [-0.0223, 0.0639]; wide_minus_inert = 0.0 [-0.0623, 0.0623]. A contrast moves when its two-sided interval excludes 0 and its estimate reaches the declared MEWD of 0.15. Moved: wide_minus_control=False, inert_minus_control=False, wide_minus_inert=False.'
+  condition: nothing moves beyond its interval
+  control_genuine_rate: 0.0
+  headroom: 1.0
+  headroom_rule: 'headroom = 1 - the control arm''s rate on the genuine half; below one declared MEWD (0.15) there is no room for any arm to move into. The flag is scoped to the RECORDED NULL, where the frozen text puts it: a null there is recorded as NO HEADROOM rather than as no effect, and the read rests on the decoy side and on wide - inert. Under any other leg something moved, which is itself proof there was room.'
+  instrument_noise: false
+  interpretation: recorded_null
+  moved:
+    inert_minus_control: false
+    wide_minus_control: false
+    wide_minus_inert: false
+  no_headroom: false
+  read: a recorded null. A null with control AT OR NEAR CEILING on the genuine half is recorded as NO HEADROOM, not as no effect -- the instrument had nowhere to move, which is a different finding and a different follow-up. The read then rests on the DECOY side, where the habituation cost is visible whatever the genuine ceiling does, and on wide - inert.
+  rollout_precondition: whether the live UserPromptSubmit hook delivers this same text inside a production spawn is NOT measured here, and neither is candidate displacement under the live nine-row router_rules.json. Both are named preconditions for any production rollout of a row, not results of this run.
 construct_boundary: this experiment measures the effect of an INJECTED HINT DELIVERED AT ROUTER-REALISTIC FIRING PATTERNS. Firing is computed offline by a generator that drives the real router read-only and is frozen in firing_table.json; the paid run delivers the frozen text directly, prepended to the prompt on stdin. Whether the live UserPromptSubmit hook delivers that same text inside a production spawn is NOT measured here. That, and candidate displacement under the live nine-row rules, are named PRECONDITIONS for any production rollout of a row -- not results of this run.
 design:
   cells:
@@ -107,6 +196,27 @@ design:
     planned_n: 24
   shared_tasks: true
 disposition:
+  completed: 189
+  excluded: 3
+  excluded_runs:
+  - arm: control
+    prompt_id: d-pt-06
+    reason: harness_error
+    repeat: 1
+  - arm: narrow
+    prompt_id: d-en-06
+    reason: harness_error
+    repeat: 1
+  - arm: narrow
+    prompt_id: d-pt-06
+    reason: harness_error
+    repeat: 0
+  exclusion_reasons:
+    empty_response: 0
+    harness_error: 3
+    not_run: 0
+  note: observed. `harness_error` and `empty_response` are the two arms of the frozen exclusion rule; `not_run` counts planned runs the ceiling halt never started, which the ceiling-halt fallback governs rather than the exclusion rule. Any non-zero total here puts BOTH outcomes in the contrasts-only shape.
+  pairing_rule: every scored run counts; a prompt drops out only where an arm has none
   total: 192
 experiment: act-hint-detector
 firing:
@@ -209,9 +319,2298 @@ plan_frozen_at:
   commit: b8307b70dfca69b0accf1a4010d4ed36d19fae89
   path: evals/experiments/act-hint/record.yaml
   timestamp: '2026-07-25T20:38:57-03:00'
+results:
+  rigor_disposition:
+    clusters:
+      d-en-01:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-02:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-03:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-04:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-05:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-06:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 1
+          numerator: 1
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-01:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-02:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-03:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-04:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-05:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-06:
+        control:
+          denominator: 1
+          numerator: 1
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 1
+          numerator: 1
+        wide:
+          denominator: 2
+          numerator: 2
+      g-en-01:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 1
+      g-pt-02:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 1
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    dropped_prompts: []
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: the confirmatory outcome over all declared cells. The verdict rests on the pre-named primary contrast alone (wide_minus_control); the counts here are descriptive and every contrast lives in its own pair-scoped block
+    surviving_clusters: 24
+    verdict: confirmatory_null
+  rigor_disposition__inert_minus_control:
+    class_scope: all
+    clusters:
+      d-en-01:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-en-02:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-en-03:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-en-04:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-en-05:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-en-06:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-pt-01:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-pt-02:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-pt-03:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-pt-04:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-pt-05:
+        control:
+          denominator: 2
+          numerator: 2
+        inert:
+          denominator: 2
+          numerator: 2
+      d-pt-06:
+        control:
+          denominator: 1
+          numerator: 1
+        inert:
+          denominator: 2
+          numerator: 2
+      g-en-01:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-pt-02:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 1
+      g-pt-03:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - inert
+      - control
+      estimate: 0.0208
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.0639
+        low: -0.0223
+        method: paired_t
+        t_quantile: 2.0687
+      moved: false
+      n_clusters: 24
+      name: inert_minus_control
+      note: 'the leg selector: whether the preamble alone moves the disposition'
+      role: exploratory
+      se: 0.0208
+      sign_test:
+        effective_n: 1
+        p_value: 1.0
+        positive: 1
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: inert - control over the all prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 24
+  rigor_disposition__narrow_minus_control:
+    class_scope: all
+    clusters:
+      d-en-01:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-02:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-03:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-04:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-05:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-06:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 1
+          numerator: 1
+      d-pt-01:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-02:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-03:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-04:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-05:
+        control:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-06:
+        control:
+          denominator: 1
+          numerator: 1
+        narrow:
+          denominator: 1
+          numerator: 1
+      g-en-01:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 2
+      g-pt-02:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        control:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - narrow
+      - control
+      estimate: 0.0417
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.1279
+        low: -0.0445
+        method: paired_t
+        t_quantile: 2.0687
+      moved: false
+      n_clusters: 24
+      name: narrow_minus_control
+      note: exploratory package contrast; no arm is length-matched to narrow, so it re-inherits the founding case confound intact
+      role: exploratory
+      se: 0.0417
+      sign_test:
+        effective_n: 1
+        p_value: 1.0
+        positive: 1
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: narrow - control over the all prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 24
+  rigor_disposition__narrow_minus_inert:
+    class_scope: all
+    clusters:
+      d-en-01:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-02:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-03:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-04:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-05:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-en-06:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 1
+          numerator: 1
+      d-pt-01:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-02:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-03:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-04:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-05:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 2
+          numerator: 2
+      d-pt-06:
+        inert:
+          denominator: 2
+          numerator: 2
+        narrow:
+          denominator: 1
+          numerator: 1
+      g-en-01:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 2
+      g-pt-02:
+        inert:
+          denominator: 2
+          numerator: 1
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - narrow
+      - inert
+      estimate: 0.0208
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.1189
+        low: -0.0772
+        method: paired_t
+        t_quantile: 2.0687
+      moved: false
+      n_clusters: 24
+      name: narrow_minus_inert
+      note: exploratory, named in the frozen exploratory_contrasts
+      role: exploratory
+      se: 0.0474
+      sign_test:
+        effective_n: 2
+        p_value: 1.0
+        positive: 1
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: narrow - inert over the all prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 24
+  rigor_disposition__narrow_minus_wide_genuine:
+    class_scope: genuine
+    clusters:
+      g-en-01:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        narrow:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 1
+      g-pt-02:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - narrow
+      - wide
+      estimate: 0.0417
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.1334
+        low: -0.05
+        method: paired_t
+        t_quantile: 2.201
+      moved: false
+      n_clusters: 12
+      name: narrow_minus_wide_genuine
+      note: A/A CALIBRATION -- the instrument noise floor. narrow and wide deliver byte-identical text on all 12 genuine prompts, so the expected value is exactly 0 and a contrast no larger than this spread is not an effect
+      role: exploratory
+      se: 0.0417
+      sign_test:
+        effective_n: 1
+        p_value: 1.0
+        positive: 1
+    dropped_prompts: []
+    instrument_noise: false
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: narrow - wide over the genuine prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 12
+  rigor_disposition__wide_minus_control:
+    class_scope: all
+    clusters:
+      d-en-01:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-02:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-03:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-04:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-05:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-06:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-01:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-02:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-03:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-04:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-05:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-06:
+        control:
+          denominator: 1
+          numerator: 1
+        wide:
+          denominator: 2
+          numerator: 2
+      g-en-01:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 1
+      g-pt-02:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - wide
+      - control
+      estimate: 0.0208
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.0639
+        low: -0.0223
+        method: paired_t
+        t_quantile: 2.0687
+      moved: false
+      n_clusters: 24
+      name: wide_minus_control
+      note: 'the pre-named PRIMARY: the deployable-package question, tokens included'
+      role: confirmatory
+      se: 0.0208
+      sign_test:
+        effective_n: 1
+        p_value: 1.0
+        positive: 1
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: wide - control over the all prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 24
+  rigor_disposition__wide_minus_control_decoy:
+    class_scope: decoy
+    clusters:
+      d-en-01:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-02:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-03:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-04:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-05:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-06:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-01:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-02:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-03:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-04:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-05:
+        control:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-06:
+        control:
+          denominator: 1
+          numerator: 1
+        wide:
+          denominator: 2
+          numerator: 2
+    contrasts:
+    - arms:
+      - wide
+      - control
+      estimate: 0.0
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.0
+        low: 0.0
+        method: paired_t
+        t_quantile: 2.201
+      moved: false
+      n_clusters: 12
+      name: wide_minus_control_decoy
+      note: the pre-registered class decomposition, exploratory -- the habituation cost
+      role: exploratory
+      se: 0.0
+      sign_test:
+        effective_n: 0
+        p_value: 1.0
+        positive: 0
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: wide - control over the decoy prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 12
+  rigor_disposition__wide_minus_control_genuine:
+    class_scope: genuine
+    clusters:
+      g-en-01:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 1
+      g-pt-02:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - wide
+      - control
+      estimate: 0.0417
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.1334
+        low: -0.05
+        method: paired_t
+        t_quantile: 2.201
+      moved: false
+      n_clusters: 12
+      name: wide_minus_control_genuine
+      note: the pre-registered class decomposition, exploratory
+      role: exploratory
+      se: 0.0417
+      sign_test:
+        effective_n: 1
+        p_value: 1.0
+        positive: 1
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: wide - control over the genuine prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 12
+  rigor_disposition__wide_minus_inert:
+    class_scope: all
+    clusters:
+      d-en-01:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-02:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-03:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-04:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-05:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-06:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-01:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-02:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-03:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-04:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-05:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-06:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      g-en-01:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 1
+      g-pt-02:
+        inert:
+          denominator: 2
+          numerator: 1
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - wide
+      - inert
+      estimate: 0.0
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.0623
+        low: -0.0623
+        method: paired_t
+        t_quantile: 2.0687
+      moved: false
+      n_clusters: 24
+      name: wide_minus_inert
+      note: 'pre-registered SECONDARY (the enum has no such value): confound separation on an identical row set with token-matched text, and the pair that decides ALIKE'
+      role: exploratory
+      se: 0.0301
+      sign_test:
+        effective_n: 2
+        p_value: 1.0
+        positive: 1
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: wide - inert over the all prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 24
+  rigor_disposition__wide_minus_inert_decoy:
+    class_scope: decoy
+    clusters:
+      d-en-01:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-02:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-03:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-04:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-05:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-en-06:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-01:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-02:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-03:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-04:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-05:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+      d-pt-06:
+        inert:
+          denominator: 2
+          numerator: 2
+        wide:
+          denominator: 2
+          numerator: 2
+    contrasts:
+    - arms:
+      - wide
+      - inert
+      estimate: 0.0
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.0
+        low: 0.0
+        method: paired_t
+        t_quantile: 2.201
+      moved: false
+      n_clusters: 12
+      name: wide_minus_inert_decoy
+      note: the pre-registered class decomposition, exploratory
+      role: exploratory
+      se: 0.0
+      sign_test:
+        effective_n: 0
+        p_value: 1.0
+        positive: 0
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: wide - inert over the decoy prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 12
+  rigor_disposition__wide_minus_inert_genuine:
+    class_scope: genuine
+    clusters:
+      g-en-01:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 1
+      g-pt-02:
+        inert:
+          denominator: 2
+          numerator: 1
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - wide
+      - inert
+      estimate: 0.0
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.1355
+        low: -0.1355
+        method: paired_t
+        t_quantile: 2.201
+      moved: false
+      n_clusters: 12
+      name: wide_minus_inert_genuine
+      note: the pre-registered class decomposition, exploratory
+      role: exploratory
+      se: 0.0615
+      sign_test:
+        effective_n: 2
+        p_value: 1.0
+        positive: 1
+    dropped_prompts: []
+    outcome: rigor_disposition
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: wide - inert over the genuine prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 12
+  skeleton_wellformedness:
+    clusters:
+      g-en-01:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-02:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        control:
+          denominator: 2
+          numerator: 0
+        inert:
+          denominator: 2
+          numerator: 0
+        narrow:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    dropped_prompts: []
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: the scoped secondary, GENUINE cells only -- no arms block by construction, since ER-RECON holds an arm block to N_expected and a subset cannot reach it
+    surviving_clusters: 12
+    verdict: inconclusive
+  skeleton_wellformedness__wide_minus_control_wellformed:
+    class_scope: genuine
+    clusters:
+      g-en-01:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-02:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        control:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - wide
+      - control
+      estimate: 0.0
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.0
+        low: 0.0
+        method: paired_t
+        t_quantile: 2.201
+      moved: false
+      n_clusters: 12
+      name: wide_minus_control_wellformed
+      note: 'the scoped secondary outcome: does the denominator actually arrive'
+      role: exploratory
+      se: 0.0
+      sign_test:
+        effective_n: 0
+        p_value: 1.0
+        positive: 0
+    dropped_prompts: []
+    outcome: skeleton_wellformedness
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: wide - control over the genuine prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 12
+  skeleton_wellformedness__wide_minus_inert_wellformed:
+    class_scope: genuine
+    clusters:
+      g-en-01:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-02:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-03:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-04:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-05:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-en-06:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-01:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-02:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-03:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-04:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-05:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+      g-pt-06:
+        inert:
+          denominator: 2
+          numerator: 0
+        wide:
+          denominator: 2
+          numerator: 0
+    contrasts:
+    - arms:
+      - wide
+      - inert
+      estimate: 0.0
+      estimator: paired_difference
+      interval:
+        alpha: 0.05
+        high: 0.0
+        low: 0.0
+        method: paired_t
+        t_quantile: 2.201
+      moved: false
+      n_clusters: 12
+      name: wide_minus_inert_wellformed
+      note: the scoped secondary outcome, confound-separated
+      role: exploratory
+      se: 0.0
+      sign_test:
+        effective_n: 0
+        p_value: 1.0
+        positive: 0
+    dropped_prompts: []
+    outcome: skeleton_wellformedness
+    paired: true
+    pairing_rule: every scored run counts; a prompt drops out only where an arm has none
+    scope: wide - inert over the genuine prompt clusters; this block carries ONLY this pair's arms and only the prompts that survive for it
+    surviving_clusters: 12
 run:
-  first_run_at: 2026-08-05 00:00:00+00:00
+  cost_usd_est: 17.8702
+  first_run_at: '2026-07-26T11:26:40Z'
   hand_reason: no fathom ledger produces these rows. The detector runs on the in-repo craft harness (evals/harness/claude_runner.py) because the outcomes are properties of the response text and the isolation primitives -- one isolated credentials-only CLAUDE_CONFIG_DIR for the run set, a fresh spawn per run, a tool allowlist, a --plugin-dir -- already exist there; a fathom bank would rebuild them cross-repo. ER-XCHECK's measurement-tier WARN is therefore a declared posture, not an accident. run_arms.py appends every run to runs.jsonl, which travels with the record as the reconstructible trace.
+  last_run_at: '2026-07-26T12:44:30Z'
+  n: 192
   n_planned: 192
   source: hand
 run_config:
@@ -242,7 +2641,126 @@ run_config:
   sampling_mode: cli_default
   skill_tool_in_allowlist: true
   timeout_seconds: 300
+run_economy:
+  note: descriptive, from the harness records. The harness reports turns and cost, not token counts, so the tax is priced in the units it actually measures.
+  per_arm:
+    control:
+      mean_cost_usd: 0.0879
+      mean_turns: 3.1875
+      runs: 48
+      total_cost_usd: 4.2189
+    inert:
+      mean_cost_usd: 0.1032
+      mean_turns: 3.5208
+      runs: 48
+      total_cost_usd: 4.9549
+    narrow:
+      mean_cost_usd: 0.0917
+      mean_turns: 2.7708
+      runs: 48
+      total_cost_usd: 4.4
+    wide:
+      mean_cost_usd: 0.0895
+      mean_turns: 2.7083
+      runs: 48
+      total_cost_usd: 4.2963
+  total:
+    mean_cost_usd: 0.0931
+    mean_turns: 3.0469
+    runs: 192
+    total_cost_usd: 17.8702
 schema_version: 1.1
+state_breakdown:
+  arms:
+    control:
+      all:
+        both: 0
+        line_only: 0
+        line_only_rate: 0.0
+        neither: 47
+        scored: 47
+        skeleton_only: 0
+      decoy:
+        both: 0
+        line_only: 0
+        line_only_rate: 0.0
+        neither: 23
+        scored: 23
+        skeleton_only: 0
+      genuine:
+        both: 0
+        line_only: 0
+        line_only_rate: 0.0
+        neither: 24
+        scored: 24
+        skeleton_only: 0
+    inert:
+      all:
+        both: 1
+        line_only: 0
+        line_only_rate: 0.0
+        neither: 46
+        scored: 48
+        skeleton_only: 1
+      decoy:
+        both: 0
+        line_only: 0
+        line_only_rate: 0.0
+        neither: 24
+        scored: 24
+        skeleton_only: 0
+      genuine:
+        both: 1
+        line_only: 0
+        line_only_rate: 0.0
+        neither: 22
+        scored: 24
+        skeleton_only: 1
+    narrow:
+      all:
+        both: 2
+        line_only: 1
+        line_only_rate: 0.0217
+        neither: 43
+        scored: 46
+        skeleton_only: 0
+      decoy:
+        both: 0
+        line_only: 0
+        line_only_rate: 0.0
+        neither: 22
+        scored: 22
+        skeleton_only: 0
+      genuine:
+        both: 2
+        line_only: 1
+        line_only_rate: 0.0417
+        neither: 21
+        scored: 24
+        skeleton_only: 0
+    wide:
+      all:
+        both: 1
+        line_only: 2
+        line_only_rate: 0.0417
+        neither: 45
+        scored: 48
+        skeleton_only: 0
+      decoy:
+        both: 0
+        line_only: 0
+        line_only_rate: 0.0
+        neither: 24
+        scored: 24
+        skeleton_only: 0
+      genuine:
+        both: 1
+        line_only: 2
+        line_only_rate: 0.0833
+        neither: 21
+        scored: 24
+        skeleton_only: 0
+  note: 'descriptive. The 2x2 state is recorded per run so the LINE-ONLY rate is a first-class number: on a genuine prompt only `both` counts correct, so a line emitted without the five elements scores zero here rather than being rewarded.'
 threats:
   construct_validity_proxy:
     statement: 'the oracle scores the SHAPE of the response, which is a proxy for the discipline the shape is meant to carry, and it errs in both directions. FALSE POSITIVE: a five-element wrapper around an unconsidered answer scores correct; skeleton_wellformedness is the partial answer (a denominator present and self-consistent) and it is a secondary, not the headline. FALSE NEGATIVE, and the more likely of the two: the oracle detects the five elements by their LABELS, so it scores the reference''s worked-example format rather than the rung''s actual rule -- and the reference says explicitly that "a check that carries all five in two sentences is a good check" and that the point is that every element is answerable, not that the response has five headings. A fully doctrine-compliant unlabelled prose check therefore scores 0 of 5. The consequence is stated rather than repaired: absolute rates read LOW and must not be quoted as the rate at which the discipline was followed, while the CONTRASTS stay interpretable because the mode is arm-uniform -- nothing in any arm''s injected text touches labelling. The one arm-differential interaction this had, an inert text that discouraged the labelled shape, was removed from the clause pool before the freeze.'
@@ -281,4 +2799,30 @@ threats:
     statement: 'written per contrast, not blanket. The token-matched inert arm controls it for `wide - inert` ONLY: every firing row''s inert text matches wide''s estimated token count exactly in the frozen table (0.00 percent deviation on all 18 firing rows, against a 5 percent tolerance). NO arm is length-matched to narrow, so `narrow - control` re-inherits the founding RG-2x2 case''s confound intact. And the package contrasts -- `wide - control` and `narrow - control` -- make NO mechanism claim: they price a deployable row, tokens included.'
     status: residual
 tier: measurement
+updates:
+  certainty: low
+  downgrade_reasons:
+  - contamination_familiarity
+  - model_version_drift
+  - nondeterminism
+  - construct_validity_proxy
+  - token_length_confound
+  - selection_exclusion
+  - generalization
+  - custom_candidate_displacement
+  - custom_language_delivery
+  posterior:
+    belief: 'nothing moves beyond its interval on the clustered scale: a recorded null over a loaded, unhinted skill rather than over no treatment, read on the decoy side and on wide - inert. wide_minus_control = 0.0208 [-0.0223, 0.0639] over 24 cluster(s); inert_minus_control = 0.0208 [-0.0223, 0.0639]; wide_minus_inert = 0.0 [-0.0623, 0.0623]. A contrast moves when its two-sided interval excludes 0 and its estimate reaches the declared MEWD of 0.15. Moved: wide_minus_control=False, inert_minus_control=False, wide_minus_inert=False.'
+    grade: low
+    method: qualitative_grade_link
+    selected_interpretation: recorded_null
+  prior:
+    belief: 'from the founding RG-2x2 (this record''s chain prior): register is null -- reg == ctrl in both tiers -- while the gate''s forced deliberation raised the disciplinary footprint from 18/48 to 36/48 as an exploratory signal, with the skill never loaded in any arm. The frozen baseline_expectation carries that across as a WIDE genuine-side prior rather than a point estimate: every arm here loads the skill, so control measures the skill''s own trigger surface with no hint, the hint effect is marginal over that, and the prior''s upper tail is a ceiling risk rather than a compression risk.'
+    grade: low
+    source_id: ../../../plugins/experiment-discipline/skills/experiment-rigor/examples/rg-2x2/record.yaml
+  what_each_leg_would_move:
+    content_carries: the injected hint moves the evaluation-act disposition while the token-matched inert arm does not, so the effect travels with the hint CONTENT rather than with the preamble -- including the literal plugin-qualified skill id the router row ships, which is the correct reading of content here
+    inert_moves_alone: inert moves and wide does not, likewise a preamble effect with the content contributing nothing; ship no row on this evidence
+    preamble_only: wide and inert both move, so the effect is preamble cost and the content is irrelevant; ship no row on this evidence
+    recorded_null: 'nothing moves beyond its interval on the clustered scale: a recorded null over a loaded, unhinted skill rather than over no treatment, read on the decoy side and on wide - inert'
 ```

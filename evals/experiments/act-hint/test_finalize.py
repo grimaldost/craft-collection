@@ -1,4 +1,11 @@
-"""Drive finalize.py end to end on SYNTHETIC runs, before a paid one exists.
+"""Drive finalize.py end to end on SYNTHETIC runs, independently of the paid one.
+
+The paid run has since happened, so `record.yaml` on disk is finalized. That is the base
+these cases stage their throwaway pre-registration from, and it is a legitimate input:
+finalize overwrites every field it owns rather than appending, whether it is handed the
+frozen record or an already-finalized one, and `test_finalize_twice_is_byte_identical`
+holds it to that. The one case that needs a record with NOTHING to render reads the
+stage-1 record back out of git instead, since the working copy can no longer be one.
 
 The real record is never written to. The end-to-end cases stage a throwaway git repo that
 mirrors the repo layout the gates read -- the record under `evals/experiments/act-hint/`
@@ -77,6 +84,28 @@ import validate  # noqa: E402
 
 RECORD_PATH = HERE / 'record.yaml'
 RECORD: dict[str, Any] = yaml.safe_load(RECORD_PATH.read_text(encoding='utf-8'))
+
+
+def _committed_blob(spec: str) -> str:
+    """A blob as committed, decoded and newline-normalized. `_git` below stages a throwaway
+    repo; this one reads THIS repo's history."""
+    proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ['git', '-C', str(REPO), 'show', spec],  # noqa: S607 - git resolved from PATH
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise AssertionError(f'git show {spec} failed: {proc.stderr.decode("utf-8", "replace")}')
+    return proc.stdout.decode('utf-8').replace('\r\n', '\n')
+
+
+# The record on disk is FINALIZED -- the run happened and finalize wrote its results into
+# it -- so it can no longer stand for a record that has nothing to render. The
+# PRE-REGISTRATION can, and it is stable because it is a commit: read it back at the
+# coordinates the record's own anchor names.
+FREEZE_SHA = str(RECORD['plan_frozen_at']['commit'])
+FREEZE_RELPATH = str(RECORD['plan_frozen_at']['path'])
+FROZEN: dict[str, Any] = yaml.safe_load(_committed_blob(f'{FREEZE_SHA}:{FREEZE_RELPATH}'))
+
 BANK: list[dict[str, Any]] = json.loads((HERE / 'bank.json').read_text(encoding='utf-8'))['prompts']
 LABELS: list[dict[str, Any]] = json.loads(
     (HERE / 'oracle_labels.json').read_text(encoding='utf-8')
@@ -866,16 +895,26 @@ def test_the_four_legs_partition_the_movement_pair():
 
 
 def test_a_record_without_contrasts_grows_no_empty_sections():
-    text = render.render_report(RECORD, RECORD_PATH)
-    for heading in (
+    """A record with nothing to say in a section must not grow the section's scaffolding.
+
+    Read off the FROZEN record: the working copy is finalized now and legitimately carries
+    contrasts, a 2x2 breakdown, a tax and an interpretation, so it is no longer an instance
+    of "a record without them" -- and the sections it does grow are asserted here too, so
+    the absence above is a degradation and not a renderer that emits nothing.
+    """
+    sections = (
         '## Contrasts',
         '## 2x2 states by arm',
         '## Turn and cost tax',
         '## Interpretation (pre-committed',
-    ):
-        assert heading not in text, heading
-    # The frozen pair on disk is untouched by this PR: the committed report is still in
-    # sync with its record.
+    )
+    bare = render.render_report(FROZEN, RECORD_PATH)
+    for heading in sections:
+        assert heading not in bare, heading
+    finalized = render.render_report(RECORD, RECORD_PATH)
+    for heading in sections:
+        assert heading in finalized, heading
+    # The pair on disk stays in sync: the committed report is what its record renders.
     assert render.check_drift(RECORD_PATH) is None
 
 
