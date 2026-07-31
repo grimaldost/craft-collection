@@ -38,8 +38,9 @@ before any public disclosure. Coordinated disclosure is appreciated.
 The security-relevant surface of this repo is **code that executes**, not the
 advisory text inside skills:
 
-- **Hooks** (`PreToolUse` / `PostToolUse` / `Stop` / `SessionStart`) that run on a
-  developer's machine during a Claude Code session.
+- **Hooks** (`PreToolUse` / `PostToolUse` / `PostToolBatch` / `UserPromptSubmit` /
+  `Stop` / `SessionStart`) that run on a developer's machine during a Claude Code
+  session.
 - **Scripts** under each skill's `scripts/` and the `scripts/` and `evals/harness/`
   directories.
 - **CI workflows** under `.github/workflows/`.

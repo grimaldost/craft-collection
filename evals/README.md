@@ -9,14 +9,16 @@ stdlib only.
 
 ## Coverage
 
-Every auto-triggering skill in both plugins has a trigger dataset under
+Every auto-triggering skill across the four plugins has a trigger dataset under
 `trigger/` (most also have correct-usage tasks under `tasks/`). `refresh-stack`
-is intentionally **excluded** — it sets `disable-model-invocation: true` (it is
-the manual-only `/refresh-stack` command), so auto-activation is not-applicable
-by design rather than a failure, and its real behavior needs live PyPI/changelog
-access a headless run can't supply. `command_first_skills` in `config.json`
-lists skills whose low auto-recall is expected (slash-first invocation) and
-reported as informational rather than gated.
+and `refresh-models` are intentionally **excluded** — they set
+`disable-model-invocation: true` (they are the manual-only `/refresh-stack` and
+`/refresh-models` commands), so auto-activation is not-applicable
+by design rather than a failure, and their real behavior needs live
+PyPI/changelog/model-lineup access a headless run can't supply.
+`command_first_skills` in `config.json` lists skills whose low auto-recall is
+expected (slash-first invocation) and reported as informational rather than
+gated.
 
 ## Prerequisites
 
@@ -110,8 +112,8 @@ Each runner prints an upfront spawn count and a ceiling, and supports `--dry-run
 (plan only) and `--limit` (cap). The full focused run scales with the config, so
 treat any fixed total as stale — get today's number from `--dry-run`. Roughly
 `trigger-queries × agent_repeats` trigger spawns plus `tasks × agent_repeats × 5`
-grading spawns; at the current config (20 skills in `plugin_of_skill`, ~330 trigger
-queries, 23 grading tasks, `agent_repeats` 3) that is ~1300 `claude -p` spawns.
+grading spawns; at the current config (23 skills in `plugin_of_skill`, 376 trigger
+queries, 25 grading tasks, `agent_repeats` 3) that is ~1500 `claude -p` spawns.
 Each runner prints its exact spawn count and `--max-budget-usd` ceiling before
 spending. Lower `--repeats`, `--limit` the set, or drop `--concurrency` to trim. `trigger_max_turns` (config) caps the trigger arm; `trigger_routing_frame`
 (config, default off) is an opt-in flail-damping lever — an `--append-system-prompt`

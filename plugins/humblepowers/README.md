@@ -11,7 +11,7 @@ tool selection across the whole installed toolkit and forces neighboring tools
 into a register arms race. humblepowers replicates the disciplines and
 replaces the mechanism: calibrated trigger descriptions that compete on fit, a
 central fit-ranking dispatch protocol, a register linter, and behavioral evals
-gating every skill from birth.
+gating every auto-triggering skill from birth.
 
 ## Skills
 
@@ -25,8 +25,12 @@ gating every skill from birth.
 | verification-before-completion | rigid port | Evidence before completion claims; red-green regression checks; verify delegated work |
 | receiving-code-review | flexible port | Technical evaluation of incoming feedback; clarify-first; no performative agreement |
 | planned-execution | rigid port | Midweight lane: executable-cold plan contract + per-task subagent loop with two-stage review |
+| choosing-models | flexible | Capacity dispatch: which model and effort a delegated or priced task should run on |
+| refresh-models | manual-only command | `/refresh-models` — detect model-lineup drift against `models.toml` and propose a reviewable changeset |
 
-All eight skills ship with trigger datasets and sealed holdouts.
+Nine of the ten skills ship with trigger datasets and sealed holdouts;
+`refresh-models` is manual-only (`disable-model-invocation: true`), so
+auto-activation is not applicable.
 
 ## Install
 

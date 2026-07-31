@@ -24,7 +24,7 @@ does not guarantee.
 
 | Tier | Mechanism | Guarantees | Does NOT guarantee |
 |---|---|---|---|
-| Act-time | Claude Code hooks (`ruff_format` PostToolUse, `uv_enforce` PreToolUse); other hook-capable harnesses via `plugins/engineering-discipline/hooks/harness_adapters.py` | a bad command is blocked before it runs; every `.py` edit is formatted immediately | anything on a harness without hooks |
+| Act-time | Claude Code hooks (`ruff_format` PostToolBatch, `uv_enforce` PreToolUse); other hook-capable harnesses via `plugins/engineering-discipline/hooks/harness_adapters.py` | a bad command is blocked before it runs; every `.py` file edited in a turn is formatted at the end of that turn | anything on a harness without hooks |
 | Commit-time | the pre-commit floor: `adapters/pre-commit/craft-floor.yaml` (ruff + the `check-uv-hygiene` hook this repo exports via `.pre-commit-hooks.yaml`) | residue and format drift cannot be committed | that the mistake never happened — it is caught after the fact |
 | Advisory | the rules stated in `AGENTS.md` and the skill bodies | the agent read the rule | that the agent followed it |
 
