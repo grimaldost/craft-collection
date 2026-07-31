@@ -47,7 +47,7 @@ avoids round-trips:
 
 ```bash
 uv tool run pre-commit run --all-files   # ruff lint + format, JSON/YAML, validator
-uv run --no-project python scripts/run_tests.py                 # every test_*.py (no pytest needed)
+uv run --no-project --with pyyaml -- python scripts/run_tests.py    # every test_*.py (no pytest needed)
 uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # structural marketplace checks (PyYAML catches the frontmatter colon-space trap)
 ```
 
@@ -64,13 +64,13 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
   "non-negotiable" is flagged only inside a skill's frontmatter `description` (where
   it buys salience), and is fine in body prose. Full doctrine in
   [`skill-authoring`](plugins/humblepowers/skills/skill-authoring/SKILL.md).
-- **The per-edit format hook is format-only and won't remove your imports.**
-  `engineering-discipline`'s PostToolUse hook runs `ruff format` only; the
+- **The end-of-turn format hook is format-only and won't remove your imports.**
+  `engineering-discipline`'s PostToolBatch hook runs `ruff format` only; the
   import-removing autofix (`ruff check --fix`) runs at the pre-commit/CI gate, where
   the file is complete — so adding an import in one edit and using it in a later one
   is safe within a session. (If you run `ruff check --fix` *manually* mid-sequence it
   will still strip the not-yet-used import; introduce the symbol and its first use
-  together. Do not re-add `check --fix` to the per-edit hook — `test_ruff_format.py`
+  together. Do not re-add `check --fix` to the format hook — `test_ruff_format.py`
   guards against it.)
 - **Stdlib-first.** Scripts avoid third-party dependencies where practical (heavier
   libs like pandas stay optional). This keeps the harness and scripts runnable with
@@ -90,6 +90,24 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
 - **Skills** follow the existing shape: `plugins/<plugin>/skills/<skill>/SKILL.md`
   with a trigger-focused `description` in the frontmatter, plus `references/` for
   on-demand depth and `scripts/` for runnable tools. Use a sibling skill as a model.
+- **`AGENTS.md` is generated — never hand-edit it.** It is rendered from
+  `SKILL.md` / command / output-style frontmatter by `scripts/gen_agents_md.py`;
+  change the frontmatter and re-run
+  `uv run --no-project -- python scripts/gen_agents_md.py`. A pre-commit hook and
+  CI both run `--check` and fail on a stale or hand-edited file.
+- **A new skill needs a word-budget baseline.** `scripts/validate_plugins.py`
+  fails a `SKILL.md` body with no entry in `scripts/word_budget.json`; add the
+  one entry by hand. (`scripts/word_budget.py --seed` exists, but it rewrites
+  *every* baseline from the current tree, so it resets the ratchet — don't use it
+  to add a single entry.) Growing an existing body means bumping its baseline in
+  the same reviewed diff and naming what the growth displaces.
+- **The evaluate-skill engine is mirrored.**
+  `evals/harness/{aggregate,claude_runner,grade_tasks,judge,run_all,run_triggers,stats}.py`
+  must stay identical to
+  `plugins/session-workflow/skills/evaluate-skill/scripts/` — the check compares
+  the two line-ending-normalised, so CRLF vs LF is the one difference it lets
+  through. Edit the harness copy, then re-copy;
+  `evals/harness/test_scripts_in_sync.py` fails the pre-push suite otherwise.
 - **Don't hand-edit `version` in two places.** A plugin's version lives in its
   `plugin.json` manifest, not in the marketplace entry.
 

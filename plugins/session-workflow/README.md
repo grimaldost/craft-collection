@@ -69,6 +69,18 @@ tool-dogfooding feedback loop (capture + triage).
   high-severity findings, fixing in disjoint partitions, and re-auditing with
   fresh eyes until findings converge.
 
+## Command
+
+- **/anchor** (`close` | `close --stale`) — snapshot the run's control anchor to
+  `.claude/anchors/` right now; a one-off backstop before a manual `/compact`,
+  usable whether or not the `compaction-survival` protocol is armed.
+
+## Output style
+
+- **step-digest** — lean narration while working, then a fixed-field digest at
+  the end of each substantive turn. Off by default; select it under `/config` or
+  set `"outputStyle": "session-workflow:step-digest"`.
+
 ## Hooks (optional, off by default)
 
 - **SessionStart** — inject the live toolkit inventory each session. Ships wired
