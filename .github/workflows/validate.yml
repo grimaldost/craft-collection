@@ -17,7 +17,7 @@ jobs:
           # acceptance suite fails LOUD (never skips) when that object is absent. A
           # depth-1 clone is expected to fail it; the fix is depth, not a skip.
           fetch-depth: 0
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - name: Install tooling
