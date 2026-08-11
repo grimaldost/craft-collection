@@ -103,6 +103,20 @@ should reach for it only if the plain `uv tool run pre-commit install` path is
 actually refused; installing it pre-emptively buys a config that looks present and
 is harder to debug.
 
+**A second, live constraint on the same machine class: exported `language: script`
+hooks are unusable.** pre-commit resolves such a hook through its entry's shebang,
+and `#!/usr/bin/env python3` resolves to the Windows Store app-execution alias,
+which exits 9009 with an install advert. Measured 2026-08-11 in a throwaway
+consumer repository against every hook this repository exports — `check-uv-hygiene`
+included, despite `adapters/pre-commit/craft-floor.yaml` recording it as verified
+by a by-URL consumer run — on both the `pre-commit run --all-files` path and the
+git-invoked commit path. Resolution census on that machine: `python3` -> the Store
+alias (9009); `python` -> a real interpreter; `py` -> a real interpreter;
+`/bin/sh` -> not found. The hooks fail closed, so nothing passes hollow. Until the
+repository is made pip-installable and the exports move to `language: python`,
+Windows consumers should use the local `repo: local` + `language: system` form
+that pins the interpreter (recipe in `plugins/experiment-discipline/README.md`).
+
 **Re-verified 2026-08-11 and it did not reproduce.** On the same machine,
 `uv tool run pre-commit --version`, `uv run --no-project --with pre-commit --
 python -m pre_commit --version`, and each of the three hooks run over the whole

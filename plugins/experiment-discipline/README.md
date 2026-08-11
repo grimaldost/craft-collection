@@ -59,6 +59,31 @@ the drift gate to `report.md`. PyYAML is the gates' only non-stdlib dependency
 and `uv run --with pyyaml` supplies it, so nothing is installed into the
 consumer's environment.
 
+**On Windows, prefer the local form.** The by-URL export runs through
+pre-commit's `language: script`, which resolves the entry's `#!/usr/bin/env
+python3` shebang — and on a stock Windows install that resolves to the Microsoft
+Store app-execution alias, which exits 9009 without running anything (measured
+2026-08-11; it hits every hook this repository exports, not only these two). The
+hooks fail closed, so nothing passes hollow, but they are unusable there. Pin the
+interpreter yourself instead, with the plugin's installed path:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: experiment-rigor-validate
+        name: experiment-rigor record validator
+        entry: uv run --no-project --with pyyaml -- python
+          /path/to/experiment-discipline/skills/experiment-rigor/scripts/validate.py
+        language: system
+        files: (^|/)record\.yaml$
+        pass_filenames: true
+```
+
+This is the form this repository uses on itself, and it is the one to copy for
+any project whose commits happen on Windows.
+
 ## Freeze durability
 
 A measurement-tier record pins its frozen pre-registration by commit

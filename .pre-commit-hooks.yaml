@@ -2,6 +2,20 @@
 # file when a consumer references craft-collection as a `repo:` by URL).
 # `language: script` on purpose: this repo is not pip-installable, and a script
 # hook runs the file straight from the hook clone with the consumer repo as cwd.
+#
+# KNOWN LIMIT, measured 2026-08-11, and it applies to every hook in this file.
+# `language: script` resolves the entry through its shebang, and `#!/usr/bin/env
+# python3` resolves on a stock Windows install to the Microsoft Store app-execution
+# alias, which exits 9009 with an advert instead of running anything. Verified in a
+# throwaway consumer repo against BOTH hooks here, on the direct `pre-commit run`
+# path and on the git-invoked commit path: the alias wins on both. They fail closed
+# (the commit is blocked), so nothing passes hollow -- but on such a machine these
+# hooks are unusable, and the honest route is the local recipe in
+# plugins/experiment-discipline/README.md, which pins the interpreter itself.
+# Resolution census on that machine: python3 -> Store alias (exit 9009);
+# python -> a real interpreter; py -> a real interpreter; /bin/sh -> not found.
+# The portable fix is making this repository pip-installable and moving these to
+# `language: python`, which is an owner decision, not a patch.
 - id: check-uv-hygiene
   name: uv hygiene (no pip/poetry/virtualenv residue in a uv project)
   description: >-
