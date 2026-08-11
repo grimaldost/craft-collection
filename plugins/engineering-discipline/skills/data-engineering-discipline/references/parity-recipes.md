@@ -30,6 +30,7 @@ of regression.
 | Row-level value match (sampled) | Single-row computation errors, value transformations | Minutes |
 | Row-level value match (exhaustive) | The strictest gate; catches anything | Minutes-to-hours |
 | Contract fingerprint (identity pin) | Any drift in a sealed surface, across commits / waves | Microseconds |
+| Two-producer join (Recipe 16) | Two writers of one shared column disagreeing - invisible to every rung above | Seconds |
 
 Two checks below the ladder govern whether any rung above can be trusted —
 they are not strictness levels but preconditions for believing a green
@@ -731,6 +732,101 @@ is then provable even where an absolute "0 failed" is not.
 
 ---
 
+## Recipe 16 — Two-producer identity: assert the join before any value
+
+Every recipe above compares a producer to a baseline or to itself. None of
+them sees two producers of the SAME column disagreeing. A `Date` from one
+emitter and a `Datetime` from another are each correct in isolation; the
+disagreement exists only in the join, so both producer-local suites stay
+green while the shared column silently drops rows downstream. That gap is
+structural, not an oversight: a shared column belongs to no single seam, so
+a correctly scoped change never covers it.
+
+**Step 1 — count the writers.** Over an emitter or lineage inventory, a
+contract column with two or more producers that were never run together is a
+finding, not a curiosity.
+
+```bash
+python scripts/producer_census.py lineage_inventory.json
+# {"columns": {"settled_on": ["orders.emit", "settlements.emit"]},
+#  "joint_runs": [["orders.emit", "settlements.emit"]]}
+```
+
+A joint run clears a column only when it covers *every* producer of it. Two
+of three writers exercised together still leaves the third never compared.
+An empty inventory is an error, not a clean pass.
+
+**Step 2 — join, then compare.** Run both producers and join on the shared
+key. Assert the join FIRST: if the key shapes disagree, the join drops rows
+and a value comparison over the survivors reads perfectly clean.
+
+```bash
+python scripts/parity_check.py --two-producer orders.csv settlements.csv \
+    --join-key settled_on
+# rows: a=3 b=3, joined on settled_on: 0
+# key shape: a=['date'] b=['datetime']
+# JOIN FAILED: 0 key(s) matched ... - values not compared
+```
+
+```sql
+-- the same assertion in SQL: the join is the result, not the setup
+SELECT
+  (SELECT count(*) FROM orders)                        AS a_rows,
+  (SELECT count(*) FROM settlements)                   AS b_rows,
+  (SELECT count(*) FROM orders o
+     JOIN settlements s ON o.settled_on = s.settled_on) AS joined
+-- joined < min(a_rows, b_rows) => stop. Nothing below this line means anything.
+```
+
+Two empty extracts join perfectly and agree on every value, so an empty side
+fails rather than passes.
+
+---
+
+## Recipe 17 — Null placement, per-column tolerance, residual-zero
+
+Three numerics an aggregate diff gets wrong, each with its own flag on
+`parity_check.py`.
+
+**Null placement, not null rate.** A `LEFT JOIN` that turns a 0 into NULL in
+one row while another row gains a 0 leaves the per-column null RATE, the row
+count, the cardinality and the sums all identical. Aligning on the key and
+counting the rows whose blank/non-blank state differs is the only view that
+sees it. It runs by default and needs unique keys; without them it reports
+UNASSESSED rather than contributing a quiet pass.
+
+```bash
+python scripts/parity_check.py base.csv cand.csv --keys id
+#   null-mismatch amount: 2 row(s) blank on one side only
+```
+
+```sql
+SELECT count(*) FROM base b FULL JOIN cand c USING (id)
+WHERE (b.amount IS NULL) <> (c.amount IS NULL);   -- must be 0
+```
+
+**Per-column tolerance.** One uniform tolerance either false-fails a column
+with known algorithmic noise or, loosened to accommodate it, masks a
+whole-value swap in the column next to it. Loosen exactly one column, and say
+in the migration notes why that column earns it.
+
+```bash
+python scripts/parity_check.py base.csv cand.csv --keys id \
+    --tol 1e-9 --tol-col interest_accrual=1e-4
+```
+
+**Residual-zero is a cardinality hazard.** A column that sits at zero by
+construction is usually read downstream as `WHERE resid > 0`. Residue far
+below any sane value tolerance still changes the number of rows that filter
+returns, so compare the count of non-zero rows, not the sum.
+
+```bash
+python scripts/parity_check.py base.csv cand.csv --keys id --residual-zero resid
+#   residual-zero resid: non-zero rows 0 -> 1 (a > 0 filter moves)
+```
+
+---
+
 ## Choosing the right strictness
 
 | Scenario | Recommended recipes |
@@ -746,6 +842,8 @@ is then provable even where an absolute "0 failed" is not.
 | Contract repair to shipped reality (Scenario 9) | 1, 4, 11 (pin the repaired surface) |
 | Release cut / multi-wave assembly (Scenario 10) | 1, 4, 6, 11 (re-seal in a clean room) |
 | Change landing in a suite with pre-existing / flaky failures | 15 (differential-baseline) |
+| A contract column written by more than one producer | 16 (census, then join before values) |
+| Null-vs-zero drift, algorithm noise, a residual column read as `> 0` | 17 |
 
 ---
 
@@ -770,6 +868,15 @@ Be honest about the gaps. Parity recipes are powerful but not omniscient.
 - **Upstream source drift** — these recipes compare two pipelines against
   their respective inputs. If the upstream source has drifted, both
   pipelines may agree on the (wrong) new shape.
+- **A backend compared against itself.** The canonical way a parity gate goes
+  vacuous: the "known good" is produced by the same backend, the same query
+  builder, or the same library version as the candidate, so a shared defect
+  cancels on both sides and the gate is green *because* both are wrong. A
+  known-good computed independently — by hand, in a spreadsheet, from an
+  analytical formula, or by a second implementation that shares no code path
+  — is what makes the comparison evidence. When only a self-comparison is
+  available, say so in the migration notes: it proves determinism, not
+  correctness.
 - **Staleness beyond the global watermark** — Recipe 14's `max(cursor)` check
   confirms the watermark moved, not that every partition advanced or that no
   rows below the mark were skipped (use per-group + row-count-per-bucket).
