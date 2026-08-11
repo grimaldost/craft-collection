@@ -5,6 +5,67 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.9.0 — 2026-08-11
+
+Backlog wave 1. The dispatch hook ships on, the hint became a decidable check,
+and the tier data caught up with the lineup the machines are actually served.
+
+### Changed
+
+- **The dispatch-router hook ships ON** (`HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`
+  opts out). It was inert behind an unset variable; the one environment where
+  that gate happened to be set produced 85 logged prompts of real dispatch signal
+  no in-session inspection could have found. The no-match path returns zero with
+  no output, so a default-on hook costs a subprocess. (CRAF-B02)
+- **The hint names each candidate by its activation test**, not by the words that
+  matched — the matched skill's own description explicitly does not rest on that
+  token, so a reader had nothing to decide against. Nine routed rows, nine
+  one-line questions. (CRAF-B05 / T35a)
+- **A candidate whose skill is not installed is dropped.** Five of the nine rows
+  name skills in sibling plugins and the hint emitted the raw id regardless, so a
+  single-plugin install recommended skills that were not there. Checked against
+  disk with stat calls, no CLI on the prompt path; the drop is still logged,
+  since that count is the evidence for whether this router belongs at
+  marketplace level. (CRAF-B05)
+- **Directory names are no longer trigger vocabulary.** A project called
+  `something-pipeline` fired the data rule on every prompt that named it, for the
+  life of that project. (CRAF-B05 / T35b)
+- **`models.toml`: the strong tier moves `claude-opus-4-8` → `claude-opus-5`.**
+  Checked against the platform model reference; same price, same tier position —
+  a lineup edit, not a threshold move. The file records the direction settled
+  before any mirror walk: sibling price mirrors are keyed by family substring and
+  are correct today, so the walk propagates a corrected lineup rather than a
+  stale one over correct mirrors. (CRAF-B06 / T38b)
+- **`verification-before-completion`:** the seen-red section asks for both halves
+  now — that a check can fail, and that it read the input you think it did. A
+  green over an empty scan is worse than a red one because it gets quoted.
+  Carries the restore rule: remove a planted violation by the inverse edit, not a
+  checkout. Equal-mass swap; the budget is unchanged at 800.
+  (CRAF-B03 / T41a, CRAF-B26 / T50d)
+
+### Added
+
+- **`choosing-models/scripts/lineup_check.py`** turns the environment tripwire
+  from prose the reader performs by hand into a command: exit 1 naming the absent
+  model and `/refresh-models`. Dated snapshots and context-window variants of a
+  known api_string pass, because a check that fires every session gets muted.
+  `/refresh-models` step 1 runs it. (CRAF-B06 / T38a)
+- **`refresh-models/references/mirrors-file.md`** — the mirror walk reads a
+  bindings file (`$MODEL_MIRRORS_FILE`, else `~/.claude/model-mirrors.toml`)
+  instead of a table in the operator's private instructions, with per-site
+  `vocabulary` so a family-named copy is translated rather than substituted, and
+  the rule the file enforces: a registered mirror with no row in its own
+  repository's backlog. Absent, ask once. (CRAF-B13)
+
+### Fixed
+
+- The router's cost bound is relative, not wall-clock: growth of an 8x longer
+  prompt over the short one, min over repeats. An absolute ceiling reddens under
+  machine load, and a suite that is sometimes noise stops being a stop signal.
+  The guard is proven against the exact unbounded pattern 0.7.0 shipped (~456x
+  growth against a 32x bound, versus ~8.7x for the shipped rules).
+  (CRAF-B26 / T50c)
+
 ## Unreleased
 
 The `experiment-rigor` skill shipped on this branch as 0.9.0 and 0.10.0 and is

@@ -3,6 +3,33 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.4.0 — 2026-08-11
+
+Backlog wave 1. The hook rule for the whole collection: a hook ships on with a
+documented opt-out, or it does not ship. A hook whose gate nobody sets has never
+run, which reads as enforcement in the manifest and is absent in the session.
+
+### Removed
+
+- **The data pre-shipping checklist Stop nudge** (`stop_nudge.py`, its test, and
+  its `hooks.json` registration; `DATAENG_CHECKLIST_NUDGE` is gone). Exhortation
+  delivered through a hook, inert behind an unset variable, and its path globs
+  (`models/*`) would have matched ORM and ML model directories the moment it
+  fired. The four runnable data checks already wired into this project's
+  pre-commit and CI gate reject rather than remind. (CRAF-B47)
+- **The plugin-local trigger dataset** under `evals/`. It used a schema the
+  shipped runner validates as invalid (no `should_trigger` key), had no consumer,
+  and carried 6 cases against the 22 in `evals/trigger/`, which is the single
+  source. (CRAF-B49)
+
+### Changed
+
+- `harness_adapters.parse_json_payload` no longer reaches through to the retired
+  module's private `_load_payload` — the coupling the seam existed to prevent.
+  The six-line tolerant JSON read is inlined.
+- The README states that both remaining hooks are unconditional, and why there
+  is no third one.
+
 ## 0.3.0 — 2026-07-23
 
 ### Fixed

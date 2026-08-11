@@ -3,6 +3,48 @@
 Notable changes to this plugin. Bump the `version` in `.claude-plugin/plugin.json`
 with each release.
 
+## 0.2.0 — 2026-08-11
+
+Backlog wave 1 (CRAF-B08). The plugin's central claim is that every load-bearing
+rule is a gate rather than a line of prose — and both gates lived only in this
+repository's own pre-commit config, behind path patterns that cannot match
+anywhere else. An installed user got the prose and the scripts and no
+enforcement.
+
+### Added
+
+- **Both gates are exported** in the repository's `.pre-commit-hooks.yaml` as
+  `experiment-rigor-validate` and `experiment-rigor-render-check`, with a
+  repo-agnostic default pattern, the narrowing pattern, and the one gap in the
+  default named (a `report.md` staged without its record).
+- `scripts/experiment_rigor_gate.py` is the launcher pre-commit's
+  `language: script` needs: it resolves the bundled `validate.py` / `render.py`
+  from its own location, never the cwd, and runs them through
+  `uv run --with pyyaml` — the invocation this repository's own hooks use. With
+  neither uv nor PyYAML it exits 1 naming both routes rather than passing
+  quietly. Verified in both directions: exit 0 on the founding RG-2x2 record,
+  non-zero on a deliberately corrupted copy of it.
+
+### Changed
+
+- Every path in the skill body is anchored at `${CLAUDE_PLUGIN_ROOT}`. From
+  outside the repository the documented invocation was a "command not found"
+  followed by an undeclared PyYAML import; the runnable invocation and PyYAML
+  (the sole non-stdlib dependency) are now named once, at the top. Body 1062 →
+  1086 words, displacing the "Statistics and threats" section — a second pointer
+  site for two references the bright lines already name.
+- The README states which install surface carries the gates: `/plugin install`
+  does not, `.pre-commit-hooks.yaml` does.
+
+### Known limit
+
+- Exported `language: script` hooks resolve through `#!/usr/bin/env python3`,
+  which on a stock Windows install hits the Microsoft Store app-execution alias
+  and exits 9009. Measured 2026-08-11 against every hook this repository
+  exports, on both the direct run and the git-invoked commit path. They fail
+  closed, so nothing passes hollow. The plugin README carries a working
+  `repo: local` + `language: system` recipe that pins the interpreter.
+
 ## 0.1.0 — 2026-07-25
 
 Birth of the plugin. The `experiment-rigor` skill was built inside humblepowers
