@@ -5,6 +5,37 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.10.0 — 2026-08-11
+
+### Added
+
+- **`verification-before-completion` gains
+  `references/evidence-fabrication.md`** — four tool-general modes re-homed
+  from `engineering-discipline:data-engineering-discipline`, where they were
+  Modes 9, 10, 12 and 13 of a data-engineering taxonomy: fabricated telemetry,
+  confabulated anchors, silence read as status on an unattended run, and
+  fail-open tooling. None is about data. The clearest recorded instance of the
+  fail-open mode diagnosed a defect in an eval harness, and that report's own
+  promotion asked for a tool-general statement. Roughly 1,900 words of evidence
+  discipline stop being reachable only by someone doing data work. The mode
+  numbers are kept so older citations still resolve.
+
+### Changed
+
+- That skill's body points at the new reference and drops the empty-scan
+  clause the reference now states at length: 790 -> 787 words, no budget bump.
+- **The dispatch router accepts several rule groups per skill.** The data
+  discipline's three ambient nouns (`pipeline`, `dataset`,
+  `dashboard`/`warehouse`) name things that exist in build automation, CRM, HR,
+  front-end and logistics prose, and each fired the rule on its own. They move
+  into their own group at `min_hits: 2`: one is a lexical coincidence, two are
+  a signal. Groups merge by skill id, and a denial on any group denies the
+  skill, so the activation test and the negative patterns are stated once.
+  Tuned on a dev set authored first
+  (`evals/trigger/fixtures/router-ambient-noun-dev.json`), then the two sealed
+  router holdouts were read once: recall unchanged on every register, null
+  false-fires 2/28 -> 1/28, adversarial unchanged at its 2/20 budget.
+
 ## 0.9.0 — 2026-08-11
 
 Backlog wave 1. The dispatch hook ships on, the hint became a decidable check,
