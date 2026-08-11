@@ -100,8 +100,18 @@ def _log_records(tmp_path):
 # --- --prompt-submit -------------------------------------------------------
 
 
-def test_inert_without_gate(tmp_path):
+def test_injects_with_no_env_set(tmp_path):
+    """The hook ships ON. Its live telemetry (85 prompts, 31% injection rate) is
+    signal nobody could have found from inside a session, and it existed only
+    because this one gate happened to be set; an unset gate is not a default."""
     with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=None):
+        code, out = _submit(ROUTING)
+    assert code == 0
+    assert '<toolkit-dispatch>' in out
+
+
+def test_opt_out_silences_it(tmp_path):
+    with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_PROMPT_INJECT='0'):
         code, out = _submit(ROUTING)
     assert code == 0 and out == ''
 

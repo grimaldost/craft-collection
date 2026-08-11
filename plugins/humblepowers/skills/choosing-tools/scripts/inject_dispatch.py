@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Inject lexical dispatch-router hints on the user's prompt, plus a health reader.
 
-Hook entry point for the humblepowers plugin, inert by default behind an env gate
-so it costs nothing until the user opts in:
+Hook entry point for the humblepowers plugin. It ships ON: an enforcement hook
+nobody's environment enables has never run, and the one gate in the suite that
+happened to be set produced 85 logged prompts of real dispatch signal that no
+in-session inspection could have found. The no-match path returns zero with no
+output, so a default-on hook costs a subprocess and nothing else.
 
-  --prompt-submit   UserPromptSubmit. When HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1,
-                    runs the lexical router (router.py) over a substantive human
-                    prompt and injects a short <toolkit-dispatch> block naming at
-                    most two candidate skills, with the matched words shown.
-                    Silent on no match. Slash-commands, short follow-ups, and
-                    subagent-completion notices (SYNTHETIC_PREFIXES) get nothing.
-                    Disable the router with HUMBLEPOWERS_DISPATCH_ROUTER=0 - with
-                    nothing else to inject, that silences the hook entirely.
+  --prompt-submit   UserPromptSubmit, ON by default. Runs the lexical router
+                    (router.py) over a substantive human prompt and injects a
+                    short <toolkit-dispatch> block naming at most two candidate
+                    skills, with each one's activation test. Silent on no match.
+                    Slash-commands, short follow-ups, and subagent-completion
+                    notices (SYNTHETIC_PREFIXES) get nothing. Opt out with
+                    HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0; disabling the router
+                    alone (HUMBLEPOWERS_DISPATCH_ROUTER=0) has the same effect,
+                    since there is nothing else to inject.
 
   --health          Human-invoked (not a hook). Summarizes the local telemetry
                     NDJSON: how many prompts were seen, how many got a hint, the
@@ -99,7 +103,7 @@ def _load_stdin_json() -> dict:
 
 
 def _prompt_submit() -> int:
-    if os.environ.get('HUMBLEPOWERS_DISPATCH_PROMPT_INJECT') != '1':
+    if os.environ.get('HUMBLEPOWERS_DISPATCH_PROMPT_INJECT') == '0':
         return 0
     payload = _load_stdin_json()
     prompt = payload.get('prompt')

@@ -3,8 +3,8 @@
 
 The decision logic lives (and stays) in the hook modules — `target_file` and
 `ruff_commands` in `ruff_format.py`, `verdict` and `cwd_is_uv_project` in
-`uv_enforce.py`, `_load_payload` in `stop_nudge.py`. This module wraps those
-functions behind harness-agnostic entry points, so a harness other than Claude
+`uv_enforce.py`. This module wraps those functions behind harness-agnostic entry
+points, so a harness other than Claude
 Code can reuse the tested semantics by writing one thin adapter: a function
 from that harness's event payload to the core call, plus a mapping from the
 core verdict to that harness's blocking convention.
@@ -25,10 +25,9 @@ Worked example (a harness whose edit event carries `{"file": ...}`):
 
 from __future__ import annotations
 
-import io
+import json
 
 import ruff_format
-import stop_nudge
 import uv_enforce
 
 # ---------------------------------------------------------------------------
@@ -65,9 +64,17 @@ def block_message() -> str:
 
 
 def parse_json_payload(raw: str) -> dict:
-    """Parse a raw event body into a dict ({} on empty/malformed) — wraps the
-    tolerant reader the Stop hook already tests."""
-    return stop_nudge._load_payload(io.StringIO(raw))
+    """Parse a raw event body into a dict ({} on empty/malformed).
+
+    Inlined when the Stop nudge was retired: this used to reach through to that
+    module's private `_load_payload`, which was the coupling the seam existed to
+    prevent.
+    """
+    try:
+        obj = json.loads(raw) if raw and raw.strip() else {}
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    return obj if isinstance(obj, dict) else {}
 
 
 # ---------------------------------------------------------------------------

@@ -58,12 +58,26 @@ Deduplicated against craft-collection and the Claude Code harness:
 Governed multi-PR machinery stays out of the pack by design; planned-execution
 hands off to it the moment work wants gates and dependency DAGs.
 
-## Optional hook (off by default)
+## Hook (on by default)
 
-| behaviour | enable with |
-|---|---|
-| Per-prompt lexical dispatch router: a UserPromptSubmit hook runs deterministic word-boundary regexes (`router_rules.json`, calibrated against `evals/trigger/*.json`) over a substantive human prompt and injects a short `<toolkit-dispatch>` block naming at most two candidate skills, with the matched words shown; silent on no match, on slash-commands, on short follow-ups, and on subagent-completion notices. | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1` |
-| Disable the router — with nothing else to inject, this silences the hook entirely. | `HUMBLEPOWERS_DISPATCH_ROUTER=0` |
+A UserPromptSubmit hook runs deterministic word-boundary regexes
+(`router_rules.json`, calibrated against `evals/trigger/*.json`) over a
+substantive human prompt and injects a short `<toolkit-dispatch>` block naming at
+most two candidate skills, each with its own activation test. Silent on no match,
+on slash-commands, on short follow-ups, and on subagent-completion notices.
+
+It ships **on**: an enforcement hook whose gate nobody sets has never run, and
+the no-match path returns zero with no output, so a default-on hook costs a
+subprocess and nothing else. Opt out in the `env` block of your settings file
+(`~/.claude/settings.json` for every project, `<repo>/.claude/settings.json` for
+one):
+
+```json
+{ "env": { "HUMBLEPOWERS_DISPATCH_PROMPT_INJECT": "0" } }
+```
+
+`HUMBLEPOWERS_DISPATCH_ROUTER=0` disables the router itself, which silences the
+hook the same way — there is nothing else to inject.
 
 The hook fails open (any error or timeout means silence, never a blocked
 prompt), keeps payloads ASCII, and logs each decision (router hits, whether a

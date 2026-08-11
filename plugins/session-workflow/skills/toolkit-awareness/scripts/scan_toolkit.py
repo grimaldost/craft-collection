@@ -9,8 +9,6 @@ under .claude/) — a fresh, never-stale replacement for a hand-typed inventory.
 Usage:
     python scan_toolkit.py                  # grouped table
     python scan_toolkit.py --json           # machine-readable
-    python scan_toolkit.py --session-start  # inert unless TOOLKIT_AWARENESS_INJECT=1
-    python scan_toolkit.py --session-start --no-cache   # force a fresh scan
     python scan_toolkit.py --check-serving <transcript>  # diagnose a frozen snapshot
 
 Stdlib only (Python 3.10+). Plugin discovery shells out to `claude plugin list`
@@ -19,24 +17,15 @@ Installed plugin versions are compared against each marketplace source's manifes
 and any skew is flagged — a stale install can silently hide newer skills; a
 skill-directory diff catches the same lag when the install carries no manifest.
 
-The --session-start path is cached: it fingerprints the settings/plugin/manifest
-files and, on a warm hit under 24h, prints the last inventory WITHOUT invoking the
-claude CLI (the inject is otherwise too slow to default on). It also diffs this
-session's transcript against the installed plugin hooks to catch an app-level
-frozen plugin snapshot — the only observable of that freeze. Both are best-effort
-and fail open; the table and --json modes never touch the cache.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import subprocess
 import sys
-import tempfile
-import time
 from pathlib import Path
 
 # Component kinds discovered under a `.claude/` directory, plus plugins (which are
@@ -568,23 +557,6 @@ def scan(roots: list[Path]) -> dict[str, list[dict]]:
 _SERVING_CAVEAT_CAP = 2
 
 
-def _read_hook_stdin() -> dict | None:
-    """The SessionStart hook envelope on stdin (session_id, transcript_path, cwd),
-    or None. Only attempted when stdin is a non-tty pipe; every failure -> None so
-    an interactive or malformed invocation never blocks or raises."""
-    try:
-        stdin = sys.stdin
-        if stdin is None or stdin.isatty():
-            return None
-        raw = stdin.read()
-        if not raw or not raw.strip():
-            return None
-        data = json.loads(raw)
-        return data if isinstance(data, dict) else None
-    except Exception:
-        return None
-
-
 def _transcript_hook_commands(transcript_path: str) -> list[str]:
     """Plugin-hook command strings recorded in an NDJSON transcript: each record
     whose `attachment` is a dict with a string `command`, keeping only commands
@@ -672,144 +644,8 @@ def _serving_snapshot_caveats(recorded_commands: list, install_paths: list) -> l
     return out
 
 
-def _serving_snapshot_from_stdin(install_paths: list) -> list[str]:
-    """Read the hook envelope from stdin and diff its transcript against the given
-    install paths. Fail-open at every step: no envelope, no transcript, no records,
-    or any error -> []."""
-    try:
-        envelope = _read_hook_stdin()
-        if not isinstance(envelope, dict):
-            return []
-        tp = envelope.get('transcript_path')
-        if not isinstance(tp, str) or not tp:
-            return []
-        recorded = _transcript_hook_commands(tp)
-        if not recorded:
-            return []
-        return _serving_snapshot_caveats(recorded, install_paths)
-    except Exception:
-        return []
-
-
-# --- inventory cache (--session-start only) ------------------------------------
-# The --session-start inject shells to the claude CLI (seconds), too slow to ever
-# default on. A fingerprinted cache lets a warm session start return instantly
-# without the CLI. Every cache failure path is silent, never fatal.
-
-_CACHE_TTL_SECONDS = 24 * 60 * 60
-
-
-def _cache_dir() -> Path:
-    base = os.environ.get('CLAUDE_PLUGIN_DATA') or tempfile.gettempdir()
-    return Path(base) / 'toolkit-awareness'
-
-
-def _cache_path() -> Path:
-    return _cache_dir() / 'inventory-cache.json'
-
-
-def _fingerprint_paths(roots: list[Path]) -> list[Path]:
-    """The files whose mtime/size decide whether a cached inventory is still valid:
-    user + per-root settings, the installed-plugins record, every marketplace
-    manifest, and this script itself."""
-    home = Path.home()
-    paths = [
-        home / '.claude' / 'settings.json',
-        home / '.claude' / 'settings.local.json',
-        home / '.claude' / 'plugins' / 'installed_plugins.json',
-    ]
-    for root in roots:
-        paths.append(Path(root) / '.claude' / 'settings.json')
-        paths.append(Path(root) / '.claude' / 'settings.local.json')
-    try:
-        markets = home / '.claude' / 'plugins' / 'marketplaces'
-        paths.extend(sorted(markets.glob('*/.claude-plugin/marketplace.json')))
-    except OSError:
-        pass
-    paths.append(Path(__file__).resolve())
-    return paths
-
-
-def _fingerprint(roots: list[Path]) -> str:
-    """A sha256 over a sorted list of [str(path), mtime_ns, size] for every
-    fingerprint file (a missing file participates as [path, null, null]) plus the
-    literal sorted list of scan roots -- changes when any of them does."""
-    entries = []
-    for p in _fingerprint_paths(roots):
-        try:
-            st = p.stat()
-            entries.append([str(p), st.st_mtime_ns, st.st_size])
-        except OSError:
-            entries.append([str(p), None, None])
-    payload = {'files': sorted(entries), 'roots': sorted(str(r) for r in roots)}
-    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode('utf-8')).hexdigest()
-
-
-def _read_cache() -> dict | None:
-    try:
-        data = json.loads(_cache_path().read_text(encoding='utf-8'))
-        return data if isinstance(data, dict) else None
-    except (OSError, json.JSONDecodeError, ValueError):
-        return None
-
-
-def _write_cache(fingerprint: str, output_text: str, install_paths: list) -> None:
-    """Atomic best-effort cache write (tmp + os.replace). Every failure is
-    swallowed -- a cache problem must never break a session start."""
-    try:
-        d = _cache_dir()
-        d.mkdir(parents=True, exist_ok=True)
-        record = {
-            'fingerprint': fingerprint,
-            'ts': time.time(),
-            'output_text': output_text,
-            'install_paths': [str(p) for p in install_paths if p],
-        }
-        tmp = d / f'inventory-cache.json.{os.getpid()}.tmp'
-        tmp.write_text(json.dumps(record), encoding='utf-8')
-        os.replace(tmp, _cache_path())
-    except Exception:  # noqa: S110 - cache is best-effort; a write failure must never break a session start
-        pass
-
-
 def _install_paths_of(inv: dict[str, list[dict]]) -> list[str]:
     return [p.get('installPath') for p in inv.get('plugins', []) if p.get('installPath')]
-
-
-def _emit_compact(output_text: str, serving_caveats: list[str]) -> None:
-    if output_text:
-        print(output_text)
-    for line in serving_caveats:
-        print(f'note: {line}')
-
-
-def _run_session_start(roots: list[Path], use_cache: bool) -> int:
-    """Cached, CLI-free warm path when possible; otherwise a full scan cached for
-    next time. The serving-snapshot check is computed fresh from this session's
-    transcript every time (never cached), on both hit and miss."""
-    fingerprint = None
-    if use_cache:
-        try:
-            fingerprint = _fingerprint(roots)
-            cached = _read_cache()
-            if (
-                cached
-                and cached.get('fingerprint') == fingerprint
-                and (time.time() - float(cached.get('ts', 0))) < _CACHE_TTL_SECONDS
-            ):
-                serving = _serving_snapshot_from_stdin(cached.get('install_paths') or [])
-                _emit_compact(str(cached.get('output_text', '')), serving)
-                return 0
-        except Exception:
-            fingerprint = None  # any cache error -> full scan below
-    inv = scan(roots)
-    text = _compact_text(inv)
-    install_paths = _install_paths_of(inv)
-    serving = _serving_snapshot_from_stdin(install_paths)
-    _emit_compact(text, serving)
-    if use_cache and fingerprint is not None:
-        _write_cache(fingerprint, text, install_paths)
-    return 0
 
 
 def _run_check_serving(transcript_path: str, roots: list[Path]) -> int:
@@ -858,12 +694,6 @@ def _compact_text(inv: dict[str, list[dict]]) -> str:
     return '\n'.join(lines)
 
 
-def _print_compact(inv: dict[str, list[dict]]) -> None:
-    text = _compact_text(inv)
-    if text:
-        print(text)
-
-
 def _default_roots() -> list[Path]:
     return [Path.home(), Path.cwd()]
 
@@ -872,20 +702,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Live Claude Code toolkit inventory.')
     parser.add_argument('--json', action='store_true', help='machine-readable output')
     parser.add_argument(
-        '--session-start',
-        action='store_true',
-        help='inject inventory only if TOOLKIT_AWARENESS_INJECT=1',
-    )
-    parser.add_argument(
         '--root',
         action='append',
         default=None,
         help='override scan root (repeatable); defaults to ~ and cwd',
-    )
-    parser.add_argument(
-        '--no-cache',
-        action='store_true',
-        help='force a fresh scan on --session-start (bypass the inventory cache)',
     )
     parser.add_argument(
         '--check-serving',
@@ -907,15 +727,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_serving is not None:
         return _run_check_serving(args.check_serving, roots)
 
-    # SessionStart hook entry point: silent unless explicitly opted in, so the hook
-    # can ship enabled-but-inert and cost nothing until the user wants it. Served
-    # from the inventory cache when warm (no claude CLI); --no-cache forces a scan.
-    if args.session_start:
-        if os.environ.get('TOOLKIT_AWARENESS_INJECT') != '1':
-            return 0
-        return _run_session_start(roots, use_cache=not args.no_cache)
-
-    inv = scan(roots)  # table and --json never touch the cache
+    inv = scan(roots)
     if args.json:
         print(json.dumps(inv, indent=2))
     else:

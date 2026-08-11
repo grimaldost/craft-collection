@@ -29,15 +29,13 @@ exists, else a directory scan of its `plugins/*/skills/`.
 Prefer the scan over memory: a remembered list is wrong the moment something
 changes.
 
-The same script is wired as a SessionStart hook (`--session-start`), inert
-unless `TOOLKIT_AWARENESS_INJECT=1`. That path caches its output (fingerprint
-over settings and plugin manifests, 24h TTL) so a warm start skips the slow
-CLI call; `--no-cache` forces a scan; table and `--json` modes never touch the
-cache. It also diffs hook commands recorded in the session transcript against
-every installed `hooks.json` and warns on a mismatch — the signature of an
-app-level **frozen plugin snapshot**, where every disk layer reads "current"
-but the running session is weeks behind; verify headless (`claude -p`). On
-demand: `--check-serving <transcript_path>` (always exits 0).
+`--check-serving <transcript_path>` diffs the hook commands recorded in a
+session transcript against every installed `hooks.json` and warns on a mismatch
+— the signature of an app-level **frozen plugin snapshot**, where every disk
+layer reads "current" but the running session is weeks behind; verify headless
+(`claude -p`). It always exits 0. This is an on-demand call: the SessionStart
+inject that used to carry it was retired, because the harness already places
+skill names and descriptions in the system prompt.
 
 ## How to reference the toolkit in prompts and specs
 
