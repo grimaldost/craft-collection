@@ -7,10 +7,12 @@ All notable changes to this plugin are documented here. Bump the `version` in
 
 `data-engineering-discipline` vNext: a re-tiering with three new rejecting
 checks. Every word now sits in a cost tier and earns that tier by passing that
-tier's test; every growth names its displacement. Body 2736 -> 2323 words with
-the `word_budget.json` ceiling ratcheted to 2380 in the same commit; references
-28,759 -> 15,718; scripts 4 -> 7 plus a self-verifying mutation harness;
-description budget-neutral at 224 words.
+tier's test; every growth names its displacement. Body 2736 -> 2312 words with
+the `word_budget.json` ceiling ratcheted to **2312 — the measured count, zero
+headroom**, because a ceiling with slack in it buys a future append that never
+has to name what it displaces; references 28,759 -> **16,546** (`wc -w` over
+`references/*.md`, the same method as the 28,759 figure); scripts 4 -> 7 plus a
+mutation harness; description 223 -> 243 words, itemised under Changed.
 
 ### Added
 
@@ -31,10 +33,15 @@ description budget-neutral at 224 words.
   checkout shadows an installed distribution. Prose since 0.1.5; fired in two
   sessions. The Axiom-2 sub-bullet becomes a pointer.
 - **`mutate_check.py`** and `test_mutate_check.py` — perturb one column, assert
-  the named check reddens. Every shipped check is now held RED on a seeded
-  defect and GREEN on the clean copy, over an adversarial fixture set. A
-  mutation a check documents it cannot see is declared a known gap, so the pin
-  breaks in both directions.
+  the named check reddens. A mutation a check documents it cannot see is
+  declared a known gap, so the pin breaks in both directions. **Stated at its
+  real reach:** the runnable `--check` surface is two checks (`parity`,
+  `schema`); `contract_check`, `freshness_check` and `producer_census` are held
+  against the same fixtures by the paired TEST MODULE, not by the CLI; the
+  `schema` arm mutates a harness-local coarse schema rather than
+  `schema_diff.py`'s pandas dtype path; and `which_copy` is in neither, having
+  its own unit test. So: five of six shipped checks held red by the test suite,
+  two invocable through the tool.
 - Body: the cross-producer bright line; grain, fanout and `DISTINCT`-as-fanout-
   repair; time semantics across joins; replay against a mutated source; and two
   plain-declarative rails — the oracle is not edited in the change it judges,
@@ -47,16 +54,20 @@ description budget-neutral at 224 words.
 
 ### Changed
 
-- **The description**, budget-neutral. The `writing tests for a pipeline`
-  trigger measured 0.33 recall despite being explicitly enumerated; it becomes
-  "writing or changing the tests, fixtures, or expected values that gate a
-  pipeline", which names the oracle no sibling claims. A schema-as-data ruling
-  is added as negative space: such a document counts when code is generated
-  from or validated against it, not when its only consumers render it. Paid for
-  by a parenthetical example and by a clause that summarised what the skill
-  does rather than when it fires. Both land as one change buying one holdout
-  reseal; three new sealed cases and pre-registered thresholds are recorded in
-  `evals/trigger/holdout/BASELINES.md`.
+- **The description — three changes, not one.** (1) The `writing tests for a
+  pipeline` trigger measured 0.33 recall despite being explicitly enumerated; it
+  becomes "writing or changing the tests, fixtures, or expected values that gate
+  a pipeline", which names the oracle no sibling claims. (2) A schema-as-data
+  ruling is added as negative space: such a document counts when code is
+  generated from or validated against it, not when its only consumers render it.
+  (3) One parenthetical example is cut to pay for it. 223 -> 243 words. An
+  earlier draft also deleted the closing `If so, this skill applies — pin the
+  contract, verify the observable source, and check parity on real data` clause;
+  that deletion was not authorised, the net +1-word figure hid it, and it has
+  been reverted, because the single sanctioned holdout read cannot attribute
+  movement across four simultaneous edits. All three land as one change buying
+  one holdout reseal; the sealed cases and the pre-registered thresholds — with
+  the n they are evaluated at — are in `evals/trigger/holdout/BASELINES.md`.
 - `contract_check.validate` raises on a contract shape it cannot read. A nested
   `{"columns": {...}}` contract iterated to zero recognised rules and returned
   an empty violation list — a green contract check over rows that violate it.

@@ -239,7 +239,9 @@ re-added with a different meaning in v3 passes `BACKWARD` while breaking a
 consumer pinned to v1 - the transitive variants exist for exactly that.
 And `NONE` is a real configured mode, not an absence: a registry set to `NONE`
 reports success on every change, which is a fail-open gate with a compatibility
-label (see `llm-failure-modes.md`, Mode 13).
+label (see `humblepowers:verification-before-completion`,
+`references/evidence-fabrication.md`, Mode 13 — the tool-general evidence modes
+were re-homed there, with the numbering preserved).
 
 Transformation tools express the same idea as breaking-change policy levels
 rather than modes: a contract-enforced model typically classifies a removed

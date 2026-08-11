@@ -86,7 +86,7 @@ def is_installed(skill_id: str, plugins_dir: Path | None = None) -> bool:
 
 def cwd_noise_tokens(cwd: str | Path | None = None) -> tuple[str, ...]:
     """Directory names that must not be read as trigger vocabulary. A project
-    called `treasury-fin-pipeline` otherwise fires the data rule on every prompt
+    called `fin-data-pipeline` otherwise fires the data rule on every prompt
     that names it, for the life of that project -- a permanent false-fire class,
     not a one-off. Only the whole directory name is removed, so a standalone
     'pipeline' in the same prompt still matches."""

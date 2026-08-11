@@ -20,5 +20,14 @@
   { "query": "Migrate the orders pipeline to the new warehouse without changing the output.", "should_trigger": true, "note": "must survive: migration verb plus two ambient nouns" },
   { "query": "Backfill three months into the sessions dataset and replay it.", "should_trigger": true, "note": "must survive: backfill/replay carries its own signal" },
   { "query": "Write tests for the billing aggregation pipeline so a bad change can't ship silently.", "should_trigger": true, "note": "must survive: an enumerated description trigger (tests that gate a pipeline) whose only ambient noun is 'pipeline'" },
-  { "query": "We're adding a column to the accounts dataset that two dashboards already read.", "should_trigger": true, "note": "must survive: two ambient nouns together are a second signal" }
+  { "query": "We're adding a column to the accounts dataset that two dashboards already read.", "should_trigger": true, "note": "must survive: two ambient nouns together are a second signal" },
+
+  { "query": "Add a nullable column to the customers dataset.", "should_trigger": true, "note": "the class the first version of this fixture could not sample: an enumerated description trigger (schema evolution) whose ONLY ambient noun is 'dataset'. Fired before the min_hits 2 move, silent after, and no test could see it because the four positives above all route via other patterns" },
+  { "query": "Rename revenue_usd to revenue in the orders dataset.", "should_trigger": true, "note": "enumerated trigger: rename a column. Note the prompt never says 'column' - the bare 'rename X to Y' form is the corroborating signal" },
+  { "query": "Drop the deprecated column from the sessions dataset before Friday.", "should_trigger": true, "note": "enumerated trigger: drop a column" },
+  { "query": "This pipeline writes a partition per day; make the writer idempotent.", "should_trigger": true, "note": "partitioned write: replay/idempotence is the discipline's own subject" },
+  { "query": "Our nightly pipeline started producing duplicate rows.", "should_trigger": true, "note": "row cardinality changed on a consumed output - the fan-out class" },
+  { "query": "Split the transform in the pipeline into two stages.", "should_trigger": true, "note": "enumerated trigger: refactoring a transform" },
+  { "query": "The dashboard totals disagree with the warehouse after last night's run.", "should_trigger": true, "note": "the pair case the single dashboard-or-warehouse alternation made unreachable: both nouns present, one hit scored, min_hits 2 never met" },
+  { "query": "Two dashboards and one warehouse table read this column.", "should_trigger": true, "note": "same pair case, consumer-inventory phrasing" }
 ]

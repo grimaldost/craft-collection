@@ -26,7 +26,9 @@ discipline, with mechanical enforcement and a self-refreshing toolchain.
   `parity_check.py` (aggregate diff, null placement, per-column tolerance,
   residual-zero, and a two-producer join asserted before any value),
   `contract_check.py`, `freshness_check.py`, `producer_census.py`,
-  `which_copy.py`, and `mutate_check.py`, which proves the others can fail
+  `which_copy.py`, and `mutate_check.py`, which proves a check can fail —
+  `parity` and `schema` through its own CLI, `contract_check`,
+  `freshness_check` and `producer_census` through `test_mutate_check.py`
   (stdlib-first, pandas optional).
 
 All scripts ship with stdlib-runnable tests (`python test_<name>.py`).

@@ -20,6 +20,18 @@ before any red is credited -- a check that fails everything catches nothing.
 `ADVERSARIAL` ships the seeded fixtures the shipped checks are held against:
 nulls beside zeros, boundary timestamps, duplicate keys, late arrivals, invalid
 types, tz-mixed cursors, literal `nan`, and warehouse `'1.0'` int rendering.
+Every entry is exercised by `test_mutate_check.py`; none is decoration.
+
+WHAT THIS TOOL COVERS, stated exactly, because the release note overstated it.
+The runnable `--check` surface is TWO checks: `parity` and `schema`.
+`contract_check`, `freshness_check` and `producer_census` are held against the
+same fixtures by `test_mutate_check.py` only — real coverage, but a consumer
+cannot invoke it through this CLI. `which_copy` is a shipped check and is in
+neither: it has its own unit test. And the `schema` arm mutates a harness-local
+`coarse_schema()` (below), not `schema_diff.py`'s pandas dtype extraction, so it
+proves `diff()` can fail, not that the shipped dtype path can. "Every shipped
+check is held red on a seeded defect" is true of the paired TEST MODULE for five
+of six checks; it is not true of this tool.
 
 Exit 0 when every mutation reddened the check, 1 when any slept through, 2 on a
 usage error. Stdlib only.

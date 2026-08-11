@@ -1,6 +1,11 @@
 # Principles — Full Catalog
 
-The 21 principles, organized by what each one protects. Each principle is
+The 16 principles, organized by what each one protects. The numbering is
+historical so older citations still resolve: principles 12–16 (replayability,
+schema evolution) were retired in 2026-08 — the body carries the replay and
+schema-evolution rules directly, and `contract-templates.md` carries the
+compatibility-mode vocabulary, so these five were a second definition site.
+Each principle is
 **universal** — it applies regardless of whether you're creating a new
 dataset, migrating an existing one, refactoring transforms, evolving a
 schema, backfilling, or investigating a regression. The *specifics* of
@@ -722,8 +727,6 @@ consumer-facing dataset.
 | Contract preservation (1–5) | Silent schema / cardinality / dtype breakage | All scenarios touching a consumer-facing dataset |
 | Source-of-truth (6–8) | Inference instead of verification | All scenarios where existing code, data, or libraries are involved |
 | Real-data (9–11) | Synthetic-fixtures-pass-real-fails | New dataset, constraint design, framework testing, any "I tested it locally" claim |
-| Replayability (12–13) | Non-idempotent runs, duplicate rows | Incremental loads, backfill, streaming, any partition-based pipeline |
-| Schema evolution (14–16) | Silent consumer breakage | Schema changes, deprecations, versioning |
 | Scope & traceability (17–19) | Bundled change, silent divergence | All scenarios — the highest-leverage discipline group |
 | Lineage & observability (20–21) | Drift invisible until consumers complain | Any consumer-facing dataset |
 

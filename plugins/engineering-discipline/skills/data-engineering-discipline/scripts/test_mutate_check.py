@@ -139,6 +139,35 @@ def test_parity_check_is_green_on_literal_nan_and_red_on_real_drift():
     assert checker(nan_rows, drifted) is False
 
 
+# A non-unique key makes the null-placement comparison UNASSESSED, so the CLEAN
+# copy is not green and no red may be credited -- the harness's own rule, working.
+NON_UNIQUE_KEY = {'duplicates'}
+# 'n/a' -> 'n/aX' moves no sum and no null rate. That is the aggregate-level-only
+# limitation parity_check states in its first paragraph, declared here per fixture
+# rather than globally so it cannot silently excuse a numeric column.
+TEXT_CELL_IS_INVISIBLE_TO_AGGREGATES = {'invalid_types'}
+
+
+def test_every_seeded_fixture_is_actually_held_against_a_shipped_check():
+    """`ADVERSARIAL` calls itself "the seeded fixtures the shipped checks are held
+    against". Three of the nine — `boundary_timestamps`, `late_arrivals`,
+    `tz_mixed_cursors` — were referenced by nothing in this directory, so for a
+    third of the set the docstring described data no check ever saw. This runs the
+    mutation harness over every entry, which is what the sentence claims."""
+    for name, rows in ADVERSARIAL.items():
+        gaps = set(KNOWN_GAPS['parity'])
+        if name in TEXT_CELL_IS_INVISIBLE_TO_AGGREGATES:
+            gaps.add('perturb_cell')
+        report = prove_can_fail(
+            parity_checker(['id']), rows, 'amount', VALUE_MUTATIONS, tuple(sorted(gaps))
+        )
+        if name in NON_UNIQUE_KEY:
+            assert report['clean_green'] is False, f'{name}: expected an unassessable clean copy'
+            continue
+        assert report['clean_green'] is True, f'{name}: check is not green on the clean copy'
+        assert not report['slept_through'], f'{name}: slept through {report["slept_through"]}'
+
+
 def test_producer_census_is_green_on_one_writer_and_red_on_two():
     assert census({'amount': ['orders.emit']}, []) == []
     assert census({'settled_on': ['orders.emit', 'settlements.emit']}, []) != []
@@ -146,12 +175,15 @@ def test_producer_census_is_green_on_one_writer_and_red_on_two():
 
 def test_duplicate_keys_do_not_buy_a_silent_parity_pass():
     # The duplicates fixture cannot be aligned one-to-one, so the null-placement
-    # comparison must report UNASSESSED rather than contribute a quiet pass.
+    # comparison must report UNASSESSED -- AND withhold the verdict. This test
+    # used to assert only the UNASSESSED report while duplicate keys did buy a
+    # silent pass, so its name stated a property the code did not have.
     from parity_check import compare
 
     rep = compare(ADVERSARIAL['duplicates'], ADVERSARIAL['duplicates'], keys=['id'])
     assert rep['null_mismatch'] is None
     assert 'unique' in rep['null_mismatch_reason']
+    assert rep['ok'] is not True
 
 
 # --- the CLI ---------------------------------------------------------------
@@ -191,6 +223,7 @@ if __name__ == '__main__':
     test_a_contract_shape_the_validator_cannot_read_is_not_a_pass()
     test_freshness_check_is_green_on_advance_and_red_on_the_seeded_defects()
     test_parity_check_is_green_on_literal_nan_and_red_on_real_drift()
+    test_every_seeded_fixture_is_actually_held_against_a_shipped_check()
     test_producer_census_is_green_on_one_writer_and_red_on_two()
     test_duplicate_keys_do_not_buy_a_silent_parity_pass()
     test_cli_runs_the_harness_and_refuses_an_empty_fixture()

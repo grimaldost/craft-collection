@@ -28,11 +28,17 @@
     },
     {
       "id": "engineering-discipline:data-engineering-discipline",
-      "comment": "Ambient-noun group. These three nouns live in build automation, CRM, HR, front-end and logistics prose as readily as in data work, so one of them alone is a lexical coincidence, not a signal: min_hits 2 requires a second one. Dev evidence: evals/trigger/fixtures/router-ambient-noun-dev.json (17 negatives, 4 must-survive positives). The activation test and the denials are stated once, on the strong group above, and resolved per skill.",
+      "comment": "Weak-signal group, min_hits 2: no member is a signal alone, two of them are. The four ambient nouns live in build automation, CRM, HR, front-end and logistics prose as readily as in data work. `dashboard` and `warehouse` are SEPARATE patterns - as one alternation a prompt naming BOTH scored one hit and could never reach min_hits 2, which is the opposite of what this group's own comment claimed to do. The five corroborating patterns are enumerated description triggers (column-level schema evolution, a bare field rename, partitioning, duplicate rows, reworking a transform) that carry no weight alone and settle an ambient noun's ambiguity; they were added because moving the nouns to min_hits 2 silenced eight prompts squarely inside the skill's enumerated triggers that the first dev fixture was structurally unable to sample. Dev evidence: evals/trigger/fixtures/router-ambient-noun-dev.json (17 negatives, 12 must-survive positives). The activation test and the denials are stated once, on the strong group above, and resolved per skill.",
       "patterns": [
         "\\bpipeline\\b",
         "\\bdataset\\b",
-        "\\bdashboards?\\b|\\bwarehouse\\b"
+        "\\bdashboards?\\b",
+        "\\bwarehouse\\b",
+        "\\b(add|adds|adding|added|rename|renames|renaming|renamed|retype|retypes|retyping|drop|drops|dropping|dropped|remove|removes|removing|removed)\\b[\\w'\\s-]{0,30}\\bcolumns?\\b",
+        "\\brenam\\w+ \\S+ to \\S+",
+        "\\bpartitions?\\b",
+        "\\bduplicate rows?\\b",
+        "\\b(refactor|refactors|refactoring|split|splits|splitting|rewrite|rewrites|rewriting|port|ports|porting|change|changes|changing)\\w* [\\w'\\s-]{0,20}\\btransforms?\\b"
       ],
       "min_hits": 2
     },

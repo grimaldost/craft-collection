@@ -103,12 +103,24 @@ def test_null_mismatch_answers_to_the_same_null_tol_knob():
 
 def test_null_mismatch_not_assessed_says_so_instead_of_passing_quietly():
     # Without keys the rows cannot be aligned. The check reports UNASSESSED with a
-    # reason rather than contributing a silent pass (the freshness ok=None doctrine).
+    # reason AND withholds the pass -- freshness's ok=None doctrine, which is a
+    # non-pass (its CLI exits 1), not a quiet green. This test used to assert
+    # ok is True and cited that doctrine while contradicting it.
     rows = [{'id': '1', 'amt': '0'}]
     rep = compare(rows, rows)
     assert rep['null_mismatch'] is None
     assert 'keys' in rep['null_mismatch_reason']
+    assert rep['ok'] is None
+    assert rep['unassessed']
+
+
+def test_opting_out_of_null_mismatch_is_a_clean_pass_not_an_unassessed_one():
+    # The caller said "compare aggregates only". That is a decision on the record,
+    # not a comparison that failed to run, so it must not be penalised.
+    rows = [{'id': '1', 'amt': '0'}]
+    rep = compare(rows, rows, null_mismatch=False)
     assert rep['ok'] is True
+    assert rep['unassessed'] == []
 
 
 def test_null_mismatch_not_assessed_when_keys_are_not_unique():
@@ -116,6 +128,39 @@ def test_null_mismatch_not_assessed_when_keys_are_not_unique():
     rep = compare(rows, rows, keys=['id'])
     assert rep['null_mismatch'] is None
     assert 'unique' in rep['null_mismatch_reason']
+    assert rep['ok'] is None
+
+
+def test_duplicate_keys_do_not_buy_a_silent_pass_on_a_real_null_swap():
+    # The reproduction that was live: a null-placement swap the aggregates cannot
+    # see, under a non-unique key. Every aggregate reads clean, the placement
+    # comparison cannot run -- and the verdict must NOT be PARITY OK.
+    a = [{'id': '1', 'amt': '0'}, {'id': '1', 'amt': ''}, {'id': '2', 'amt': '5'}]
+    b = [{'id': '1', 'amt': ''}, {'id': '1', 'amt': '0'}, {'id': '2', 'amt': '5'}]
+    rep = compare(a, b, keys=['id'])
+    assert rep['null_rate_delta']['amt'] == 0.0
+    assert rep['null_mismatch'] is None
+    assert rep['ok'] is not True
+    # the control: the identical drift with a unique key is a hard FAIL
+    ua = [{'id': '1', 'amt': '0'}, {'id': '2', 'amt': ''}]
+    ub = [{'id': '1', 'amt': ''}, {'id': '2', 'amt': '0'}]
+    assert compare(ua, ub, keys=['id'])['ok'] is False
+
+
+def test_cli_exits_nonzero_when_a_requested_comparison_could_not_be_made():
+    import tempfile
+    from pathlib import Path
+
+    from parity_check import main
+
+    with tempfile.TemporaryDirectory() as d:
+        a = Path(d) / 'a.csv'
+        b = Path(d) / 'b.csv'
+        a.write_text('id,amt\n1,0\n1,\n2,5\n', encoding='utf-8')
+        b.write_text('id,amt\n1,\n1,0\n2,5\n', encoding='utf-8')
+        assert main([str(a), str(b), '--keys', 'id']) == 1
+        # opting out is the caller's call and stays a clean 0
+        assert main([str(a), str(b), '--keys', 'id', '--no-null-mismatch']) == 0
 
 
 def test_tol_col_overrides_the_global_tolerance_per_column():
@@ -187,6 +232,21 @@ def test_two_producer_clean_join_then_compares_the_values():
     assert same['ok'] is True and same['values']['ok'] is True
 
 
+def test_two_producer_fails_a_join_key_that_fans_out():
+    # Set equality says WHICH keys appear on both sides, never HOW MANY rows carry
+    # each. Two 2-row sides sharing one key value used to print `matched: 1` beside
+    # `a=2 b=2` and then TWO-PRODUCER OK -- while a real SQL join on that key
+    # produces four rows. COUNT(*) vs COUNT(DISTINCT key) is the assertion.
+    a = [{'k': '1', 'v': '5'}, {'k': '1', 'v': '5'}]
+    b = [{'k': '1', 'v': '5'}, {'k': '1', 'v': '5'}]
+    rep = two_producer_check(a, b, 'k')
+    assert rep['ok'] is False
+    assert rep['join_ok'] is False
+    assert rep['values'] is None, 'values must not be compared across a fan-out'
+    assert rep['a_distinct_keys'] == 1 and rep['a_rows'] == 2
+    assert 'not unique' in rep['reason']
+
+
 def test_two_producer_empty_input_is_not_a_clean_join():
     # Two empty extracts join perfectly and agree on every value.
     rep = two_producer_check([], [], 'k')
@@ -219,13 +279,17 @@ if __name__ == '__main__':
     test_null_mismatch_catches_a_compensating_null_swap()
     test_null_mismatch_answers_to_the_same_null_tol_knob()
     test_null_mismatch_not_assessed_says_so_instead_of_passing_quietly()
+    test_opting_out_of_null_mismatch_is_a_clean_pass_not_an_unassessed_one()
     test_null_mismatch_not_assessed_when_keys_are_not_unique()
+    test_duplicate_keys_do_not_buy_a_silent_pass_on_a_real_null_swap()
+    test_cli_exits_nonzero_when_a_requested_comparison_could_not_be_made()
     test_tol_col_overrides_the_global_tolerance_per_column()
     test_residual_zero_is_a_cardinality_hazard_not_a_value_tolerance()
     test_two_producer_join_is_asserted_before_any_value_comparison()
     test_two_producer_join_names_the_key_shape_disagreement()
     test_two_producer_partial_join_fails_even_when_every_survivor_agrees()
     test_two_producer_clean_join_then_compares_the_values()
+    test_two_producer_fails_a_join_key_that_fans_out()
     test_two_producer_empty_input_is_not_a_clean_join()
     test_cli_two_producer_mode_end_to_end()
     print('ok: all parity_check tests passed')

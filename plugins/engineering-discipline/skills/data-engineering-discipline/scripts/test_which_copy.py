@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from which_copy import classify, main, resolve
+import importlib.metadata as md
+
+from which_copy import classify, distribution_version, main, resolve
 
 SITE = ['/venv/lib/python3.13/site-packages']
 
@@ -45,6 +47,49 @@ def test_cli_resolves_a_real_module_and_refuses_one_that_does_not_import():
     assert main([]) == 2
 
 
+def _with_fake_metadata(mapping: dict[str, list[str]], versions: dict[str, str]):
+    """Swap importlib.metadata's two lookups for the duration of one assertion.
+
+    The metadata lookup is where the live false negative lived, and every other
+    test in this file hands `version` to `classify` by hand -- so `resolve`'s
+    lookup was exercised only on `json`, a stdlib module with no distribution.
+    A gate that cannot reach the defective line is not a gate.
+    """
+    real = (md.packages_distributions, md.version)
+
+    def fake_version(dist):
+        if dist in versions:
+            return versions[dist]
+        raise md.PackageNotFoundError(dist)
+
+    md.packages_distributions = lambda: mapping
+    md.version = fake_version
+    return real
+
+
+def test_a_distribution_named_differently_from_its_import_name_is_still_found():
+    # yaml/PyYAML, sklearn/scikit-learn, PIL/pillow, cv2/opencv-python,
+    # bs4/beautifulsoup4, dateutil/python-dateutil. version('yaml') raises, so the
+    # version came back None and a shadowing checkout was downgraded to
+    # 'local-only' -- WHICH-COPY OK, exit 0, on the exact case the tool exists for.
+    real = _with_fake_metadata({'yaml': ['PyYAML']}, {'PyYAML': '6.0.2'})
+    try:
+        assert distribution_version('yaml') == ('6.0.2', 'PyYAML')
+        got = classify('yaml', '/w/checkout/yaml/__init__.py', '6.0.2', SITE, 'PyYAML')
+        assert got['state'] == 'shadowing'
+        assert got['shadowed'] is True
+    finally:
+        md.packages_distributions, md.version = real
+
+
+def test_a_module_with_no_distribution_anywhere_still_reports_none():
+    real = _with_fake_metadata({}, {})
+    try:
+        assert distribution_version('some_local_module') == (None, None)
+    finally:
+        md.packages_distributions, md.version = real
+
+
 if __name__ == '__main__':
     test_a_module_resolved_inside_site_packages_is_the_installed_copy()
     test_an_editable_checkout_shadowing_an_installed_distribution_is_flagged()
@@ -52,4 +97,6 @@ if __name__ == '__main__':
     test_a_module_with_no_file_is_named_rather_than_assumed_clean()
     test_a_stdlib_module_is_not_misread_as_a_local_checkout()
     test_cli_resolves_a_real_module_and_refuses_one_that_does_not_import()
+    test_a_distribution_named_differently_from_its_import_name_is_still_found()
+    test_a_module_with_no_distribution_anywhere_still_reports_none()
     print('ok: all which_copy tests passed')

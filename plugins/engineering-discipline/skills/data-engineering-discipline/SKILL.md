@@ -19,7 +19,8 @@ description: >
   could this change the columns, dtypes, row or group cardinality, null
   behavior, semantics, or freshness of a dataset — or the fields, types, or
   closed vocabularies of a tool/API payload — that something or someone
-  else reads? Do NOT activate for pure
+  else reads? If so, this skill applies — pin the contract, verify the
+  observable source, and check parity on real data. Do NOT activate for pure
   exploratory analysis with no downstream consumer, throwaway notebooks, or
   non-data software work.
 ---
@@ -187,11 +188,8 @@ than the failure it hid.
 For each side of a filtered or joined transform, name: event time or ingestion
 time; bounds inclusive or exclusive; timezone and DST; fiscal, ISO or calendar
 week; `CURRENT_DATE` versus the pipeline's execution date. Every table in a
-join is filtered on the same time semantics, or the join is wrong. One internal
-audit of *time-based analyses* found 73% carried inconsistent time filters
-across joined tables — a prevalence among analyses, not an agent capability
-score — and what fixed it was metadata plus a deterministic cross-join
-consistency check.
+join is filtered on the same time semantics, or the join is wrong. What fixes
+this is metadata plus a deterministic cross-join consistency check, not care.
 
 Re-running old logic against a source that has since changed produces a clean
 compare and corrupt history: both sides read the same mutated input. Pin the
@@ -204,7 +202,9 @@ the replay proves determinism and not historical correctness. Whether history
 The verifier, fixtures, expected values, baselines and tolerance settings are
 not edited in the change they judge. A diff that touches both the transform
 and its expected output has produced no evidence. If a baseline is genuinely
-wrong, repair it in its own change, with the reason.
+wrong, repair it in its own change, with the reason. The tool-general form of
+this — evidence that was never produced — is
+`humblepowers:verification-before-completion`.
 
 ## Irreversible operations
 

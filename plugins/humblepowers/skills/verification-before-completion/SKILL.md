@@ -61,6 +61,8 @@ checkout also discards whatever else was in that file, and only a byte-precise
 restore is verifiable. `references/evidence-fabrication.md` catalogues the four
 ways evidence itself goes wrong: invented events, confabulated anchors, silence
 read as finished, a gate green because it never ran.
+(`data-engineering-discipline`, when installed, carries the canonical
+non-vacuity matrix: its `scenarios.md`, Step 8.2.)
 
 ## Delegated work
 

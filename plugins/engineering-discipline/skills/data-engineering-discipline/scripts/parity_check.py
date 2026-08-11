@@ -21,7 +21,8 @@ cardinality change); the key-aligned null-placement comparison runs by default a
 answers to `--null-tol` (`--no-null-mismatch` opts out); `--two-producer` asserts
 the join between two writers of one shared column BEFORE comparing any value.
 
-Exit 1 if any metric is out of tolerance. Stdlib only.
+Exit 1 if any metric is out of tolerance OR if a requested comparison could not be
+made (`PARITY NOT ASSESSED`) — unassessable is never a pass. Stdlib only.
 """
 
 from __future__ import annotations
@@ -108,7 +109,17 @@ def compare(
     ROW COUNT is compared, since a downstream `> 0` filter turns residue smaller
     than any value tolerance into rows appearing or disappearing -- a cardinality
     hazard, not a value one. `null_mismatch` (default on) compares blank placement
-    row by row and needs unique `keys`; without them it reports UNASSESSED.
+    row by row and needs unique `keys`.
+
+    `ok` is TRI-STATE, like `freshness_check`: True (every requested comparison
+    ran and passed), False (something is out of tolerance), or **None** (nothing
+    failed, but a requested comparison could not be made -- today that is null
+    placement without unique keys). None is not a pass and the CLI exits 1 on it.
+    Before this was tri-state, an unassessable null-placement comparison
+    contributed a vacuously-true `all()` over an empty dict, so two tables with a
+    null-placement swap and a non-unique key printed `NOT ASSESSED` and then
+    `PARITY OK`, exit 0 -- the exact vacuous-gate class this script's own
+    docstring and SKILL.md claim it closes.
     """
     keys = keys or []
     report: dict = {
@@ -168,7 +179,7 @@ def compare(
     # The explicit isfinite guard keeps a non-finite delta (sum overflow to inf,
     # inf - inf = nan) a FAILURE even if a refactor ever inverts the comparison —
     # nan compares False both ways, so `not (abs > tol)` would silently pass it.
-    report['ok'] = (
+    comparable_ok = (
         report['row_count']['delta'] == 0
         and report['group_cardinality']['a'] == report['group_cardinality']['b']
         and all(abs(v) <= null_tol for v in report['null_rate_delta'].values())
@@ -183,6 +194,14 @@ def compare(
         and all(n / aligned <= null_tol for n in (mismatch or {}).values() if aligned)
         and all(r['delta'] == 0 for r in resid.values())
     )
+    # A requested comparison that could not be made is UNASSESSED, never a pass:
+    # `all()` over the empty dict an unassessable comparison leaves behind is
+    # vacuously True, which is how a null-placement swap under a duplicate key
+    # used to print PARITY OK. Opting out with null_mismatch=False is a caller
+    # decision and stays a clean True.
+    unassessed = null_mismatch and mismatch is None
+    report['unassessed'] = [report['null_mismatch_reason']] if unassessed else []
+    report['ok'] = (None if unassessed else True) if comparable_ok else False
     return report
 
 
@@ -214,6 +233,14 @@ def two_producer_check(
     an audit. So the join is the first-class result here: unless every row on both
     sides matched, `values` stays None and nothing is claimed about the values.
     Two empty extracts join perfectly, so an empty side is a failure, not a pass.
+
+    JOIN CARDINALITY IS PART OF THE ASSERTION, not just key-set equality. Set
+    equality says which keys appear on both sides; it says nothing about how many
+    rows carry each key, so two 2-row sides sharing one key value used to report
+    `matched: 1` and TWO-PRODUCER OK while a real SQL join on that key fans out to
+    four rows. So COUNT(*) is compared against COUNT(DISTINCT join_key) on both
+    sides -- the same rule SKILL.md states for every join -- and a duplicate key
+    on either side fails before any value is compared.
     """
     ka = [str(r.get(join_key)) for r in rows_a]
     kb = [str(r.get(join_key)) for r in rows_b]
@@ -223,6 +250,8 @@ def two_producer_check(
     report: dict = {
         'a_rows': len(rows_a),
         'b_rows': len(rows_b),
+        'a_distinct_keys': len(set(ka)),
+        'b_distinct_keys': len(set(kb)),
         'matched': matched,
         'only_a': only_a,
         'only_b': only_b,
@@ -234,6 +263,14 @@ def two_producer_check(
     }
     if not rows_a or not rows_b:
         report['reason'] = 'empty input: an empty side joins perfectly and proves nothing'
+        return report
+    if len(ka) != len(set(ka)) or len(kb) != len(set(kb)):
+        report['reason'] = (
+            f'join key {join_key!r} is not unique: a has {len(ka)} rows over '
+            f'{len(set(ka))} distinct key(s), b has {len(kb)} over {len(set(kb))} - '
+            'a join on this key fans out, so neither the row set nor the values are '
+            'comparable'
+        )
         return report
     if only_a or only_b or matched != len(set(ka)) or matched != len(set(kb)):
         shapes = (
@@ -248,8 +285,10 @@ def two_producer_check(
         return report
     report['join_ok'] = True
     report['values'] = compare(rows_a, rows_b, keys=[join_key], **compare_kwargs)
-    report['ok'] = bool(report['values']['ok'])
-    report['reason'] = 'join clean' if report['ok'] else 'join clean, values differ'
+    report['ok'] = report['values']['ok'] is True
+    report['reason'] = (
+        'join clean' if report['ok'] else 'join clean, values differ or could not be fully compared'
+    )
     return report
 
 
@@ -381,13 +420,18 @@ def main(argv: list[str] | None = None) -> int:
         if r['delta']:
             print(f'  residual-zero {c}: non-zero rows {r["a"]} -> {r["b"]} (a > 0 filter moves)')
     ok = rep['ok']
-    print('PARITY OK' if ok else 'PARITY FAILED')
-    if ok:
+    print({True: 'PARITY OK', False: 'PARITY FAILED', None: 'PARITY NOT ASSESSED'}[ok])
+    if ok is None:
+        print(
+            f'  ({"; ".join(rep["unassessed"])}) - give unique --keys, or '
+            '--no-null-mismatch to compare aggregates only and say so'
+        )
+    if ok is True:
         print(
             '  (aggregate-level only: a sum/count-preserving value swap also passes '
             '- confirm with a row-level diff, parity-recipes.md Recipe 6)'
         )
-    return 0 if ok else 1
+    return 0 if ok is True else 1
 
 
 if __name__ == '__main__':

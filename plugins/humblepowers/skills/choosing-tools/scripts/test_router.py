@@ -207,10 +207,16 @@ def test_adversarial_holdout_false_fire_budget():
 def test_recall_holdout_floors():
     """The 2026-07-23 blind recall holdout (sealed with baseline in
     holdout/BASELINES.md) gates against regression, never against fitting:
-    floors sit under the sealed numbers (overall 0.50, direct 0.94, 2/28 null
+    floors sit at the measured numbers (overall 0.50, direct 0.94, 1/28 null
     false-fires). Tuning against individual cases spends the seal — the
     register gradient (direct 0.94 / embedded 0.44 / paraphrase 0.12) is the
-    lexical ceiling and is closed by a semantic layer, not more patterns."""
+    lexical ceiling and is closed by a semantic layer, not more patterns.
+
+    The null-fire floor is RATCHETED, not left where an old measurement put it.
+    The 2026-08-11 ambient-noun change moved null false-fires 2/28 -> 1/28 and
+    left this assertion at `<= 3`, so nothing in the suite could fail if the
+    recovered null came back — an improvement claimed in the changelog with no
+    test standing behind it. A gain that is not ratcheted is not banked."""
     holdout = TRIGGER_DIR / 'holdout' / 'dispatch-router-recall.json'
     if not holdout.exists():
         return  # dataset optional in a partial checkout
@@ -226,7 +232,7 @@ def test_recall_holdout_floors():
     assert direct_hits / len(direct) >= 0.85, (
         f'direct recall regressed: {direct_hits}/{len(direct)}'
     )
-    assert null_fires <= 3, f'null false-fires regressed: {null_fires}/{len(nulls)}'
+    assert null_fires <= 1, f'null false-fires regressed: {null_fires}/{len(nulls)}'
 
 
 def test_every_routed_skill_carries_an_activation_test():
@@ -240,11 +246,21 @@ def test_every_routed_skill_carries_an_activation_test():
 
 
 def test_a_bare_ambient_noun_needs_a_second_signal():
-    """The three broad single nouns (`pipeline`, `dataset`, `dashboard`/`warehouse`)
+    """The four broad single nouns (`pipeline`, `dataset`, `dashboard`, `warehouse`)
     name things that exist in build automation, CRM, HR, front-end and logistics
-    prose. Alone they are a lexical coincidence, so they sit in their own rule
-    group at min_hits 2. Dev evidence (never tuned against a sealed set):
-    evals/trigger/fixtures/router-ambient-noun-dev.json."""
+    prose. Alone they are a lexical coincidence, so they sit in a rule group at
+    min_hits 2 beside corroborating patterns that are also worthless alone. Dev
+    evidence (never tuned against a sealed set):
+    evals/trigger/fixtures/router-ambient-noun-dev.json.
+
+    The fixture now carries the POSITIVE class the first version could not
+    sample. Moving the nouns to min_hits 2 silenced eight prompts squarely inside
+    the skill's enumerated triggers ("add a nullable column to the customers
+    dataset", "our nightly pipeline started producing duplicate rows", "the
+    dashboard totals disagree with the warehouse"), and the original four
+    must-survive positives all routed via other patterns — so the fixture was
+    structurally incapable of seeing the cost, and the sealed set lacked the
+    resolution, which is why "recall unchanged" was true and uninformative."""
     rules = _rules()
     cases = json.loads(
         (TRIGGER_DIR / 'fixtures' / 'router-ambient-noun-dev.json').read_text(encoding='utf-8')
@@ -273,12 +289,12 @@ def test_hint_renders_the_activation_test_not_the_matched_words():
 
 
 def test_project_name_is_not_trigger_vocabulary():
-    # A project called treasury-fin-pipeline otherwise fires the data rule on
+    # A project called fin-data-pipeline otherwise fires the data rule on
     # every prompt that names it, for the life of that project.
     rules = _rules()
-    noise = router.cwd_noise_tokens('/w/treasury-fin-pipeline')
-    assert 'treasury-fin-pipeline' in noise
-    assert router.route('rerun the treasury-fin-pipeline build please', rules, noise) == []
+    noise = router.cwd_noise_tokens('/w/fin-data-pipeline')
+    assert 'fin-data-pipeline' in noise
+    assert router.route('rerun the fin-data-pipeline build please', rules, noise) == []
     # A genuine standalone mention in the same project still routes.
     hits = {
         m['id']

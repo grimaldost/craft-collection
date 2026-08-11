@@ -35,8 +35,14 @@ def _norm(path: str) -> str:
     return path.replace('\\', '/').lower()
 
 
-def classify(name: str, module_file: str | None, version: str | None, sites: list[str]) -> dict:
-    """Report where `name` resolved from. Pure -- feed it the three facts.
+def classify(
+    name: str,
+    module_file: str | None,
+    version: str | None,
+    sites: list[str],
+    distribution: str | None = None,
+) -> dict:
+    """Report where `name` resolved from. Pure -- feed it the facts.
 
     `state` is one of: 'installed' (resolved inside an installed-package root),
     'shadowing' (resolved elsewhere while a distribution of that name IS
@@ -54,19 +60,44 @@ def classify(name: str, module_file: str | None, version: str | None, sites: lis
         'name': name,
         'file': module_file,
         'version': version,
+        'distribution': distribution,
         'state': state,
         'shadowed': state == 'shadowing',
     }
 
 
+def distribution_version(name: str) -> tuple[str | None, str | None]:
+    """(version, distribution name) for the IMPORT name `name`.
+
+    `importlib.metadata.version()` takes a DISTRIBUTION name, not an import name.
+    For yaml/PyYAML, sklearn/scikit-learn, PIL/pillow, cv2/opencv-python,
+    bs4/beautifulsoup4 and dateutil/python-dateutil the two differ, so the direct
+    lookup raised PackageNotFoundError, the version came back None, and
+    `classify` downgraded 'shadowing' to 'local-only': a checkout imported over
+    an installed release reported WHICH-COPY OK, exit 0. That is this skill's own
+    Mode 11 -- the verifier inheriting none of the design's documented traps --
+    committed inside the skill. `packages_distributions()` is the stdlib mapping
+    from top-level import name to the distributions that provide it.
+    """
+    top = name.split('.')[0]
+    for dist in importlib.metadata.packages_distributions().get(top) or []:
+        try:
+            return importlib.metadata.version(dist), dist
+        except importlib.metadata.PackageNotFoundError:
+            continue
+    try:
+        return importlib.metadata.version(name), name
+    except importlib.metadata.PackageNotFoundError:
+        return None, None
+
+
 def resolve(name: str, sites: list[str] | None = None) -> dict:
     """Import `name` and classify it. Raises ImportError if it does not import."""
     module = importlib.import_module(name)
-    try:
-        version = importlib.metadata.version(name)
-    except importlib.metadata.PackageNotFoundError:
-        version = None
-    return classify(name, getattr(module, '__file__', None), version, sites or site_paths())
+    version, distribution = distribution_version(name)
+    return classify(
+        name, getattr(module, '__file__', None), version, sites or site_paths(), distribution
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -86,9 +117,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f'error: {name} does not import: {e}', file=sys.stderr)
             return 2
         version = report['version'] or 'not installed as a distribution'
+        dist = report['distribution']
         print(f'{name}: {report["state"]}')
         print(f'  file    {report["file"]}')
-        print(f'  version {version}')
+        print(
+            f'  version {version}' + (f'  (distribution {dist})' if dist and dist != name else '')
+        )
         shadowed = shadowed or report['shadowed']
     if shadowed:
         print('SHADOWED: a checkout is being imported over an installed distribution')
