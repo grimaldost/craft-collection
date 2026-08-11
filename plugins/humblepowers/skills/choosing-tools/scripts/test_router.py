@@ -95,13 +95,44 @@ def test_payload_is_ascii():
     line.encode('ascii')
 
 
-def test_latency_bound():
-    rules = _rules()
-    prompt = 'Refactor the transform that builds the orders fact table dashboards read. ' * 10
-    start = time.perf_counter()
-    for _ in range(1000):
+# --- router cost: a relative bound, never a wall-clock one -----------------
+#
+# An absolute ceiling ("1000 routes under 2.0s") reddens whenever the machine is
+# busy, and a red suite that is sometimes noise is a stop signal people learn to
+# ignore. The property worth guarding is that route() stays roughly LINEAR in
+# prompt length: catastrophic backtracking -- the two chained unbounded [\w\s]*
+# spans v1's data-eng pattern shipped (2026-07-22 stress) -- is super-linear and
+# shows up as a growth ratio far above the length ratio. Comparing two lengths
+# inside one process cancels machine speed out; taking the MIN over repeats
+# cancels contention, which can only ever add time, never remove it.
+LENGTH_RATIO = 8
+GROWTH_SLACK = 4.0  # allowed cost multiple on top of the length ratio
+PROSE_UNIT = 'Refactor the transform that builds the orders fact table dashboards read. '
+
+
+def _min_route_seconds(prompt: str, rules: dict, repeats: int) -> float:
+    best = float('inf')
+    for _ in range(repeats):
+        start = time.perf_counter()
         router.route(prompt, rules)
-    assert time.perf_counter() - start < 2.0, 'router too slow for a prompt-path hook'
+        best = min(best, time.perf_counter() - start)
+    return best
+
+
+def route_growth_ratio(rules: dict, unit: str, short_units: int = 5, repeats: int = 5) -> float:
+    """Cost of routing a LENGTH_RATIO-times-longer prompt over the short one.
+    Shared with test_stress_regressions.py, which points it at the ReDoS input."""
+    short = _min_route_seconds(unit * short_units, rules, repeats)
+    long = _min_route_seconds(unit * (short_units * LENGTH_RATIO), rules, repeats)
+    return long / short if short else float('inf')
+
+
+def test_route_cost_grows_linearly_with_prompt_length():
+    ratio = route_growth_ratio(_rules(), PROSE_UNIT)
+    assert ratio <= LENGTH_RATIO * GROWTH_SLACK, (
+        f'router cost grew {ratio:.1f}x for a {LENGTH_RATIO}x longer prompt '
+        f'(bound {LENGTH_RATIO * GROWTH_SLACK:.0f}x) - super-linear backtracking'
+    )
 
 
 # --- calibration against the trigger datasets ------------------------------
