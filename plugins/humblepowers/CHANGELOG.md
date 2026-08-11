@@ -5,6 +5,52 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.9.1 — 2026-08-11
+
+Calibration pass on `choosing-models`, on evidence from the 2026-08-11 fathom
+`model-tier-v1` recalibration (5 arms x 7 tasks x 5 repeats, adding
+`claude-opus-5`). Doctrine prose and provenance only — no threshold moved, no
+scoring mechanic changed, no lineup edit. Patch bump on the 0.7.3 precedent.
+
+### Changed
+
+- **`choosing-models` oracle-coverage discount, two clauses (CRAF-B12 / T37a).**
+  The bullet now asks what oracle will exist for *this* task in *this* run —
+  including one about to be authored — instead of reading the oracle off the
+  environment as it already stands; and it states that the discount presumes
+  the gated failure is diagnosable at the discounted tier, since a red gate the
+  cheaper model cannot read buys a repair loop rather than a saving. The
+  calibration-provenance preamble moved out to `models.toml`, where provenance
+  already lives; the body came out 6 words shorter than it went in.
+- **The scoring rubric reads the brief, not the problem (CRAF-B11, partial).**
+  Coverage governs in both directions: where the prompt enumerates the edit
+  sites, the decomposition or the acceptance cases, the structure and reasoning
+  axes fall with it. A reading rule for the axes that exist — not a new axis and
+  not an adjustment row. Displaces the paragraph restating the cross-shape
+  floor's own table, and Example 5's duplicated contrast.
+- **`models.toml` provenance** carries the third calibration run and the
+  decision taken, plus a new `oracle_discount` entry holding the evidence
+  displaced from the skill body.
+
+### Measured (the honest headline)
+
+**The bank could not answer the question CRAF-B11 asks, so no scoring mechanic
+moved.** On-diagonal is 1/7 for the third run running, but 6 of 7 tasks sit at
+100% for every arm, no task resolves empirically to `mid` or `strong`, and a
+10/10 cell carries a Wilson 95% CI of [0.72, 1.00] — a true shortfall under ~28
+points is invisible. With the outcome a near-constant, no predictor can be shown
+to separate it, so the review's "delete the point system if the score does not
+separate tiers" is not licensed: that null is manufactured by saturation, not
+observed. T36a's second dimension is not landed either. The tier-separating bank
+that would settle it is designed and unrun.
+
+Two directional observations recorded rather than acted on: over-provisioning
+persists (5 of 7 tasks were served by the weak tier), and the newest strong model
+was quality-flat against its predecessor at ~1.4x the per-task cost. Separately,
+the executing model authored a regression test in 70% of trials where four other
+models did so in 0–3% — first evidence for the authored-oracle clause above, from
+a bank not designed to test it.
+
 ## 0.9.0 — 2026-08-11
 
 Backlog wave 1. The dispatch hook ships on, the hint became a decidable check,
