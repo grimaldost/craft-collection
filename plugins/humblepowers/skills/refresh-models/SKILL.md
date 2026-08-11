@@ -61,13 +61,14 @@ overrides of that file are refreshed the same way, in their own location.
    by default) in `models.toml`.
 
 6. **Walk the mirror sites.** Downstream copies of tier/model/price data are
-   supplied by a user binding (a mirror-sites table in project or user
-   memory — e.g. an engine's tier map, an eval harness's price fallback, a
-   template's pinned model strings), since a plugin cannot know a given
-   stack's mirrors. Walk each registered site and propose its matching edit
-   in that repo's own change process. With no binding registered, skip —
-   then close with the grep: search the working repos for the *outgoing*
-   model string and report any hit as a candidate mirror to register.
+   registered in a bindings file — `$MODEL_MIRRORS_FILE`, else
+   `~/.claude/model-mirrors.toml` — because a plugin cannot know a given
+   stack's mirrors. Absent, ask once and proceed without the walk; never hunt
+   the filesystem. Walk each registered site, honour its `vocabulary` (a
+   family-named copy is translated, not substituted), and propose the edit in
+   that repo's own change process. Close with the grep either way: search for
+   the *outgoing* model string and report any hit as a candidate mirror.
+   Format, fields, and the rule it enforces: `references/mirrors-file.md`.
 
 ## Guardrails
 
