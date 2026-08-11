@@ -21,12 +21,21 @@ overrides of that file are refreshed the same way, in their own location.
 
 ## Workflow
 
-1. **Detect.** Compare `models.toml` against the platform's model reference
+1. **Detect.** Run the check rather than performing it by hand:
+
+   ```bash
+   uv run --no-project -- python \
+     "${CLAUDE_PLUGIN_ROOT}/skills/choosing-models/scripts/lineup_check.py" <session model id>
+   ```
+
+   It exits 1 and names the absent model when the session is running on
+   something the tier data does not list — the environment tripwire, as a
+   command. Then compare `models.toml` against the platform's model reference
    (e.g. the claude-api skill's current-models table, the session environment's
    lineup note where present, or the published models documentation via
-   WebFetch). Drift means a current model missing from the table, a listed
-   model no longer current, or `review_by` in the past. No drift and not past
-   `review_by` → report "lineup current" and stop.
+   WebFetch) for the drift a single id cannot show: a current model missing from
+   the table, a listed model no longer current, or `review_by` in the past. No
+   drift and not past `review_by` → report "lineup current" and stop.
 
 2. **Read the changes.** For each drifted entry, read the vendor's release
    notes or model documentation for what actually changed — capability tier,
