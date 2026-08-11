@@ -5,6 +5,72 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.10.0 — 2026-08-11
+
+`verification-before-completion` gets the two delivery mechanisms it never had.
+The skill body is **unchanged**, and that is the finding, not an omission: an
+audit of the program behind it found that the body has never been an
+experimental arm — every trial in the lineage mounted the plugin identically in
+every arm, bare included — so nothing measured to date speaks to the prose at
+all. What was measured is a stop-stage gate that was not shipped. Minor bump:
+one new hook event and a tenth routed row, no removals.
+
+### Added
+
+- **A `SubagentStop` gate, off by default**
+  (`skills/verification-before-completion/scripts/subagent_gate.py`;
+  `HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE=1` arms it). It blocks a subagent's
+  first stop once with a discipline reconsideration and lets every later stop
+  through. Mechanics come from the measured fixture unchanged — one shot per
+  `(session_id, agent_id)` so the block cannot loop and concurrent subagents do
+  not share a counter, and it fails open on any exception, because a hook that
+  cannot decide must never be the reason a subagent cannot stop. The wording is
+  byte-identical to the arm that was measured and is pinned by a test: a
+  prescriptively-worded sibling on the same bank wrote a test on **every**
+  trivial code edit and was rejected on that alone, so the words are the
+  treatment rather than packaging. One deliberate divergence from the fixture:
+  counters past a 24-hour window are pruned, so an opt-in hook does not
+  accumulate files for the life of the machine.
+- **A router row for the skill** — the tenth. It had **zero** rows, so the
+  plugin's one shipped mechanism could not fire for it and the entire delivery
+  surface was the skill description competing on its own. Dev-set recall 8/8 and
+  specificity 8/8; cross-fire 2/176. The gated held-out number is precision on
+  near-misses (2/2 clean), because a hint at a claim moment is cheap and one
+  during a status question is the class that gets hooks turned off.
+
+### Measured, and what it does not cover
+
+The gate's evidence is **one bank**: two tasks, nine repeats per cell, three
+tiers. On the rate at which delegated work leaves a regression check behind it
+moved **+0.22 (haiku) / +0.56 (sonnet) / +0.44 (opus, 90% CI [+0.11, +0.78])**,
+with **0/12** false positives on trivial edits where verification work would
+have been over-scope. Three cautions ride every one of those numbers. They are
+the *discipline*-worded arm; a widely-quoted "+0.56 for the skill" is the
+rejected prescriptive arm's figure and should not be repeated. The ladder is
+non-monotone across one bank with overlapping intervals, which is why no
+tier-conditional guidance appears anywhere in the skill. And the default stays
+off until a replication on a different task family, because a stop-blocking hook
+in every subagent is a larger bet than one bank funds.
+
+`HUMBLEPOWERS_VERIFICATION_GATE_SKIP_MODELS` is marked **provisional** in the
+module, the README and its tests. No measurement licenses any value for it, the
+payload key it reads is unconfirmed across harness versions, and an absent model
+gates rather than skips. It exists because the hook is the only place a tier fact
+is implementable at all — the harness cannot condition a skill's activation on a
+subagent's model, so the same claim written into a description would name a
+decision nothing can act on.
+
+### Not changed, deliberately
+
+The skill body did not move. A candidate body — three procedures displaced to a
+reference, three new rows in *What claims require*, and a pristine-output clause
+extended to warnings and a jumped runtime — lives under
+`evals/arms/verification-vnext/` as an experimental arm with its obligations
+written down, and a test fails if any of it reaches the plugin before its
+evidence does. Also declined and recorded there rather than left implicit: a
+tier clause, a config protocol row, an adversarial-re-read section, and any
+growth of the failure-mode catalog.
+
 ## 0.9.1 — 2026-08-11
 
 Calibration pass on `choosing-models`, on evidence from the 2026-08-11 fathom
