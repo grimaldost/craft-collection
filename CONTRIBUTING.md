@@ -51,7 +51,69 @@ uv run --no-project --with pyyaml -- python scripts/run_tests.py    # every test
 uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # structural marketplace checks (PyYAML catches the frontmatter colon-space trap)
 ```
 
-The `validate` workflow re-runs all of these on every PR; it must be green to merge.
+The `validate` workflow re-runs the register linter, the plugin validator, the
+`AGENTS.md` freshness check, ruff, and the test suite on every PR; it must be green
+to merge. It does **not** run the pre-commit-only hooks — `check-json`,
+`check-yaml`, `check-merge-conflict`, `check-added-large-files`, the ASCII runtime
+ratchet, or the two `experiment-rigor` record gates. Those exist at commit time
+only, which is what makes the exemptions below worth writing down.
+
+## Gate exemptions on a Windows application-control machine
+
+This is the suite's shared record of local gate constraints, kept here because
+sibling repositories plan commit-time gates against it rather than rediscovering
+it. It is a log of observations, not a standing instruction — check the
+re-verification line before copying anything from it.
+
+**Observed (2026-07-23 to 2026-07-26).** On the maintainer's Windows machine,
+`pre-commit`'s bare `.exe` shims were refused by the OS application-control policy
+(`WinError 4551`). Three hooks that run through those shims — `check-json`,
+`check-merge-conflict`, `check-added-large-files` — were skipped for the duration
+with `SKIP=check-merge-conflict,check-added-large-files,check-json git commit …`.
+Only the first two were written down at the time; `check-json` rode along
+undocumented for eight consecutive commits, which is the reason this section
+exists. Hooks **git itself invoked** ran normally throughout; only direct
+invocation of the binary was refused.
+
+**Compensating controls while those three were skipped.** `check-json` is
+substantially covered by `scripts/validate_plugins.py`, which parses every plugin
+manifest, `marketplace.json`, and `hooks.json` in pre-commit and in CI — but not
+by the eval and router data files, which nothing else parses at commit time.
+`check-merge-conflict` is covered indirectly: a conflict marker in a `.py`, `.json`
+or `.yaml` file fails ruff, the validator, or the test suite. `check-added-large-files`
+had **no** compensating control; a large file added in that window would have gone in.
+
+**The installation form that works under the restriction.** A checked-in hooks
+directory git executes itself, rather than a shim:
+
+```bash
+git config core.hooksPath .githooks
+# .githooks/pre-commit
+#!/bin/sh
+exec uv run --no-project --with pre-commit -- python -m pre_commit \
+  hook-impl --config=.pre-commit-config.yaml --hook-type=pre-commit -- "$@"
+```
+
+The module form (`python -m pre_commit`) is the load-bearing part: it is an
+interpreter invocation, not a shim launch. Verified 2026-08-11 in a throwaway
+repository, both directions: a clean commit ran `check-json` green, and a commit
+carrying malformed JSON was rejected with the hook's own diagnostic — the form is
+not merely present, it blocks. Sibling repositories adding commit-time gates
+should reach for it only if the plain `uv tool run pre-commit install` path is
+actually refused; installing it pre-emptively buys a config that looks present and
+is harder to debug.
+
+**Re-verified 2026-08-11 and it did not reproduce.** On the same machine,
+`uv tool run pre-commit --version`, `uv run --no-project --with pre-commit --
+python -m pre_commit --version`, and each of the three hooks run over the whole
+tree (`uv tool run pre-commit run <hook> --all-files`) all succeeded, and a real
+commit ran the full pre-commit set green with no `SKIP`. So the skip list is
+**not** standing: do not carry `SKIP=…` forward on a new commit without first
+reproducing the block. The one skip that remains legitimate is per-commit and
+unrelated to application control — the `experiment-rigor-validate` freeze
+bootstrap documented in
+[`FREEZE.md`](plugins/experiment-discipline/skills/experiment-rigor/examples/rg-2x2/FREEZE.md),
+where a frozen record cannot name its own commit sha before that commit exists.
 
 ## Conventions
 
