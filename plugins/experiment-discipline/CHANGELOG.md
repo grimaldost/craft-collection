@@ -36,6 +36,16 @@ enforcement.
 - The README states which install surface carries the gates: `/plugin install`
   does not, `.pre-commit-hooks.yaml` does.
 
+### Removed
+
+- **The validator's embedded schema fallback** and the sync test that existed only
+  to police it. Its justification was build order -- the module had to be testable
+  before `templates/schema.json` existed -- which stopped applying when section 3
+  shipped that file. `load_schema` now reads the shipped schema and raises a named
+  `SchemaError` when it is missing, instead of resolving quietly to a second copy.
+  One schema, one maintenance surface, and the loud-failure path has its own test.
+  (CRAF-B56)
+
 ### Known limit
 
 - Exported `language: script` hooks resolve through `#!/usr/bin/env python3`,

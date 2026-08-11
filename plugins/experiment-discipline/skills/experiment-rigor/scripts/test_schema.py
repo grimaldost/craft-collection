@@ -1,10 +1,11 @@
 """Sync gates and template acceptance for the canonical schema (spec section 3).
 
-templates/schema.json is THE machine-readable schema; two things must never drift
-from it: validate.py's _EMBEDDED_SCHEMA (the pre-section-3 inline copy the gate falls
-back to) and templates/SCHEMA.md (the generated human field guide). This module is the
-sync gate for both, and it also proves the three tier skeletons validate as the spec
-requires. PyYAML is a hard dependency (templates are YAML), so the module refuses to
+templates/schema.json is THE machine-readable schema and now the only copy: the
+validator's embedded fallback and the sync test that policed it are retired, so the
+one thing that must never drift from schema.json is templates/SCHEMA.md (the
+generated human field guide). This module is that sync gate, proves a missing or
+degenerate schema file fails loudly rather than resolving to a second answer, and
+proves the three tier skeletons validate as the spec requires. PyYAML is a hard dependency (templates are YAML), so the module refuses to
 run -- and never emits `skip:` -- when it is absent.
 """
 
@@ -17,6 +18,7 @@ except ImportError:  # pragma: no cover - exercised only on a broken toolchain
     raise SystemExit(1) from None
 
 import json
+import pathlib
 import sys
 from pathlib import Path
 
@@ -39,29 +41,9 @@ def _fail_codes(report: validate.Report) -> set[str]:
     return {f.code for f in report.failures}
 
 
-# --- schema.json <-> _EMBEDDED_SCHEMA (the section-2 flag) -------------------
-
-
-def test_schema_json_agrees_with_embedded_schema():
-    data = _schema_json()
-    for key, value in validate._EMBEDDED_SCHEMA.items():
-        assert key in data, f'schema.json is missing embedded key {key!r}'
-        assert data[key] == value, f'schema.json[{key!r}] {data[key]!r} != embedded {value!r}'
-
-
-def test_schema_json_loads_without_weakening_the_gate():
-    # load_schema prefers schema.json; the completeness assertion must pass (no
-    # SchemaError), and every embedded read-key must survive the merge equal.
-    loaded = validate.load_schema(SCHEMA_JSON)
-    for key, value in validate._EMBEDDED_SCHEMA.items():
-        assert loaded[key] == value, key
-
-
-def test_known_versions_is_bumped_in_both_copies():
+def test_known_versions_carries_both():
     # The v1.1 extension is additive, so known_versions carries BOTH: a v1.0 record
-    # keeps validating and a v1.1 one is recognized. The sync test above is what makes
-    # bumping one copy alone red; this names the value the bump had to land on.
-    assert validate._EMBEDDED_SCHEMA['known_versions'] == [1, 1.1]
+    # keeps validating and a v1.1 one is recognized.
     assert _schema_json()['known_versions'] == [1, 1.1]
     assert _schema_json()['schema_version'] == 1.1
 
@@ -89,11 +71,26 @@ def test_v11_contrast_keys_are_present_and_readable():
     assert 'contrast_interval_methods' in validate._SCHEMA_LIST_KEYS
 
 
-def test_schema_json_is_the_loaded_default():
-    # With schema.json on disk, the default load must come from it (not the embedded
-    # fallback) -- proven by a key schema.json adds that the embedded copy lacks.
+def test_schema_json_is_the_only_source():
     loaded = validate.load_schema()
     assert 'field_shapes' in loaded, 'load_schema did not read templates/schema.json'
+    assert not hasattr(validate, '_EMBEDDED_SCHEMA'), 'the embedded fallback came back'
+
+
+def test_a_missing_schema_file_is_loud():
+    # Retiring the fallback moves this from "resolve to a second answer" to a named
+    # failure. Made to fail on purpose: a gate that silently substitutes a different
+    # schema is exactly the vacuous-pass shape this plugin exists to prevent.
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        missing = pathlib.Path(td) / 'nope.json'
+        try:
+            validate.load_schema(missing)
+        except validate.SchemaError as exc:
+            assert 'not found' in str(exc)
+        else:
+            raise AssertionError('a missing schema file resolved to something')
 
 
 # --- schema.json <-> SCHEMA.md (the generated field guide) ------------------
