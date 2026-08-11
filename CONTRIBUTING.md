@@ -95,6 +95,12 @@ The `validate` workflow re-runs all of these on every PR; it must be green to me
   change the frontmatter and re-run
   `uv run --no-project -- python scripts/gen_agents_md.py`. A pre-commit hook and
   CI both run `--check` and fail on a stale or hand-edited file.
+- **Trigger datasets live in exactly one place.** `evals/trigger/<skill>.json`, with
+  the sealed sets under `evals/trigger/holdout/` and the registration in
+  `evals/config.json`. Do not add a per-plugin copy: three such copies existed
+  under `plugins/*/evals/` until 2026-08, used a schema the shipped runner rejects
+  (no `should_trigger` key), were read by nothing, and could only mislead a reader
+  into thinking they were the evidence.
 - **A new skill needs a word-budget baseline.** `scripts/validate_plugins.py`
   fails a `SKILL.md` body with no entry in `scripts/word_budget.json`; add the
   one entry by hand. (`scripts/word_budget.py --seed` exists, but it rewrites
