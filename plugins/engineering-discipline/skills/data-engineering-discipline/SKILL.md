@@ -4,21 +4,22 @@ description: >
   Discipline guardrails for data-engineering work with downstream consumers —
   activate at the START of the task, before writing code, because silent
   semantic drift is the dominant risk. Activate on: migrating or porting a
-  pipeline (e.g. "migrate this Spark pipeline to the new warehouse"),
-  refactoring a transform, backfilling or replaying history, evolving a schema
-  (add / rename / retype / drop a column), creating a new dataset — or a
-  metadata / catalog / lineage emitter whose output a separate tool loads — that
-  has consumers, designing or reviewing a data contract, reshaping a tool / API
-  response payload a client depends on, writing tests for a pipeline, generating
-  pipeline code with an LLM, and investigating a consumed
+  pipeline, refactoring a transform, backfilling or replaying history,
+  evolving a schema (add / rename / retype / drop a column), creating a new
+  dataset — or a metadata / catalog / lineage emitter whose output a separate
+  tool loads — that has consumers, designing or reviewing a data contract,
+  reshaping a tool / API response payload a client depends on, writing or
+  changing the tests, fixtures, or expected values that gate a pipeline,
+  generating pipeline code with an LLM, and investigating a consumed
   dataset that misbehaves — "the numbers changed / look different", or a
   table/extract that "ran but didn't update / is stale / isn't refreshing / the
-  watermark didn't advance". The test for activation:
+  watermark didn't advance". A hand-authored schema-as-data document counts
+  when code is generated from or validated against it; not when its
+  only consumers render it. The test for activation:
   could this change the columns, dtypes, row or group cardinality, null
   behavior, semantics, or freshness of a dataset — or the fields, types, or
   closed vocabularies of a tool/API payload — that something or someone
-  else reads? If so, this skill applies — pin the contract, verify the
-  observable source, and check parity on real data. Do NOT activate for pure
+  else reads? Do NOT activate for pure
   exploratory analysis with no downstream consumer, throwaway notebooks, or
   non-data software work.
 ---
