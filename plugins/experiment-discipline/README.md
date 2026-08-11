@@ -33,10 +33,31 @@ dogfood record — the chain root every later record's prior links back to.
 
 ## Gates that travel with a record
 
-Two pre-commit hooks in the repo root select every travelling `record.yaml` /
-`report.md` pair and run `validate.py` and `render.py --check` over it, so a
-record cannot be committed out of sync with its report or with its own frozen
-pre-registration.
+Two pre-commit hooks select every travelling `record.yaml` / `report.md` pair and
+run `validate.py` and `render.py --check` over it, so a record cannot be
+committed out of sync with its report or with its own frozen pre-registration.
+
+**Which install surface carries them.** `/plugin install` carries the skill, the
+scripts, the templates and the references — it does not carry commit-time gates,
+because a Claude Code plugin has no way to install one. The gates come from the
+repository's `.pre-commit-hooks.yaml`, which every consumer project can reference
+by URL:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/grimaldost/craft-collection
+    rev: <tag or sha>
+    hooks:
+      - id: experiment-rigor-validate
+      - id: experiment-rigor-render-check
+```
+
+The default pattern matches any `record.yaml`; narrow it with `files:` once your
+records have a home, and see the note in `.pre-commit-hooks.yaml` before widening
+the drift gate to `report.md`. PyYAML is the gates' only non-stdlib dependency
+and `uv run --with pyyaml` supplies it, so nothing is installed into the
+consumer's environment.
 
 ## Freeze durability
 

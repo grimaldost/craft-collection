@@ -12,3 +12,41 @@
   language: script
   pass_filenames: false
   always_run: true
+
+# experiment-discipline's two gates. They previously existed only in this repo's
+# own .pre-commit-config.yaml, behind path patterns that cannot match anywhere
+# else -- so a consumer installed the plugin's prose and scripts and none of its
+# enforcement. Both run through scripts/experiment_rigor_gate.py, which resolves
+# the bundled validate.py / render.py from the hook clone and invokes them with
+# `uv run --with pyyaml` (PyYAML is the sole non-stdlib dependency).
+#
+# The default `files:` pattern is repo-agnostic: any record.yaml, anywhere.
+# NARROW it in your own config once your records have a home, e.g.
+#   - id: experiment-rigor-validate
+#     files: ^experiments/.*/record\.yaml$
+# WIDEN the drift gate to `(^|/)(record\.yaml|report\.md)$` if every report.md in
+# your tree sits beside a record.yaml. That is what this repository does, and it
+# closes the one gap in the default: a report.md staged without restaging its
+# record.yaml does not match `record\.yaml$`, so the drift goes uncaught until the
+# record is next staged. It is not the default because a lone docs/report.md in an
+# unrelated tree would then fail the commit.
+- id: experiment-rigor-validate
+  name: experiment-rigor record validator (travelling records)
+  description: >-
+    Run experiment-discipline's validate.py over every staged record.yaml: the
+    schema, the declared-cells reconciliation, the small-n interval refusal, and
+    the frozen pre-registration reconstructed with `git show`.
+  entry: scripts/experiment_rigor_gate.py --validate
+  language: script
+  files: (^|/)record\.yaml$
+  pass_filenames: true
+- id: experiment-rigor-render-check
+  name: experiment-rigor report drift gate (record.yaml <-> report.md)
+  description: >-
+    Run experiment-discipline's render.py --check over every staged record.yaml,
+    so a report.md cannot be committed out of sync with the record it is derived
+    from. See the note above before widening the pattern to report.md.
+  entry: scripts/experiment_rigor_gate.py --render-check
+  language: script
+  files: (^|/)record\.yaml$
+  pass_filenames: true
