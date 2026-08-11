@@ -77,6 +77,11 @@ description budget-neutral at 224 words.
   in your output`, whose four positive directives are replaced by two negative
   rails; the observability group; and the five contract checkboxes, which
   become the invocations that execute them.
+- Two closing paragraphs, cut in the same pass and named here for the ledger:
+  Axiom 2's note that it "replaces the migration-specific framing of legacy is
+  the source of truth" (the skill narrating its own edit history to the reader
+  who has to pay for those words), and Axiom 4's closing list of mechanical
+  defenses, which enumerated the references table three sections above it.
 
 ### Moved
 
