@@ -36,6 +36,7 @@ import json
 import os
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -130,9 +131,15 @@ def lint_file(path: Path) -> list[str]:
         if SUPPRESS_MARK in first_line:
             continue
         bad = next(ch for ch in node.value if not ch.isascii())
+        # The finding is itself runtime output, so it has to obey the rule this
+        # lint enforces: interpolating the offending character (`{bad!r}`) sent a
+        # non-ASCII byte to a cp1252 stdout and lost the actionable line while
+        # keeping the exit code -- a gate that reports nothing but still fails.
+        # The lint could not catch this on itself: its rule reads string LITERALS,
+        # and this character arrives by interpolation. Name it, never print it.
         findings.append(
-            f'{node.lineno}:{node.col_offset}: non-ASCII {bad!r} (U+{ord(bad):04X}) '
-            'in a runtime string literal'
+            f'{node.lineno}:{node.col_offset}: non-ASCII U+{ord(bad):04X} '
+            f'({unicodedata.name(bad, "unnamed codepoint")}) in a runtime string literal'
         )
     return findings
 

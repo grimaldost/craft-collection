@@ -10,13 +10,14 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import inject_dispatch
 import router
+from test_router import GROWTH_SLACK, LENGTH_RATIO, route_growth_ratio
 
 SCRIPTS = Path(__file__).parent
 INJECT = SCRIPTS / 'inject_dispatch.py'
@@ -184,14 +185,55 @@ def test_oversized_session_id_still_injects(tmp_path):
 # --- Finding: ReDoS in router pattern[7] (BLOCKER) ---
 
 
+ADVERSARIAL_UNIT = 'job not '  # the shape that fed v1's two chained unbounded spans
+# The exact pattern[7] humblepowers 0.7.0 shipped, kept verbatim as the fixture the
+# backtracking guard is proven against. Not loaded by anything at runtime.
+V1_UNBOUNDED_PATTERN = (
+    r"\b(data|extract|load|table|job) [\w'\s-]*\b(didn.?t|hasn.?t|isn.?t|stuck|not|still) "
+    r'[\w\s]*\b(update|updated|updating|refresh|refreshing|changed|advance)\w*'
+)
+
+
+def _rules_from(patterns: list[str]) -> dict:
+    """A one-skill rules dict in the shape router.route() consumes, without going
+    through load_rules() -- so a pattern that is no longer shipped can be measured."""
+    return {
+        'max_candidates': 2,
+        'skills': [
+            {
+                'id': 'stress:probe',
+                'patterns': patterns,
+                '_compiled': [re.compile(p) for p in patterns],
+                '_compiled_neg': [],
+                'min_hits': 1,
+            }
+        ],
+    }
+
+
 def test_router_no_catastrophic_backtracking(tmp_path):
-    """An adversarial 4000-char input must not blow the router's latency budget."""
-    rules = router.load_rules()
-    adversarial = ('job not ' * 500)[: router.MAX_PROMPT_CHARS]
-    start = time.perf_counter()
-    router.route(adversarial, rules)
-    elapsed = time.perf_counter() - start
-    assert elapsed < 0.2, f'router took {elapsed:.2f}s on an adversarial 4000-char input (ReDoS)'
+    """Routing cost must stay roughly linear in prompt length on an adversarial
+    input. Relative, not a wall-clock ceiling: an absolute bound reddens under
+    machine load, and a suite that is sometimes noise stops being read."""
+    ratio = route_growth_ratio(router.load_rules(), ADVERSARIAL_UNIT, short_units=32, repeats=3)
+    assert ratio <= LENGTH_RATIO * GROWTH_SLACK, (
+        f'router cost grew {ratio:.0f}x for a {LENGTH_RATIO}x longer adversarial '
+        f'input (bound {LENGTH_RATIO * GROWTH_SLACK:.0f}x) - ReDoS'
+    )
+
+
+def test_backtracking_guard_reddens_on_the_pattern_it_was_written_for(tmp_path):
+    """The guard above is not evidence until it has been made to fail on purpose
+    against real input. Point it at the exact unbounded pattern 0.7.0 shipped: it
+    must exceed the bound by a wide margin (~450x observed against a 32x bound).
+    If this ever passes, the guard has gone blind and the one above is decoration."""
+    ratio = route_growth_ratio(
+        _rules_from([V1_UNBOUNDED_PATTERN]), ADVERSARIAL_UNIT, short_units=32, repeats=2
+    )
+    assert ratio > LENGTH_RATIO * GROWTH_SLACK, (
+        f'the backtracking guard did NOT fire on v1 pattern[7]: growth {ratio:.1f}x '
+        f'is within the {LENGTH_RATIO * GROWTH_SLACK:.0f}x bound'
+    )
 
 
 # --- Verified-safe property: no markup breakout via matched text ---

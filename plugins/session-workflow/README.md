@@ -81,10 +81,25 @@ tool-dogfooding feedback loop (capture + triage).
   the end of each substantive turn. Off by default; select it under `/config` or
   set `"outputStyle": "session-workflow:step-digest"`.
 
-## Hooks (optional, off by default)
+## Hooks
 
-- **SessionStart** — inject the live toolkit inventory each session. Ships wired
-  but inert; enable with `TOOLKIT_AWARENESS_INJECT=1`.
+The rule across this collection: **a hook ships on with a documented opt-out, or
+it does not ship.** A hook whose gate nobody sets has never run, which is worse
+than an honest line of prose — it looks like enforcement in the manifest and is
+absent in the session. Opt-outs go in the `env` block of your settings file
+(`~/.claude/settings.json` for every project, `<repo>/.claude/settings.json` for
+one):
+
+```json
+{ "env": { "SESSION_WORKFLOW_ANCHOR_HOOKS": "0" } }
+```
+
+There is no toolkit-inventory SessionStart inject. It was retired in 0.21.0: the
+harness already places skill names and descriptions in the system prompt in
+progressive-disclosure shape, and dropping the inject removed the fingerprint
+cache layer that existed only to make it affordable. The serving-snapshot diff it
+carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`.
+
 - **SessionStart (compact/resume/clear/startup)** — re-inject the newest open
   control anchor's HEAD (`.claude/anchors/*.md`; content above the
   `<!-- anchor:tail -->` marker, whole file when marker-less) so a run survives
@@ -94,18 +109,22 @@ tool-dogfooding feedback loop (capture + triage).
   confirm-to-expand + close command) instead of the full body; `startup`
   (fresh process — the crash-restart path) injects only when the anchor was
   updated in the last 6h, so ordinary new sessions in a cwd with an old anchor
-  pay nothing. Ships wired but inert; enable with
-  `SESSION_WORKFLOW_ANCHOR_HOOKS=1`.
+  pay nothing. **On by default**; opt out with
+  `SESSION_WORKFLOW_ANCHOR_HOOKS=0`.
   Enabling it in a session whose plugin snapshot predates the hook (or in a
   harness without the plugin surface):
   `skills/compaction-survival/references/cold-start.md` has the manual recipe.
-- **PostToolUse (async)** — skill-exercise ledger: one JSONL entry per `Skill`
-  or plugin-MCP tool call, under `<CLAUDE_PLUGIN_DATA>/exercise-ledger/`. The
-  substrate for real-session activation telemetry and for the Stop nudge below.
-  Ships wired but inert; enable with `SESSION_WORKFLOW_EXERCISE_LEDGER=1`.
-- **Stop** — feedback-debt nudge: once per session, when the ledger shows
+- **Stop** — feedback-debt nudge: once per session, when the transcript shows
   plugin tools were exercised, no tool-feedback invocation is on record, and
   the session has at least `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) real
   user turns, a Stop block asks the model to apply the tool-feedback skill (or
-  finish if nothing is worth recording). Requires the ledger. Ships wired but
-  inert; enable with `SESSION_WORKFLOW_FEEDBACK_NUDGE=1`.
+  finish if nothing is worth recording). **On by default**; opt out with
+  `SESSION_WORKFLOW_FEEDBACK_NUDGE=0`.
+  What makes default-on safe is the binding check: it stays silent unless a
+  feedback-targets file resolves (`$FEEDBACK_TARGETS_FILE`, else
+  `~/.claude/feedback-targets.toml`), so an install with no registered tools
+  never sees it.
+  There is no skill-exercise ledger hook. It wrote one JSONL entry per `Skill` or
+  plugin-MCP call so this nudge had something to read; the transcript already
+  carried that, so the nudge reads it directly and the second write path is
+  gone.

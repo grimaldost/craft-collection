@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Inject lexical dispatch-router hints on the user's prompt, plus a health reader.
 
-Hook entry point for the humblepowers plugin, inert by default behind an env gate
-so it costs nothing until the user opts in:
+Hook entry point for the humblepowers plugin. It ships ON: an enforcement hook
+nobody's environment enables has never run, and the one gate in the suite that
+happened to be set produced 85 logged prompts of real dispatch signal that no
+in-session inspection could have found. The no-match path returns zero with no
+output, so a default-on hook costs a subprocess and nothing else.
 
-  --prompt-submit   UserPromptSubmit. When HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1,
-                    runs the lexical router (router.py) over a substantive human
-                    prompt and injects a short <toolkit-dispatch> block naming at
-                    most two candidate skills, with the matched words shown.
-                    Silent on no match. Slash-commands, short follow-ups, and
-                    subagent-completion notices (SYNTHETIC_PREFIXES) get nothing.
-                    Disable the router with HUMBLEPOWERS_DISPATCH_ROUTER=0 - with
-                    nothing else to inject, that silences the hook entirely.
+  --prompt-submit   UserPromptSubmit, ON by default. Runs the lexical router
+                    (router.py) over a substantive human prompt and injects a
+                    short <toolkit-dispatch> block naming at most two candidate
+                    skills, with each one's activation test. Silent on no match.
+                    Slash-commands, short follow-ups, and subagent-completion
+                    notices (SYNTHETIC_PREFIXES) get nothing. Opt out with
+                    HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0; disabling the router
+                    alone (HUMBLEPOWERS_DISPATCH_ROUTER=0) has the same effect,
+                    since there is nothing else to inject.
 
   --health          Human-invoked (not a hook). Summarizes the local telemetry
                     NDJSON: how many prompts were seen, how many got a hint, the
@@ -99,7 +103,7 @@ def _load_stdin_json() -> dict:
 
 
 def _prompt_submit() -> int:
-    if os.environ.get('HUMBLEPOWERS_DISPATCH_PROMPT_INJECT') != '1':
+    if os.environ.get('HUMBLEPOWERS_DISPATCH_PROMPT_INJECT') == '0':
         return 0
     payload = _load_stdin_json()
     prompt = payload.get('prompt')
@@ -116,13 +120,24 @@ def _prompt_submit() -> int:
 
     hint = ''
     hits: list[str] = []
+    dropped: list[str] = []
     if os.environ.get('HUMBLEPOWERS_DISPATCH_ROUTER') != '0':
         try:
             import router
 
-            matches = router.route(prompt, router.load_rules())
-            hint = router.hint_line(matches)
-            hits = [m['id'] for m in matches]
+            cwd = payload.get('cwd')
+            matches = router.route(
+                prompt,
+                router.load_rules(),
+                router.cwd_noise_tokens(cwd if isinstance(cwd, str) and cwd else None),
+            )
+            # Never recommend a skill this install does not have: five of the nine
+            # rows name siblings, and on a single-plugin install the hint used to
+            # point at nothing.
+            present = [m for m in matches if router.is_installed(m['id'])]
+            dropped = [m['id'] for m in matches if m not in present]
+            hint = router.hint_line(present)
+            hits = [m['id'] for m in present]
         except Exception:
             hint = ''  # router problems must never cost the prompt
 
@@ -132,7 +147,12 @@ def _prompt_submit() -> int:
     # so a failed print never suppresses a record that claims a hint shipped.
     if hint:
         print(_ascii('<toolkit-dispatch>\n' + hint + '\n</toolkit-dispatch>'))
-    _log_telemetry(session_id, {'router_hits': hits, 'injected': bool(hint)})
+    record: dict = {'router_hits': hits, 'injected': bool(hint)}
+    if dropped:
+        # A row that matched but is not installed here: the signal that says
+        # whether this router belongs at marketplace level rather than in one plugin.
+        record['not_installed'] = dropped
+    _log_telemetry(session_id, record)
     return 0
 
 

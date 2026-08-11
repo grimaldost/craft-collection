@@ -19,10 +19,13 @@ Lifecycle gates (T22a hardening):
   a cwd with an old anchor stays untaxed. compact/resume/clear — explicit
   continuation or reset signals — always evaluate.
 
-Ships INERT: does nothing unless SESSION_WORKFLOW_ANCHOR_HOOKS=1 (house
-precedent — hooks are enabled deliberately, never by install). Hot-path
-discipline: stdlib only, no LLM, no network, append-only telemetry, and every
-failure path exits 0 — a broken hook must never break a session start.
+Ships ON. `SESSION_WORKFLOW_ANCHOR_HOOKS=0` is the documented opt-out. It shipped
+inert behind an unset variable until 2026-08, which meant the mechanism carrying
+this plugin's strongest claim had never run anywhere while the claim rested on
+it — and the no-anchor path already returns zero with no output, so a default-on
+hook costs a subprocess and nothing else. Hot-path discipline: stdlib only, no
+LLM, no network, append-only telemetry, and every failure path exits 0 — a broken
+hook must never break a session start.
 
 Evidence that motivated shipping this (2026-07-04): 32 real sessions with
 compaction events in ~30 days of this user's history, plus two same-day CC
@@ -255,7 +258,7 @@ def append_telemetry(anchors_dir: Path, record: dict) -> None:
 
 
 def main() -> int:
-    if os.environ.get(ENV_GATE) != '1':
+    if os.environ.get(ENV_GATE) == '0':
         return 0
 
     # Hook runners on Windows hand this script a cp1252 stdout; campaign anchors

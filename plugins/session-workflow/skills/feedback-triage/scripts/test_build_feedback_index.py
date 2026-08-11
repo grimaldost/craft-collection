@@ -8,7 +8,12 @@ import io
 import tempfile
 from pathlib import Path
 
-from build_feedback_index import build_index, extract_proposals, main
+from build_feedback_index import (
+    build_index,
+    extract_proposals,
+    extract_section_bullets,
+    main,
+)
 
 
 def test_extract_proposals_pulls_numbered_titles():
@@ -21,8 +26,8 @@ def test_extract_proposals_pulls_numbered_titles():
         '3. not a proposal (outside the section)\n'
     )
     assert extract_proposals(text) == [
-        ('1', 'First fix here. Home: x.'),
-        ('2', 'extends `foo#3` — second fix.'),
+        ('1', 'MED', '', 'First fix here. Home: x.'),
+        ('2', 'LOW', 'foo#3', 'second fix.'),
     ]
 
 
@@ -42,7 +47,7 @@ def test_build_index_lists_reports_and_excludes_meta():
         (dd / 'README.md').write_text('# readme\n', encoding='utf-8')  # excluded
         (dd / 'INDEX.md').write_text('# stale self\n', encoding='utf-8')  # excluded (self)
         idx = build_index(dd)
-    assert '`2026-01-01-foo#1` — Do the thing.' in idx
+    assert '`2026-01-01-foo#1` [MED] — Do the thing.' in idx
     assert '## 2026-01-02-bar' in idx and 'no numbered proposals' in idx
     # A triage doc is an OUTPUT: no report section (## ), only a coverage entry (### ).
     assert '\n## 2026-01-03-triage-x' not in idx
@@ -71,8 +76,8 @@ def test_misses_and_friction_indexed_as_section_stubs():
         dd = Path(d)
         (dd / '2026-01-05-z.md').write_text(text, encoding='utf-8')
         idx = build_index(dd)
-    assert '`2026-01-05-z#1` — Fix the gate.' in idx
-    assert '`2026-01-05-z §Misses` — The gate never fired on X.' in idx
+    assert '`2026-01-05-z#1` [MED] — Fix the gate.' in idx
+    assert '`2026-01-05-z §Misses` [MED] — The gate never fired on X.' in idx
     assert '`2026-01-05-z §Friction` — Setup took three tries.' in idx
     assert 'indented sub-bullet' not in idx
     assert 'fenced bullet' not in idx
@@ -113,7 +118,7 @@ def test_build_index_survives_non_utf8_file():
         )
         (dd / '2026-01-05-bad.md').write_bytes(b'# bad\n\xff\xfe not utf-8\n')
         idx = build_index(dd)  # must not raise
-    assert '`2026-01-04-good#1` — ok.' in idx
+    assert '`2026-01-04-good#1` [MED] — ok.' in idx
     assert '## 2026-01-05-bad' in idx  # the bad file is still listed, not a crash
 
 
@@ -130,7 +135,7 @@ def test_triage_named_input_report_is_indexed():
         )
         idx = build_index(dd)
     assert '## 2026-01-06-triage-round-foo' in idx  # indexed despite 'triage' in the name
-    assert '`2026-01-06-triage-round-foo#1` — Do it.' in idx
+    assert '`2026-01-06-triage-round-foo#1` [MED] — Do it.' in idx
 
 
 def test_triage_doc_detected_by_h1_not_filename():
@@ -171,8 +176,8 @@ def test_extract_proposals_ignores_nested_and_fenced_numbers():
         '## Cost\n'
     )
     assert extract_proposals(text) == [
-        ('1', 'First real proposal.'),
-        ('2', 'Second real proposal.'),
+        ('1', 'MED', '', 'First real proposal.'),
+        ('2', 'LOW', '', 'Second real proposal.'),
     ]
 
 
@@ -187,8 +192,8 @@ def test_extract_proposals_strips_digit_hyphen_severity_tag():
         '2. **[P2-HIGH]** Another tagged fix.\n'
     )
     assert extract_proposals(text) == [
-        ('1', 'Priority-one fix.'),
-        ('2', 'Another tagged fix.'),
+        ('1', 'P1', '', 'Priority-one fix.'),
+        ('2', 'P2-HIGH', '', 'Another tagged fix.'),
     ]
 
 
@@ -354,6 +359,142 @@ def test_coverage_is_fence_aware_and_credits_prose_disposition():
     assert '`2026-02-01-listed`' not in untriaged
 
 
+def test_digest_carries_severity_and_extends_referent():
+    # The index is the input to every recurrence check. Stripping the severity tag
+    # and burying the `extends` target inside prose made "same cause?" a four-report
+    # read; both are fields now, in a fixed position, so the answer is one grep.
+    text = (
+        '# report\n'
+        '## Proposed promotions / changes\n'
+        '1. **[HIGH]** A fresh finding. Home: x.\n'
+        '2. **[LOW]** extends `2026-01-01-prior#3` — only the new evidence.\n'
+        '3. An untagged proposal.\n'
+    )
+    assert extract_proposals(text) == [
+        ('1', 'HIGH', '', 'A fresh finding. Home: x.'),
+        ('2', 'LOW', '2026-01-01-prior#3', 'only the new evidence.'),
+        ('3', '', '', 'An untagged proposal.'),
+    ]
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-05-z.md').write_text(text, encoding='utf-8')
+        idx = build_index(dd)
+    assert '`2026-01-05-z#1` [HIGH] — A fresh finding. Home: x.' in idx
+    assert '`2026-01-05-z#2` [LOW] extends `2026-01-01-prior#3` — only the new evidence.' in idx
+    assert '`2026-01-05-z#3` — An untagged proposal.' in idx  # no empty brackets when untagged
+
+
+def test_digest_carries_the_phase_a_miss_names():
+    # Every miss names the phase that should have caught it; carrying it into the
+    # index is what lets a triage pass cluster by phase without opening the reports.
+    text = (
+        '# report\n'
+        '## Misses\n'
+        '- **[MED]** The gate passed on a hollow record (phase: gate)\n'
+        '- **[LOW]** extends `2026-01-01-prior` §Misses — same shape, second time.\n'
+        '## Friction\n'
+        '- Setup took three tries.\n'
+    )
+    assert extract_section_bullets(text) == [
+        ('Misses', 'MED', 'gate', '', 'The gate passed on a hollow record'),
+        ('Misses', 'LOW', '', '2026-01-01-prior §Misses', 'same shape, second time.'),
+        ('Friction', '', '', '', 'Setup took three tries.'),
+    ]
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-06-y.md').write_text(text, encoding='utf-8')
+        idx = build_index(dd)
+    assert '`2026-01-06-y §Misses` [MED] (phase: gate) — The gate passed on a hollow record' in idx
+    assert '`2026-01-06-y §Friction` — Setup took three tries.' in idx
+
+
+def _dir_with_index(dd: Path, stamped_version: str) -> Path:
+    (dd / '2026-01-01-r.md').write_text(
+        '# r feedback - x\n## Proposed promotions\n1. **[MED]** keep me.\n', encoding='utf-8'
+    )
+    idx = dd / 'INDEX.md'
+    idx.write_text(
+        '# Feedback index\n\n'
+        f'9 report(s) - generated by build_feedback_index.py (session-workflow '
+        f'{stamped_version}, H1-rule); do not hand-edit.\n\n'
+        '## 2026-01-01-r\n- `2026-01-01-r#1` [MED] - keep me.\n',
+        encoding='utf-8',
+    )
+    return idx
+
+
+def test_refuses_to_overwrite_an_index_built_by_a_newer_builder():
+    # The loop's memory. The script stamped a version and never read one, so an
+    # older cached copy silently overwrote a newer index -- its own docstring
+    # documented the hazard it did not guard.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        idx = _dir_with_index(dd, '99.0.0')
+        before = idx.read_text(encoding='utf-8')
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = main([str(dd)])
+        out = buf.getvalue()
+        after = idx.read_text(encoding='utf-8')
+    assert rc != 0, 'an older builder was allowed to overwrite a newer index'
+    assert after == before, 'the newer index was overwritten anyway'
+    assert '99.0.0' in out and str(idx) in out  # both versions and the newer copy's path
+    assert '--force' in out
+
+
+def test_force_permits_a_deliberate_rollback():
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        idx = _dir_with_index(dd, '99.0.0')
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = main([str(dd), '--force'])
+        after = idx.read_text(encoding='utf-8')
+    assert rc == 0
+    assert '1 report(s)' in after  # rebuilt from the one real report, not the stamped 9
+
+
+def test_older_or_unstamped_index_is_rebuilt_without_complaint():
+    for stamp in ('0.0.1', None):
+        with tempfile.TemporaryDirectory() as d:
+            dd = Path(d)
+            if stamp is None:
+                (dd / '2026-01-01-r.md').write_text('# r feedback - x\n', encoding='utf-8')
+                (dd / 'INDEX.md').write_text('# Feedback index\n\nhand-rolled\n', encoding='utf-8')
+                idx = dd / 'INDEX.md'
+            else:
+                idx = _dir_with_index(dd, stamp)
+            with contextlib.redirect_stdout(io.StringIO()):
+                rc = main([str(dd)])
+            assert rc == 0, f'stamp {stamp!r} was treated as a downgrade'
+            assert 'hand-rolled' not in idx.read_text(encoding='utf-8')
+
+
+def test_write_prints_the_report_and_finding_delta():
+    # Versions matching is not enough: a parser change can drop findings silently.
+    # The write prints what changed, so a structural loss is visible at the console.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-01-r.md').write_text(
+            '# r feedback - x\n## Proposed promotions\n1. **[MED]** a.\n2. **[LOW]** b.\n',
+            encoding='utf-8',
+        )
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert main([str(dd)]) == 0
+        first = buf.getvalue()
+        assert '2 finding(s)' in first and 'new index' in first
+        # Now lose one finding and add a report; the delta must show both moves.
+        (dd / '2026-01-01-r.md').write_text(
+            '# r feedback - x\n## Proposed promotions\n1. **[MED]** a.\n', encoding='utf-8'
+        )
+        (dd / '2026-01-02-s.md').write_text('# s feedback - y\n', encoding='utf-8')
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert main([str(dd)]) == 0
+        second = buf.getvalue()
+    assert '+1' in second and '-1' in second, second
+
+
 def test_help_flag_returns_zero_not_swallowed_as_dir():
     # --help / -h must print usage and exit 0, not be read as a positional dir arg
     # (regression: `--help` -> `Path('--help')` -> "not a directory: --help", exit 1).
@@ -401,6 +542,12 @@ if __name__ == '__main__':
     test_extract_proposals_ignores_nested_and_fenced_numbers()
     test_extract_proposals_strips_digit_hyphen_severity_tag()
     test_header_stamps_generator_version_and_rule()
+    test_digest_carries_severity_and_extends_referent()
+    test_digest_carries_the_phase_a_miss_names()
+    test_refuses_to_overwrite_an_index_built_by_a_newer_builder()
+    test_force_permits_a_deliberate_rollback()
+    test_older_or_unstamped_index_is_rebuilt_without_complaint()
+    test_write_prints_the_report_and_finding_delta()
     test_triage_coverage_and_untriaged_sections()
     test_coverage_stem_match_is_boundary_aware()
     test_fragmented_stems_read_as_zero_coverage()

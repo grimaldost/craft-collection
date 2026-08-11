@@ -10,8 +10,9 @@ description: >
   direct imperative naming one tool ("write a dogfooding feedback report for keel")
   is this skill too, since writing that report IS the skill; route it here rather
   than drafting the report freehand — and offer once, unprompted, when a session
-  that exercised a registered tool is winding down. Registered tools come from a feedback-targets table the user supplies (e.g.
-  in CLAUDE.md) — never hunt the filesystem for targets. Design-only or
+  that exercised a registered tool is winding down. Registered tools come from a
+  feedback-targets registry the user supplies — a file at a known path, or a table
+  in loaded context — never hunt the filesystem for targets. Design-only or
   authoring-only use of a tool still counts as use. Not for feedback on code or PRs
   (that is code review), not for capturing general session knowledge into a memory
   store (that is journaling-sessions), and not for product feedback to a third-party
@@ -31,15 +32,15 @@ quality bar: a maintainer can act on it cold.
 
 ## Registered tools — the feedback-targets binding
 
-A tool is **registered** iff a `feedback-targets` table is in loaded context (e.g.
-the user's CLAUDE.md) or the user points you at one. Shape:
+First hit wins: `$FEEDBACK_TARGETS_FILE` → `~/.claude/feedback-targets.toml`
+(absolute-pathed, so it survives being copied between environments) → a
+`feedback-targets` table in loaded context → **ask once**. **Never hunt the
+filesystem.** Either shape carries the same fields:
 
 | tool | repo | feedback dir | extras |
 |------|------|--------------|--------|
 | keel | C:\Users\me\Documents\keel | docs/feedback | format: that dir's README.md |
 
-- **No table in context → ask once** for it (or an inline binding). **Never hunt the
-  filesystem** for candidate repos.
 - `extras` carries per-tool obligations — a format README that stays authoritative
   for that directory, a registered triage template, "include cost table for engine
   runs". Read and honor it; if it cites a README that does not exist, fall back to

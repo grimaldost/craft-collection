@@ -33,10 +33,56 @@ dogfood record — the chain root every later record's prior links back to.
 
 ## Gates that travel with a record
 
-Two pre-commit hooks in the repo root select every travelling `record.yaml` /
-`report.md` pair and run `validate.py` and `render.py --check` over it, so a
-record cannot be committed out of sync with its report or with its own frozen
-pre-registration.
+Two pre-commit hooks select every travelling `record.yaml` / `report.md` pair and
+run `validate.py` and `render.py --check` over it, so a record cannot be
+committed out of sync with its report or with its own frozen pre-registration.
+
+**Which install surface carries them.** `/plugin install` carries the skill, the
+scripts, the templates and the references — it does not carry commit-time gates,
+because a Claude Code plugin has no way to install one. The gates come from the
+repository's `.pre-commit-hooks.yaml`, which every consumer project can reference
+by URL:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/grimaldost/craft-collection
+    rev: <tag or sha>
+    hooks:
+      - id: experiment-rigor-validate
+      - id: experiment-rigor-render-check
+```
+
+The default pattern matches any `record.yaml`; narrow it with `files:` once your
+records have a home, and see the note in `.pre-commit-hooks.yaml` before widening
+the drift gate to `report.md`. PyYAML is the gates' only non-stdlib dependency
+and `uv run --with pyyaml` supplies it, so nothing is installed into the
+consumer's environment.
+
+**On Windows, prefer the local form.** The by-URL export runs through
+pre-commit's `language: script`, which resolves the entry's `#!/usr/bin/env
+python3` shebang — and on a stock Windows install that resolves to the Microsoft
+Store app-execution alias, which exits 9009 without running anything (measured
+2026-08-11; it hits every hook this repository exports, not only these two). The
+hooks fail closed, so nothing passes hollow, but they are unusable there. Pin the
+interpreter yourself instead, with the plugin's installed path:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: experiment-rigor-validate
+        name: experiment-rigor record validator
+        entry: uv run --no-project --with pyyaml -- python
+          /path/to/experiment-discipline/skills/experiment-rigor/scripts/validate.py
+        language: system
+        files: (^|/)record\.yaml$
+        pass_filenames: true
+```
+
+This is the form this repository uses on itself, and it is the one to copy for
+any project whose commits happen on Windows.
 
 ## Freeze durability
 

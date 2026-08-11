@@ -14,6 +14,17 @@ declarable** — a reader who cannot reconstruct what was manipulated, where, an
 how it was measured has found a defect; a wide confidence interval is an honest
 result.
 
+Paths below are relative to `${CLAUDE_PLUGIN_ROOT}/skills/experiment-rigor/`, and
+PyYAML is the scripts' only non-stdlib dependency — run them as the gates do:
+
+```bash
+uv run --no-project --with pyyaml -- python \
+  "${CLAUDE_PLUGIN_ROOT}/skills/experiment-rigor/scripts/validate.py" <record.yaml>
+```
+
+The same two gates ship as pre-commit hooks (`experiment-rigor-validate`,
+`experiment-rigor-render-check`); the README names the install surface.
+
 ## The tier ladder
 
 `tier` is a field, not a second skill. It selects the required fields and which
@@ -86,7 +97,8 @@ the rule.
 - **The small-n CI refusal (`ER-STATS`).** No CLT / normal method below a cell
   denominator of 30. Allowed: `wilson`, `clopper_pearson`, `beta_binomial`. Every
   stated interval is recomputed from `stats.py` and must match to four decimals.
-  See `references/small-n-stats.md`.
+  `references/small-n-stats.md` also covers clustered and paired standard errors,
+  the Beta(1, 1) prior, and the within-experiment-only pooling boundary.
 - **A rate needs both a numerator and a denominator (`ER-SCHEMA`).** A rate lives
   under `results.<outcome>.arms.<arm>` with both; a loose rate at the outcome
   level fails.
@@ -98,14 +110,6 @@ the rule.
 - **Threat coverage (`ER-THREAT`).** Every core threat in the closed enum carries
   a row with a status and a statement; silence on one fails. The enum and what
   each key means are in `references/threats-catalog.md`.
-
-## Statistics and threats
-
-- Small-n interval methods, clustered and paired standard errors, the Beta(1, 1)
-  prior and its sensitivity, and the within-experiment-only pooling boundary:
-  `references/small-n-stats.md`.
-- The nine-key closed threat enum, and when each is controlled versus residual:
-  `references/threats-catalog.md`.
 
 ## What binds, role-generically
 

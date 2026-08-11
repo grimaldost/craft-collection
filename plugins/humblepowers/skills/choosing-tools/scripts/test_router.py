@@ -95,13 +95,44 @@ def test_payload_is_ascii():
     line.encode('ascii')
 
 
-def test_latency_bound():
-    rules = _rules()
-    prompt = 'Refactor the transform that builds the orders fact table dashboards read. ' * 10
-    start = time.perf_counter()
-    for _ in range(1000):
+# --- router cost: a relative bound, never a wall-clock one -----------------
+#
+# An absolute ceiling ("1000 routes under 2.0s") reddens whenever the machine is
+# busy, and a red suite that is sometimes noise is a stop signal people learn to
+# ignore. The property worth guarding is that route() stays roughly LINEAR in
+# prompt length: catastrophic backtracking -- the two chained unbounded [\w\s]*
+# spans v1's data-eng pattern shipped (2026-07-22 stress) -- is super-linear and
+# shows up as a growth ratio far above the length ratio. Comparing two lengths
+# inside one process cancels machine speed out; taking the MIN over repeats
+# cancels contention, which can only ever add time, never remove it.
+LENGTH_RATIO = 8
+GROWTH_SLACK = 4.0  # allowed cost multiple on top of the length ratio
+PROSE_UNIT = 'Refactor the transform that builds the orders fact table dashboards read. '
+
+
+def _min_route_seconds(prompt: str, rules: dict, repeats: int) -> float:
+    best = float('inf')
+    for _ in range(repeats):
+        start = time.perf_counter()
         router.route(prompt, rules)
-    assert time.perf_counter() - start < 2.0, 'router too slow for a prompt-path hook'
+        best = min(best, time.perf_counter() - start)
+    return best
+
+
+def route_growth_ratio(rules: dict, unit: str, short_units: int = 5, repeats: int = 5) -> float:
+    """Cost of routing a LENGTH_RATIO-times-longer prompt over the short one.
+    Shared with test_stress_regressions.py, which points it at the ReDoS input."""
+    short = _min_route_seconds(unit * short_units, rules, repeats)
+    long = _min_route_seconds(unit * (short_units * LENGTH_RATIO), rules, repeats)
+    return long / short if short else float('inf')
+
+
+def test_route_cost_grows_linearly_with_prompt_length():
+    ratio = route_growth_ratio(_rules(), PROSE_UNIT)
+    assert ratio <= LENGTH_RATIO * GROWTH_SLACK, (
+        f'router cost grew {ratio:.1f}x for a {LENGTH_RATIO}x longer prompt '
+        f'(bound {LENGTH_RATIO * GROWTH_SLACK:.0f}x) - super-linear backtracking'
+    )
 
 
 # --- calibration against the trigger datasets ------------------------------
@@ -196,6 +227,59 @@ def test_recall_holdout_floors():
         f'direct recall regressed: {direct_hits}/{len(direct)}'
     )
     assert null_fires <= 3, f'null false-fires regressed: {null_fires}/{len(nulls)}'
+
+
+def test_every_row_carries_an_activation_test():
+    for skill in _rules()['skills']:
+        test = skill.get('activation_test', '')
+        assert test and test.endswith('?'), f'{skill["id"]} has no answerable activation test'
+
+
+def test_hint_renders_the_activation_test_not_the_matched_words():
+    # The measured-weaker output shape named the matched token, which the matched
+    # skill's own description explicitly does not rest on -- nothing to decide
+    # against. The hint now asks a question a reader can answer no to.
+    rules = _rules()
+    matches = router.route('backfill the pipeline and replay history', rules)
+    line = router.hint_line(matches)
+    assert 'matched:' not in line
+    assert 'engineering-discipline:data-engineering-discipline' in line
+    assert 'freshness' in line, line
+
+
+def test_project_name_is_not_trigger_vocabulary():
+    # A project called treasury-fin-pipeline otherwise fires the data rule on
+    # every prompt that names it, for the life of that project.
+    rules = _rules()
+    noise = router.cwd_noise_tokens('/w/treasury-fin-pipeline')
+    assert 'treasury-fin-pipeline' in noise
+    assert router.route('rerun the treasury-fin-pipeline build please', rules, noise) == []
+    # A genuine standalone mention in the same project still routes.
+    hits = {
+        m['id']
+        for m in router.route('the pipeline output changed after the backfill', rules, noise)
+    }
+    assert 'engineering-discipline:data-engineering-discipline' in hits
+
+
+def test_is_installed_reads_disk_and_says_no(tmp_root=None):
+    import tempfile
+
+    rules = _rules()
+    for skill in rules['skills']:
+        assert router.is_installed(skill['id']), f'{skill["id"]} unresolvable from this checkout'
+    with tempfile.TemporaryDirectory() as d:
+        empty = Path(d)
+        # A single-plugin install: the siblings are simply not on disk. Without
+        # this check the hint recommended skills that were not there.
+        assert not router.is_installed('session-workflow:review-panel', empty)
+        (empty / 'session-workflow' / 'skills' / 'review-panel').mkdir(parents=True)
+        (empty / 'session-workflow' / 'skills' / 'review-panel' / 'SKILL.md').write_text(
+            'x', encoding='utf-8'
+        )
+        assert router.is_installed('session-workflow:review-panel', empty)
+    assert not router.is_installed('not-a-plugin:not-a-skill')
+    assert not router.is_installed('malformed-id')
 
 
 def test_multilingual_is_silent_not_wrong():

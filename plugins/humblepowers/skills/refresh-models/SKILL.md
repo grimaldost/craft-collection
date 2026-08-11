@@ -21,12 +21,21 @@ overrides of that file are refreshed the same way, in their own location.
 
 ## Workflow
 
-1. **Detect.** Compare `models.toml` against the platform's model reference
+1. **Detect.** Run the check rather than performing it by hand:
+
+   ```bash
+   uv run --no-project -- python \
+     "${CLAUDE_PLUGIN_ROOT}/skills/choosing-models/scripts/lineup_check.py" <session model id>
+   ```
+
+   It exits 1 and names the absent model when the session is running on
+   something the tier data does not list — the environment tripwire, as a
+   command. Then compare `models.toml` against the platform's model reference
    (e.g. the claude-api skill's current-models table, the session environment's
    lineup note where present, or the published models documentation via
-   WebFetch). Drift means a current model missing from the table, a listed
-   model no longer current, or `review_by` in the past. No drift and not past
-   `review_by` → report "lineup current" and stop.
+   WebFetch) for the drift a single id cannot show: a current model missing from
+   the table, a listed model no longer current, or `review_by` in the past. No
+   drift and not past `review_by` → report "lineup current" and stop.
 
 2. **Read the changes.** For each drifted entry, read the vendor's release
    notes or model documentation for what actually changed — capability tier,
@@ -52,13 +61,14 @@ overrides of that file are refreshed the same way, in their own location.
    by default) in `models.toml`.
 
 6. **Walk the mirror sites.** Downstream copies of tier/model/price data are
-   supplied by a user binding (a mirror-sites table in project or user
-   memory — e.g. an engine's tier map, an eval harness's price fallback, a
-   template's pinned model strings), since a plugin cannot know a given
-   stack's mirrors. Walk each registered site and propose its matching edit
-   in that repo's own change process. With no binding registered, skip —
-   then close with the grep: search the working repos for the *outgoing*
-   model string and report any hit as a candidate mirror to register.
+   registered in a bindings file — `$MODEL_MIRRORS_FILE`, else
+   `~/.claude/model-mirrors.toml` — because a plugin cannot know a given
+   stack's mirrors. Absent, ask once and proceed without the walk; never hunt
+   the filesystem. Walk each registered site, honour its `vocabulary` (a
+   family-named copy is translated, not substituted), and propose the edit in
+   that repo's own change process. Close with the grep either way: search for
+   the *outgoing* model string and report any hit as a candidate mirror.
+   Format, fields, and the rule it enforces: `references/mirrors-file.md`.
 
 ## Guardrails
 

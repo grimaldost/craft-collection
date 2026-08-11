@@ -2,7 +2,7 @@
 re-injection hook.
 
 Contract under test (panel-hardened design, memory-suite v2):
-- inert unless SESSION_WORKFLOW_ANCHOR_HOOKS=1 (house precedent: hooks ship OFF);
+- ON by default; SESSION_WORKFLOW_ANCHOR_HOOKS=0 is the documented opt-out;
 - silent no-op when no anchor exists (an anchor-less session pays nothing);
 - fresh anchor -> stdout JSON with hookSpecificOutput.additionalContext carrying
   the anchor content;
@@ -43,9 +43,11 @@ def run_hook(
     cwd: Path, env_on: bool = True, source: str = 'compact', extra_env: dict | None = None
 ):
     env = dict(os.environ)
+    # Default ON: env_on leaves the variable unset, which is how a real install
+    # runs. env_on=False sets the documented opt-out value.
     env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
-    if env_on:
-        env['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '1'
+    if not env_on:
+        env['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '0'
     if extra_env:
         env.update(extra_env)
     payload = json.dumps(
@@ -83,7 +85,19 @@ def make_anchor(
     return f
 
 
-def test_inert_without_env():
+def test_injects_with_no_env_set():
+    """The hook ships ON. An install that sets nothing must still re-inject the
+    anchor -- the whole point of the rule: a mechanism whose gate nobody sets has
+    never run, and the plugin's evidence rests on it."""
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp)
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        assert '<control-anchor>' in proc.stdout
+
+
+def test_opt_out_silences_it():
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
         make_anchor(tmp)
@@ -549,7 +563,7 @@ def test_emit_failure_logs_failure_event_not_success():
         )
         old_in, old_out = sys.stdin, sys.stdout
         old_env = os.environ.get('SESSION_WORKFLOW_ANCHOR_HOOKS')
-        os.environ['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '1'
+        os.environ.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
         sys.stdin, sys.stdout = io.StringIO(payload), BoomStdout()
         try:
             rc = anchor_inject.main()
@@ -570,7 +584,8 @@ def test_emit_failure_logs_failure_event_not_success():
 
 
 if __name__ == '__main__':
-    test_inert_without_env()
+    test_injects_with_no_env_set()
+    test_opt_out_silences_it()
     test_silent_when_no_anchor()
     test_fresh_anchor_injected()
     test_closed_anchor_ignored()

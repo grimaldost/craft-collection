@@ -6,11 +6,18 @@ recurrence-grep robustness fix). Stdlib only; best-effort parsing of the report
 template's "## Proposed promotions" section. The output (INDEX.md) is a generated
 artifact — regenerate it, do not hand-edit.
 
-    uv run --no-project python build_feedback_index.py <feedback-dir>
+    uv run --no-project python build_feedback_index.py <feedback-dir> [--force]
 
 Use `uv run --no-project python` (not a bare `python` / `python3`): on Windows
 without Python on PATH, both resolve to the Microsoft-Store app-execution stub
 and abort.
+
+The index is the loop's memory, so the write defends itself. An existing index
+stamped with a NEWER builder version is not overwritten: the run exits non-zero
+naming both versions and the file, because an older cached copy silently
+downgrading a newer index is a structural loss nobody sees. `--force` is the
+deliberate-rollback escape hatch. Every write prints the report and finding
+delta, so a loss is visible even when the two versions match.
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 # The triage-doc detection rule this generator applies (stamped into the INDEX
 # header): a doc is a triage doc iff its H1 starts with '# Triage'. A stale
@@ -44,16 +52,64 @@ _PROPOSAL = re.compile(r'^(\d+)\.\s+(.+?)\s*$')
 _FENCE = re.compile(r'^\s*(```|~~~)')
 # A leading severity tag — **[MED]** / **[HIGH]** / **[P1]** / **[P2-HIGH]** — including
 # digit and hyphen forms, not only alpha ones (`[A-Za-z/]+` left `**[P1]**` glued on).
-_SEVERITY = re.compile(r'\*\*\[[A-Za-z0-9/-]+\]\*\*\s*')
+# Captured, not merely stripped: the digest's consumer clusters by severity, and a
+# stripped tag cost one `extends` delta four full report reads.
+_SEVERITY = re.compile(r'\*\*\[([A-Za-z0-9/-]+)\]\*\*\s*')
+# The template's two repeat forms: "extends `<stem>#<n>`" and "extends `<stem>` section".
+_EXTENDS = re.compile(
+    r'^extends\s+`([^`]+)`(?:\s*§\s*([A-Za-z]+))?\s*(?:[-—:]\s*)?',  # ascii-ok: report text
+    re.IGNORECASE,
+)
+# "phase: gate" / "phase: pre-mortem" — the miss's own account of what should have
+# caught it. Lifted out of the prose when it trails the bullet, read in place otherwise.
+_PHASE_ANY = re.compile(r'\bphase:\s*([A-Za-z][\w-]*)', re.IGNORECASE)
+_PHASE_TRAILING = re.compile(r'\s*[(\[]?\s*phase:\s*([A-Za-z][\w-]*)\s*[)\]]?\s*$', re.IGNORECASE)
 
 
-def extract_proposals(text: str) -> list[tuple[str, str]]:
-    """Return [(number, title)] from the report's "## Proposed promotions" section.
-    Only flush-left numbered lines outside fenced code blocks count; indented sub-lists
-    and fenced numbered lines are ignored. The title is stripped of a leading severity
-    tag and capped; parsing stops at the next `## ` heading. Best-effort: a report
-    without the section yields []."""
-    out: list[tuple[str, str]] = []
+class Proposal(NamedTuple):
+    number: str
+    severity: str  # 'MED' — '' when the proposal carries no tag
+    extends: str  # 'prior-stem#3' — '' when the finding is fresh
+    title: str
+
+
+class Stub(NamedTuple):
+    section: str  # 'Misses' | 'Friction'
+    severity: str
+    phase: str  # 'gate' — '' when the bullet names none
+    extends: str
+    title: str
+
+
+def _split_severity(text: str) -> tuple[str, str]:
+    m = _SEVERITY.search(text)
+    return (m.group(1) if m else ''), _SEVERITY.sub('', text).strip()
+
+
+def _split_extends(text: str) -> tuple[str, str]:
+    m = _EXTENDS.match(text)
+    if not m:
+        return '', text
+    ref = m.group(1) + (f' §{m.group(2)}' if m.group(2) else '')  # ascii-ok: index content
+    return ref, text[m.end() :].strip()
+
+
+def _split_phase(text: str) -> tuple[str, str]:
+    trailing = _PHASE_TRAILING.search(text)
+    if trailing:
+        return trailing.group(1), text[: trailing.start()].rstrip(' ([,;')
+    anywhere = _PHASE_ANY.search(text)
+    return (anywhere.group(1) if anywhere else ''), text
+
+
+def extract_proposals(text: str) -> list[Proposal]:
+    """Return [Proposal(number, severity, extends, title)] from the report's
+    "## Proposed promotions" section. Only flush-left numbered lines outside fenced code
+    blocks count; indented sub-lists and fenced numbered lines are ignored. The severity
+    tag and any leading `extends` reference become fields rather than title prose, and
+    the remainder is capped; parsing stops at the next `## ` heading. Best-effort: a
+    report without the section yields []."""
+    out: list[Proposal] = []
     in_section = False
     in_fence = False
     for line in text.splitlines():
@@ -69,8 +125,9 @@ def extract_proposals(text: str) -> list[tuple[str, str]]:
         if in_section:
             m = _PROPOSAL.match(line)
             if m:
-                title = _SEVERITY.sub('', m.group(2)).strip()
-                out.append((m.group(1), title[:140]))
+                severity, rest = _split_severity(m.group(2))
+                extends, title = _split_extends(rest)
+                out.append(Proposal(m.group(1), severity, extends, title[:140]))
     return out
 
 
@@ -81,11 +138,12 @@ _BULLET = re.compile(r'^-\s+(.+?)\s*$')
 _STUB_SECTIONS = ('misses', 'friction')
 
 
-def extract_section_bullets(text: str) -> list[tuple[str, str]]:
-    """Return [(SectionName, bullet)] for flush-left `- ` bullets under the
-    `## Misses` / `## Friction` sections — the §-stub twins of extract_proposals.
-    Fence-aware; indented sub-bullets ignored; severity tag stripped; capped."""
-    out: list[tuple[str, str]] = []
+def extract_section_bullets(text: str) -> list[Stub]:
+    """Return [Stub(section, severity, phase, extends, bullet)] for flush-left `- `
+    bullets under the `## Misses` / `## Friction` sections — the §-stub twins of
+    extract_proposals. Fence-aware; indented sub-bullets ignored; severity, phase and
+    any leading `extends` reference lifted into fields; remainder capped."""
+    out: list[Stub] = []
     section: str | None = None
     in_fence = False
     for line in text.splitlines():
@@ -102,7 +160,10 @@ def extract_section_bullets(text: str) -> list[tuple[str, str]]:
         if section:
             m = _BULLET.match(line)
             if m:
-                out.append((section, _SEVERITY.sub('', m.group(1)).strip()[:140]))
+                severity, rest = _split_severity(m.group(1))
+                extends, rest = _split_extends(rest)
+                phase, title = _split_phase(rest)
+                out.append(Stub(section, severity, phase, extends, title.strip()[:140]))
     return out
 
 
@@ -190,6 +251,71 @@ def extract_inputs_coverage(text: str, report_stems: list[str]) -> list[str]:
     return [s for s in report_stems if re.search(re.escape(s) + r'(?![A-Za-z0-9_-])', section)]
 
 
+def _render_finding(ref: str, severity: str, phase: str, extends: str, title: str) -> str:
+    """One digest line. Fields in a fixed order and omitted when empty, so `[HIGH]`,
+    `(phase: gate)` and `extends \\`x#3\\`` are greppable positions rather than prose."""
+    bits = [f'- `{ref}`']
+    if severity:
+        bits.append(f'[{severity}]')
+    if phase:
+        bits.append(f'(phase: {phase})')
+    if extends:
+        bits.append(f'extends `{extends}`')
+    bits.append(f'— {title}')  # ascii-ok: index content
+    return ' '.join(bits)
+
+
+# The generator stamp in an existing index's header — the provenance line this script
+# has always written and never read (its own docstring documented the hazard).
+_INDEX_VERSION = re.compile(r'generated by build_feedback_index\.py \(session-workflow ([^,\s)]+)')
+# A digest line, told apart from a coverage or untriaged line by its `#<n>` / ` §Sec` ref.
+_INDEX_FINDING = re.compile(r'^- `[^`]+(?:#\d+| §[A-Za-z]+)`')  # ascii-ok: index content
+
+
+def _version_key(v: str) -> tuple[int, ...] | None:
+    m = re.match(r'^(\d+(?:\.\d+)*)', v.strip())
+    return tuple(int(x) for x in m.group(1).split('.')) if m else None
+
+
+def downgrade_blocker(existing_text: str, running_version: str) -> str | None:
+    """The version stamped in an existing index when it is NEWER than the copy about
+    to overwrite it; None when the write is safe. Unstamped or unparseable versions
+    return None — refusing on a version this script cannot read would make every
+    hand-rolled index unbuildable."""
+    m = _INDEX_VERSION.search(existing_text)
+    if not m:
+        return None
+    existing, running = _version_key(m.group(1)), _version_key(running_version)
+    if existing is None or running is None:
+        return None
+    return m.group(1) if existing > running else None
+
+
+def index_counts(text: str) -> tuple[int, int]:
+    """(reports, findings) read back out of an index — the two numbers a silent
+    structural loss shows up in."""
+    reports = findings = 0
+    for line in text.splitlines():
+        if line.startswith('## ') and line.strip() != '## Triage coverage':
+            reports += 1
+        elif _INDEX_FINDING.match(line):
+            findings += 1
+    return reports, findings
+
+
+def delta_line(old_text: str, new_text: str) -> str:
+    """One line naming what the write changed. Versions matching is not enough: a
+    parser change can drop findings while the stamp stays identical."""
+    reports, findings = index_counts(new_text)
+    if not old_text.strip():
+        return f'{reports} report(s), {findings} finding(s) (new index)'
+    was_reports, was_findings = index_counts(old_text)
+    return (
+        f'{reports} report(s) ({reports - was_reports:+d}), '
+        f'{findings} finding(s) ({findings - was_findings:+d})'
+    )
+
+
 def build_index(feedback_dir: Path) -> str:
     reports = sorted(p for p in feedback_dir.glob('*.md') if _is_report(p))
     triage_docs = sorted(
@@ -198,10 +324,11 @@ def build_index(feedback_dir: Path) -> str:
     lines = [
         '# Feedback index',
         '',
-        f'{len(reports)} report(s) — generated by build_feedback_index.py '
-        f'(session-workflow {_plugin_version()}, {DETECTION_RULE}); do not hand-edit. '
+        # This header and the digest lines below go to INDEX.md, never to a console.
+        f'{len(reports)} report(s) — generated by build_feedback_index.py '  # ascii-ok
+        f'(session-workflow {_plugin_version()}, {DETECTION_RULE}); do not hand-edit. '  # ascii-ok
         'Each entry is a report stem with its numbered proposals and its '
-        '§Misses/§Friction bullet stubs; grep here for an `extends` target before '
+        '§Misses/§Friction bullet stubs; grep here for an `extends` target before '  # ascii-ok
         'restating a finding. `## Triage coverage` maps each triage doc to the '
         'reports its Inputs and dated Addendum sections list; `### Untriaged` is '
         "the scope step's input list.",
@@ -217,10 +344,15 @@ def build_index(feedback_dir: Path) -> str:
         props = extract_proposals(text)
         stubs = extract_section_bullets(text)
         if props:
-            lines += [f'- `{p.stem}#{num}` — {title}' for num, title in props]
+            lines += [
+                _render_finding(f'{p.stem}#{pr.number}', pr.severity, '', pr.extends, pr.title)
+                for pr in props
+            ]
         elif not stubs:
             lines.append('- (no numbered proposals)')
-        lines += [f'- `{p.stem} §{sec}` — {title}' for sec, title in stubs]
+        for s in stubs:
+            ref = f'{p.stem} §{s.section}'  # ascii-ok: index content
+            lines.append(_render_finding(ref, s.severity, s.phase, s.extends, s.title))
         lines.append('')
 
     report_stems = [p.stem for p in reports]
@@ -255,16 +387,34 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] in ('-h', '--help'):
         print(__doc__)
         return 0
+    force = '--force' in argv
+    argv = [a for a in argv if a != '--force']
     if not argv:
-        print('usage: build_feedback_index.py <feedback-dir>')
+        print('usage: build_feedback_index.py <feedback-dir> [--force]')
         return 2
     d = Path(argv[0])
     if not d.is_dir():
         print(f'not a directory: {d}')
         return 1
     out = d / 'INDEX.md'
-    out.write_text(build_index(d), encoding='utf-8')
-    print(f'wrote {out}')  # the index header carries the report count
+    try:
+        old = out.read_text(encoding='utf-8', errors='replace') if out.is_file() else ''
+    except OSError:
+        old = ''
+    running = _plugin_version()
+    if not force:
+        newer = downgrade_blocker(old, running)
+        if newer:
+            print(
+                f'refusing to write {out}: it was built by session-workflow {newer} and '
+                f'this copy is {running}. An older builder overwriting a newer index is a '
+                f'silent structural downgrade. Re-run from the {newer} copy, or pass '
+                f'--force to roll back on purpose.'
+            )
+            return 3
+    new = build_index(d)
+    out.write_text(new, encoding='utf-8')
+    print(f'wrote {out}: {delta_line(old, new)}')
     return 0
 
 

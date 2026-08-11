@@ -15,9 +15,10 @@
 schema_version = '1'
 
 [meta]
-last_reviewed = "2026-07-14"   # stamped by /refresh-models; mirrored nowhere else
-review_by = "2026-10-14"       # age tripwire — past this date, refresh before trusting
+last_reviewed = "2026-08-11"   # stamped by /refresh-models; mirrored nowhere else
+review_by = "2026-11-11"       # age tripwire — past this date, refresh before trusting
 calibration = "model-tier calibration runs of 2026-06-16 and 2026-07-01 (fathom model-tier-v1); thresholds are ported defaults pending a tier-separating bank"
+lineup_reconciled = "2026-08-11 against the platform model reference: strong was pinned to a model the machines are no longer served. Direction settled before any mirror walk - the sibling PRICE mirrors are keyed by family substring (opus/sonnet/haiku/fable), so a model-id change inside a family does not touch them and they are correct today; the one sibling tier-to-model map carried the same stale strong entry, so the walk propagates a corrected lineup rather than a stale one."
 
 # Score -> tier. Calibratable data, not doctrine: the rubric owns how to
 # score, these bands own where the cuts sit. frontier is opt-in only and
@@ -45,11 +46,11 @@ notes = 'intro pricing through 2026-08-31; tokenizer ~30% more tokens for the sa
 
 [[models]]
 tier = 'strong'
-api_string = 'claude-opus-4-8'
+api_string = 'claude-opus-5'
 harness_alias = 'opus'
-display = 'Opus 4.8'
+display = 'Opus 5'
 available = true
-notes = ''
+notes = 'same price as Opus 4.8; thinking is ON by default, and disabling it is rejected above `high` effort'
 
 [[models]]
 tier = 'frontier'
@@ -57,7 +58,7 @@ api_string = 'claude-fable-5'
 harness_alias = 'fable'
 display = 'Fable 5'
 available = true
-notes = '2x Opus 4.8 pricing; opt-in only — never score-assigned'
+notes = '2x Opus 5 pricing; opt-in only — never score-assigned'
 
 # Per-task cost observations from calibration/production runs — provenance
 # above. Small-prompt baselines; a large prompt at max effort runs 5-10x.

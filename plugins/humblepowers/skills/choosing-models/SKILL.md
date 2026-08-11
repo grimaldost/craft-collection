@@ -115,10 +115,10 @@ skill ends.
 
 - **Age (always fires):** `models.toml` carries `review_by`; past that date,
   offer `/refresh-models` before trusting the table.
-- **Environment (partial):** where the session environment lists the current
-  model lineup, a model named there but missing from `models.toml` flags the
-  table stale. This cannot see a model the session doesn't know about — the
-  age check and the quarterly refresh are for that.
+- **Environment (partial):** `scripts/lineup_check.py <model id>` exits 1 when
+  the session's own model is not in `models.toml` — run it rather than checking
+  by hand. It cannot see a model the session doesn't know about; the age check
+  and the quarterly refresh are for that.
 
 ## Data and overrides
 

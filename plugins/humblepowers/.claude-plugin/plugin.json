@@ -1,10 +1,24 @@
 {
   "name": "humblepowers",
   "displayName": "Humble Powers",
-  "version": "0.8.0",
-  "description": "Superpowers-derived process disciplines in a calibrated register: fit-ranked tool dispatch, capacity dispatch (task-to-model/effort routing on a calibrated rubric), calibration-first skill authoring, red-green TDD, root-cause-first debugging, design-before-code brainstorming, evidence-before-claims verification, technically rigorous review reception, and midweight planned execution (executable-cold plans + per-task subagent review loop) — deduplicated against the craft-collection toolkit and eval-gated from birth.",
-  "author": { "name": "Grimaldo Stanzani", "email": "grimaldosj93@gmail.com" },
+  "version": "0.9.0",
+  "description": "Superpowers-derived process disciplines in a calibrated register: fit-ranked tool dispatch, capacity dispatch (task-to-model/effort routing on a calibrated rubric), calibration-first skill authoring, red-green TDD, root-cause-first debugging, design-before-code brainstorming, evidence-before-claims verification, technically rigorous review reception, and midweight planned execution (executable-cold plans + per-task subagent review loop) \u2014 deduplicated against the craft-collection toolkit and eval-gated from birth.",
+  "author": {
+    "name": "Grimaldo Stanzani",
+    "email": "grimaldosj93@gmail.com"
+  },
   "repository": "https://github.com/grimaldost/craft-collection",
   "license": "MIT",
-  "keywords": ["tdd", "debugging", "verification", "code-review", "brainstorming", "dispatch", "model-tier", "skill-authoring", "process-discipline", "calibration"]
+  "keywords": [
+    "tdd",
+    "debugging",
+    "verification",
+    "code-review",
+    "brainstorming",
+    "dispatch",
+    "model-tier",
+    "skill-authoring",
+    "process-discipline",
+    "calibration"
+  ]
 }

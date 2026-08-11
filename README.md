@@ -31,7 +31,7 @@ craft-collection is a Claude Code plugin marketplace with four plugins:
 ## Install
 
 **Prerequisites:** [`uv`](https://docs.astral.sh/uv/) must be on your `PATH`. The
-plugins' hooks launch via `uv run`, so without uv every Write/Edit/Bash/Stop/
+plugins' hooks launch via `uv run`, so without uv every Write/Edit/Bash/Stop and
 session-start hook fails to spawn.
 
 ```text
@@ -73,8 +73,9 @@ travelling `record.yaml` / `report.md` pair.
 `llm-signature`, `tool-feedback`, `feedback-triage`, `compaction-survival`, and
 `corpus-review`;
 the `/anchor` command; a live `scan_toolkit.py` inventory; the headless
-skill-eval engine in `scripts/`; a selectable `step-digest` output style; four
-optional hooks, all shipped wired but inert (see the plugin README).
+skill-eval engine in `scripts/`; a selectable `step-digest` output style; the
+control-anchor re-injection hook (on by default) plus two opt-in ones (see the
+plugin README).
 
 **humblepowers** — skills `choosing-tools`, `skill-authoring`, `brainstorming`,
 `test-driven-development`, `systematic-debugging`,
@@ -84,8 +85,7 @@ auto-triggering skill carries a trigger dataset and a sealed holdout under
 `evals/`, and four of them — `test-driven-development`, `systematic-debugging`,
 `verification-before-completion`, `planned-execution` — additionally carry
 correct-usage suites; register linter wired into pre-commit;
-an optional per-prompt dispatch-router hint hook
-(`HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1`). Derived from
+a per-prompt dispatch-router hint hook, on by default. Derived from
 [obra/superpowers](https://github.com/obra/superpowers) (MIT) — see the
 plugin's LICENSE for third-party notices.
 
@@ -96,21 +96,27 @@ they are its mechanical layer, not options: `ruff_format` re-formats every `.py`
 file edited in a turn, once at the end of that turn (PostToolBatch,
 non-blocking; needs Claude Code >= 2.1.218), and `uv_enforce` blocks
 pip/poetry/virtualenv inside uv-managed projects (PreToolUse; override one command
-with `CLAUDE_ALLOW_PIP=1`). Everything else is **off by default**, each behind an
-env var:
+with `CLAUDE_ALLOW_PIP=1`).
 
-| Behaviour | Enable with |
-|-----------|-------------|
-| Toolkit inventory injected at session start | `TOOLKIT_AWARENESS_INJECT=1` |
-| Data pre-shipping checklist nudge on Stop | `DATAENG_CHECKLIST_NUDGE=1` |
-| Dispatch router hint injected on each prompt (UserPromptSubmit, not session start) | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1` |
-| Control-anchor re-injection on compact/resume | `SESSION_WORKFLOW_ANCHOR_HOOKS=1` |
-| Skill-exercise ledger (one JSONL entry per Skill / plugin-MCP call) | `SESSION_WORKFLOW_EXERCISE_LEDGER=1` |
-| Feedback-debt nudge on Stop (requires the ledger) | `SESSION_WORKFLOW_FEEDBACK_NUDGE=1` |
+The rule for every other hook here: **it ships on with a documented opt-out, or
+it does not ship.** A hook behind a variable nobody sets has never run, which
+reads as enforcement in the manifest and is absent in the session. Opt-outs go in
+the `env` block of `~/.claude/settings.json` (every project) or
+`<repo>/.claude/settings.json` (one), e.g.
+`{ "env": { "SESSION_WORKFLOW_ANCHOR_HOOKS": "0" } }`.
 
-The dispatch router itself can be turned off entirely with
-`HUMBLEPOWERS_DISPATCH_ROUTER=0` — with nothing left to inject, that silences
-the hook.
+| Behaviour | Default | Opt out with |
+|-----------|---------|--------------|
+| Dispatch router hint injected on each prompt (UserPromptSubmit, not session start) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
+| Control-anchor re-injection on compact/resume | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0` |
+| Feedback-debt nudge on Stop (silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
+
+Three hooks were retired rather than defaulted on: the toolkit-inventory session
+start inject (the harness already lists skills and descriptions in the system
+prompt), the data pre-shipping checklist Stop nudge (exhortation through a hook,
+against four runnable checks already in the gates that reject rather than
+remind), and the skill-exercise ledger (a second write path for a fact the
+session transcript already carried — the Stop nudge reads the transcript).
 
 ## Optional output style
 

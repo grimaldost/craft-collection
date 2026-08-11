@@ -3,6 +3,61 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.21.0 — 2026-08-11
+
+Backlog wave 1. Four hooks became two, both on by default, and the feedback index
+stopped being able to quietly downgrade itself.
+
+### Changed
+
+- **The control-anchor re-injection hook ships ON**
+  (`SESSION_WORKFLOW_ANCHOR_HOOKS=0` opts out). It shipped inert behind an unset
+  variable, which meant the mechanism carrying this plugin's strongest claim had
+  never run anywhere while the claim rested on it. The no-anchor path already
+  returned zero with no output. (CRAF-B02)
+- **The feedback-debt Stop nudge ships ON** (`SESSION_WORKFLOW_FEEDBACK_NUDGE=0`
+  opts out) and is re-founded on the session transcript. What makes defaulting a
+  Stop-blocking hook on defensible is a binding check: it stays silent unless a
+  feedback-targets file resolves (`$FEEDBACK_TARGETS_FILE`, else
+  `~/.claude/feedback-targets.toml`), so an install with no registered tools
+  never sees it. (CRAF-B02, CRAF-B46)
+- **`exercise_ledger.py` is now `feedback_nudge.py`.** The ledger was a second
+  write path for facts the transcript already carried; the nudge reads the
+  transcript directly in one pass (human turns and plugin tools together),
+  verified against six live transcripts for the record shape it parses.
+- **The feedback index refuses to downgrade itself.** It stamped a builder
+  version and never read one, so an older cached copy silently overwrote a newer
+  index — the hazard its own docstring documented. A newer stamp now refuses the
+  write (exit 3, both versions and the path in the message); `--force` is the
+  deliberate rollback. Every write prints the report and finding delta, so a
+  structural loss is visible even when versions match. (CRAF-B07 / T40a, T40b)
+- **The index digest carries its consumer's fields.** Severity, the phase a miss
+  names, and the `extends` referent are fields in fixed positions rather than
+  prose — stripping the severity tag and burying the referent cost one `extends`
+  delta four full report reads. Verified over a real 209-report corpus: 1082
+  findings before and after, 504 severity / 150 phase / 140 extends fields
+  extracted. (CRAF-B07 / T40c)
+- **`tool-feedback` resolves its registry from a file.**
+  `$FEEDBACK_TARGETS_FILE` → `~/.claude/feedback-targets.toml` → an in-context
+  table → ask once. It bound to "a table in loaded context" while the registry
+  had already moved to a file at a known path, so it would ask for a table
+  already on disk. (CRAF-B13)
+
+### Removed
+
+- **The toolkit-inventory SessionStart inject** and the fingerprint-cache layer
+  that existed only to make it affordable (~120 lines of script, ~180 of test,
+  plus two stdin helpers). The harness already places skill names and
+  descriptions in the system prompt in progressive-disclosure shape. The
+  serving-snapshot diff survives as the on-demand
+  `scan_toolkit.py --check-serving <transcript>`. (CRAF-B45)
+- **The skill-exercise ledger hook** and its record path (`PostToolUse`,
+  `SESSION_WORKFLOW_EXERCISE_LEDGER`). One fewer hook, one fewer write path.
+  (CRAF-B46)
+- **The two plugin-local trigger datasets** under `evals/`. Invalid against the
+  shipped runner's schema, read by nothing, and thinner than the
+  `evals/trigger/` sets they shadowed. (CRAF-B49)
+
 ## 0.20.0 — 2026-07-24
 
 Triage 2026-07-23 row T2a (Inputs coverage contract), reconciled against what

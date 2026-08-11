@@ -79,67 +79,6 @@ ERROR_CODES: tuple[str, ...] = (
 
 CONTEXT_CODES: tuple[str, ...] = ('ER-ANCHOR', 'ER-XCHECK', 'ER-PREREG', 'ER-COMPREHEND')
 
-# --- the embedded schema --------------------------------------------------
-#
-# schema.json is a §3 deliverable and, per ADR-0007, the canonical machine-readable
-# field list once it exists. §2 must be buildable and testable BEFORE §3, so this
-# module carries the schema inline and `load_schema` prefers an on-disk
-# templates/schema.json when present, falling back to this embedded copy otherwise.
-# §3, when it authors schema.json, should shape it to expose these keys and add a
-# sync test asserting the two agree (the same discipline as the schema.json<->SCHEMA.md
-# sync gate). No rework to this module is required — it already reads schema.json first.
-
-_EMBEDDED_SCHEMA: dict[str, Any] = {
-    'known_versions': [1, 1.1],
-    'tiers': ['probe', 'measurement', 'decision'],
-    'required_fields': {
-        'probe': ['schema_version', 'tier', 'experiment', 'design', 'outcomes', 'threats'],
-        'measurement': [
-            'schema_version',
-            'tier',
-            'experiment',
-            'design',
-            'outcomes',
-            'threats',
-            'analysis_plan',
-        ],
-        'decision': [
-            'schema_version',
-            'tier',
-            'experiment',
-            'design',
-            'outcomes',
-            'threats',
-            'analysis_plan',
-        ],
-    },
-    'threat_enum': [
-        'contamination_familiarity',
-        'prompt_format_sensitivity',
-        'judge_bias',
-        'model_version_drift',
-        'nondeterminism',
-        'construct_validity_proxy',
-        'token_length_confound',
-        'selection_exclusion',
-        'generalization',
-    ],
-    'threat_status_enum': ['controlled', 'residual'],
-    'role_enum': ['confirmatory', 'exploratory'],
-    'verdict_enum': [
-        'confirmatory_supported',
-        'confirmatory_null',
-        'exploratory_signal',
-        'inconclusive',
-    ],
-    'confirmatory_verdicts': ['confirmatory_supported', 'confirmatory_null'],
-    'ci_methods': ['wilson', 'clopper_pearson', 'beta_binomial'],
-    'contrast_estimators': ['paired_difference'],
-    'contrast_interval_methods': ['paired_t'],
-    'certainty_enum': ['high', 'moderate', 'low', 'very_low'],
-    'small_n_floor': 30,
-}
-
 
 class SchemaError(Exception):
     """A loaded schema is incomplete or degenerate — raised loudly rather than
@@ -185,24 +124,27 @@ def _assert_schema_complete(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_schema(override: str | Path | None = None) -> dict[str, Any]:
-    """Return the schema. Prefers templates/schema.json (canonical once §3 ships it),
-    else the embedded copy. `override` forces a specific path (mainly for tests).
-    Whatever is loaded is asserted complete before use (F8)."""
-    path: Path | None = None
-    if override is not None:
-        path = Path(override)
-    else:
-        candidate = Path(__file__).resolve().parent.parent / 'templates' / 'schema.json'
-        if candidate.exists():
-            path = candidate
-    if path is not None and path.exists():
-        data = json.loads(path.read_text(encoding='utf-8'))
-        # Merge over the embedded defaults so a partial schema.json still resolves
-        # every key this module reads (forward-compatible with §3's richer file).
-        merged = dict(_EMBEDDED_SCHEMA)
-        merged.update(data)
-        return _assert_schema_complete(merged)
-    return _assert_schema_complete(dict(_EMBEDDED_SCHEMA))
+    """Return the schema, read from templates/schema.json -- the canonical
+    machine-readable field list (ADR-0007). `override` forces a specific path
+    (mainly for tests). Whatever is loaded is asserted complete before use (F8).
+
+    This module used to carry an embedded copy and fall back to it, because it had
+    to be buildable and testable before schema.json existed. That build order is
+    long past, so the fallback and the sync test that policed it are gone: one
+    schema, one maintenance surface, and a missing file is a loud SchemaError
+    rather than a quiet second answer.
+    """
+    path = (
+        Path(override)
+        if override is not None
+        else Path(__file__).resolve().parent.parent / 'templates' / 'schema.json'
+    )
+    if not path.exists():
+        raise SchemaError(f'schema file not found: {path}')
+    data = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(data, dict):
+        raise SchemaError(f'schema file is not a JSON object: {path}')
+    return _assert_schema_complete(data)
 
 
 # --- results ----------------------------------------------------------------
