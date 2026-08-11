@@ -21,212 +21,6 @@ examples, see `contract-templates.md`.
 
 ---
 
-## 1. Creating a new dataset
-
-The most common starting point for new data work. The discipline here
-sets the contract that future scenarios (evolution, refactor, migration)
-will protect.
-
-### Step 1.1 — Find at least one named consumer
-
-**What.** Identify who will read this dataset, what they'll do with it,
-what their freshness / accuracy needs are.
-
-**Why.** Datasets without consumers are speculative. Speculative
-datasets become abandoned datasets become production confusion.
-
-**Watch for.** "Someone might find this useful" is not a consumer. A
-named team with a named use case is a consumer. If you can't name one,
-the work is exploratory — close this skill and proceed without these
-guardrails.
-
-### Step 1.2 — Inventory the source data
-
-**What.** Read the source data's schema and a representative sample of
-values. Understand what's actually in the data, not what the upstream
-team's documentation says is in it.
-
-**Why.** Principle 2 (source of truth is observable, not inferred).
-Source-side documentation lies more often than not — either it's
-outdated, or it describes the intent rather than the reality.
-
-**How.**
-
-```sql
--- Schema inspection
-SELECT column_name, data_type, is_nullable
-FROM information_schema.columns
-WHERE table_schema = 'raw' AND table_name = 'source_events'
-ORDER BY ordinal_position;
-
--- Sample inspection
-SELECT * FROM raw.source_events
-ORDER BY ingestion_timestamp DESC
-LIMIT 100;
-
--- Distributional check
-SELECT
-    COUNT(*) AS n_rows,
-    COUNT(DISTINCT primary_key) AS n_distinct_keys,
-    SUM(CASE WHEN nullable_col IS NULL THEN 1 ELSE 0 END) AS null_count,
-    MIN(numeric_col), MAX(numeric_col), AVG(numeric_col)
-FROM raw.source_events
-WHERE partition_date >= CURRENT_DATE - INTERVAL '7 days';
-```
-
-**Watch for.** Surprises in the sample. "There shouldn't be nulls here"
-that have nulls. "This should be unique" that has duplicates. "This is
-an enum" that has unexpected values. Every surprise is a constraint
-you'd otherwise declare incorrectly (Principle 10).
-
-### Step 1.3 — Define the contract first
-
-**What.** Columns, dtypes, primary key, freshness SLO, deprecation
-policy, owner. Write it down before writing the producer.
-
-**Why.** Contract-first prevents the producer from drifting toward
-"what the source happens to provide" instead of "what the consumer
-needs." It also forces explicit decisions about nullability, ranges,
-and enums — decisions that surface assumptions early.
-
-**How.** See `contract-templates.md` for worked templates in dbt
-`schema.yml`, ODCS, Pydantic, and JSON Schema. Pick the form that
-matches where you're enforcing the contract:
-
-- dbt `schema.yml` for in-warehouse models managed by dbt.
-- ODCS YAML when the contract crosses team boundaries.
-- Pydantic at Python-side ingestion or service boundaries.
-- JSON Schema when contracts cross language boundaries.
-
-**Watch for.** Schema-only contracts (just columns and dtypes) are
-incomplete. The contract must include nullability, value constraints
-(enum, ranges, regex), uniqueness, freshness SLO, and ownership.
-
-### Step 1.4 — Read 2–3 existing similar datasets
-
-**What.** Find datasets in the same domain or layer. Read their YAML,
-their transforms, their tests.
-
-**Why.** Convention drift is the #1 source of LLM-assisted errors.
-Reading existing datasets is the cheapest way to absorb conventions.
-
-**Watch for.** Don't reinvent conventions. If the project uses
-`stg_<source>__<entity>` naming, follow it. If it materializes
-silver-layer models as incremental tables, follow suit. Deviation from
-convention is a conscious choice with a documented reason, not an
-oversight.
-
-### Step 1.5 — Choose materialization and layer explicitly
-
-**What.** Bronze, silver, gold (medallion) or staging, intermediate,
-mart (dbt convention). Each layer has different discipline.
-
-**Why.** Materialization is part of the operational contract. A
-bronze-layer dataset is append-only and source-fidelity; a gold-layer
-dataset is read-optimized for a specific use case.
-
-**How.**
-
-- *Bronze / staging*: raw, immutable, source-fidelity. Minimal
-  transformation. Wide nullability tolerance. Type casting limited
-  to obvious safe casts.
-- *Silver / intermediate*: validated, conformed enterprise entities.
-  Deduplication, type casting, data-quality gating. The "single
-  source of truth" for an entity.
-- *Gold / mart*: business-ready aggregates, star schemas,
-  denormalized read-optimized models per consumption use case.
-
-**Watch for.** Cross-layer shortcuts. Writing to silver directly from
-ingestion (skipping bronze) is the canonical mistake — schema drift in
-sources will break silver. Reading from bronze in a BI dashboard skips
-the validation silver provides.
-
-### Step 1.6 — Validate proposed constraints against source data
-
-**What.** Run each declared constraint as a pre-flight query against
-the actual source data.
-
-**Why.** Principle 10. Constraints lie when they reflect what you
-wish were true. Falsify them before declaring them.
-
-**How.**
-
-```sql
--- Run before declaring `nullable: false` on a column
-SELECT SUM(CASE WHEN col IS NULL THEN 1 ELSE 0 END) AS null_count
-FROM source_data
-WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
--- If null_count > 0, the constraint will fail.
-
--- Run before declaring `accepted_values: [a, b, c]`
-SELECT DISTINCT col_value FROM source_data
-WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
--- The declared enum must include every observed value.
-```
-
-**Watch for.** "Recent" data may not cover the full distribution. Edge
-cases (month-end, year-end, holidays, special promotions) may produce
-values outside the typical range. Either widen the constraint or
-exclude those days from production and document why.
-
-### Step 1.7 — Build the producer to satisfy the contract
-
-**What.** Write transforms that produce exactly what the contract
-declares. No more, no less.
-
-**Why.** Output drift from declared contract is silent breakage in
-slow motion. Consumers will read the contract and depend on it.
-
-**Watch for.** The temptation to ship "useful extras" — columns the
-producer happens to compute that aren't in the contract. Either add
-them to the contract (with version bump) or remove them. Don't ship
-undocumented columns; consumers will start using them and you'll have
-created an undeclared contract.
-
-### Step 1.8 — Build the test pyramid at creation, not retrofitted
-
-**What.** Unit tests for any non-trivial transform; contract
-enforcement on output; generic data tests on PKs and FKs; freshness
-check.
-
-**Why.** Tests added later cover only what someone remembers to test.
-Tests at creation cover what the original designer intended.
-
-**How.** At minimum:
-
-- *Unit*: every transform with non-trivial logic. dbt unit tests
-  (v1.8+) or pytest for Python transforms.
-- *Contract*: `contract: enforced: true` on the dbt model (or
-  equivalent).
-- *Generic*: `not_null`, `unique` on PKs; `relationships` on FKs;
-  `accepted_values` for enums.
-- *Source freshness*: declared and monitored.
-- *Singular*: business-rule SQL for the specific invariants of this
-  dataset.
-
-See `references/community-practices.md` for the 7-layer test pyramid.
-
-### Step 1.9 — Document and announce before any consumer integrates
-
-**What.** Owner, freshness SLO, schema, sample queries, deprecation
-policy, contact for issues. Discoverability in the catalog.
-
-**Why.** Documentation written after consumers depend on the dataset
-reflects what the producer wishes were true, not what actually is.
-
-### Step 1.10 — Wire production observability
-
-**What.** Freshness monitor, volume monitor, schema-drift monitor.
-
-**Why.** Build-time tests catch what you knew to test. Production
-monitors catch what you didn't. Principle 21.
-
-**Watch for.** Don't ship observability after consumers depend on the
-dataset. The first incident your consumers will tell you about is the
-one that observability would have caught first.
-
----
-
 ## 2. Evolving a schema
 
 The most common ongoing scenario for an existing dataset. The
@@ -283,8 +77,8 @@ must upgrade.
 - *FULL*: both BACKWARD and FORWARD.
 - *NONE*: no checks. Avoid in production.
 
-See `references/community-practices.md` → Schema Registry for the
-detailed taxonomy.
+The full mode table, including the transitive variants and the trap in
+`NONE`, is in `references/contract-templates.md`.
 
 ### Step 2.3 — Lineage walk to identify consumers
 
@@ -292,7 +86,8 @@ detailed taxonomy.
 of the columns being changed.
 
 **Why.** Consumer impact analysis is non-optional for subtractive or
-renaming changes. Principle 14.
+renaming changes: a schema change moves through dual-write and a
+deprecation calendar, never an in-place mutation.
 
 **How.**
 
@@ -662,7 +457,7 @@ result in the destination.
 
 **Why.** A non-idempotent backfill leaves the destination in a state
 that depends on whether the backfill is partial, complete, or has
-been re-run. Replay becomes impossible. Principle 13.
+been re-run. Replay becomes impossible: write idempotently or not at all.
 
 **How.** `INSERT OVERWRITE` keyed on partition, or `MERGE` with a
 complete match condition.
@@ -711,7 +506,8 @@ WHERE event_timestamp > (SELECT MAX(event_timestamp) FROM {{ this }})
 
 ### Step 6.2 — Idempotent overwrites or MERGEs
 
-Match conditions cover the full natural-key set. Principle 13.
+Match conditions cover the full natural-key set, so a re-run overwrites
+rather than appends.
 
 ### Step 6.3 — Replay-safe by partition
 

@@ -10,491 +10,27 @@ is especially dangerous because failures don't throw — they return numbers
 that look fine. The defense is always mechanical: contracts, parity diffs,
 CI gates, hooks — never social ("the agent should know better").
 
+Two modes are catalogued here, and the numbering is historical so older
+citations still resolve. Modes 1–8 were retired in 2026-08: they described
+generic LLM hygiene that a current base model supplies unprompted, and across
+fourteen exercise reports not one cited them. Modes 9, 10, 12 and 13 moved to
+`humblepowers:verification-before-completion`
+(`references/evidence-fabrication.md`) — fabricated telemetry, confabulated
+anchors, silence read as status, fail-open tooling. None is about data; the
+clearest recorded instance of the last one diagnosed a defect in an eval
+harness. They were paying rent inside a data skill, reachable only by someone
+doing data work.
+
+What stays is what the corpus cites and what is specific to producing a
+dataset: a verifier that inherits none of the design's documented traps, and
+a source read from the wrong copy of the code.
+
 For each failure mode below, four parts:
 
 1. **Mode** — what goes wrong.
 2. **Detection** — how to spot it happening (signals to watch for).
 3. **Defense** — the mechanical countermeasure.
 4. **Concrete example** — drawn from real cases.
-
----
-
-## Mode 1 — Plausible-but-wrong code
-
-**The pattern.** The agent generates SQL or Python that compiles, runs,
-and produces output that looks reasonable to a quick glance. Under
-specific data conditions, it silently drops rows, coarsens groups,
-mismatches dtypes, or applies a transformation that's subtly wrong.
-
-**Detection signals.**
-
-- Row count of new output is suspiciously close to but not exactly equal
-  to the baseline row count.
-- Aggregates differ by small percentages that get hand-waved as "rounding."
-- Edge-case partitions (month-end, year-end, leap days) show larger
-  deviations than typical partitions.
-- The agent says "the data looks right" without having run a diff.
-- New code "works on the sample" but the sample is hand-crafted.
-
-**Defense.**
-
-- Row-level + aggregate parity diff against the baseline output as a
-  non-negotiable done-gate. The baseline is the legacy output for a
-  migration, the current output for a refactor, the declared contract
-  for a new dataset, the last-known-good output for an investigation.
-  See `parity-recipes.md`.
-- Schema diff (columns + dtypes) before any data comparison.
-- "Looks reasonable" is forbidden as a done-criterion. Looks reasonable
-  is the *weakest* test pyramid layer; it cannot replace contract checks
-  or parity diffs.
-
-**Example (migration form).** Migration silently changes the output of
-a daily aggregate. Row count: existing 69,449, new 31,032. Aggregates:
-existing total amount $4.2M, new total $4.2M. The agent reports "totals
-match, looks good." The row count delta means each row in the new output
-represents a coarser grouping than before. The total matches because
-aggregation is associative; the per-row meaning has silently changed.
-
-**Example (new-dataset form).** The first run of a new pipeline
-produces 50,000 rows. The agent says "that's a reasonable volume for a
-customer dimension." A row-count check against the source (which has
-55,000 distinct customers) would reveal 5,000 customers silently
-dropped by a join condition.
-
----
-
-## Mode 2 — Plan drift / context truncation
-
-**The pattern.** In multi-turn sessions, the agent writes a plan early
-based on a quick read of the existing code (or upstream data, or
-upstream spec). The plan becomes the source of truth as the
-conversation progresses. Code is built against the plan rather than
-against the primary source. When the plan was lossy — and it always is
-— the build inherits the loss.
-
-This is the dominant LLM failure mode across all scenarios. In
-migrations and refactors, the plan misses corner-case branches in
-existing code. In new-dataset work, the plan misses corner-case values
-in source data. In schema-evolution work, the plan misses the current
-materialized schema (vs. the schema YAML).
-
-**Detection signals.**
-
-- The agent references the "plan" or "task list" when justifying a code
-  decision, rather than the primary source (code, data, or spec).
-- The agent says "as we discussed earlier" about details that were
-  inferred, not verified.
-- The agent has not re-opened the primary source file in the last
-  several turns.
-- The session is long; context is summarized; specific column names or
-  identifiers are paraphrased rather than quoted.
-- "Integrate X later" appears in the plan and X never returns.
-
-**Defense.**
-
-- **Re-read the primary source at the start of each phase**, regardless
-  of confidence. The plan is a notepad; the source is the contract.
-- For multi-day work, re-establish context at the start of each session
-  by reading source files, not by reading conversation summaries.
-- The plan tracks intent; the primary source tracks reality. When they
-  disagree, reality wins.
-
-**Example (migration form).** A real migration had a plan that captured
-"orders + revenue data" as one input. The actual source script extracted
-TWO tables. The agent deferred the second indefinitely; the `revenue`
-column silently disappeared from output. A migration like this can take
-dozens of commits to chase the gap back down.
-
-**Example (new-dataset form).** The plan describes a source as
-"customer events." The actual source has three distinct event types
-with different shapes. The new pipeline handles only the first type
-and silently drops the others.
-
----
-
-## Mode 3 — "Improving while executing a scope-bounded task"
-
-**The pattern.** The agent reflexively renames columns for clarity,
-simplifies schemas, refactors architecture, splits modules — during
-any task whose scope was supposed to be bounded. Each individual change
-is a legitimate engineering choice in isolation. Bundled into a
-scope-limited task, they are silent regressions.
-
-This is the universal form of "improving while migrating." It applies
-to migrations (where the scope is bug-for-bug parity), refactors (where
-the scope is no functional change), schema-evolution PRs (where the
-scope is one specific change), and bug-fix PRs (where the scope is the
-bug, not adjacent cleanup).
-
-**Detection signals.**
-
-- The agent describes a code change as "cleaner," "more consistent," or
-  "more pythonic" during a scope-bounded task.
-- Column names in the new output don't match the existing output
-  exactly (in a migration or refactor).
-- Group keys in the new aggregate are a subset of the existing keys.
-- A "redundant" column or group key is dropped without a divergence
-  document.
-- The agent says "I noticed this was suboptimal and fixed it" without
-  having asked first.
-- The PR's diff is larger than the stated scope implies.
-
-**Defense.**
-
-- Explicit **improvement-freeze rule** in the scope-bounded task's
-  agent instructions: improvements are deferred to a backlog file
-  (`IMPROVEMENTS.md`) consulted after the scoped task completes.
-- Every code change in a scope-bounded PR must map to either:
-  (a) a baseline-preserving translation,
-  (b) a documented divergence in the appropriate artifact
-      (`MIGRATION_NOTES.md`, `CONTRACT_CHANGELOG.md`) with sign-off,
-  (c) an item on the post-task improvements backlog.
-- Parity gate enforces no column renames during migrations / refactors.
-- For new-dataset and schema-evolution scenarios, the analogous gate is
-  contract conformance: the producer's output matches the declared
-  contract exactly.
-
-**Example (migration form).** A migration silently renames `unit_cost
-→ uc`, `base_fee → base_fee_amt`, `margin_raw → margin`. Each
-rename looks reasonable — shorter, more consistent. Downstream Excel
-workbooks keyed on the original names break the next morning.
-
-**Example (refactor form).** A "pure refactor" PR also tightens a
-constraint from `nullable: true` to `nullable: false` because "the data
-doesn't seem to have nulls." The next month-end batch hits the null
-case and the pipeline fails.
-
-**Example (new-dataset form).** The declared contract says `tier` is
-one of `bronze`, `silver`, `gold`, `platinum`. The producer writes
-`diamond` too because "the source has that value." The contract drifted
-from the implementation; downstream consumers crash on the new value.
-
----
-
-## Mode 4 — Synthetic-fixtures-only validation
-
-**The pattern.** The LLM writes both the production code and the test
-fixtures. The fixtures satisfy the code's assumptions because the same
-mind generated both. The unit tests pass at high coverage. Real
-production data fails immediately because production data violates
-assumptions the LLM didn't think to encode in fixtures.
-
-**Detection signals.**
-
-- Test coverage is very high (>90%) and tests were written by the LLM.
-- Fixtures are small (single-digit row counts) and hand-crafted.
-- Tests pass deterministically every time.
-- The agent has not run the code against production-shaped data.
-- All edge cases tested are "obvious" edge cases (null, empty); none
-  reflect actual production distributions.
-
-**Defense.**
-
-- Pair every LLM-generated unit test suite with a real-data integration
-  test that uses fixtures **the LLM did not generate** — sampled directly
-  from production.
-- Required staging run on at least the last 30 days of production data
-  before declaring done.
-- Every constraint declared in the schema must be validated against
-  production data (see Principle 10).
-
-**Example.** Schema declares `nullable: false` on `rate_frag`, `uc`,
-`margin`, `base_fee_amt`. Every unit test passes (fixtures had no
-nulls). First staging run fails: adjustment coverage gaps produce null
-`uc`; same-day operations have `tenure_days=0` → division by zero →
-null. The constraints were drafted from "what makes sense," not from
-"what production data actually looks like."
-
----
-
-## Mode 5 — Confabulated signatures and identifiers
-
-**The pattern.** The agent generates plausible function calls with
-wrong parameter names, wrong return types, or non-existent string
-identifiers. The patterns come from training-data priors, not from the
-current installed version of the library.
-
-**Detection signals.**
-
-- The agent calls a function it hasn't called recently in the session.
-- The agent uses a string identifier (calendar name, source name, schema
-  name) without first listing the registry.
-- The agent uses keyword arguments with names that "sound right" but
-  weren't verified.
-- Runtime errors of the form `TypeError: unexpected keyword argument
-  'rtol'` or `KeyError: 'calendar_c'`.
-
-**Defense.**
-
-- For any unfamiliar primitive, **a 10-line smoke script using
-  `inspect.signature(fn)` is a required first step**:
-
-```python
-import inspect
-from mylib.compute import weighted_average
-print(inspect.signature(weighted_average))
-# Now you know the actual parameter names.
-```
-
-- For any string identifier, enumerate the registry first:
-
-```python
-from mylib.calendars import list_calendars
-print(list_calendars())
-# ['calendar_a', 'calendar_b', ...]
-```
-
-- Treat every keyword argument as suspect until verified.
-
-**Example.** A single migration phase produced eight signature
-confabulations caught at runtime:
-
-| Confabulated | Actual |
-|--------------|--------|
-| `assert_frame_equal(rtol=...)` | `rel_tol=` |
-| `weighted_average(keys=...)` | `group_cols=` |
-| `business_date_range(...)` returns `Date` | Returns `Datetime[μs]` |
-| `WindowSpec(as_of_date=Series)` | Takes `Sequence[date]` |
-| `apply_adjustment(...)` for resample | Use `resample_bulk` |
-| `resample_bulk(value_col=...)` | `@singledispatch`, positional only |
-| Output col == input col name | Output col literally `'interpolated'` |
-| Calendar `'calendar_c'` | Registry has `'calendar_a'` |
-
-Each cost a debug round. Total cost: hours. Cost of `inspect.signature`
-per primitive: 30 seconds.
-
----
-
-## Mode 6 — "Looks reasonable" as the done-gate
-
-**The pattern.** The agent runs the pipeline, eyeballs the output, sees
-plausible numbers, declares done. Skips the test pyramid layers entirely.
-
-**Detection signals.**
-
-- Done-claim arrives before the parity diff has run.
-- Done-claim references "the data looks correct" or "the totals match"
-  without specific numerical comparisons.
-- No mention of contract checks, unit tests, or parity gates.
-- The agent has run the pipeline exactly once.
-
-**Defense.**
-
-- The pre-shipping checklist in `SKILL.md` is the active gate. If any
-  item cannot be answered "yes," the work is not done.
-- "Looks reasonable" is the production-observability layer of the test
-  pyramid — the *weakest* gate. It cannot substitute for contract or
-  parity gates.
-- For migrations and refactors: row-level diff against the baseline is
-  the done-gate, not eyeballing. For new datasets: contract conformance
-  + real-data integration test. For schema evolutions: compatibility
-  check + consumer notification.
-
-**Example (migration form).** In the session that motivated this
-skill, three earlier moments declared "done" before parity tests
-revealed schema divergences. Each "done" claim was based on "the
-pipeline runs and the data looks reasonable." Each time, a parity diff
-was deferred. Each time, the parity diff — when finally run — found a
-regression.
-
-**Example (new-dataset form).** The agent ships a new pipeline,
-declares done because "the rows look right." A later constraint check
-against 90 days of production data reveals 200 violations of a declared
-`not_null` constraint. The eyeball test missed what the constraint
-check would have caught immediately.
-
----
-
-## Mode 7 — Confidence miscalibration / no escalation under uncertainty
-
-**The pattern.** The agent has no instinct to escalate when uncertain.
-It confabulates with the same fluent confidence as when correct. A
-junior engineer would say "I'm not sure — can you clarify?" An LLM
-ships.
-
-**Detection signals.**
-
-- The agent makes a decision based on ambiguous spec text without
-  flagging the ambiguity.
-- The agent picks a default when multiple interpretations are reasonable,
-  without surfacing the choice.
-- The agent's code review responses say "I made this choice because…"
-  retroactively, rather than "I'd like to ask…" proactively.
-
-**Defense.**
-
-- Encode the ambiguity-flagging requirement in agent instructions: when
-  spec text is ambiguous, stop and ask before proceeding.
-- Code review checklist: every defaulted choice the agent made is
-  re-validated by a human before merge.
-- For high-risk areas (contracts, schema changes, migrations), require
-  explicit sign-off on every interpretation.
-
-**Example (migration form).** "Match the legacy output" leaves dozens
-of small choices — exact dtype representation, exact ordering of group
-keys, exact null behavior on edge cases. An LLM resolves each silently.
-A human-in-the-loop reviewer would catch divergences before they ship;
-an LLM left alone produces a migration that compiles but doesn't match.
-
-**Example (new-dataset form).** A contract spec says `tier` is one of
-"bronze, silver, gold, platinum." The source data also has `enterprise`
-and `trial` values. The LLM either silently buckets them into the
-declared enum (wrong) or fails on every row (better, but disruptive).
-The right move is to flag the discrepancy before writing the
-transform.
-
----
-
-## Mode 8 — Plan-as-spec drift across sessions
-
-**The pattern.** Across multiple sessions (or after context
-truncation), the agent loses track of the *original* contract (legacy
-contract for a migration, source-data shape for a new dataset, current
-contract for a schema evolution) and works from session-summary
-surrogates. Subsequent sessions inherit distortions from earlier ones.
-
-**Detection signals.**
-
-- Multi-session work where the second-session agent never re-reads the
-  primary source files (existing code, source data, contract YAML).
-- Session-handoff summaries that paraphrase rather than quote.
-- Column names mentioned in handoff don't exactly match column names in
-  the primary source.
-- Disagreement between sessions on what the contract "is."
-
-**Defense.**
-
-- Session handoff includes primary-source file references, not just
-  summaries. Subsequent sessions re-read the files.
-- Persist the baseline (schema, row count, aggregates, declared
-  contract) as a versioned artifact in the repo. Subsequent sessions
-  diff against the artifact, not against memory.
-- Treat `MIGRATION_NOTES.md` / `CONTRACT_CHANGELOG.md` as the
-  authoritative log of intentional changes. Anything not in it is an
-  unintentional divergence to investigate.
-
-**Example (migration form).** A two-week migration spans many
-sessions. By session five, the agent is convinced that `payment_method`
-was always excluded from the group-by because session three "decided"
-that. Session three actually deferred the decision, with a TODO.
-Session one's plan listed `payment_method` as a required group key.
-Reading the legacy code (which no session did after session one) would
-have ended the confusion in thirty seconds.
-
-**Example (schema-evolution form).** A long-running schema-evolution
-project spans many sessions. The contract YAML was updated in session
-two to add a `customer_tier_v2` column. Session five sees only the
-session-summary mention of "tier work" and produces code that writes
-to the deprecated `customer_tier` column. Reading the current
-contract YAML would have caught the staleness immediately.
-
----
-
-## Mode 9 — Fabricated telemetry: async status events treated as system state
-
-**The pattern.** In orchestrated or long-running work, the agent treats
-asynchronous status signals — progress notifications, monitor streams,
-dry-run callbacks, "approved" / "merged" / "complete" events, cost
-summaries — as the system's actual state. They are the agent's (or a
-tool's) *narration about* the system, generated from expectation, not
-read from it. When the narration runs ahead of reality, the agent acts
-on events that never happened: it reports approvals for work not done,
-marks runs complete that did not finish, records costs for runs that did
-not execute.
-
-This is Axiom 2's blind spot in its sharpest form. Modes 2 and 8 cover
-*drift* — a fact that existed, paraphrased lossily. This is *invention* —
-a fact that never existed, asserted with the same fluent confidence.
-
-**Detection signals.**
-
-- A status claim ("wave approved", "all merged", "5/5 passed") with no
-  artifact named — no commit SHA, no log line, no file on disk.
-- An outcome reported before the process that produces it could have
-  finished; costs and identifiers that are too clean, too fast, or
-  suspiciously round.
-- Bulk success in progress/dry-run output ("COMPLETE … SUCCESS" for every
-  item at once) rather than one verified result at a time.
-- The agent narrates the next step's result while still inside the
-  current step.
-
-**Defense — the disk-truth protocol.**
-
-- Every event claim is unconfirmed until verified against an append-only
-  source: VCS state (the commit/merge on disk), an append-only run log,
-  the process table, the materialized artifact. A notification is a prompt
-  to go look, not a fact.
-- No state-changing action and no status report on the strength of an
-  event alone — read the disk truth first.
-- For an orchestrated run, the close step is an independent
-  re-verification from disk (git log, tracker file, process exit), never
-  a trust of the run's own progress stream.
-
-**Example.** An orchestration run reported two waves of approvals — with
-realistic costs and plausible branch names — for changes that had not
-been created; a `git log` would have shown nothing. Separately, a dry-run
-emitted "COMPLETE … SUCCESS" for every item in a series it had not
-executed. In both, the defense is identical: the commit on disk is the
-truth; the event is a claim.
-
----
-
-## Mode 10 — Confabulated anchors and projected verification
-
-**The pattern.** The agent cites an anchor — a test, a fixture, a file
-path, a line range, a symbol — that it never actually read or that does
-not exist, and builds on it as if verified. Three shapes recur:
-
-- *Fabricated anchor* — the cited test / fixture / file isn't in the tree.
-- *Projected verification* — one part is checked and the whole is recorded
-  clean.
-- *Partial read* — a `file:lo-hi` slice that ends inside an open
-  collection literal, read as complete, producing *higher* false
-  confidence than no read at all.
-
-This is Mode 5 generalized from library calls to *any* cited referent,
-and it is the verification-side twin of Mode 9: there the agent invents
-the system's state; here it invents the evidence that the state was
-checked.
-
-**Detection signals.**
-
-- A "verified" / "confirmed clean" claim that doesn't name the exact scope
-  checked ("verified the file" rather than "verified the constants table
-  only").
-- A cited `file:line` range whose end falls inside an unclosed `[`, `{`,
-  or `(` — the read was sliced mid-literal.
-- A spec or review names a fixture / test / symbol that a grep doesn't
-  find.
-- A handed-down brief ("X drifted; add Y") applied without reading the
-  cited X — and the brief turns out accurate-but-incomplete.
-
-**Defense — the anchor-provenance pass.**
-
-- Every cited anchor traces to a read actually performed. Before shipping
-  a spec or a review, grep-verify each cited `file:line` / fixture /
-  symbol exists and says what you claim.
-- A verified-clean entry names the exact scope read. "Verified clean"
-  without a scope is an unverified claim wearing a verified label.
-- A cited line range that ends inside an unclosed bracket / brace is
-  evidence the read was truncated — re-read to the closing delimiter
-  before citing any collection literal.
-- A handed-down fix brief is a *claim*, not a contract: when a task
-  supplies a root cause AND a fix, verify each cited anchor against the
-  source before applying. The brief's own diagnostic step is often the
-  tell that a second site needs the same change.
-
-**Example.** A spec cited a parity-baseline fixture that did not exist in
-the tree (fabricated anchor). A reviewer verified one table in a config
-file and recorded the whole file clean; six other entries had wrong
-signatures (projected verification). A `file:0-40` read ended inside a
-list literal, so a three-element set was read as two and the truncated
-value became the spec's concrete instance (partial read). A handed-down
-brief said "the hook drifted; add the missing entry to its exclusion
-set"; reading the source showed the *scanner's* exclusion set was
-byte-identical and *also* lacked the entry — the one-file fix was a
-two-file fix, and the brief's own step-1 diagnostic ("read the scanner;
-is it missing too?") was the tell.
 
 ---
 
@@ -537,127 +73,6 @@ read only its prompt.
 
 ---
 
-## Mode 12 — Silence read as status on an unattended run
-
-**The pattern.** On a long unattended job — an overnight migration, a
-headless multi-PR run, a backfill left to churn — the agent treats the
-*absence* of new output as a fact: a tracker that hasn't moved and a HEAD
-that hasn't advanced get read as "it finished" or "it stopped," and the
-agent reports done or steps in to take over. But a quiet job is
-slow-versus-dead-ambiguous: a still-live writer mid-computation and a
-wedged process produce the *same* surface (no new lines, unmoved HEAD).
-Acting on the inference corrupts the work — declaring a still-running job
-complete reports a result that isn't materialized yet; taking over a
-still-live writer collides two processes on the same worktree.
-
-This is the inverse of Mode 9. Mode 9 is a *fabricated* event — narration
-ahead of reality. This is a *missing* event read as a terminal state —
-silence treated as a status it cannot, on its own, convey. Both share the
-Axiom-2 root: a signal *about* the system stood in for the system.
-
-**Detection signals.**
-
-- A "the run finished / stalled / is stuck" claim with no independent
-  observable named — no process-table check, no artifact mtime, no log
-  tail, only "nothing new appeared."
-- A takeover (kill, branch reset, re-fire) about to start on the strength
-  of a frozen tracker alone.
-- "No errors, so it must have worked" on a job whose result was never read
-  from disk.
-- The job's own progress stream is trusted to *stop reporting* as proof of
-  termination (a wedged process stops reporting too).
-
-**Defense — disambiguate before acting, verify from disk before reporting.**
-
-- Silence is a prompt to probe, not a status. Disambiguate slow-vs-dead
-  with an independent observable: the process tree (is the writer still
-  alive?), artifact mtimes (is anything still being written?), an
-  append-only run log's tail. Only a dead process *and* quiescent artifacts
-  is "stopped."
-- A watcher that reports the world gone may be reporting its own instrument
-  broken: a git-bash `/c/...` path handed to a Windows interpreter reads as a
-  different, empty location, so a live workspace looks absent. Probe the observer
-  with a known-present path first — if it cannot see a thing that certainly
-  exists, the "gone" verdict is the observer failing, not the target.
-- No state-changing takeover — kill, branch reset, re-fire — until
-  quiescence is confirmed; a takeover that collides with a live writer
-  corrupts the worktree, and that is the irreversible move.
-- Completion is read from the materialized result (Mode 9's disk-truth
-  protocol), never inferred from quiet. "No new errors" is not "succeeded";
-  a job can die silently between log lines.
-- When the gates-green output of a stalled run is salvageable, the recovery
-  sequence is itself disciplined: confirm quiescence, review the in-diff
-  artifact, re-verify it independently from disk, then merge — the same
-  observable-source discipline the run itself owed.
-
-**Example.** An overnight multi-PR run went quiet: the tracker file hadn't
-advanced in an hour and HEAD was unmoved. Read as "stuck," the safe-looking
-move was to take over and re-fire. The independent probe told a different
-story each time it was run — a process-tree check plus artifact mtimes
-distinguished a writer still mid-PR (do not touch) from a genuinely wedged
-orchestrator (safe to salvage). Where the run had genuinely stopped with a
-gates-green PR in the tree, the recovery was a quiescence check → in-diff
-review → independent re-verify → merge, not a blind re-run.
-
----
-
-## Mode 13 — Fail-open tooling: a check that passes when it errors
-
-**The pattern.** A gate is written so that *failing to run* and *finding
-nothing* produce the same green verdict. The classic shape is
-`command | filter` with "no output means pass": if the command itself is
-absent from PATH, mis-invoked, or errors out, it prints nothing, the filter
-matches nothing, and the gate reports clean — not because the tree is clean
-but because the check never executed. A return-code-blind gate (pattern-
-matching stdout while ignoring a non-zero exit) and an exception-swallowing
-validator (`try: check() except: pass`) have the same defect. A gate that
-manufactures false confidence is worse than no gate: no gate at least leaves
-you knowing you haven't checked.
-
-This is Mode 12's logic inside the project's own tooling — *absence of
-output* read as *found-nothing*, when it may mean *the check didn't run*.
-The per-invocation environment is not always sticky across an agent's
-shell calls, so a tool present in one step can be missing in the next, and
-a fence built on it silently flips from enforcing to vacuous.
-
-**Detection signals.**
-
-- A gate of the form `<tool> ... | grep/Select-String ...` whose pass
-  condition is "no matching lines," with no prior check that `<tool>` exists
-  and exited zero.
-- A check that prints `CLEAN` / `PASS` unconditionally on an empty result,
-  including the empty result an error produces.
-- Stdout parsed for a success token while the process's exit code is
-  discarded.
-- A `try/except` around a validation step whose `except` branch lets the
-  caller proceed.
-- A gate that has never been observed to fail — neither on a planted bad
-  input nor when its own tool was removed.
-
-**Defense — distinguish did-not-run from found-nothing.**
-
-- A check is fail-closed only when *tool-missing* is distinguishable from
-  *nothing-found*. Assert the command exists and exited zero before trusting
-  an empty result; treat a non-zero exit as BLOCKED, not CLEAN.
-- Prefer a built-in over a shelled-out external tool for a fence (a
-  language built-in or `Select-String` / Python over a PATH-dependent
-  binary), so tool-absence can't silently zero the result.
-- Let exceptions in a validator propagate, or catch-and-fail — never
-  catch-and-pass. The error path defaults to blocked.
-- Prove the gate can fail twice: once on a planted violation (Scenario 8's
-  plant-fires), and once by removing its own tool — a fail-closed gate goes
-  red in both cases.
-
-**Example.** A documentation fence ran `<formatter> --check ... | <filter>`
-and treated empty output as pass. In a shell where the formatter binary
-wasn't on PATH that invocation, the command errored, printed nothing, and
-the fence reported CLEAN over a tree it had never inspected. Rewritten to
-assert the tool resolved and exited zero — and to read a non-zero exit as
-BLOCKED — the same fence went correctly red the next time the tool was
-absent, surfacing the gap instead of hiding it.
-
----
-
 ## Mode 14 — Traced the wrong copy: editable-vs-installed / stale-cache divergence
 
 **The pattern.** The agent debugs a behavior by reading source — but the
@@ -693,82 +108,44 @@ exist; this reads a real anchor that isn't the live one.
 - This is the data form of `systematic-debugging`'s "confirm the source you
   read is the code that runs."
 
-**Example.** A "DI pipeline ran but the dataset didn't update to 2026-06-16"
-regression: the agent traced an editable `treasuryutils 0.6.x` sibling and
+**Example.** An "incremental load ran but the dataset didn't update to 2026-06-16"
+regression: the agent traced an editable `warehouse-io 0.6.x` sibling and
 asserted "the source has no 2026-06-16" — while the venv imported the `1.0.1`
 release, a different read architecture. A direct query showed the date existed
-(3,644 rows). One `import treasuryutils; print(__file__, version)` before
+(3,644 rows). One `import warehouse_io; print(__file__, version)` before
 reading would have pre-empted pages of wrong inference.
 
 ---
 
 ## Cross-mode patterns
 
-Several failure modes share common roots:
-
-**"The agent prefers reasoning over data inspection."**
-Modes 1, 4, 6, 7, 8 all reflect this. The defense pattern is identical
-across them: require concrete data inspection at specific gates. The
-parity diff is the data-inspection gate that covers all five modes.
+**"The agent fabricates evidence and presents it as observation."**
+Mode 11 is the local form: the trap was documented, and the fresh verifier
+reproduced it anyway, so "we documented this" was recorded as if it were
+enforcement. The wider family — an invented event, a cited anchor never read,
+an absence over-read as a verdict — lives in
+`verification-before-completion`'s `references/evidence-fabrication.md`. The
+shared root is Axiom 2: a signal *about* the system stood in for the system.
 
 **"The agent treats summarized context as ground truth."**
-Modes 2, 5, 8 share this. The defense pattern: re-read primary sources
-(existing code, library signatures, contract YAML, source data) rather
-than trusting session summaries — and (Mode 14) confirm the primary source
-you re-read is the copy that actually runs, not an editable or cached twin.
-
-**"The agent improves what it shouldn't and accepts what it shouldn't."**
-Modes 3, 7 share this. The defense pattern: explicit instructions about
-when to defer to the user vs. when to act.
-
-**"The agent fabricates evidence and presents it as observation."**
-Modes 9, 10, 11 share this — the sharpest form of the Axiom-2 violation:
-not drift from a fact that existed, but a fact, anchor, or verification
-*invented*. The defense is identical across them: disk truth over
-narration — every event, every cited anchor, every "verified" claim
-traces to something actually read from an append-only source (VCS state,
-logs, the materialized artifact, the file at the cited line). Where Modes
-2/5/8 say "re-read the source instead of the summary," these say "confirm
-the thing exists at all before citing it."
-
-**"The agent reads absence as a state."**
-Modes 12, 13 share this — the mirror image of the fabrication family.
-There a signal was invented; here a *missing* signal is over-read: silence
-on an unattended run taken as "finished/stopped" (12), or an empty
-check-result taken as "clean" when the check may not have run (13). The
-defense is the same shape in both: an absence is a prompt to probe, not a
-verdict — confirm the process is actually dead (not just quiet) and the
-tool actually ran (not just silent) before acting on "nothing happened."
-The Axiom-2 root is shared with 9/10/11 (a signal about the system stood
-in for the system); the tell is opposite — too little output read as a
-conclusion rather than too much asserted as a fact.
+Mode 14 is the sharpest data-side case, and the one a summary cannot fix by
+being more careful: the primary source was re-read faithfully, and it was the
+wrong copy. Confirm the source you re-read is the one that runs, not an
+editable or cached twin.
 
 ---
 
 ## Mechanical defenses summary
 
-Every mode above is defended by one or more of these mechanical layers:
+Both modes above are defended mechanically, never by self-assessment:
 
-| Defense | Modes addressed | Implementation |
-|---------|----------------|----------------|
-| Row-level + aggregate parity diff | 1, 3, 4, 6 | See `parity-recipes.md` |
-| Schema diff in CI | 1, 3 | dbt `state:modified`, custom scripts |
-| Contract enforcement | 1, 3, 4 | dbt contracts, ODCS YAML |
-| Re-read primary sources each phase | 2, 5, 8 | Agent-instructions rule |
-| `inspect.signature` smoke script | 5 | Required before unfamiliar primitive |
-| Registry enumeration before identifier use | 5 | Required before string identifier use |
-| Production-data constraint validation | 4 | Pre-flight queries in `principles.md` Principle 10 |
-| Real-data integration tests | 4 | Required staging run before "done" |
-| Improvement-freeze rule | 3 | Explicit in agent instructions |
-| Documented divergences (MIGRATION_NOTES) | 3, 7, 8 | Required artifact |
-| Ambiguity-flagging requirement | 7 | Agent instructions: ask before defaulting |
-| Disk-truth protocol (events vs VCS/logs/disk) | 9, 12 | Append-only source check before any status report or state-changing action |
-| Anchor-provenance pass (cited anchors trace to a read) | 5, 10 | Name the scope verified; read to the closing delimiter; grep-verify the cited `file:line`/fixture/symbol exists |
-| Resolve the loaded module before a source claim | 14 | `python -c "import m; print(m.__file__, m.__version__)"`; logs / loaded path outrank the source tree |
+| Defense | Mode | Implementation |
+|---------|------|----------------|
 | Traps in the verifier's own inputs | 11 | Review prompts, planted-failure fixtures, wave-output flags |
-| Liveness probe before takeover (process tree + artifact mtimes) | 12 | Confirm dead *and* quiescent before any kill / reset / re-fire; completion read from the materialized result |
-| Fail-closed-tooling check (did-not-run ≠ found-nothing) | 13 | Assert the tool exists and exited zero; non-zero exit is BLOCKED; prefer built-ins for fences; catch-and-fail, never catch-and-pass |
-| Pre-shipping checklist | 6, all | `SKILL.md` |
+| A documented trap becomes a planted-failure fixture | 11 | `mutate_check.py` — a verifier blind to the trap fails its own self-test |
+| Resolve the loaded module before a source claim | 14 | `which_copy.py`; the run's logs and loaded path outrank the source tree |
+| Row-level + aggregate parity diff | both | See `parity-recipes.md` |
+| Pre-shipping checklist | both | `SKILL.md` |
 
 None of these defenses rely on the agent's self-assessment. All are
 mechanical: code, files, CI gates, runnable scripts. **Make the

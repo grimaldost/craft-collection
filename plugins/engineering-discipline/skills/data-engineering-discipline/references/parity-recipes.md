@@ -382,7 +382,8 @@ def multi_partition_parity(
 
 ## Recipe 8 — Replay idempotency check
 
-Tests that re-running a partition produces the same output (Principle 12).
+Tests that re-running a partition produces the same output - a pipeline is
+a pure function of its inputs and its partition key, or it cannot be replayed.
 
 ```python
 def replay_idempotency(

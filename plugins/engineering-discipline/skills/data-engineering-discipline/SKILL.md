@@ -324,21 +324,20 @@ tolerance), `contract_check.py` (validate rows against a contract spec), and
 `freshness_check.py` (assert an incremental cursor advanced — Recipe 14).
 Wire them into CI or run by hand before declaring done.
 
-> **last-reviewed: 2026-06-04.** The four non-negotiables and the 21 principles
-> are stable; only the tool survey in `community-practices.md` drifts over time,
-> so re-check that file's tool versions periodically.
+> **last-reviewed: 2026-08-11.** The references carry no tool survey and no
+> version-pinned recommendations, so nothing here goes stale on a vendor's
+> release schedule. What does drift is the corpus: re-read this body against the
+> feedback reports, not against the calendar.
 
 ## Additional resources
 
 | File | Read when |
 |------|-----------|
 | `references/principles.md` | Drafting a design decision, code review, or stuck on which principle applies. The 21 principles in full, each with anti-pattern, corrective, verification, and the LLM-specific gotcha. Principles are universal; per-scenario applications are noted inline. |
-| `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for new dataset, migration, refactor, schema evolution (columns — and equally event types, enum values, API fields, tool/API payload contracts), backfill, incremental/streaming, and investigating downstream breakage. |
-| `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." Fourteen documented failure modes (incl. the fabrication family: telemetry, anchors, verifier-inherited traps; the absence-read-as-state pair: unattended-run silence, fail-open tooling; and traced-the-wrong-copy: editable-vs-installed divergence) with detection patterns and mechanical defenses. |
+| `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for migration, refactor, schema evolution (columns — and equally event types, enum values, API fields, tool/API payload contracts), backfill, incremental/streaming, and investigating downstream breakage. |
+| `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." A verifier that inherits none of the design's documented traps, and a source traced from the wrong copy. The tool-general evidence modes (invented events, confabulated anchors, silence read as status, fail-open gates) live in `verification-before-completion`. |
 | `references/parity-recipes.md` | Implementing a parity check, row-level diff, schema diff, or any verification step. Concrete code/SQL/CLI recipes for SQL warehouses, Polars, PySpark, dbt, and Python. |
-| `references/contract-templates.md` | Designing or reviewing a data contract. Worked templates for the same dataset expressed as a dbt `schema.yml`, an ODCS YAML, a Pydantic model, and a JSON Schema. |
-| `references/glossary.md` | When precision matters: schema vs. contract vs. interface, parity vs. equivalence, partition vs. snapshot, replay vs. backfill. |
-| `references/community-practices.md` | Grounding a recommendation in published practice or choosing between competing approaches. Detailed summaries of dbt contracts/tests, ODCS, Schema Registry, GX, Soda, Beauchemin's paradigm, OpenLineage, Hamilton, Kedro, medallion, data mesh, Kimball SCDs. |
+| `references/contract-templates.md` | Designing or reviewing a data contract. A worked ODCS contract, the field vocabulary, the completeness checklist, the compatibility-mode table, and the contract-design anti-patterns. |
 
 ### How to use this skill in practice
 
