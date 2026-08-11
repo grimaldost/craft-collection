@@ -229,6 +229,59 @@ def test_recall_holdout_floors():
     assert null_fires <= 3, f'null false-fires regressed: {null_fires}/{len(nulls)}'
 
 
+def test_every_row_carries_an_activation_test():
+    for skill in _rules()['skills']:
+        test = skill.get('activation_test', '')
+        assert test and test.endswith('?'), f'{skill["id"]} has no answerable activation test'
+
+
+def test_hint_renders_the_activation_test_not_the_matched_words():
+    # The measured-weaker output shape named the matched token, which the matched
+    # skill's own description explicitly does not rest on -- nothing to decide
+    # against. The hint now asks a question a reader can answer no to.
+    rules = _rules()
+    matches = router.route('backfill the pipeline and replay history', rules)
+    line = router.hint_line(matches)
+    assert 'matched:' not in line
+    assert 'engineering-discipline:data-engineering-discipline' in line
+    assert 'freshness' in line, line
+
+
+def test_project_name_is_not_trigger_vocabulary():
+    # A project called treasury-fin-pipeline otherwise fires the data rule on
+    # every prompt that names it, for the life of that project.
+    rules = _rules()
+    noise = router.cwd_noise_tokens('/w/treasury-fin-pipeline')
+    assert 'treasury-fin-pipeline' in noise
+    assert router.route('rerun the treasury-fin-pipeline build please', rules, noise) == []
+    # A genuine standalone mention in the same project still routes.
+    hits = {
+        m['id']
+        for m in router.route('the pipeline output changed after the backfill', rules, noise)
+    }
+    assert 'engineering-discipline:data-engineering-discipline' in hits
+
+
+def test_is_installed_reads_disk_and_says_no(tmp_root=None):
+    import tempfile
+
+    rules = _rules()
+    for skill in rules['skills']:
+        assert router.is_installed(skill['id']), f'{skill["id"]} unresolvable from this checkout'
+    with tempfile.TemporaryDirectory() as d:
+        empty = Path(d)
+        # A single-plugin install: the siblings are simply not on disk. Without
+        # this check the hint recommended skills that were not there.
+        assert not router.is_installed('session-workflow:review-panel', empty)
+        (empty / 'session-workflow' / 'skills' / 'review-panel').mkdir(parents=True)
+        (empty / 'session-workflow' / 'skills' / 'review-panel' / 'SKILL.md').write_text(
+            'x', encoding='utf-8'
+        )
+        assert router.is_installed('session-workflow:review-panel', empty)
+    assert not router.is_installed('not-a-plugin:not-a-skill')
+    assert not router.is_installed('malformed-id')
+
+
 def test_multilingual_is_silent_not_wrong():
     """Portuguese-intent prompts (no English trigger vocab) must not mis-fire —
     the router is monolingual-English and degrades to silence, the safe default,

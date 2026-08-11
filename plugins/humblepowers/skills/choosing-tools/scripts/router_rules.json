@@ -1,10 +1,11 @@
 {
-  "version": 2,
+  "version": 3,
   "max_candidates": 2,
-  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait. Recalibrated 2026-07-23 against the fresh blind recall holdout (evals/trigger/holdout/dispatch-router-recall.json, sealed with baseline; floors in test_router.py): register gradient direct 0.94 / embedded 0.44 / paraphrase 0.12 - the lexical ceiling. More patterns do not buy oblique-phrasing recall; that is the semantic layer's job. Never tune against either sealed holdout.",
+  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill. Each row carries an activation_test: the hint renders that one-line question instead of the matched words, so declining the candidate is a decidable check rather than a bare lexical coincidence. Rows are NOT pruned on one operator's telemetry: 85 prompts from one machine is not evidence a rule is dead for everyone, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait. Recalibrated 2026-07-23 against the fresh blind recall holdout (evals/trigger/holdout/dispatch-router-recall.json, sealed with baseline; floors in test_router.py): register gradient direct 0.94 / embedded 0.44 / paraphrase 0.12 - the lexical ceiling. More patterns do not buy oblique-phrasing recall; that is the semantic layer's job. Never tune against either sealed holdout.",
   "skills": [
     {
       "id": "engineering-discipline:data-engineering-discipline",
+      "activation_test": "could this change the columns, dtypes, cardinality, nulls, semantics or freshness of something another consumer reads?",
       "patterns": [
         "\\bmigrat\\w* \\w*\\s?\\w* ?pipeline\\b|\\bpipeline\\b",
         "\\bbackfill\\b|\\breplay\\b",
@@ -26,6 +27,7 @@
     },
     {
       "id": "humblepowers:systematic-debugging",
+      "activation_test": "is there a defect whose cause is not yet proven with evidence?",
       "patterns": [
         "\\b(still|keeps?) (broken|failing|breaking)\\b|\\b(error|bug|failure|it).?s back\\b|\\b(error|bug) is back\\b",
         "\\bintermittent\\b|\\bflak(y|iness)\\b",
@@ -45,6 +47,7 @@
     },
     {
       "id": "humblepowers:test-driven-development",
+      "activation_test": "is production code about to be written that no failing test demands yet?",
       "patterns": [
         "\\b(implement|build|add) (?:(?:a|an|the|this|that) )?(?:[\\w-]+ ){0,3}(helper|validation|validator|feature|flag|limiter|endpoint|command|parser)\\b",
         "\\bfix (this|the|a) bug\\b",
@@ -62,6 +65,7 @@
     },
     {
       "id": "engineering-discipline:python-engineering",
+      "activation_test": "is this Python project structure, tooling or packaging rather than one throwaway script?",
       "patterns": [
         "\\bpyproject\\b|\\bruff\\b|\\bmypy\\b|\\bpytest\\b|\\bhypothesis\\b|\\bpre-commit\\b",
         "\\bfastapi\\b|\\bopentelemetry\\b|\\bstructured logging\\b",
@@ -79,6 +83,7 @@
     },
     {
       "id": "humblepowers:brainstorming",
+      "activation_test": "is the shape of what to build still unpinned, so code would be guessing?",
       "patterns": [
         "\\blet.?s build\\b|\\bbuild me a\\b|\\bnew project\\b",
         "\\bi want to add\\b|\\bthinking of (adding|reworking|building)\\b",
@@ -95,6 +100,7 @@
     },
     {
       "id": "session-workflow:review-panel",
+      "activation_test": "is a hard-to-reverse call about to be made on an artifact you are too close to judge?",
       "patterns": [
         "\\bfresh eyes\\b|\\bsecond opinion\\b|\\bred[- ]team\\b",
         "\\bpoke holes\\b|\\bam i anchored\\b|\\btoo close to (it|this)\\b",
@@ -103,11 +109,14 @@
         "\\bcritique [\\w\\s]{0,40}\\b(perspectives|angles)\\b|\\bfrom (several|different|a few) (perspectives|angles)\\b",
         "\\bcan.?t tell if it.?s good\\b|\\bgoing round and round\\b"
       ],
-      "negative_patterns": ["\\bpoke holes in (the|a|my|these) (fence|wall|wood|ground|posts?|dirt)\\b"],
+      "negative_patterns": [
+        "\\bpoke holes in (the|a|my|these) (fence|wall|wood|ground|posts?|dirt)\\b"
+      ],
       "min_hits": 1
     },
     {
       "id": "session-workflow:journaling-sessions",
+      "activation_test": "is knowledge about to be lost that a future session would have to rediscover?",
       "patterns": [
         "\\bjournal (this|the|what|today)\\b",
         "\\bwrap (up|-up)\\b|\\bclose out\\b|\\bsession summary\\b",
@@ -125,6 +134,7 @@
     },
     {
       "id": "session-workflow:context-handoff",
+      "activation_test": "does this work have to cross a boundary the harness will not bridge, to a receiver with zero context?",
       "patterns": [
         "\\bhand (this|the|it|them|him|her)? ?[\\w-]* ?off\\b|\\bhand-?off\\b",
         "\\bfork this\\b|\\bspin (this|it|that)? ?[\\w-]* ?off\\b|\\bpeel [\\w\\s-]{0,40}off\\b|\\bcarve [\\w\\s-]{0,40}out\\b",
@@ -143,6 +153,7 @@
     },
     {
       "id": "experiment-discipline:experiment-rigor",
+      "activation_test": "will a decision ride on this measurement, so its method has to reconstruct without the conversation?",
       "patterns": [
         "\\bpre-?regist(er|ered|ering|ration)\\b",
         "\\bthreats? to validity\\b",

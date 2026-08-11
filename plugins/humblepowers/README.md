@@ -79,10 +79,21 @@ one):
 `HUMBLEPOWERS_DISPATCH_ROUTER=0` disables the router itself, which silences the
 hook the same way — there is nothing else to inject.
 
+Two things keep the hint honest. It names each candidate by its **activation
+test** — one question the reader can answer no to — rather than by the words that
+matched, because a bare lexical token is something the matched skill's own
+description explicitly does not rest on. And it drops a candidate whose skill is
+not installed here: five of the nine routed rows name skills in sibling plugins,
+so on a single-plugin install the hint used to recommend skills that were not
+there. Directory names are also removed from the prompt before matching, so a
+project called `something-pipeline` does not fire the data rule for the life of
+that project.
+
 The hook fails open (any error or timeout means silence, never a blocked
-prompt), keeps payloads ASCII, and logs each decision (router hits, whether a
-hint shipped) to a size-capped local NDJSON (`dispatch-log.ndjson` in its state
-dir); read it back with `inject_dispatch.py --health`. Router calibration
+prompt), keeps payloads ASCII, and logs each decision (router hits, candidates
+dropped as not installed, whether a hint shipped) to a size-capped local NDJSON
+(`dispatch-log.ndjson` in its state dir); read it back with
+`inject_dispatch.py --health`. Router calibration
 numbers are dev-set numbers by construction — the trigger datasets are also the
 calibration corpus; seal a fresh holdout before citing generalization. Router
 rules are English-lexicon; prompts in other languages match only on loanwords

@@ -78,19 +78,18 @@ rules of thumb hold:
 
 ## Boundaries
 
-- **The inventory is someone else's job** — what is installed and who owns
-  which concern comes from an inventory skill when one is installed (e.g.
-  session-workflow's toolkit-awareness), the harness's skill listing, or a
-  repo's `AGENTS.md` index.
+- **The inventory is someone else's job** — what is installed and who owns which
+  concern comes from an inventory skill (e.g. session-workflow's
+  toolkit-awareness), the harness's skill listing, or a repo's `AGENTS.md` index.
   This skill consumes that answer; it does not produce it.
 - **skill-authoring** owns descriptions — when a skill keeps winning or losing
-  dispatch wrongly, fix its trigger surface there. Never compensate by
-  inflating register; selection quality depends on descriptions staying
-  honest.
+  dispatch wrongly, fix its trigger surface there, never by inflating register;
+  selection quality depends on descriptions staying honest.
 
-## Optional dispatch-router hook
+## Dispatch-router hook
 
 The plugin ships a UserPromptSubmit hook that runs a lexical router over each
-substantive prompt and names candidate skills when the wording matches. Inert
-by default: set `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1` to enable it. A concrete
-candidate the harness computes per prompt beats prose asking to be remembered.
+substantive prompt and names each matching skill by its activation test — a
+question to answer, not a coincidence to notice. It skips skills this install
+lacks, and never reads the cwd's name as trigger vocabulary. On by default;
+`HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0` opts out.

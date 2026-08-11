@@ -23,6 +23,11 @@ from pathlib import Path
 
 RULES_PATH = Path(__file__).parent / 'router_rules.json'
 MAX_PROMPT_CHARS = 4000
+# scripts/ -> choosing-tools -> skills -> humblepowers -> the directory holding
+# every sibling plugin. Both shipped install shapes put them there: a marketplace
+# install and `--plugin-dir ./plugins/<name>` from a checkout.
+_PLUGINS_DIR = Path(__file__).resolve().parents[3].parent
+_USER_SKILLS = Path.home() / '.claude' / 'skills'
 
 
 def _ascii(text: str) -> str:
@@ -39,11 +44,52 @@ def load_rules(path: str | Path = RULES_PATH) -> dict:
     return rules
 
 
-def route(prompt: str, rules: dict) -> list[dict]:
+def is_installed(skill_id: str, plugins_dir: Path | None = None) -> bool:
+    """True when `plugin:skill` resolves to a SKILL.md on disk. Five of the nine
+    routed rows name skills in SIBLING plugins, and the hint used to emit the raw
+    id with no check -- so a single-plugin install recommended skills that were
+    not there, failing the pack's own degradation test. Pure stat calls: this runs
+    on the prompt path and must not shell out."""
+    plugin, _, skill = skill_id.partition(':')
+    if not plugin or not skill:
+        return False
+    if plugins_dir is not None:
+        # An explicit base is the ONLY place searched -- otherwise a test cannot
+        # express "this skill is absent" on a machine that has it installed.
+        return (plugins_dir / plugin / 'skills' / skill / 'SKILL.md').is_file()
+    candidates = [
+        _PLUGINS_DIR / plugin / 'skills' / skill / 'SKILL.md',
+        _USER_SKILLS / skill / 'SKILL.md',
+    ]
+    try:
+        candidates.extend(
+            (Path.home() / '.claude' / 'plugins' / 'marketplaces').glob(
+                f'*/plugins/{plugin}/skills/{skill}/SKILL.md'
+            )
+        )
+    except OSError:
+        pass
+    return any(c.is_file() for c in candidates)
+
+
+def cwd_noise_tokens(cwd: str | Path | None = None) -> tuple[str, ...]:
+    """Directory names that must not be read as trigger vocabulary. A project
+    called `treasury-fin-pipeline` otherwise fires the data rule on every prompt
+    that names it, for the life of that project -- a permanent false-fire class,
+    not a one-off. Only the whole directory name is removed, so a standalone
+    'pipeline' in the same prompt still matches."""
+    p = Path(cwd) if cwd else Path.cwd()
+    names = [p.name, p.parent.name]
+    return tuple(n.lower() for n in names if len(n) > 3)
+
+
+def route(prompt: str, rules: dict, noise_tokens: tuple[str, ...] = ()) -> list[dict]:
     """Return up to max_candidates matches: [{'id', 'matched', 'hits'}], best first."""
     # Strip zero-width / format-category chars so an invisible character cannot
     # selectively defeat a negative_pattern (e.g. a ZWSP inside "ci pipeline").
     text = ''.join(c for c in prompt[:MAX_PROMPT_CHARS] if unicodedata.category(c) != 'Cf').lower()
+    for token in noise_tokens:
+        text = text.replace(token, ' ')
     matches = []
     for skill in rules['skills']:
         if any(neg.search(text) for neg in skill['_compiled_neg']):
@@ -54,23 +100,35 @@ def route(prompt: str, rules: dict) -> list[dict]:
             if hit:
                 matched.append(hit.group(0).strip())
         if len(matched) >= skill.get('min_hits', 1):
-            matches.append({'id': skill['id'], 'matched': matched, 'hits': len(matched)})
+            matches.append(
+                {
+                    'id': skill['id'],
+                    'matched': matched,
+                    'hits': len(matched),
+                    'activation_test': skill.get('activation_test', ''),
+                }
+            )
     matches.sort(key=lambda m: -m['hits'])
     return matches[: rules.get('max_candidates', 2)]
 
 
 def hint_line(matches: list[dict]) -> str:
-    """Render the advisory hint for a non-empty match list ('' when empty)."""
+    """Render the advisory hint for a non-empty match list ('' when empty).
+
+    Each candidate is rendered as its one-line ACTIVATION TEST, not as the words
+    that matched. A bare lexical token is not a reason -- the matched skill's own
+    description explicitly does not rest on it -- so a reader had nothing to
+    decide against; a question they can answer no to is a decidable check."""
     if not matches:
         return ''
     parts = []
     for m in matches:
-        words = ', '.join(_ascii(w) for w in list(dict.fromkeys(m['matched']))[:3])
-        parts.append(f'{m["id"]} (matched: {words})')
+        test = _ascii(str(m.get('activation_test') or '')).strip()
+        parts.append(f'- {m["id"]}: {test}' if test else f'- {m["id"]}')
     return (
-        'Prompt wording matches triggers for: '
-        + '; '.join(parts)
-        + ". Check fit before starting; 'nothing fits' remains a valid outcome."
+        'Prompt wording matches triggers for these skills. Answer each test; '
+        'a no is a complete answer, and "nothing fits" remains a valid outcome.\n'
+        + '\n'.join(parts)
     )
 
 

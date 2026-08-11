@@ -110,6 +110,35 @@ def test_injects_with_no_env_set(tmp_path):
     assert '<toolkit-dispatch>' in out
 
 
+def test_uninstalled_candidates_are_not_recommended(tmp_path):
+    """Five of the nine routed rows name skills in SIBLING plugins. On a
+    single-plugin install the hint used to emit the raw id anyway, recommending
+    skills that are not there -- the pack's own degradation test, failed. With
+    every sibling absent the hook must fall silent, not point at nothing."""
+    import router
+
+    real = router.is_installed
+    router.is_installed = lambda skill_id, plugins_dir=None: False
+    try:
+        with _Env(tmp_path):
+            code, out = _submit(ROUTING)
+            recs = _log_records(tmp_path)  # inside: _log_path reads the scoped state dir
+    finally:
+        router.is_installed = real
+    assert code == 0
+    assert out == '', out
+    assert recs and recs[-1]['router_hits'] == [], 'an uninstalled hit must not log as a hit'
+    assert recs[-1].get('not_installed'), 'the dropped candidate must still be recorded'
+
+
+def test_hint_carries_the_activation_test(tmp_path):
+    with _Env(tmp_path):
+        code, out = _submit(ROUTING)
+    assert code == 0
+    assert 'matched:' not in out
+    assert '?' in out, 'the hint must render an answerable activation test'
+
+
 def test_opt_out_silences_it(tmp_path):
     with _Env(tmp_path, HUMBLEPOWERS_DISPATCH_PROMPT_INJECT='0'):
         code, out = _submit(ROUTING)

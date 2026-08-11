@@ -120,13 +120,24 @@ def _prompt_submit() -> int:
 
     hint = ''
     hits: list[str] = []
+    dropped: list[str] = []
     if os.environ.get('HUMBLEPOWERS_DISPATCH_ROUTER') != '0':
         try:
             import router
 
-            matches = router.route(prompt, router.load_rules())
-            hint = router.hint_line(matches)
-            hits = [m['id'] for m in matches]
+            cwd = payload.get('cwd')
+            matches = router.route(
+                prompt,
+                router.load_rules(),
+                router.cwd_noise_tokens(cwd if isinstance(cwd, str) and cwd else None),
+            )
+            # Never recommend a skill this install does not have: five of the nine
+            # rows name siblings, and on a single-plugin install the hint used to
+            # point at nothing.
+            present = [m for m in matches if router.is_installed(m['id'])]
+            dropped = [m['id'] for m in matches if m not in present]
+            hint = router.hint_line(present)
+            hits = [m['id'] for m in present]
         except Exception:
             hint = ''  # router problems must never cost the prompt
 
@@ -136,7 +147,12 @@ def _prompt_submit() -> int:
     # so a failed print never suppresses a record that claims a hint shipped.
     if hint:
         print(_ascii('<toolkit-dispatch>\n' + hint + '\n</toolkit-dispatch>'))
-    _log_telemetry(session_id, {'router_hits': hits, 'injected': bool(hint)})
+    record: dict = {'router_hits': hits, 'injected': bool(hint)}
+    if dropped:
+        # A row that matched but is not installed here: the signal that says
+        # whether this router belongs at marketplace level rather than in one plugin.
+        record['not_installed'] = dropped
+    _log_telemetry(session_id, record)
     return 0
 
 
