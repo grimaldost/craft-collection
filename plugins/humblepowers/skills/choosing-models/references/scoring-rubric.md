@@ -70,9 +70,14 @@ prompt is a reason to fire the floor, not to bump past mid).
 | **Uncovered backend / parity** -- two or more implementations (backends, dialects, code paths, an ETL-vs-serving pair) must produce equivalent results, AND at least one is not named in the prompt as an edit site (if the prompt names every implementation to change, that is breadth, not cross-shape -- do not fire) |
 
 Every trigger keys on a site the prompt does NOT point at -- the *relationship*
-between symptom and fix, not how many files or modules the task spans. A change
-spread across many modules that are all the obvious, named edit sites is NOT
-cross-shape; raw breadth or repo size never triggers this floor.
+between symptom and fix, not how many files or modules the task spans; raw
+breadth or repo size never fires this floor.
+
+Coverage governs in both directions, and the axes below read the same brief:
+score the task **as briefed**, not the problem behind it. Where the prompt
+already enumerates the edit sites, the decomposition, or the acceptance cases,
+the structure and reasoning axes fall with it -- that thinking is done and
+handed over. Every recorded mis-score ran the other way.
 
 ---
 
@@ -260,6 +265,6 @@ tiers.
 - **Cross-shape floor: does NOT fire.** The change fans out across 6 files, but the
   prompt *enumerates every file and reference* -- coverage is complete, so this is
   breadth, not cross-shape. Raw file count never fires the floor.
-- **Final: weak, confidence: high.** Contrast with Example 4: same surface tier, but
-  there the fix site was *uncovered* (a shared helper the prompt did not name) -> mid;
-  here every site is named -> weak. The floor keys on coverage, not breadth.
+- **Final: weak, confidence: high.** Contrast with Example 4: there the fix site was
+  *uncovered* -> mid; here the brief names every one -> weak. Coverage, not breadth --
+  and that same coverage is why reasoning scored +0 on a six-file change.

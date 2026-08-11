@@ -53,16 +53,16 @@ decision; the judgment inside each step is yours.
 
 ## Context modifiers
 
-- **Oracle-coverage discount — a labeled hypothesis, pending a crossed
-  calibration.** Downshifting one tier on implementation work is licensed by
-  the *quality of the oracle around the task*, not by the presence of a gate:
-  the strongest replicated finding: a suite-only gate at the weak tier
-  neither detects nor lifts (gates green, escapes reach the oracle); gate
-  value tracks the independence and coverage of the checks. Downshift when the gate carries independent checks covering
+- **Oracle-coverage discount.** Downshifting one tier on implementation work
+  is licensed by the *quality of the oracle around the task*, not by the
+  presence of a gate. Ask what oracle will exist for **this** task in **this**
+  run — including one about to be authored — not the one the environment
+  already has. Downshift when the gate carries independent checks covering
   the task's dominant failure classes; a lint-plus-types-plus-tests gate does
-  not qualify on its own. What is established twice over: scored tiers
-  over-provision in the small, and on feature-refactor shapes an iterative
-  implement→gate→fix loop beat a bigger one-shot model.
+  not qualify on its own. The discount also presumes the gated failure is
+  **diagnosable at the discounted tier** — a red gate the cheaper model cannot
+  read buys a repair loop, not a saving. Evidence and pending calibration:
+  `models.toml`.
 - **Ungated, hard-to-reverse, or interface-defining work** stays at or above
   its scored tier. The discount never applies where no oracle exists.
 - **Review and design judgment route by stakes,** not by implementation
