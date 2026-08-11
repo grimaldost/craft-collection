@@ -10,10 +10,23 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 `verification-before-completion` gets the two delivery mechanisms it never had.
 The skill body is **unchanged**, and that is the finding, not an omission: an
 audit of the program behind it found that the body has never been an
-experimental arm — every trial in the lineage mounted the plugin identically in
-every arm, bare included — so nothing measured to date speaks to the prose at
-all. What was measured is a stop-stage gate that was not shipped. Minor bump:
-one new hook event and a tenth routed row, no removals.
+experimental arm — no trial in the lineage carried the skill body at all — so
+nothing measured to date speaks to the prose. What was measured is a stop-stage
+gate that was not shipped. Minor bump: one new hook event and a tenth routed
+row, no removals.
+
+> **Correction to this entry, same day.** It first said "every trial in the
+> lineage mounted the plugin identically in every arm, bare included". That is
+> **false**, and the fact it got wrong matters for how the gate's own numbers
+> read. Checked against the primary scenario files: the lineage's **main-agent**
+> arms mounted `humblepowers` (plus two sibling plugins); every **delegated**
+> arm — `bare-sub`, `gated-sub`, `disc-sub` — mounted **nothing**, or the gate
+> plugin alone. Mount was confounded with the delegation split. Two consequences,
+> both kept below: the conclusion "nothing speaks to the prose" survives and is
+> in fact stronger (no arm carried the body, rather than all of them carrying
+> it); and no main-agent-vs-delegated comparison in that program is
+> interpretable, so the claim "delegation degrades verification" is withdrawn as
+> **untested** — not reversed.
 
 ### Added
 
@@ -44,13 +57,33 @@ The gate's evidence is **one bank**: two tasks, nine repeats per cell, three
 tiers. On the rate at which delegated work leaves a regression check behind it
 moved **+0.22 (haiku) / +0.56 (sonnet) / +0.44 (opus, 90% CI [+0.11, +0.78])**,
 with **0/12** false positives on trivial edits where verification work would
-have been over-scope. Three cautions ride every one of those numbers. They are
+have been over-scope. Four cautions ride every one of those numbers. They are
 the *discipline*-worded arm; a widely-quoted "+0.56 for the skill" is the
 rejected prescriptive arm's figure and should not be repeated. The ladder is
 non-monotone across one bank with overlapping intervals, which is why no
-tier-conditional guidance appears anywhere in the skill. And the default stays
-off until a replication on a different task family, because a stop-blocking hook
-in every subagent is a larger bet than one bank funds.
+tier-conditional guidance appears anywhere in the skill. The contrast is
+**gate-vs-no-gate with no skill body on either side** — both arms mounted no
+plugins — so it says nothing about the gate's value *in addition to* the body
+this plugin ships. And the default stays off until a replication on a different
+task family, because a stop-blocking hook in every subagent is a larger bet than
+one bank funds.
+
+**This gate ships with its own proof obligation undischarged, and that is stated
+rather than glossed.** The program commissioned to re-measure it pre-registered a
+full gate — a lift of ≥ +0.15 on at least one tier, **and** a false-positive rate
+≤ +0.05, **and** beating a shape-matched placebo by ≥ +0.10 — before this
+mechanism was allowed to ship. **Not one gate trial and not one placebo trial was
+ever bought.** All three conditions are therefore *unmeasured in this codebase*,
+not merely unmet, and the figures above are inherited from a prior program on a
+different contrast at n=9.
+
+Two things follow, and neither is the other. Nothing here justifies **deleting**
+the gate: an unmeasured mechanism is not a refuted one. And nothing here
+justifies presenting it as **validated**: it is opt-in, it fails open, and those
+are safety properties, not evidence. Anyone enabling
+`HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE=1` is enabling a mechanism whose local
+evidence is a wording-fidelity test and a fires-and-blocks fixture — not a
+measured lift.
 
 `HUMBLEPOWERS_VERIFICATION_GATE_SKIP_MODELS` is marked **provisional** in the
 module, the README and its tests. No measurement licenses any value for it, the

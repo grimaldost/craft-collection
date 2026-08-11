@@ -134,6 +134,16 @@ edits where verification work would have been over-scope. That is enough to
 offer, not enough to impose; default-on waits on a replication with a different
 task family.
 
+Read those numbers with two scope limits attached. **Both arms behind them ran
+with no skill body mounted** — the measured contrast is gate-vs-no-gate in a bare
+delegated session, so it does not say what the gate adds *on top of* the
+discipline this plugin already ships as prose. And the replication commissioned
+to re-measure the gate here — including its false-positive rate and a
+shape-matched placebo control — **was never bought**: no gate trial and no
+placebo trial exists in this codebase's ledgers. The mechanism is offered as
+unmeasured-here and inherited-from-elsewhere, which is why it is opt-in and why
+it fails open.
+
 Two things about the wording are worth knowing before editing it. It names no
 artifact — no test, no check, no "add one now" — and a prescriptive sibling
 measured on the same bank, which did name one, wrote a test on **every** trivial
