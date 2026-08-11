@@ -25,6 +25,7 @@ Runnable with pytest or `python test_git_env_isolation.py`. Stdlib only.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -104,12 +105,43 @@ def test_check_uv_hygiene_reads_the_tree_it_was_pointed_at():
     assert any('.venv/' in e for e in errors), errors
 
 
+_GIT_CALL = re.compile(r"""['"]git['"]""")
+_SCRUB = re.compile(r"startswith\(\s*['\"]GIT_['\"]\s*\)")
+
+
+def test_every_repo_script_that_shells_to_git_scrubs_the_environment():
+    """Generalized from the two scripts the incident happened to name. Two named
+    tests do not cover the class: the next script to shell out to git inherits
+    the same trap and nothing here would notice. This one reddens on the file
+    that forgets, before it has ever run as a hook."""
+    offenders = []
+    for f in sorted((ROOT / 'scripts').glob('*.py')):
+        if f.name.startswith('test_'):
+            continue
+        src = f.read_text(encoding='utf-8')
+        if _GIT_CALL.search(src) and not _SCRUB.search(src):
+            offenders.append(f.name)
+    assert not offenders, (
+        'repo scripts shelling out to git without scrubbing GIT_* from the child '
+        f'environment (an ambient GIT_DIR outranks `git -C`): {", ".join(offenders)}'
+    )
+    # The detector, made to fail on purpose: a green sweep over the real scripts
+    # is only evidence if the same predicate reddens on a script that forgets.
+    forgetful = "subprocess.run(['git', '-C', str(root), 'status'])\n"
+    assert _GIT_CALL.search(forgetful) and not _SCRUB.search(forgetful)
+    careful = (
+        forgetful + "env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}\n"
+    )
+    assert _SCRUB.search(careful)
+
+
 def main() -> int:
     if not shutil.which('git'):
         print('skip: git unavailable, inherited-GIT_DIR isolation tests not run')
         return 0
     test_ascii_runtime_lint_scans_the_tree_it_was_pointed_at()
     test_check_uv_hygiene_reads_the_tree_it_was_pointed_at()
+    test_every_repo_script_that_shells_to_git_scrubs_the_environment()
     print('ok: repo scripts resolve git against the tree they were pointed at')
     return 0
 

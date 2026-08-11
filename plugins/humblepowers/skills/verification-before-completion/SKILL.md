@@ -42,24 +42,25 @@ fix → it passes again. A regression test never seen failing against the bug
 proves nothing about it.
 
 **A bug fix is not done until that test exists** — even a one-line fix, even when
-you judged the full test-driven-development cycle not worth loading for the change
-(its exceptions still hold: throwaway spikes, generated code, pure config — agreed
-with the user, not self-granted). The regression test costs seconds and keeps the
-bug from returning; "the fix is obvious" is how a fixed bug comes back later.
-Shipping a fix without one is an unverified durability claim, not a smaller scope.
+you judged the full test-driven-development cycle not worth loading (its
+exceptions still hold: throwaway spikes, generated code, pure config — agreed
+with the user, not self-granted). "The fix is obvious" is how a fixed bug comes
+back later; shipping without the test is an unverified durability claim, not a
+smaller scope.
 
-## A verifier is trusted green only after it has been seen red
+## A verifier is trusted green only after it has been seen red, over real input
 
-The regression-test rule above is one case of a principle that governs *any*
-verifier — a gate, a parity diff, a contract check, an eval assertion: a check
+The regression-test rule above is one case of a principle governing *any*
+verifier — a gate, a parity diff, a contract check, an eval assertion. A check
 seen only green is indistinguishable from one that tests nothing (a typo'd join
-key, a tolerance so wide nothing trips, a fixture that hits a fallback). Before
-trusting a green, watch it go red — plant a known violation, confirm the catch,
-remove the plant. test-driven-development's "verify red" is this for tests; for
-an enforcement gate, prove it can fail before trusting it green. (A
-data-engineering skill states this canonically for gates when installed — e.g.
-`data-engineering-discipline`'s prove-the-gate-can-fail non-vacuity matrix.)
-Same discipline, named here.
+key, a tolerance nothing trips, a fixture that hits a fallback), and a
+green over an **empty scan** is worse than a red one because it gets quoted as
+evidence. Confirm both halves: that it read the input you think it did — count
+the files, rows, or cases it saw — and that it can fail. Plant a known
+violation, confirm the catch, then remove the plant **by the inverse edit**; a
+checkout also discards whatever else was in that file, and only a byte-precise
+restore is verifiable. (`data-engineering-discipline`, when installed, carries
+the canonical non-vacuity matrix.)
 
 ## Delegated work
 
@@ -77,10 +78,7 @@ outlasts intention. When the suite carries irreducible pre-existing
 failures, the honest gate is "zero net regression" against a baseline, not an
 absolute zero: diff this run's failure set against the baseline's and require
 the difference to be empty — capture the baseline by stashing the change and
-running the suite, or by running it at the base commit. (A data-engineering
-skill, when one is installed, carries these as concrete parity recipes — e.g.
-`data-engineering-discipline`'s differential-baseline: the stash-test and the
-base-commit set-diff.)
+running the suite, or by running it at the base commit.
 
 ## Wording that signals an unverified claim
 
@@ -93,5 +91,5 @@ the proving command or say plainly that verification hasn't happened.
 Designing what to verify — suite shape, coverage strategy — is test-strategy
 work. This skill governs the moment of claiming. The reproducing-test cycle
 for a fix belongs to test-driven-development; this skill takes the evidence from
-there — and, when that cycle wasn't loaded, still refuses a fix's completion claim
-without its cheap core, a red-green regression test.
+there — and, when that cycle wasn't loaded, still refuses a fix's completion
+claim without its cheap core, a red-green regression test.

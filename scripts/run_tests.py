@@ -16,6 +16,7 @@ own tests. Exits non-zero if any module fails. Used by CI and the pre-push hook.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +29,27 @@ def discover(root: Path = ROOT) -> list[Path]:
     return sorted(t for d in SEARCH_DIRS for t in (root / d).rglob('test_*.py'))
 
 
+def working_tree_state(root: Path) -> str | None:
+    """`git status --porcelain` for `root`, or None when it cannot be read.
+
+    GIT_* is scrubbed so `-C` is authoritative: git exports the repository
+    location into every hook it runs, and an ambient GIT_DIR would answer about
+    the OUTER repository instead -- the same trap the repo scripts scrub for.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    try:
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            ['git', '-C', str(root), 'status', '--porcelain'],  # noqa: S607 - PATH git
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     root = Path(argv[0]).resolve() if argv else ROOT
@@ -35,6 +57,12 @@ def main(argv: list[str] | None = None) -> int:
     if not tests:
         print('no test_*.py files found')
         return 1
+    # The cheaper, stronger invariant beside the per-script isolation tests: a
+    # full suite run must leave the working tree byte-identical. A test that
+    # writes into the repo instead of a temp dir -- or a script that resolves git
+    # against the wrong tree and mutates it -- shows up here even when every
+    # module passes, which is exactly the shape those failures take.
+    before = working_tree_state(root)
     failed: list[str] = []
     for t in tests:
         rel = t.relative_to(root)
@@ -56,6 +84,18 @@ def main(argv: list[str] | None = None) -> int:
             failed.append(str(rel))
     print('---')
     print(f'{len(tests) - len(failed)}/{len(tests)} passed')
+    after = working_tree_state(root)
+    if before is not None and after is not None and before != after:
+        print('WORKING TREE CHANGED during the suite run (tests must not write into the repo):')
+        before_lines = set(before.splitlines())
+        for line in after.splitlines():
+            if line not in before_lines:
+                print(f'  + {line}')
+        after_lines = set(after.splitlines())
+        for line in before.splitlines():
+            if line not in after_lines:
+                print(f'  - {line}')
+        return 1
     return 1 if failed else 0
 
 
