@@ -68,8 +68,35 @@ def _canon(v: object) -> str:
     return str(int(f)) if f.is_integer() else str(f)
 
 
+RULE_KEYS = frozenset({'required', 'nullable', 'enum', 'unique', 'dtype'})
+
+
+def _check_shape(contract: dict) -> None:
+    """Reject a contract this validator cannot read, instead of validating nothing.
+
+    The contract is a FLAT {column: rule} map. A nested {'columns': {...}} wrapper
+    (the shape ODCS and dbt use) iterated to zero recognised rules and returned an
+    empty violation list -- a green contract check over rows that violate it. An
+    empty contract is the same class. Both are usage errors, never a pass.
+    """
+    if not contract:
+        raise ValueError('contract has no columns - a check over zero rules is not a pass')
+    for col, rule in contract.items():
+        if not isinstance(rule, dict):
+            raise ValueError(f'{col}: rule must be a mapping like {{"dtype": "int"}}, got {rule!r}')
+        if not RULE_KEYS & set(rule):
+            raise ValueError(
+                f'{col}: rule names none of {sorted(RULE_KEYS)} - if this is a nested '
+                'contract, pass the inner {column: rule} map'
+            )
+
+
 def validate(rows: list[dict], contract: dict) -> list[str]:
-    """Return a list of contract violation strings (empty == valid)."""
+    """Return a list of contract violation strings (empty == valid).
+
+    Raises ValueError on a contract shape it cannot read (see `_check_shape`).
+    """
+    _check_shape(contract)
     violations: list[str] = []
     for col, rule in contract.items():
         values = [r.get(col) for r in rows]
@@ -118,7 +145,13 @@ def main(argv: list[str] | None = None) -> int:
     with open(args.contract, encoding='utf-8') as fh:
         contract = json.load(fh)
 
-    violations = validate(rows, contract)
+    try:
+        violations = validate(rows, contract)
+    except ValueError as e:
+        # a contract shape the validator cannot read is a usage error (2),
+        # distinct from a contract violation (1) and never a silent pass
+        print(f'error: {e}', file=sys.stderr)
+        return 2
     for v in violations:
         print(f'  ! {v}')
     print('CONTRACT OK' if not violations else f'{len(violations)} violation(s)')

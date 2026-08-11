@@ -54,9 +54,25 @@ def test_numeric_enum_consistent_with_int_dtype():
     assert validate([{'s': 'openx'}], {'s': {'enum': ['open']}}) != []
 
 
+def test_an_unrecognised_contract_shape_raises_instead_of_passing_vacuously():
+    # Surfaced by the mutation harness: a nested {'columns': {...}} contract --
+    # the natural mistake, and the shape ODCS and dbt both use -- iterated to
+    # zero recognised rules and returned [], a green contract check that
+    # validated nothing at all against rows that violate it.
+    nested = {'columns': {'id': {'dtype': 'int', 'nullable': False}}}
+    for bad, marker in ((nested, 'columns'), ({}, 'no columns'), ({'id': 'int'}, 'id')):
+        try:
+            validate([{'id': 'abc'}], bad)
+        except ValueError as e:
+            assert marker in str(e), f'{bad} -> {e}'
+        else:
+            raise AssertionError(f'expected ValueError for contract {bad!r}')
+
+
 if __name__ == '__main__':
     test_clean_passes()
     test_violations_detected()
     test_numeric_enum_matches_string_csv_values()
     test_numeric_enum_consistent_with_int_dtype()
+    test_an_unrecognised_contract_shape_raises_instead_of_passing_vacuously()
     print('ok: all contract_check tests passed')
