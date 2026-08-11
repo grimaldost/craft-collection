@@ -229,6 +229,37 @@ def test_recall_holdout_floors():
     assert null_fires <= 3, f'null false-fires regressed: {null_fires}/{len(nulls)}'
 
 
+VERIFICATION_ID = 'humblepowers:verification-before-completion'
+
+
+def test_verification_before_completion_is_routed():
+    """The plugin's one shipped mechanism carried zero rows for this skill, so it
+    could not fire for it at all. The generic per-skill calibration tests above
+    only cover rows that exist; this asserts the row exists to be covered."""
+    assert VERIFICATION_ID in _routed_ids(_rules())
+
+
+def test_verification_holdout_precision_on_near_misses():
+    """V1's obligation: injection precision on the SEALED holdout's near-misses.
+
+    A hint injected at a claim moment is cheap; one injected while someone asks
+    for CI status is the false-fire class that gets hooks turned off. Precision on
+    the held-out negatives is therefore the gated number. Holdout recall is
+    measured and recorded in holdout/BASELINES.md, never tuned against — the
+    liveness floor below (>= 1 positive fires) only proves the check has teeth."""
+    holdout = TRIGGER_DIR / 'holdout' / 'verification-before-completion.json'
+    if not holdout.exists():
+        return  # dataset optional in a partial checkout
+    rules = _rules()
+    cases = json.loads(holdout.read_text(encoding='utf-8'))
+    pos = [c['query'] for c in cases if c['should_trigger']]
+    neg = [c['query'] for c in cases if not c['should_trigger']]
+    false_fires = [q for q in neg if VERIFICATION_ID in _fired_ids(q, rules)]
+    hits = sum(1 for q in pos if VERIFICATION_ID in _fired_ids(q, rules))
+    assert not false_fires, f'held-out near-miss fired: {false_fires}'
+    assert hits >= 1, 'row fires on no held-out positive - the precision check is vacuous'
+
+
 def test_every_row_carries_an_activation_test():
     for skill in _rules()['skills']:
         test = skill.get('activation_test', '')
