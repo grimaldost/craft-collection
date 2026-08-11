@@ -58,7 +58,7 @@ Deduplicated against craft-collection and the Claude Code harness:
 Governed multi-PR machinery stays out of the pack by design; planned-execution
 hands off to it the moment work wants gates and dependency DAGs.
 
-## Hook (on by default)
+## Dispatch hook (on by default)
 
 A UserPromptSubmit hook runs deterministic word-boundary regexes
 (`router_rules.json`, calibrated against `evals/trigger/*.json`) over a
@@ -83,7 +83,7 @@ Two things keep the hint honest. It names each candidate by its **activation
 test** — one question the reader can answer no to — rather than by the words that
 matched, because a bare lexical token is something the matched skill's own
 description explicitly does not rest on. And it drops a candidate whose skill is
-not installed here: five of the nine routed rows name skills in sibling plugins,
+not installed here: five of the ten routed rows name skills in sibling plugins,
 so on a single-plugin install the hint used to recommend skills that were not
 there. Directory names are also removed from the prompt before matching, so a
 project called `something-pipeline` does not fire the data rule for the life of
@@ -106,6 +106,49 @@ per-prompt tiered cadence with `HUMBLEPOWERS_DISPATCH_FULL_EVERY` /
 as no better than no injection, and the wall-clock / prompt-count cadence was
 never validated. Only the concrete-candidate router hint — the one shape the
 A/B favored — survives.
+
+## Verification gate (off by default, opt in)
+
+A SubagentStop hook
+(`skills/verification-before-completion/scripts/subagent_gate.py`) blocks a
+subagent's **first** stop once and returns a discipline reconsideration —
+"are you actually confident this is correct, or are you assuming it is?" — then
+lets every later stop through. One shot per `(session_id, agent_id)`, so the
+block cannot loop and concurrent subagents do not share a counter; it fails open
+on any error, because a hook that cannot decide must never be the reason a
+subagent cannot stop.
+
+Arm it in the `env` block of your settings file:
+
+```json
+{ "env": { "HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE": "1" } }
+```
+
+It ships **off**, unlike the dispatch hint, and the asymmetry is deliberate: a
+hint costs a few tokens, while this one blocks a stop in every subagent in your
+environment. What funds it today is one bank — three tiers, two tasks, nine
+repeats per cell — where the same wording moved the rate at which delegated work
+left a regression check behind by **+0.22 (haiku) / +0.56 (sonnet) / +0.44
+(opus, 90% CI [+0.11, +0.78])**, at a false-positive rate of 0/12 on trivial
+edits where verification work would have been over-scope. That is enough to
+offer, not enough to impose; default-on waits on a replication with a different
+task family.
+
+Two things about the wording are worth knowing before editing it. It names no
+artifact — no test, no check, no "add one now" — and a prescriptive sibling
+measured on the same bank, which did name one, wrote a test on **every** trivial
+code edit and was rejected on that alone. So the words are the treatment, and
+`test_subagent_gate.py` pins them byte-for-byte.
+
+`HUMBLEPOWERS_VERIFICATION_GATE_SKIP_MODELS` (comma-separated substrings, e.g.
+`opus`) no-ops the gate when the stop payload names a matching model. It is
+**provisional**: no measurement licenses any particular value, the payload key
+it reads is unconfirmed across harness versions, and an absent model gates
+rather than skips. It exists because a tier fact, if one is ever measured, is
+implementable here and nowhere else — the harness cannot condition a skill's
+activation on a subagent's model, so the same claim written into a skill
+description would be a sentence nothing can act on. Left unset, the hook behaves
+exactly like the fixture that was measured.
 
 ## Register linter
 
