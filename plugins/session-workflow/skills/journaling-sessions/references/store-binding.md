@@ -23,7 +23,7 @@ it must never do.
 ```yaml
 target_store:                       # optional; absent ⇒ generic behavior, unchanged
   author: user:grimaldo-stanzani    # canonical author id for this store — use verbatim
-  areas: [mantis_engineering, treasuryutils_development]   # existing area vocabulary to REUSE
+  areas: [mantis_engineering, data_tooling]   # existing area vocabulary to REUSE
   allowed_types:   [decision, finding, observation, tradeoff, hypothesis, contradiction, connection, pattern, anti_pattern]  # optional — the enum the store strict-parses
   allowed_origins: [chat, code, meeting, reading]          # optional
   required_fields: [type, author, timestamp, area, language, origin, session]  # optional
