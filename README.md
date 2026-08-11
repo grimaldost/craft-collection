@@ -109,14 +109,14 @@ the `env` block of `~/.claude/settings.json` (every project) or
 |-----------|---------|--------------|
 | Dispatch router hint injected on each prompt (UserPromptSubmit, not session start) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
 | Control-anchor re-injection on compact/resume | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0` |
-| Skill-exercise ledger (one JSONL entry per Skill / plugin-MCP call) | off | enable with `SESSION_WORKFLOW_EXERCISE_LEDGER=1` |
-| Feedback-debt nudge on Stop (requires the ledger) | off | enable with `SESSION_WORKFLOW_FEEDBACK_NUDGE=1` |
+| Feedback-debt nudge on Stop (silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
 
-Two hooks were retired rather than defaulted on: the toolkit-inventory session
+Three hooks were retired rather than defaulted on: the toolkit-inventory session
 start inject (the harness already lists skills and descriptions in the system
-prompt) and the data pre-shipping checklist Stop nudge (exhortation through a
-hook, against four runnable checks already in the gates that reject rather than
-remind).
+prompt), the data pre-shipping checklist Stop nudge (exhortation through a hook,
+against four runnable checks already in the gates that reject rather than
+remind), and the skill-exercise ledger (a second write path for a fact the
+session transcript already carried — the Stop nudge reads the transcript).
 
 ## Optional output style
 
