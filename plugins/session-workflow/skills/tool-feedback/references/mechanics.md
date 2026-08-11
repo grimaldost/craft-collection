@@ -42,3 +42,22 @@ with its numbered proposals and §-stubs) instead of N speculative greps, becaus
 grep-by-phrasing is fragile: a finding restated in different words is invisible
 to it, and a missed recurrence breaks the `extends` chain triage depends on for
 reinforcement counts.
+
+Each digest line carries the fields the "same cause?" question needs, in fixed
+positions — severity, the phase a miss names, and the `extends` referent:
+
+    - `2026-08-01-wave#2` [HIGH] extends `2026-07-20-prior#3` — only the new evidence.
+    - `2026-08-01-wave §Misses` [MED] (phase: gate) — the gate passed on a hollow record
+
+so answering it is one read of the index rather than four reads of the reports
+it summarizes. A field is omitted when the source report did not supply it.
+
+## When the builder refuses to write
+
+Two install surfaces can serve different plugin versions at once, so an older
+cached builder can meet an index a newer one wrote. It now refuses rather than
+overwriting: exit 3, naming both versions and the file. Re-run from the newer
+copy. `--force` writes anyway and is for a deliberate rollback, not for getting
+past the message. Every successful write prints the report and finding delta
+(`209 report(s) (+0), 1082 finding(s) (-14)`) — read it, because a parser change
+can drop findings while the version stamp stays identical.
