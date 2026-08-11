@@ -229,10 +229,35 @@ def test_recall_holdout_floors():
     assert null_fires <= 3, f'null false-fires regressed: {null_fires}/{len(nulls)}'
 
 
-def test_every_row_carries_an_activation_test():
-    for skill in _rules()['skills']:
-        test = skill.get('activation_test', '')
-        assert test and test.endswith('?'), f'{skill["id"]} has no answerable activation test'
+def test_every_routed_skill_carries_an_activation_test():
+    # Per SKILL, not per row: a skill may carry several rule groups (a strong one
+    # at min_hits 1 and a weak one at min_hits 2), and restating the sentence on
+    # each row would be a second definition site for one fact.
+    rules = _rules()
+    for skill_id in dict.fromkeys(_routed_ids(rules)):
+        test = router.activation_test_for(skill_id, rules)
+        assert test and test.endswith('?'), f'{skill_id} has no answerable activation test'
+
+
+def test_a_bare_ambient_noun_needs_a_second_signal():
+    """The three broad single nouns (`pipeline`, `dataset`, `dashboard`/`warehouse`)
+    name things that exist in build automation, CRM, HR, front-end and logistics
+    prose. Alone they are a lexical coincidence, so they sit in their own rule
+    group at min_hits 2. Dev evidence (never tuned against a sealed set):
+    evals/trigger/fixtures/router-ambient-noun-dev.json."""
+    rules = _rules()
+    cases = json.loads(
+        (TRIGGER_DIR / 'fixtures' / 'router-ambient-noun-dev.json').read_text(encoding='utf-8')
+    )
+    dd = 'engineering-discipline:data-engineering-discipline'
+    fired_on_negatives = [
+        c['query'] for c in cases if not c['should_trigger'] and dd in _fired_ids(c['query'], rules)
+    ]
+    missed_positives = [
+        c['query'] for c in cases if c['should_trigger'] and dd not in _fired_ids(c['query'], rules)
+    ]
+    assert not fired_on_negatives, f'ambient-noun false fires: {fired_on_negatives}'
+    assert not missed_positives, f'lost positives: {missed_positives}'
 
 
 def test_hint_renders_the_activation_test_not_the_matched_words():

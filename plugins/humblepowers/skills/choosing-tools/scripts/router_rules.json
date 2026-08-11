@@ -1,18 +1,19 @@
 {
   "version": 3,
   "max_candidates": 2,
-  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill. Each row carries an activation_test: the hint renders that one-line question instead of the matched words, so declining the candidate is a decidable check rather than a bare lexical coincidence. Rows are NOT pruned on one operator's telemetry: 85 prompts from one machine is not evidence a rule is dead for everyone, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait. Recalibrated 2026-07-23 against the fresh blind recall holdout (evals/trigger/holdout/dispatch-router-recall.json, sealed with baseline; floors in test_router.py): register gradient direct 0.94 / embedded 0.44 / paraphrase 0.12 - the lexical ceiling. More patterns do not buy oblique-phrasing recall; that is the semantic layer's job. Never tune against either sealed holdout.",
+  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill. A skill id may appear on SEVERAL rows - rule groups with their own min_hits - so an ambient noun that only means something beside a second one sits in a group at min_hits 2 instead of firing alone; the activation_test and negative_patterns are stated once per skill and resolved across its rows. Each row carries an activation_test: the hint renders that one-line question instead of the matched words, so declining the candidate is a decidable check rather than a bare lexical coincidence. Rows are NOT pruned on one operator's telemetry: 85 prompts from one machine is not evidence a rule is dead for everyone, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait. Recalibrated 2026-07-23 against the fresh blind recall holdout (evals/trigger/holdout/dispatch-router-recall.json, sealed with baseline; floors in test_router.py): register gradient direct 0.94 / embedded 0.44 / paraphrase 0.12 - the lexical ceiling. More patterns do not buy oblique-phrasing recall; that is the semantic layer's job. Never tune against either sealed holdout.",
   "skills": [
     {
       "id": "engineering-discipline:data-engineering-discipline",
       "activation_test": "could this change the columns, dtypes, cardinality, nulls, semantics or freshness of something another consumer reads?",
       "patterns": [
-        "\\bmigrat\\w* \\w*\\s?\\w* ?pipeline\\b|\\bpipeline\\b",
+        "\\bmigrat\\w* \\w*\\s?\\w* ?pipeline\\b",
         "\\bbackfill\\b|\\breplay\\b",
-        "\\bdata contract\\b|\\bdataset\\b",
-        "\\bdashboards?\\b|\\bwarehouse\\b|\\bfact table\\b|\\bdimension table\\b",
+        "\\bdata contract\\b",
+        "\\bfact table\\b|\\bdimension table\\b",
         "\\bp?y?spark\\b|\\betl\\b|\\bdbt\\b|\\blineage\\b",
         "\\bschema (change|changes|evolution|drift|migration)\\b",
+        "\\btests? for [\\w'\\s-]{0,40}\\bpipeline\\b",
         "\\b(revenue|numbers|totals) [\\w\\s]{0,40}\\b(changed|wrong|look different)\\b",
         "\\b(data|extract|load|table|job) [\\w'\\s-]{0,40}\\b(didn.?t|hasn.?t|isn.?t|stuck|not|still) [\\w\\s]{0,40}\\b(update|updated|updating|refresh|refreshing|changed|advance)\\w*"
       ],
@@ -24,6 +25,16 @@
         "\\b(spreadsheet|excel)\\b"
       ],
       "min_hits": 1
+    },
+    {
+      "id": "engineering-discipline:data-engineering-discipline",
+      "comment": "Ambient-noun group. These three nouns live in build automation, CRM, HR, front-end and logistics prose as readily as in data work, so one of them alone is a lexical coincidence, not a signal: min_hits 2 requires a second one. Dev evidence: evals/trigger/fixtures/router-ambient-noun-dev.json (17 negatives, 4 must-survive positives). The activation test and the denials are stated once, on the strong group above, and resolved per skill.",
+      "patterns": [
+        "\\bpipeline\\b",
+        "\\bdataset\\b",
+        "\\bdashboards?\\b|\\bwarehouse\\b"
+      ],
+      "min_hits": 2
     },
     {
       "id": "humblepowers:systematic-debugging",
