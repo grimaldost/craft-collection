@@ -1,7 +1,7 @@
 {
   "name": "humblepowers",
   "displayName": "Humble Powers",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Superpowers-derived process disciplines in a calibrated register: fit-ranked tool dispatch, capacity dispatch (task-to-model/effort routing on a calibrated rubric), calibration-first skill authoring, red-green TDD, root-cause-first debugging, design-before-code brainstorming, evidence-before-claims verification, technically rigorous review reception, and midweight planned execution (executable-cold plans + per-task subagent review loop) \u2014 deduplicated against the craft-collection toolkit and eval-gated from birth.",
   "author": {
     "name": "Grimaldo Stanzani",

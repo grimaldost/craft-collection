@@ -1,7 +1,7 @@
 {
   "version": 3,
   "max_candidates": 2,
-  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill. A skill id may appear on SEVERAL rows - rule groups with their own min_hits - so an ambient noun that only means something beside a second one sits in a group at min_hits 2 instead of firing alone; the activation_test and negative_patterns are stated once per skill and resolved across its rows. Each row carries an activation_test: the hint renders that one-line question instead of the matched words, so declining the candidate is a decidable check rather than a bare lexical coincidence. Rows are NOT pruned on one operator's telemetry: 85 prompts from one machine is not evidence a rule is dead for everyone, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait. Recalibrated 2026-07-23 against the fresh blind recall holdout (evals/trigger/holdout/dispatch-router-recall.json, sealed with baseline; floors in test_router.py): register gradient direct 0.94 / embedded 0.44 / paraphrase 0.12 - the lexical ceiling. More patterns do not buy oblique-phrasing recall; that is the semantic layer's job. Never tune against either sealed holdout.",
+  "comment": "Hand-curated word-boundary regexes per chronically under-firing skill. A skill id may appear on SEVERAL rows - rule groups with their own min_hits - so an ambient noun that only means something beside a second one sits in a group at min_hits 2 instead of firing alone; the activation_test and negative_patterns are stated once per skill and resolved across its rows. Each row carries an activation_test: the hint renders that one-line question instead of the matched words, so declining the candidate is a decidable check rather than a bare lexical coincidence. Rows are NOT pruned on one operator's telemetry: 85 prompts from one machine is not evidence a rule is dead for everyone, calibrated against evals/trigger/*.json (dev data for the router - seal a fresh holdout before publishing generalization numbers). Patterns match the lowercased prompt. Keep regexes simple: word alternations only, NO unbounded spans - the two chained [\\w\\s]* spans in v1's data-eng pattern[7] caused cubic backtracking (2026-07-22 stress). Bound every span to {0,40}. negative_patterns carry recall-safe denials for the concrete non-technical senses an adversarial holdout surfaced (sales/warehouse/car/construction/physical uses); they do not generalize to novel bait. Recalibrated 2026-07-23 against the fresh blind recall holdout (evals/trigger/holdout/dispatch-router-recall.json, sealed with baseline; floors in test_router.py): register gradient direct 0.94 / embedded 0.44 / paraphrase 0.12 - the lexical ceiling. More patterns do not buy oblique-phrasing recall; that is the semantic layer's job. Never tune against either sealed holdout. The tenth row (verification-before-completion, 2026-08-11) was added because the skill had zero rows and the plugin's one shipped mechanism therefore could not fire for it at all; it is calibrated on its dev set plus the skill's own unverified-claim vocabulary, and its per-row holdout numbers sit in holdout/BASELINES.md with the seal caveat spelled out.",
   "skills": [
     {
       "id": "engineering-discipline:data-engineering-discipline",
@@ -165,6 +165,23 @@
         "\\brelease branch\\b",
         "\\bwhere we left off\\b",
         "\\bhand (off )?[\\w\\s]{0,15}\\b(package|laptop|device|phone|keys|documents?|box|parcel|courier)\\b"
+      ],
+      "min_hits": 1
+    },
+    {
+      "id": "humblepowers:verification-before-completion",
+      "activation_test": "is a completion claim about to be made without this session having run the command that proves it?",
+      "patterns": [
+        "\\b(should|probably|seems) (pass|passes|work|works|fine|fixed|ok|done|right)\\b",
+        "\\b(mark|call|report|declare|write|summari[sz]e) [\\w\\s]{0,20}\\b(as )?(done|complete|completed|finished|success)\\b",
+        "\\bready to (open|merge|ship|tag|push|commit|land)\\b|\\bbefore (i|we) (open|merge|ship|tag|push|commit|land)\\b|\\bopen the pr\\b",
+        "\\b(let.?s|lets) (commit|push|merge|ship)\\b|\\bship it\\b|\\bmove on to the next\\b",
+        "\\b(sub)?agent (says|said|reports?|reported|finished|completed|claims)\\b",
+        "\\b(done|fixed|passing),? right\\b"
+      ],
+      "negative_patterns": [
+        "\\bship(ping)? [\\w\\s]{0,20}\\b(address|customer|courier|warehouse|overnight|parcel)\\b",
+        "\\bmove on to the next (slide|chapter|song|episode|agenda item|speaker)\\b"
       ],
       "min_hits": 1
     },
