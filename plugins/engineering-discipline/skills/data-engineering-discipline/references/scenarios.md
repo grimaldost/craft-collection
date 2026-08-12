@@ -9,11 +9,17 @@ not a menu — execute steps in order. Each step has four parts:
 - **Watch for** — failure modes specific to this step, and when to
   escalate.
 
-The playbooks are ordered roughly by frequency: most data work is
-either creating a new dataset, evolving an existing one, or refactoring
-internals while preserving the interface. Migration and backfill are
-less frequent but higher-risk per occurrence. Investigation is the
-fire-drill scenario.
+The section numbering is historical so older citations still resolve:
+Section 1, the new-dataset playbook, was retired in 2026-08. The body
+already carries that case — the contract-is-the-spec line and the
+new-dataset checklist item — and `principles.md` applies every principle
+group to it under a `New dataset:` bullet, so the playbook was a second
+definition site for the one scenario the skill covers in full without it.
+
+The remaining playbooks are ordered roughly by frequency: most ongoing
+data work is evolving an existing dataset or refactoring internals while
+preserving the interface. Migration and backfill are less frequent but
+higher-risk per occurrence. Investigation is the fire-drill scenario.
 
 For the parity recipes referenced throughout (row-level diff, schema
 diff, aggregate checks), see `parity-recipes.md`. For contract template

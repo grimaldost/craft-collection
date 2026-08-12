@@ -94,13 +94,22 @@ mutation harness; description 223 -> 243 words, itemised under Changed.
   citations across fourteen exercise reports; a current model reconstructs all
   of it; and the tool survey had no refresh mechanism, so retiring it is also
   the stale-pointer fix rather than a refresh that would go stale again.
-- `llm-failure-modes.md` Modes 1-8 (zero citations, generic LLM hygiene) and
-  `scenarios.md` new-dataset plus `principles.md` replayability and
-  schema-evolution groups.
+- `llm-failure-modes.md` Modes 1-8 (zero citations, generic LLM hygiene), and
+  `principles.md`'s replayability and schema-evolution groups — each file's own
+  head note carries the destination.
+- `scenarios.md` Section 1, the new-dataset playbook, which had been the one
+  retirement here with no replacement written down. It has one: the body covers
+  that case directly (the contract-is-the-spec line and the new-dataset
+  checklist item) and `principles.md` applies every principle group to it under
+  a `New dataset:` bullet, so the playbook was a second definition site. Section
+  numbering is unchanged and the file now says so, since sections are cited by
+  number and the first heading is `## 2`.
 - Body: `## When to invoke` and `### How to use this skill in practice`, which
   restated the description and the checklist; `## Make the discipline visible
   in your output`, whose four positive directives are replaced by two negative
-  rails; the observability group; and the five contract checkboxes, which
+  rails; the observability group, whose content survives as the
+  `freshness_check.py` invocation in the body and as `principles.md` Group 7
+  (lineage and observability); and the five contract checkboxes, which
   become the invocations that execute them.
 - Two closing paragraphs, cut in the same pass and named here for the ledger:
   Axiom 2's note that it "replaces the migration-specific framing of legacy is

@@ -124,7 +124,8 @@ Mode 11 is the local form: the trap was documented, and the fresh verifier
 reproduced it anyway, so "we documented this" was recorded as if it were
 enforcement. The wider family — an invented event, a cited anchor never read,
 an absence over-read as a verdict — lives in
-`verification-before-completion`'s `references/evidence-fabrication.md`. The
+`humblepowers:verification-before-completion`'s
+`references/evidence-fabrication.md`. The
 shared root is Axiom 2: a signal *about* the system stood in for the system.
 
 **"The agent treats summarized context as ground truth."**
