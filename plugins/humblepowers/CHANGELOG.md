@@ -5,6 +5,180 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.11.0 — 2026-08-11
+
+> Renumbered from 0.10.0 before release. That number belongs to the
+> `data-engineering-discipline` vNext entry directly below, which ships
+> first; this entry is stacked above it so the file reads in release order
+> once both are in. The 0.10.0 section is a **forward reference** until that
+> release lands — it cites `references/evidence-fabrication.md`, which arrives
+> with it. If that release is dropped rather than merged, delete the 0.10.0
+> section and renumber this entry back to 0.10.0.
+
+`verification-before-completion` gets the two delivery mechanisms it never had.
+The skill body is **unchanged**, and that is the finding, not an omission: an
+audit of the program behind it found that the body has never been an
+experimental arm — no trial in the lineage carried the skill body at all — so
+nothing measured to date speaks to the prose. What was measured is a stop-stage
+gate that was not shipped. Minor bump: one new hook event and a tenth routed
+row, no removals.
+
+> **Correction to this entry, same day.** It first said "every trial in the
+> lineage mounted the plugin identically in every arm, bare included". That is
+> **false**, and the fact it got wrong matters for how the gate's own numbers
+> read. Checked against the primary scenario files: the lineage's **main-agent**
+> arms mounted `humblepowers` (plus two sibling plugins); every **delegated**
+> arm — `bare-sub`, `gated-sub`, `disc-sub` — mounted **nothing**, or the gate
+> plugin alone. Mount was confounded with the delegation split. Two consequences,
+> both kept below: the conclusion "nothing speaks to the prose" survives and is
+> in fact stronger (no arm carried the body, rather than all of them carrying
+> it); and no main-agent-vs-delegated comparison in that program is
+> interpretable, so the claim "delegation degrades verification" is withdrawn as
+> **untested** — not reversed.
+
+### Added
+
+- **A `SubagentStop` gate, off by default**
+  (`skills/verification-before-completion/scripts/subagent_gate.py`;
+  `HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE=1` arms it). It blocks a subagent's
+  first stop once with a discipline reconsideration and lets every later stop
+  through. Mechanics come from the measured fixture unchanged — one shot per
+  `(session_id, agent_id)` so the block cannot loop and concurrent subagents do
+  not share a counter, and it fails open on any exception, because a hook that
+  cannot decide must never be the reason a subagent cannot stop. The wording is
+  byte-identical to the arm that was measured and is pinned by a test: a
+  prescriptively-worded sibling on the same bank wrote a test on **every**
+  trivial code edit and was rejected on that alone, so the words are the
+  treatment rather than packaging. One deliberate divergence from the fixture:
+  counters past a 24-hour window are pruned, so an opt-in hook does not
+  accumulate files for the life of the machine.
+- **A router row for the skill** — the tenth. It had **zero** rows, so the
+  plugin's one shipped mechanism could not fire for it and the entire delivery
+  surface was the skill description competing on its own. Dev-set recall 8/8 and
+  specificity 8/8; cross-fire 2/176. The gated held-out number is precision on
+  near-misses (2/2 clean), because a hint at a claim moment is cheap and one
+  during a status question is the class that gets hooks turned off.
+
+### Measured, and what it does not cover
+
+The gate's evidence is **one bank**: two tasks, nine repeats per cell, three
+tiers. On the rate at which delegated work leaves a regression check behind it
+moved **+0.22 (haiku) / +0.56 (sonnet) / +0.44 (opus, 90% CI [+0.11, +0.78])**,
+with **0/12** false positives on trivial edits where verification work would
+have been over-scope. Four cautions ride every one of those numbers, and a
+fifth — the sharpest — follows them. They are
+the *discipline*-worded arm; a widely-quoted "+0.56 for the skill" is the
+rejected prescriptive arm's figure and should not be repeated. The ladder is
+non-monotone across one bank with overlapping intervals, which is why no
+tier-conditional guidance appears anywhere in the skill. The contrast is
+**gate-vs-no-gate with no skill body on either side** — both arms mounted no
+plugins — so it says nothing about the gate's value *in addition to* the body
+this plugin ships. And the default stays off until a replication on a different
+task family, because a stop-blocking hook in every subagent is a larger bet than
+one bank funds.
+
+**A fifth caution, and it is the one to read before quoting the ladder: the
++0.44 is not known to be the gate firing.** A companion pass over the raw
+streams found that at the strong tier the gate arm was mounted and **never
+delivered its treatment** — the gate's own sentence appears in **0 of 15** opus
+streams, against **16 of 21** haiku streams on the *same* plugin directory. The
++0.44 is real in the ledger (9/9 against 5/9) and the delivery gap is not a
+formatting difference: the sentence is absent in any form. So the strong-tier
+figure's **cause is unexplained** — not refuted, and not the gate firing.
+Anyone citing a three-tier ladder is citing one number whose mechanism is open.
+Two provenance limits on that check itself: the stream files it reads are
+gitignored and exist in a single working directory rather than in any git
+history, and the p-value quoted for it elsewhere is one-sided and computed on a
+pooled table rather than on the 0/15-versus-16/21 pair — so the counts above are
+the claim, and the p-value is not repeated here.
+
+**This gate ships with its own proof obligation undischarged, and that is stated
+rather than glossed.** The program commissioned to re-measure it pre-registered a
+full gate — a lift of ≥ +0.15 on at least one tier, **and** a false-positive rate
+≤ +0.05, **and** beating a shape-matched placebo by ≥ +0.10 — before this
+mechanism was allowed to ship. **Not one gate trial and not one placebo trial was
+ever bought.** All three conditions are therefore *unmeasured in this codebase*,
+not merely unmet, and the figures above are inherited from a prior program on a
+different contrast at n=9.
+
+Two things follow, and neither is the other. Nothing here justifies **deleting**
+the gate: an unmeasured mechanism is not a refuted one. And nothing here
+justifies presenting it as **validated**: it is opt-in, it fails open, and those
+are safety properties, not evidence. Anyone enabling
+`HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE=1` is enabling a mechanism whose local
+evidence is a wording-fidelity test and a fires-and-blocks fixture — not a
+measured lift.
+
+`HUMBLEPOWERS_VERIFICATION_GATE_SKIP_MODELS` is marked **provisional** in the
+module, the README and its tests. No measurement licenses any value for it, the
+payload key it reads is unconfirmed across harness versions, and an absent model
+gates rather than skips. It exists because the hook is the only place a tier fact
+is implementable at all — the harness cannot condition a skill's activation on a
+subagent's model, so the same claim written into a description would name a
+decision nothing can act on.
+
+### Not changed, deliberately
+
+The skill body did not move. A candidate body — three procedures displaced to a
+reference, three new rows in *What claims require*, and a pristine-output clause
+extended to warnings and a jumped runtime — lives under
+`evals/arms/verification-vnext/` as an experimental arm with its obligations
+written down, and a test fails if any of it reaches the plugin before its
+evidence does. Also declined and recorded there rather than left implicit: a
+tier clause, a config protocol row, an adversarial-re-read section, and any
+growth of the failure-mode catalog.
+
+## 0.10.0 — 2026-08-11
+
+### Added
+
+- **`verification-before-completion` gains
+  `references/evidence-fabrication.md`** — four tool-general modes re-homed
+  from `engineering-discipline:data-engineering-discipline`, where they were
+  Modes 9, 10, 12 and 13 of a data-engineering taxonomy: fabricated telemetry,
+  confabulated anchors, silence read as status on an unattended run, and
+  fail-open tooling. None is about data. The clearest recorded instance of the
+  fail-open mode diagnosed a defect in an eval harness, and that report's own
+  promotion asked for a tool-general statement. Roughly 1,900 words of evidence
+  discipline stop being reachable only by someone doing data work. The mode
+  numbers are kept so older citations still resolve.
+
+### Changed
+
+- That skill's body points at the new reference and drops the empty-scan
+  clause the reference now states at length: 790 -> 787 words, no budget bump.
+- **The dispatch router accepts several rule groups per skill.** The data
+  discipline's three ambient nouns (`pipeline`, `dataset`,
+  `dashboard`/`warehouse`) name things that exist in build automation, CRM, HR,
+  front-end and logistics prose, and each fired the rule on its own. They move
+  into their own group at `min_hits: 2`: one is a lexical coincidence, two are
+  a signal. Groups merge by skill id, and a denial on any group denies the
+  skill, so the activation test and the negative patterns are stated once.
+  Tuned on a dev set authored first
+  (`evals/trigger/fixtures/router-ambient-noun-dev.json`), then the two sealed
+  router holdouts were read once: recall unchanged on every register, null
+  false-fires 2/28 -> 1/28, adversarial unchanged at its 2/20 budget.
+- **The ambient-noun move cost true positives, and the fixture could not see
+  it.** `dashboard`/`warehouse` shipped as ONE alternation, so a prompt naming
+  both scored one hit and could never reach `min_hits: 2` — the group's own
+  comment described a property its patterns could not express. Split into two.
+  Separately, eight prompts squarely inside the skill's enumerated triggers went
+  FIRE -> silent (column add/rename/drop on a dataset, duplicate rows, a
+  partitioned write, reworking a transform, dashboard-versus-warehouse); the dev
+  fixture's four must-survive positives all routed via other patterns, so it was
+  structurally incapable of sampling the class, and the sealed set lacks the
+  resolution — which is why "recall unchanged" was true and uninformative. All
+  eight are now positives in the fixture (17 negatives / 12 positives) and five
+  corroborating patterns, each worthless alone, recover them. Sealed pair
+  re-read once, unchanged: overall 0.50, direct 0.94, 1/28 nulls.
+- **The recovered null is now banked.** `test_recall_holdout_floors` still
+  asserted `null_fires <= 3` after the measurement moved to 1/28, so nothing in
+  the suite could fail if it regressed. Ratcheted to `<= 1`.
+- `verification-before-completion` points back at the non-vacuity matrix. The
+  re-homing replaced that pointer with one to the new reference, but the matrix
+  itself stayed in `data-engineering-discipline` and was audit-classed
+  keep-worthy, so its one external pointer had simply been deleted.
+
 ## 0.9.1 — 2026-08-11
 
 Calibration pass on `choosing-models`, on evidence from the 2026-08-11 fathom
