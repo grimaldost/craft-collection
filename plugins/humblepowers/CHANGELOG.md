@@ -82,7 +82,11 @@ only one implicates the formula — on the other the formula said `mid` at score
 45 and a weak model *applying* it emitted `strong`, which is a decider error,
 not a design error. And no general over-provisioning claim: the four discordant
 briefs split **2–2 by tier pair**, right to escalate off `weak` and wrong off
-`mid`.
+`mid`. The direction of error is not uniform either — every disagreement in the
+routing programme was the rubric routing *up*, which reads as conservative bias,
+but on one brief (a robust `weak` 0/5, `mid` 0/5, `strong` 5/5) it escalated in
+the right direction and **under**-escalated, so routing by it would still have
+shipped a silent failure.
 
 **Held open.** Whether the rubric routes *better* anywhere was never measured.
 The weak decider's four upgrades cost **+$0.0580/task** in extra execution — 28×
