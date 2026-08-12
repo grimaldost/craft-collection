@@ -5,7 +5,12 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
-## 0.10.0 — 2026-08-11
+## 0.11.0 — 2026-08-11
+
+> Renumbered from 0.10.0 before release. That number belongs to the
+> `data-engineering-discipline` vNext entry directly below, which ships
+> first; this entry is stacked above it so the file reads in release order
+> once both are in.
 
 `verification-before-completion` gets the two delivery mechanisms it never had.
 The skill body is **unchanged**, and that is the finding, not an omission: an
@@ -103,6 +108,57 @@ written down, and a test fails if any of it reaches the plugin before its
 evidence does. Also declined and recorded there rather than left implicit: a
 tier clause, a config protocol row, an adversarial-re-read section, and any
 growth of the failure-mode catalog.
+
+## 0.10.0 — 2026-08-11
+
+### Added
+
+- **`verification-before-completion` gains
+  `references/evidence-fabrication.md`** — four tool-general modes re-homed
+  from `engineering-discipline:data-engineering-discipline`, where they were
+  Modes 9, 10, 12 and 13 of a data-engineering taxonomy: fabricated telemetry,
+  confabulated anchors, silence read as status on an unattended run, and
+  fail-open tooling. None is about data. The clearest recorded instance of the
+  fail-open mode diagnosed a defect in an eval harness, and that report's own
+  promotion asked for a tool-general statement. Roughly 1,900 words of evidence
+  discipline stop being reachable only by someone doing data work. The mode
+  numbers are kept so older citations still resolve.
+
+### Changed
+
+- That skill's body points at the new reference and drops the empty-scan
+  clause the reference now states at length: 790 -> 787 words, no budget bump.
+- **The dispatch router accepts several rule groups per skill.** The data
+  discipline's three ambient nouns (`pipeline`, `dataset`,
+  `dashboard`/`warehouse`) name things that exist in build automation, CRM, HR,
+  front-end and logistics prose, and each fired the rule on its own. They move
+  into their own group at `min_hits: 2`: one is a lexical coincidence, two are
+  a signal. Groups merge by skill id, and a denial on any group denies the
+  skill, so the activation test and the negative patterns are stated once.
+  Tuned on a dev set authored first
+  (`evals/trigger/fixtures/router-ambient-noun-dev.json`), then the two sealed
+  router holdouts were read once: recall unchanged on every register, null
+  false-fires 2/28 -> 1/28, adversarial unchanged at its 2/20 budget.
+- **The ambient-noun move cost true positives, and the fixture could not see
+  it.** `dashboard`/`warehouse` shipped as ONE alternation, so a prompt naming
+  both scored one hit and could never reach `min_hits: 2` — the group's own
+  comment described a property its patterns could not express. Split into two.
+  Separately, eight prompts squarely inside the skill's enumerated triggers went
+  FIRE -> silent (column add/rename/drop on a dataset, duplicate rows, a
+  partitioned write, reworking a transform, dashboard-versus-warehouse); the dev
+  fixture's four must-survive positives all routed via other patterns, so it was
+  structurally incapable of sampling the class, and the sealed set lacks the
+  resolution — which is why "recall unchanged" was true and uninformative. All
+  eight are now positives in the fixture (17 negatives / 12 positives) and five
+  corroborating patterns, each worthless alone, recover them. Sealed pair
+  re-read once, unchanged: overall 0.50, direct 0.94, 1/28 nulls.
+- **The recovered null is now banked.** `test_recall_holdout_floors` still
+  asserted `null_fires <= 3` after the measurement moved to 1/28, so nothing in
+  the suite could fail if it regressed. Ratcheted to `<= 1`.
+- `verification-before-completion` points back at the non-vacuity matrix. The
+  re-homing replaced that pointer with one to the new reference, but the matrix
+  itself stayed in `data-engineering-discipline` and was audit-classed
+  keep-worthy, so its one external pointer had simply been deleted.
 
 ## 0.9.1 — 2026-08-11
 
