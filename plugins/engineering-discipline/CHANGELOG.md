@@ -3,6 +3,130 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.5.0 — 2026-08-11
+
+`data-engineering-discipline` vNext: a re-tiering with three new rejecting
+checks. Every word now sits in a cost tier and earns that tier by passing that
+tier's test; every growth names its displacement. Body 2736 -> 2312 words with
+the `word_budget.json` ceiling ratcheted to **2312 — the measured count, zero
+headroom**, because a ceiling with slack in it buys a future append that never
+has to name what it displaces; references 28,759 -> **16,546** (`wc -w` over
+`references/*.md`, the same method as the 28,759 figure); scripts 4 -> 7 plus a
+mutation harness; description 223 -> 243 words, itemised under Changed.
+
+### Added
+
+- **`producer_census.py`** and **`parity_check.py --two-producer A B
+  --join-key K`** — the corpus's only HIGH finding, as checks rather than
+  prose. A contract column written by two producers that were never run
+  together is a finding; the two-producer mode asserts the JOIN before
+  asserting any value, because a dtype or rendering mismatch drops rows and a
+  comparison over the survivors reads clean. Producer-local suites structurally
+  cannot see this, and a shared column belongs to no seam, so the scoped-change
+  lane's correct application keeps the gap open. Body gains a bright line;
+  `parity-recipes.md` gains Recipe 16.
+- **Parity numerics**, unlanded since July: `--null-mismatch` (key-aligned null
+  PLACEMENT, on by default, answering to the same `--null-tol` knob as the null
+  rate), `--tol-col NAME=ATOL`, and `--residual-zero NAME`, which reports a
+  residual column as a cardinality hazard rather than a value one. Recipe 17.
+- **`which_copy.py`** — `__file__` plus the installed version, exit 1 when a
+  checkout shadows an installed distribution. Prose since 0.1.5; fired in two
+  sessions. The Axiom-2 sub-bullet becomes a pointer.
+- **`mutate_check.py`** and `test_mutate_check.py` — perturb one column, assert
+  the named check reddens. A mutation a check documents it cannot see is
+  declared a known gap, so the pin breaks in both directions. **Stated at its
+  real reach:** the runnable `--check` surface is two checks (`parity`,
+  `schema`); `contract_check`, `freshness_check` and `producer_census` are held
+  against the same fixtures by the paired TEST MODULE, not by the CLI; the
+  `schema` arm mutates a harness-local coarse schema rather than
+  `schema_diff.py`'s pandas dtype path; and `which_copy` is in neither, having
+  its own unit test. So: five of six shipped checks held red by the test suite,
+  two invocable through the tool.
+- Body: the cross-producer bright line; grain, fanout and `DISTINCT`-as-fanout-
+  repair; time semantics across joins; replay against a mutated source; and two
+  plain-declarative rails — the oracle is not edited in the change it judges,
+  and irreversible operations are proposed rather than executed, with the plain
+  statement that this skill's force is advisory and a prompt rule is not a gate.
+- `contract-templates.md` gains the compatibility-mode table (including the
+  transitive variants and `NONE` as a configured fail-open gate) and the note
+  that no independent adoption survey exists. Factual currency, no behavioral
+  claim.
+
+### Changed
+
+- **The description — three changes, not one.** (1) The `writing tests for a
+  pipeline` trigger measured 0.33 recall despite being explicitly enumerated; it
+  becomes "writing or changing the tests, fixtures, or expected values that gate
+  a pipeline", which names the oracle no sibling claims. (2) A schema-as-data
+  ruling is added as negative space: such a document counts when code is
+  generated from or validated against it, not when its only consumers render it.
+  (3) One parenthetical example is cut to pay for it. 223 -> 243 words. An
+  earlier draft also deleted the closing `If so, this skill applies — pin the
+  contract, verify the observable source, and check parity on real data` clause;
+  that deletion was not authorised, the net +1-word figure hid it, and it has
+  been reverted, because the single sanctioned holdout read cannot attribute
+  movement across four simultaneous edits. All three land as one change buying
+  one holdout reseal.
+- **MEASURED, and (1) did not work.** The dev pass and the sealed holdout were
+  both bought on 2026-08-11 (105 spawns, $9.97) and the row is filed in
+  `evals/trigger/holdout/BASELINES.md`. The pre-registered gate for (1) was
+  1/3 -> 3/3 on `Write tests for the billing aggregation pipeline so a bad
+  change can't ship silently`; it measured **1/3 on three valid runs with zero
+  errored positive runs — no movement**. Dev recall 0.82 [0.66, 0.91] and
+  specificity 1.00 [0.90, 1.00] both clear their gates, but recall on the
+  byte-identical fixture was 0.939 before the edit, and two other positives
+  regressed. That decline is descriptive only (Fisher exact p ~ 0.26, runs
+  clustered by query), so it licenses no revert — it licenses **not claiming
+  (1) as a fix**. (2) fares better and is bounded: on its three sealed cases the
+  ruling is decidable but not uniform — one positive fires 3/3, the other misses
+  0/3, the negative correctly stays silent, n = 1 query per outcome. The one
+  genuine generalization row on this surface, the 0.1.15 intent paraphrase,
+  fires 3/3.
+- `contract_check.validate` raises on a contract shape it cannot read. A nested
+  `{"columns": {...}}` contract iterated to zero recognised rules and returned
+  an empty violation list — a green contract check over rows that violate it.
+  Found by the new mutation harness.
+
+### Removed
+
+- `references/glossary.md` and `references/community-practices.md`, and the
+  dbt / Pydantic / JSON Schema renderings in `contract-templates.md`. Zero
+  citations across fourteen exercise reports; a current model reconstructs all
+  of it; and the tool survey had no refresh mechanism, so retiring it is also
+  the stale-pointer fix rather than a refresh that would go stale again.
+- `llm-failure-modes.md` Modes 1-8 (zero citations, generic LLM hygiene), and
+  `principles.md`'s replayability and schema-evolution groups — each file's own
+  head note carries the destination.
+- `scenarios.md` Section 1, the new-dataset playbook, which had been the one
+  retirement here with no replacement written down. It has one: the body covers
+  that case directly (the contract-is-the-spec line and the new-dataset
+  checklist item) and `principles.md` applies every principle group to it under
+  a `New dataset:` bullet, so the playbook was a second definition site. Section
+  numbering is unchanged and the file now says so, since sections are cited by
+  number and the first heading is `## 2`.
+- Body: `## When to invoke` and `### How to use this skill in practice`, which
+  restated the description and the checklist; `## Make the discipline visible
+  in your output`, whose four positive directives are replaced by two negative
+  rails; the observability group, whose content survives as the
+  `freshness_check.py` invocation in the body and as `principles.md` Group 7
+  (lineage and observability); and the five contract checkboxes, which
+  become the invocations that execute them.
+- Two closing paragraphs, cut in the same pass and named here for the ledger:
+  Axiom 2's note that it "replaces the migration-specific framing of legacy is
+  the source of truth" (the skill narrating its own edit history to the reader
+  who has to pay for those words), and Axiom 4's closing list of mechanical
+  defenses, which enumerated the references table three sections above it.
+
+### Moved
+
+- `llm-failure-modes.md` Modes 9, 10, 12 and 13 — fabricated telemetry,
+  confabulated anchors, silence read as status, fail-open tooling — to
+  `humblepowers:verification-before-completion` as
+  `references/evidence-fabrication.md`. None is about data; the clearest
+  recorded instance of the fail-open mode diagnosed a defect in an eval
+  harness. Modes 11 and 14 stay, and the numbering is unchanged so older
+  citations still resolve.
+
 ## 0.4.0 — 2026-08-11
 
 Backlog wave 1. The hook rule for the whole collection: a hook ships on with a

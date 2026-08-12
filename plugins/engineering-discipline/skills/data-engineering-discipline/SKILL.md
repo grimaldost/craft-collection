@@ -4,16 +4,18 @@ description: >
   Discipline guardrails for data-engineering work with downstream consumers —
   activate at the START of the task, before writing code, because silent
   semantic drift is the dominant risk. Activate on: migrating or porting a
-  pipeline (e.g. "migrate this Spark pipeline to the new warehouse"),
-  refactoring a transform, backfilling or replaying history, evolving a schema
-  (add / rename / retype / drop a column), creating a new dataset — or a
-  metadata / catalog / lineage emitter whose output a separate tool loads — that
-  has consumers, designing or reviewing a data contract, reshaping a tool / API
-  response payload a client depends on, writing tests for a pipeline, generating
-  pipeline code with an LLM, and investigating a consumed
+  pipeline, refactoring a transform, backfilling or replaying history,
+  evolving a schema (add / rename / retype / drop a column), creating a new
+  dataset — or a metadata / catalog / lineage emitter whose output a separate
+  tool loads — that has consumers, designing or reviewing a data contract,
+  reshaping a tool / API response payload a client depends on, writing or
+  changing the tests, fixtures, or expected values that gate a pipeline,
+  generating pipeline code with an LLM, and investigating a consumed
   dataset that misbehaves — "the numbers changed / look different", or a
   table/extract that "ran but didn't update / is stale / isn't refreshing / the
-  watermark didn't advance". The test for activation:
+  watermark didn't advance". A hand-authored schema-as-data document counts
+  when code is generated from or validated against it; not when its
+  only consumers render it. The test for activation:
   could this change the columns, dtypes, row or group cardinality, null
   behavior, semantics, or freshness of a dataset — or the fields, types, or
   closed vocabularies of a tool/API payload — that something or someone
@@ -39,33 +41,6 @@ schema, backfilling history, designing incremental loads, and
 investigating downstream regressions. The specifics change; the
 non-negotiables do not.
 
-## When to invoke
-
-Activate on any task where downstream consumers might be affected:
-
-- Creating a new dataset that will have at least one consumer beyond
-  yourself.
-- Building or reshaping a metadata / catalog / lineage emitter, or a tool / API
-  response payload, whose output a separate tool or client loads — the emitted
-  contract is a consumer contract even though it is not a table.
-- Migrating a pipeline between frameworks, stacks, or warehouses.
-- Refactoring transforms while preserving the produced dataset.
-- Evolving the schema of an existing dataset (add, remove, rename,
-  retype, re-semanticize a column).
-- Backfilling history or designing replay logic.
-- Designing incremental or streaming loads (watermarks, late-arriving
-  data).
-- Writing tests for a data pipeline.
-- Investigating "the numbers look different" reports — or a consumed dataset
-  that ran but didn't update / is stale / isn't refreshing / the watermark
-  didn't advance.
-- Generating data-pipeline code with an LLM where semantics matter.
-- Designing or reviewing a data contract.
-
-Do **not** activate for one-off exploratory analysis with no downstream
-consumer, throwaway notebooks, or software-engineering tasks unrelated to
-data outputs.
-
 ## Scoped-change lane
 
 A bounded change to one transform or seam — a single tz-cursor fix, one emitter
@@ -76,15 +51,18 @@ that touch it, and leave the rest of the pipeline alone — a wide scope is what
 invites the "improving while executing" failure mode. The four non-negotiables
 below still hold for the seam; what shrinks is the blast radius you verify, not
 the rigor. Follow the project's own conventions over greenfield defaults
-(python-engineering's edit lane owns that code-style half).
+(python-engineering's edit lane owns that code-style half). A column written by
+more than one producer is the documented exception — see below, it belongs to no
+seam.
 
 ## The four non-negotiables
 
-These four beliefs are the source from which every principle in this
-skill derives. They are scenario-agnostic by design: the specifics of
-how each one applies differ between migration, refactor, new dataset,
-schema evolution, and other scenarios, but the axiom itself does not.
-If a recommendation in any other file conflicts with these, these win.
+These four are the source of every principle here, and they win over any
+recommendation in another file. Rank what follows by three properties: a
+defense is deterministic, is out-of-band and not editable by the change it
+judges, and bounds the blast radius. This skill is prompt-level guidance with
+none of the three — its job is to make you build and demand the out-of-band
+checks, not to be one.
 
 ### 1. The output is the contract
 
@@ -110,11 +88,9 @@ Concretely, this means:
 
 - For an existing pipeline: read the source code end-to-end and inspect
   the materialized output. Don't trust your summary of either — and
-  confirm the source you read is the code that *runs*: resolve the
-  imported module's `__file__` and installed version first, because an
-  editable checkout and an installed release of the same library diverge
-  silently (reading a non-executing copy is inference, not observation).
-  `systematic-debugging` owns the debug-time form of this check.
+  confirm the source you read is the code that *runs* (`which_copy.py`):
+  an editable checkout and an installed release of the same library
+  diverge silently. `systematic-debugging` owns the debug-time form.
 - For an unfamiliar library: run `inspect.signature(fn)` or read the
   docstring. Don't trust your memory of the signature.
 - For a string identifier (calendar name, source name, schema name):
@@ -136,12 +112,6 @@ consolidated here so other files point to this set rather than re-stating it:
 
 If this set recurs *after* this consolidation, it is judgment-bound with no
 mechanical reach — sharpen an example or decline it; do not add a sixth row.
-
-This axiom replaces the migration-specific framing of "legacy is the
-source of truth" with the universal observation that an LLM (or a
-hurried human) will reach for inference when verification is available
-at low cost. The defense is mechanical: make verification the default
-first step, not an optional one.
 
 ### 3. Real data finds what synthetic fixtures cannot
 
@@ -192,59 +162,67 @@ By scenario:
   the data, which leaves the producer broken and history
   inconsistent.
 
-The corrective in every case is the same: make the change scope
-explicit, document it, and verify the result. The mechanical defenses
-that enforce this — parity diffs, schema-diff in CI, contract
-enforcement, `MIGRATION_NOTES.md` artifacts — are detailed in the
-references.
+## Cross-producer contract
 
-## Make the discipline visible in your output
+A contract column written by more than one producer belongs to no single seam,
+so a correctly scoped change never covers it and both producer-local suites
+stay green while the two writers disagree. Count the writers of every column
+you touch (`producer_census.py`); two or more that were never run together is
+unverified, not fine. Then run both and assert the join on the shared key
+*before* asserting any value (`parity_check.py --two-producer`) — a dtype or
+rendering mismatch drops rows, and a value comparison over the survivors reads
+perfectly clean. A `Date` and a `Datetime` written by two emitters of one
+column survived a 7,500-test suite, a full-model review and a multi-agent
+audit exactly this way.
 
-Apply the discipline *visibly* — silent correctness is indistinguishable from a
-plausible guess, and a reviewer can only trust what they can see. As you work:
+## Grain, fanout and time
 
-1. **Pin the contract first** — state the schema / dtypes / grain / cardinality /
-   null behavior and known quirks you're protecting, and that changes to them are
-   breaking by default for the named consumers — before writing code.
-2. **Name the non-negotiable you're invoking** as you apply it, so a reader can
-   audit which principle each step serves.
-3. **Insist on reading the observable source** even when handed a diff, summary, or
-   description; never diagnose or migrate from the diff text alone.
-4. **Propose the verification gates** that must pass before "done"; for any fix,
-   **repair the producer and replay** rather than patching the data forward.
+Declare the grain before writing code — one row per what? A diff tool that is
+not told the grain compares nothing. Then compare `COUNT(*)` against
+`COUNT(DISTINCT <declared key>)` on both sides at every join and every
+materialization stage, not only at the output. A `DISTINCT` introduced in a
+diff that also changes a join is a fanout repair until proven otherwise: it
+restores the row count while the measure stays double-counted, which is worse
+than the failure it hid.
 
-## LLM failure modes — quick warning
+For each side of a filtered or joined transform, name: event time or ingestion
+time; bounds inclusive or exclusive; timezone and DST; fiscal, ISO or calendar
+week; `CURRENT_DATE` versus the pipeline's execution date. Every table in a
+join is filtered on the same time semantics, or the join is wrong. What fixes
+this is metadata plus a deterministic cross-join consistency check, not care.
 
-This skill is consumed by an LLM workflow. LLMs introduce specific
-failure modes that mechanical discipline must defend against. The
-dominant pattern is **plausible-but-wrong code**: output that compiles,
-runs, and produces believable numbers while silently changing meaning.
-Other recurring modes:
+Re-running old logic against a source that has since changed produces a clean
+compare and corrupt history: both sides read the same mutated input. Pin the
+source snapshot, or an as-of timestamp, for both sides — or state plainly that
+the replay proves determinism and not historical correctness. Whether history
+*should* change at all is a contract decision, not a technical one.
 
-- **Inference instead of verification** — the agent reasons about what
-  the code/signature/identifier should be rather than reading it — or
-  reads the *wrong copy* (an editable checkout while the venv runs the
-  installed release), so the read isn't the code that ran.
-- **Plan drift** — the conversational summary becomes the spec;
-  subsequent work drifts from the actual source.
-- **Improving while executing** — reflexive renames, refactors, and
-  simplifications during what should be a scope-bounded task.
-- **Synthetic-fixtures-only validation** — the agent generates both
-  the tests and the code that satisfies them.
-- **"Looks reasonable" as done-gate** — the weakest test pyramid
-  layer used as the only gate.
-- **Fabricated inference presented as observation** — an async status
-  event, a cited anchor, or a "verified" claim *invented* rather than
-  read (the sharpest Axiom-2 violation); the defense is disk truth over
-  narration — confirm the thing exists before citing it.
-- **Absence read as a state** — silence on an unattended run taken as
-  "finished/stopped," or an empty check-result taken as "clean" when the
-  check may not have run; the defense is to probe before acting — confirm
-  the process is dead (not just quiet) and the tool ran (not just silent).
+## Oracle integrity
 
-For full taxonomy, detection patterns, and mechanical defenses, read
-**`references/llm-failure-modes.md`**. Consult this file before any
-non-trivial LLM-assisted data work.
+The verifier, fixtures, expected values, baselines and tolerance settings are
+not edited in the change they judge. A diff that touches both the transform
+and its expected output has produced no evidence. If a baseline is genuinely
+wrong, repair it in its own change, with the reason. The tool-general form of
+this — evidence that was never produced — is
+`humblepowers:verification-before-completion`.
+
+## Irreversible operations
+
+`DROP`, `TRUNCATE`, table replace, full refresh, production backfill,
+partition delete, a primary-key or grain change, a metric-definition change:
+propose these, do not execute them. This skill's force is advisory — a prompt
+rule is not a gate, and in-context prohibitions have been violated on record.
+The gate you rely on is the one outside the session.
+
+## LLM failure modes
+
+The dominant pattern is plausible-but-wrong output: it compiles, runs, and
+produces believable numbers while silently changing meaning. SQL is the
+sharpest case because the failures do not throw. Two modes specific to
+producing a dataset are in **`references/llm-failure-modes.md`** — a fresh
+verifier that inherits none of the design's documented traps, and a source
+traced from the wrong copy. The tool-general evidence modes belong to
+`verification-before-completion`.
 
 ## Pre-shipping checklist
 
@@ -259,20 +237,23 @@ depends on yet) runs the contract and real-data checks and may skip the
 parity/replay items. When you can't tell whether a change is additive or
 breaking, treat it as breaking.
 
-**Contract checks.**
-
-- [ ] Output schema (columns + dtypes) matches the declared contract /
-      baseline exactly.
-- [ ] Row count is within tolerance of the expected baseline.
-- [ ] Group cardinality (distinct combinations of key columns) matches.
-- [ ] Per-column null rate is consistent with the contract.
-- [ ] Aggregate sums on numeric columns match within float tolerance.
+**Contract checks — run them, don't tick them.** `schema_diff.py base cand`;
+`parity_check.py base cand --keys id,as_of --tol 1e-9` (add `--tol-col
+name=atol` per noisy column, `--residual-zero name` for a column read as
+`> 0`); `contract_check.py cand contract.json`; `freshness_check.py --prev
+--curr`; `producer_census.py inventory.json`; `mutate_check.py cand --check
+parity --column amount`. Each fails loudly on what it could not assess rather
+than passing quietly — a dtype match never checked, an unassessable cursor,
+null placement without unique keys, a contract shape it cannot read. PARITY OK
+is necessary, not sufficient: the gaps each check leaves are enumerated in
+`parity-recipes.md`.
 
 **Source-of-truth checks.**
 
 - [ ] Every input read by the spec / existing code is read by the new
       code.
-- [ ] Every output column has a documented source.
+- [ ] Every output column has a documented source, and every column has
+      exactly one producer or a two-producer join that passed.
 - [ ] Library signatures and string identifiers (calendar names,
       source names, schema names) verified, not assumed.
 
@@ -280,7 +261,7 @@ breaking, treat it as breaking.
 
 - [ ] Pipeline has been run end-to-end on a production-shaped sample.
 - [ ] If the load is incremental, the cursor/watermark advanced this run
-      (`freshness_check.py`) — a self-reported `success` is not freshness.
+      — a self-reported `success` is not freshness.
 - [ ] Every constraint declared in the schema is satisfied by the
       sample.
 - [ ] If the framework supports multiple backends, each backend has
@@ -306,57 +287,17 @@ breaking, treat it as breaking.
 - [ ] Every deliberate divergence from the baseline is documented and
       signed off.
 
-**Observability checks.**
-
-- [ ] Tests at every applicable pyramid layer (unit, contract,
-      generic, singular, parity where relevant).
-- [ ] Production monitors (freshness, volume, drift) configured
-      before consumers depend on the output.
-
-For concrete recipes implementing each check (SQL EXCEPT queries,
-Polars `assert_frame_equal`, dbt-utils macros, custom comparison
-scripts), read **`references/parity-recipes.md`**.
-
-**Runnable checks (`scripts/`).** Four of those recipes ship as runnable,
-stdlib-first tools: `schema_diff.py` (column/dtype diff), `parity_check.py`
-(row-count, group-cardinality, null-rate, and aggregate-sum diff within
-tolerance), `contract_check.py` (validate rows against a contract spec), and
-`freshness_check.py` (assert an incremental cursor advanced — Recipe 14).
-Wire them into CI or run by hand before declaring done.
-
-> **last-reviewed: 2026-06-04.** The four non-negotiables and the 21 principles
-> are stable; only the tool survey in `community-practices.md` drifts over time,
-> so re-check that file's tool versions periodically.
+> **last-reviewed: 2026-08-11.** The references carry no tool survey and no
+> version-pinned recommendations, so nothing here goes stale on a vendor's
+> release schedule. What drifts is the corpus: re-read this body against the
+> feedback reports, not against the calendar.
 
 ## Additional resources
 
 | File | Read when |
 |------|-----------|
-| `references/principles.md` | Drafting a design decision, code review, or stuck on which principle applies. The 21 principles in full, each with anti-pattern, corrective, verification, and the LLM-specific gotcha. Principles are universal; per-scenario applications are noted inline. |
-| `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for new dataset, migration, refactor, schema evolution (columns — and equally event types, enum values, API fields, tool/API payload contracts), backfill, incremental/streaming, and investigating downstream breakage. |
-| `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." Fourteen documented failure modes (incl. the fabrication family: telemetry, anchors, verifier-inherited traps; the absence-read-as-state pair: unattended-run silence, fail-open tooling; and traced-the-wrong-copy: editable-vs-installed divergence) with detection patterns and mechanical defenses. |
-| `references/parity-recipes.md` | Implementing a parity check, row-level diff, schema diff, or any verification step. Concrete code/SQL/CLI recipes for SQL warehouses, Polars, PySpark, dbt, and Python. |
-| `references/contract-templates.md` | Designing or reviewing a data contract. Worked templates for the same dataset expressed as a dbt `schema.yml`, an ODCS YAML, a Pydantic model, and a JSON Schema. |
-| `references/glossary.md` | When precision matters: schema vs. contract vs. interface, parity vs. equivalence, partition vs. snapshot, replay vs. backfill. |
-| `references/community-practices.md` | Grounding a recommendation in published practice or choosing between competing approaches. Detailed summaries of dbt contracts/tests, ODCS, Schema Registry, GX, Soda, Beauchemin's paradigm, OpenLineage, Hamilton, Kedro, medallion, data mesh, Kimball SCDs. |
-
-### How to use this skill in practice
-
-For each new task, do these three things before writing any code:
-
-1. **Identify the scenario.** New dataset? Migration? Schema evolution?
-   Refactor? Backfill? Investigation? Open `references/scenarios.md`
-   and find the matching playbook. Follow it in order; do not skip
-   steps.
-2. **Pin the baseline.** What is the contract being protected (for
-   migration/refactor/schema-evolution) or declared (for new
-   dataset)? Capture it — schema, dtypes, row count if relevant,
-   group cardinality, aggregate sums. The pre-shipping checklist
-   runs against this baseline.
-3. **Decide on verification gates.** Which checks from
-   `references/parity-recipes.md` apply to this task? Wire them into
-   CI or run them by hand before declaring done.
-
-When the work is complete, the pre-shipping checklist above is the
-gate. If you cannot answer every item with "yes," the work is not done
-— regardless of what the data "looks like."
+| `references/principles.md` | Drafting a design decision, code review, or stuck on which principle applies. Each principle with its anti-pattern, corrective, verification, and LLM-specific gotcha. |
+| `references/scenarios.md` | Starting a specific kind of task. Step-by-step playbooks for migration, refactor, schema evolution (columns — and equally event types, enum values, API fields, tool/API payload contracts), backfill, incremental/streaming, and investigating downstream breakage. |
+| `references/parity-recipes.md` | Implementing a parity check, row-level diff, schema diff, two-producer join, or any verification step. Concrete code/SQL/CLI recipes, and an honest list of what they do not catch. |
+| `references/llm-failure-modes.md` | About to generate non-trivial data code with an LLM, or debugging output that "looks right but feels wrong." A verifier that inherits none of the design's documented traps, and a source traced from the wrong copy. |
+| `references/contract-templates.md` | Designing or reviewing a data contract. A worked ODCS contract, the field vocabulary, the completeness checklist, the compatibility-mode table, and the contract-design anti-patterns. |

@@ -53,14 +53,16 @@ smaller scope.
 The regression-test rule above is one case of a principle governing *any*
 verifier — a gate, a parity diff, a contract check, an eval assertion. A check
 seen only green is indistinguishable from one that tests nothing (a typo'd join
-key, a tolerance nothing trips, a fixture that hits a fallback), and a
-green over an **empty scan** is worse than a red one because it gets quoted as
-evidence. Confirm both halves: that it read the input you think it did — count
+key, a tolerance nothing trips, a fixture that hits a fallback). Confirm both
+halves: that it read the input you think it did — count
 the files, rows, or cases it saw — and that it can fail. Plant a known
 violation, confirm the catch, then remove the plant **by the inverse edit**; a
 checkout also discards whatever else was in that file, and only a byte-precise
-restore is verifiable. (`data-engineering-discipline`, when installed, carries
-the canonical non-vacuity matrix.)
+restore is verifiable. `references/evidence-fabrication.md` catalogues the four
+ways evidence itself goes wrong: invented events, confabulated anchors, silence
+read as finished, a gate green because it never ran.
+(`data-engineering-discipline`, when installed, carries the canonical
+non-vacuity matrix: its `scenarios.md`, Step 8.2.)
 
 ## Delegated work
 

@@ -37,11 +37,23 @@ def _ascii(text: str) -> str:
 
 
 def load_rules(path: str | Path = RULES_PATH) -> dict:
+    """Compile the rules file. A skill id may appear on SEVERAL rows -- rule
+    groups with different `min_hits` thresholds -- so the per-id facts (the
+    activation test, the denials) are resolved across all of a skill's rows."""
     rules = json.loads(Path(path).read_text(encoding='utf-8'))
+    activation: dict[str, str] = {}
     for skill in rules['skills']:
         skill['_compiled'] = [re.compile(p) for p in skill['patterns']]
         skill['_compiled_neg'] = [re.compile(p) for p in skill.get('negative_patterns', [])]
+        if not activation.get(skill['id']):
+            activation[skill['id']] = skill.get('activation_test', '')
+    rules['_activation_by_id'] = activation
     return rules
+
+
+def activation_test_for(skill_id: str, rules: dict) -> str:
+    """The skill's one-line activation test, wherever among its rows it is stated."""
+    return rules.get('_activation_by_id', {}).get(skill_id, '')
 
 
 def is_installed(skill_id: str, plugins_dir: Path | None = None) -> bool:
@@ -74,7 +86,7 @@ def is_installed(skill_id: str, plugins_dir: Path | None = None) -> bool:
 
 def cwd_noise_tokens(cwd: str | Path | None = None) -> tuple[str, ...]:
     """Directory names that must not be read as trigger vocabulary. A project
-    called `treasury-fin-pipeline` otherwise fires the data rule on every prompt
+    called `fin-data-pipeline` otherwise fires the data rule on every prompt
     that names it, for the life of that project -- a permanent false-fire class,
     not a one-off. Only the whole directory name is removed, so a standalone
     'pipeline' in the same prompt still matches."""
@@ -84,31 +96,45 @@ def cwd_noise_tokens(cwd: str | Path | None = None) -> tuple[str, ...]:
 
 
 def route(prompt: str, rules: dict, noise_tokens: tuple[str, ...] = ()) -> list[dict]:
-    """Return up to max_candidates matches: [{'id', 'matched', 'hits'}], best first."""
+    """Return up to max_candidates matches: [{'id', 'matched', 'hits'}], best first.
+
+    A skill may declare several rule GROUPS: a strong one that fires on a single
+    hit, and a weak one whose patterns are ambient nouns that only mean something
+    together (min_hits 2). Groups sharing an id merge into one candidate, and a
+    denial on any of a skill's groups denies the skill -- a negative pattern
+    answers about the prompt, not about which group happened to read it.
+    """
     # Strip zero-width / format-category chars so an invisible character cannot
     # selectively defeat a negative_pattern (e.g. a ZWSP inside "ci pipeline").
     text = ''.join(c for c in prompt[:MAX_PROMPT_CHARS] if unicodedata.category(c) != 'Cf').lower()
     for token in noise_tokens:
         text = text.replace(token, ' ')
-    matches = []
+    denied = {
+        s['id'] for s in rules['skills'] if any(neg.search(text) for neg in s['_compiled_neg'])
+    }
+    merged: dict[str, dict] = {}
     for skill in rules['skills']:
-        if any(neg.search(text) for neg in skill['_compiled_neg']):
+        if skill['id'] in denied:
             continue
         matched = []
         for pattern in skill['_compiled']:
             hit = pattern.search(text)
             if hit:
                 matched.append(hit.group(0).strip())
-        if len(matched) >= skill.get('min_hits', 1):
-            matches.append(
-                {
-                    'id': skill['id'],
-                    'matched': matched,
-                    'hits': len(matched),
-                    'activation_test': skill.get('activation_test', ''),
-                }
-            )
-    matches.sort(key=lambda m: -m['hits'])
+        if len(matched) < skill.get('min_hits', 1):
+            continue
+        entry = merged.setdefault(
+            skill['id'],
+            {
+                'id': skill['id'],
+                'matched': [],
+                'hits': 0,
+                'activation_test': activation_test_for(skill['id'], rules),
+            },
+        )
+        entry['matched'].extend(m for m in matched if m not in entry['matched'])
+        entry['hits'] = len(entry['matched'])
+    matches = sorted(merged.values(), key=lambda m: -m['hits'])
     return matches[: rules.get('max_candidates', 2)]
 
 
@@ -135,19 +161,19 @@ def hint_line(matches: list[dict]) -> str:
 def _eval(trigger_dir: Path, rules: dict) -> int:
     """Print the per-skill dev-set recall/specificity table (informational)."""
     print(f'{"skill":<55} {"recall":>7} {"spec":>7}')
-    for skill in rules['skills']:
-        dataset = trigger_dir / (skill['id'].split(':', 1)[1] + '.json')
+    for skill_id in dict.fromkeys(s['id'] for s in rules['skills']):
+        dataset = trigger_dir / (skill_id.split(':', 1)[1] + '.json')
         if not dataset.exists():
-            print(f'{skill["id"]:<55} {"n/a":>7} {"n/a":>7}')
+            print(f'{skill_id:<55} {"n/a":>7} {"n/a":>7}')
             continue
         data = json.loads(dataset.read_text(encoding='utf-8'))
         pos = [d['query'] for d in data if d['should_trigger']]
         neg = [d['query'] for d in data if not d['should_trigger']]
-        hits = sum(1 for q in pos if skill['id'] in {m['id'] for m in route(q, rules)})
-        false_fires = sum(1 for q in neg if skill['id'] in {m['id'] for m in route(q, rules)})
+        hits = sum(1 for q in pos if skill_id in {m['id'] for m in route(q, rules)})
+        false_fires = sum(1 for q in neg if skill_id in {m['id'] for m in route(q, rules)})
         recall = hits / len(pos) if pos else 1.0
         spec = 1 - false_fires / len(neg) if neg else 1.0
-        print(f'{skill["id"]:<55} {recall:>7.2f} {spec:>7.2f}')
+        print(f'{skill_id:<55} {recall:>7.2f} {spec:>7.2f}')
     return 0
 
 

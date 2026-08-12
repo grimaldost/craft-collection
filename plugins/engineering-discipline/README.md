@@ -10,8 +10,10 @@ discipline, with mechanical enforcement and a self-refreshing toolchain.
   security. Version pins live in `skills/python-engineering/stack.toml`.
 - **data-engineering-discipline** — the four non-negotiables (output is the
   contract; source of truth is observable; real data finds what fixtures can't;
-  all change is traceable), LLM failure modes, scenario playbooks, parity recipes,
-  and contract templates.
+  all change is traceable), the cross-producer contract, grain and time
+  semantics, two plain rails (the oracle is not edited in the change it judges;
+  irreversible operations are proposed, not executed), scenario playbooks,
+  parity recipes, and a contract template.
 - **/refresh-stack** (manual-only) — review changelogs for any drifted tool and
   propose a reviewable `stack.toml` + guidance update.
 
@@ -21,8 +23,13 @@ discipline, with mechanical enforcement and a self-refreshing toolchain.
   `doctor.py` (audit an existing project), `check_versions.py` (compare pins to
   PyPI; `--json` for CI).
 - `skills/data-engineering-discipline/scripts/` — `schema_diff.py`,
-  `parity_check.py`, `contract_check.py`, `freshness_check.py` (stdlib-first,
-  pandas optional).
+  `parity_check.py` (aggregate diff, null placement, per-column tolerance,
+  residual-zero, and a two-producer join asserted before any value),
+  `contract_check.py`, `freshness_check.py`, `producer_census.py`,
+  `which_copy.py`, and `mutate_check.py`, which proves a check can fail —
+  `parity` and `schema` through its own CLI, `contract_check`,
+  `freshness_check` and `producer_census` through `test_mutate_check.py`
+  (stdlib-first, pandas optional).
 
 All scripts ship with stdlib-runnable tests (`python test_<name>.py`).
 

@@ -1,6 +1,11 @@
 # Principles — Full Catalog
 
-The 21 principles, organized by what each one protects. Each principle is
+The 16 principles, organized by what each one protects. The numbering is
+historical so older citations still resolve: principles 12–16 (replayability,
+schema evolution) were retired in 2026-08 — the body carries the replay and
+schema-evolution rules directly, and `contract-templates.md` carries the
+compatibility-mode vocabulary, so these five were a second definition site.
+Each principle is
 **universal** — it applies regardless of whether you're creating a new
 dataset, migrating an existing one, refactoring transforms, evolving a
 schema, backfilling, or investigating a regression. The *specifics* of
@@ -497,170 +502,6 @@ the framework's CI matrix.
 
 ---
 
-## Group 4 — Replayability & idempotency (recompute as recovery)
-
-### Principle 12 — Pipelines are pure functions of inputs and partition keys
-
-**Statement.** Same inputs + same partition + same code = same output.
-Always. This is the foundation Maxime Beauchemin laid in *Functional
-Data Engineering* and remains the design philosophy behind Airflow,
-Dagster, and Prefect.
-
-**Per-scenario application.** Universal — applies to every batch
-pipeline.
-
-**Anti-pattern.** Transforms that read `now()` or random seeds without
-recording them; transforms that mutate a partition in place;
-transforms where the order of input rows affects output. Replay
-produces different results than the original run.
-
-**Corrective and verification.**
-
-```python
-# Pure-function check: same input → same output
-out1 = run_pipeline(inputs, partition_key="2026-05-26")
-out2 = run_pipeline(inputs, partition_key="2026-05-26")
-pl.testing.assert_frame_equal(out1, out2, check_exact=True)
-```
-
-**LLM gotcha.** LLMs reach for `datetime.now()` and `pd.Timestamp.now()`
-when they need a date. They use random sampling without recording
-seeds. Mechanical defense: pre-commit hook that flags `now()` /
-`today()` / `random.*` in transform code; CI gate that enforces
-partition-keyed outputs.
-
----
-
-### Principle 13 — Idempotent writes only
-
-**Statement.** `INSERT INTO ... SELECT` is not idempotent. `INSERT
-OVERWRITE`, `DELETE WHERE partition_key = X; INSERT`, and `MERGE` with
-a complete match condition are idempotent.
-
-**Per-scenario application.**
-
-- New dataset: declare idempotency at design time. Choose a
-  partition-overwrite or MERGE strategy.
-- Migration / refactor: the new write pattern must be at least as
-  idempotent as the existing one.
-- Backfill: idempotency is the *enabling* property. Without it,
-  backfill is not safe.
-- Incremental loads: MERGE match conditions must cover the full
-  natural-key set.
-
-**Anti-pattern.** A MERGE statement matches on `(customer_id)` when
-uniqueness requires `(customer_id, effective_date)`. Each rerun
-creates silent duplicates that look like new rows. Documented in
-Monte Carlo's analysis of LLM-generated SQL.
-
-**Corrective and verification.**
-
-```sql
--- Replay row-count check
-SELECT COUNT(*) FROM target_table WHERE partition_date = '2026-05-26';
--- run the MERGE again
-SELECT COUNT(*) FROM target_table WHERE partition_date = '2026-05-26';
--- counts must match exactly
-```
-
-For dbt incremental models: declare `unique_key` explicitly with all
-key columns; use `merge` strategy; test replay.
-
-**LLM gotcha.** LLMs write MERGE statements with the most obvious key
-column but miss compound keys. Mechanical defense: replay test as a
-required step before declaring an incremental model done.
-
----
-
-## Group 5 — Schema evolution (change with a calendar)
-
-### Principle 14 — Schema changes go through dual-write and deprecation, not in-place mutation
-
-**Statement.** A column rename is two changes: add the new column,
-then later remove the old one — separated by a deprecation window
-with a named end date. The same applies to drops, retypes, and
-semantic changes.
-
-**Per-scenario application.**
-
-- Schema evolution: dual-write is the default for any non-additive
-  change.
-- Migration / refactor: schema changes are out of scope. Smuggling
-  them into a migration is the anti-pattern (see Principle 17).
-- New dataset: design with future evolution in mind — versioned
-  contract, owner, deprecation policy.
-
-**Anti-pattern.** Rename a column in one PR. Downstream notebooks,
-dashboards, and exports break the next morning. The producer team
-blames "downstream's brittle code."
-
-**Corrective and verification.** Add the new column alongside the
-old; populate both; announce the deprecation window; remove the old
-column only after the window expires and consumers have
-acknowledged. dbt's `deprecation_date` or equivalent metadata makes
-the calendar discoverable.
-
-**LLM gotcha.** LLMs do not have a sense of consumer impact. They
-will rename or delete columns without considering who reads them.
-Mechanical defense: consumer-impact analysis (via lineage walk) is a
-required step before any subtractive or renaming schema change.
-
----
-
-### Principle 15 — Choose a compatibility direction and enforce it
-
-**Statement.** BACKWARD-compatible changes: add nullable/defaulted
-fields, delete fields. FORWARD-compatible changes: add fields, delete
-fields-with-defaults. Pick one mode per producer and apply it across
-all changes.
-
-**Per-scenario application.** Most directly relevant to schema
-evolution and to event-stream design (Schema Registry). The choice
-also informs migration / refactor decisions when the producer's
-output is consumed by multiple downstream teams.
-
-**Anti-pattern.** Mixing compatibility modes within a single producer;
-one PR breaks readers, the next breaks writers. Consumers never know
-what to expect.
-
-**Corrective and verification.** Declare the compatibility mode in
-the producer's contract. Validate in CI before merge. For event
-streams, use Schema Registry's `_TRANSITIVE` variants — they check
-against all prior versions, not just the immediate predecessor. See
-`references/community-practices.md` for the compatibility-mode
-taxonomy.
-
-**LLM gotcha.** LLMs handle each schema change in isolation, without
-maintaining a global stance on compatibility direction. Mechanical
-defense: compatibility mode is declared in the producer's contract
-file; CI enforces it on every PR.
-
----
-
-### Principle 16 — Versioned models for breaking changes
-
-**Statement.** When a change cannot be made compatible, version the
-model. `dim_user_v1` and `dim_user_v2` coexist for the deprecation
-window; `latest_version` points consumers at the current one.
-
-**Per-scenario application.** Schema evolution where the change is
-genuinely breaking and dual-write is insufficient.
-
-**Anti-pattern.** In-place breaking changes labeled as "v2" in a
-comment but materialized to the same table. Consumers cannot opt in
-to the new version.
-
-**Corrective and verification.** Two physical artifacts during the
-migration window. Discoverable, documented, dated. Use dbt's
-`versions:` block or equivalent metadata.
-
-**LLM gotcha.** LLMs may suggest "just update the model" when
-versioning is the right choice. Mechanical defense: breaking-change
-detection in CI (dbt `state:modified` with `--fail-fast`) forces the
-versioning conversation before merge.
-
----
-
 ## Group 6 — Scope and traceability (intentional change)
 
 These principles defend against the failure mode where change scope is
@@ -800,9 +641,9 @@ unit tests.
 **Anti-pattern.** Relying on a single layer (most often "I ran the
 pipeline and the rows look reasonable").
 
-**Corrective and verification.** Test coverage matrix per artifact.
-See `references/community-practices.md` for the 7-layer pyramid
-taxonomy.
+**Corrective and verification.** Test coverage matrix per artifact:
+unit, contract, generic, singular, integration-on-real-data, parity, and
+production monitors - each layer catching what the one below it cannot.
 
 **LLM gotcha.** LLMs default to "the data looks right" as the only
 check when no explicit test framework is set up. Mechanical defense:
@@ -886,8 +727,6 @@ consumer-facing dataset.
 | Contract preservation (1–5) | Silent schema / cardinality / dtype breakage | All scenarios touching a consumer-facing dataset |
 | Source-of-truth (6–8) | Inference instead of verification | All scenarios where existing code, data, or libraries are involved |
 | Real-data (9–11) | Synthetic-fixtures-pass-real-fails | New dataset, constraint design, framework testing, any "I tested it locally" claim |
-| Replayability (12–13) | Non-idempotent runs, duplicate rows | Incremental loads, backfill, streaming, any partition-based pipeline |
-| Schema evolution (14–16) | Silent consumer breakage | Schema changes, deprecations, versioning |
 | Scope & traceability (17–19) | Bundled change, silent divergence | All scenarios — the highest-leverage discipline group |
 | Lineage & observability (20–21) | Drift invisible until consumers complain | Any consumer-facing dataset |
 

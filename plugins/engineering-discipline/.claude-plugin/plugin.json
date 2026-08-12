@@ -1,7 +1,7 @@
 {
   "name": "engineering-discipline",
   "displayName": "Engineering Discipline",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Modern Python engineering standards and stack-agnostic data-engineering discipline, with ruff/uv enforcement hooks and a self-refreshing toolchain manifest.",
   "author": {
     "name": "Grimaldo Stanzani",
