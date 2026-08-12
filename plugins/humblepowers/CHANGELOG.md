@@ -65,7 +65,8 @@ The gate's evidence is **one bank**: two tasks, nine repeats per cell, three
 tiers. On the rate at which delegated work leaves a regression check behind it
 moved **+0.22 (haiku) / +0.56 (sonnet) / +0.44 (opus, 90% CI [+0.11, +0.78])**,
 with **0/12** false positives on trivial edits where verification work would
-have been over-scope. Four cautions ride every one of those numbers. They are
+have been over-scope. Four cautions ride every one of those numbers, and a
+fifth — the sharpest — follows them. They are
 the *discipline*-worded arm; a widely-quoted "+0.56 for the skill" is the
 rejected prescriptive arm's figure and should not be repeated. The ladder is
 non-monotone across one bank with overlapping intervals, which is why no
