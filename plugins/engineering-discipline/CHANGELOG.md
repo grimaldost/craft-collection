@@ -66,8 +66,22 @@ mutation harness; description 223 -> 243 words, itemised under Changed.
   that deletion was not authorised, the net +1-word figure hid it, and it has
   been reverted, because the single sanctioned holdout read cannot attribute
   movement across four simultaneous edits. All three land as one change buying
-  one holdout reseal; the sealed cases and the pre-registered thresholds — with
-  the n they are evaluated at — are in `evals/trigger/holdout/BASELINES.md`.
+  one holdout reseal.
+- **MEASURED, and (1) did not work.** The dev pass and the sealed holdout were
+  both bought on 2026-08-11 (105 spawns, $9.97) and the row is filed in
+  `evals/trigger/holdout/BASELINES.md`. The pre-registered gate for (1) was
+  1/3 -> 3/3 on `Write tests for the billing aggregation pipeline so a bad
+  change can't ship silently`; it measured **1/3 on three valid runs with zero
+  errored positive runs — no movement**. Dev recall 0.82 [0.66, 0.91] and
+  specificity 1.00 [0.90, 1.00] both clear their gates, but recall on the
+  byte-identical fixture was 0.939 before the edit, and two other positives
+  regressed. That decline is descriptive only (Fisher exact p ~ 0.26, runs
+  clustered by query), so it licenses no revert — it licenses **not claiming
+  (1) as a fix**. (2) fares better and is bounded: on its three sealed cases the
+  ruling is decidable but not uniform — one positive fires 3/3, the other misses
+  0/3, the negative correctly stays silent, n = 1 query per outcome. The one
+  genuine generalization row on this surface, the 0.1.15 intent paraphrase,
+  fires 3/3.
 - `contract_check.validate` raises on a contract shape it cannot read. A nested
   `{"columns": {...}}` contract iterated to zero recognised rules and returned
   an empty violation list — a green contract check over rows that violate it.
