@@ -134,8 +134,15 @@ edits where verification work would have been over-scope. That is enough to
 offer, not enough to impose; default-on waits on a replication with a different
 task family.
 
-Read those numbers with two scope limits attached. **Both arms behind them ran
-with no skill body mounted** — the measured contrast is gate-vs-no-gate in a bare
+Read those numbers with three scope limits attached. **The +0.44 is not known to
+be the gate firing.** At the strong tier the arm was mounted and never delivered
+its treatment: the gate's own sentence appears in **0 of 15** opus streams
+against **16 of 21** haiku streams on the same plugin directory. The lift is
+real in the ledger (9/9 against 5/9), and the sentence is absent in any form, so
+the strong-tier figure's cause is **unexplained** — not refuted, and not the
+gate. Do not quote it as a three-tier ladder without that clause. **Both arms
+behind all of the numbers ran with no skill body mounted** — the measured
+contrast is gate-vs-no-gate in a bare
 delegated session, so it does not say what the gate adds *on top of* the
 discipline this plugin already ships as prose. And the replication commissioned
 to re-measure the gate here — including its false-positive rate and a

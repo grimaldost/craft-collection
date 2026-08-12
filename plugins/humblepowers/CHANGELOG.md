@@ -10,7 +10,10 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 > Renumbered from 0.10.0 before release. That number belongs to the
 > `data-engineering-discipline` vNext entry directly below, which ships
 > first; this entry is stacked above it so the file reads in release order
-> once both are in.
+> once both are in. The 0.10.0 section is a **forward reference** until that
+> release lands — it cites `references/evidence-fabrication.md`, which arrives
+> with it. If that release is dropped rather than merged, delete the 0.10.0
+> section and renumber this entry back to 0.10.0.
 
 `verification-before-completion` gets the two delivery mechanisms it never had.
 The skill body is **unchanged**, and that is the finding, not an omission: an
@@ -72,6 +75,21 @@ plugins — so it says nothing about the gate's value *in addition to* the body
 this plugin ships. And the default stays off until a replication on a different
 task family, because a stop-blocking hook in every subagent is a larger bet than
 one bank funds.
+
+**A fifth caution, and it is the one to read before quoting the ladder: the
++0.44 is not known to be the gate firing.** A companion pass over the raw
+streams found that at the strong tier the gate arm was mounted and **never
+delivered its treatment** — the gate's own sentence appears in **0 of 15** opus
+streams, against **16 of 21** haiku streams on the *same* plugin directory. The
++0.44 is real in the ledger (9/9 against 5/9) and the delivery gap is not a
+formatting difference: the sentence is absent in any form. So the strong-tier
+figure's **cause is unexplained** — not refuted, and not the gate firing.
+Anyone citing a three-tier ladder is citing one number whose mechanism is open.
+Two provenance limits on that check itself: the stream files it reads are
+gitignored and exist in a single working directory rather than in any git
+history, and the p-value quoted for it elsewhere is one-sided and computed on a
+pooled table rather than on the 0/15-versus-16/21 pair — so the counts above are
+the claim, and the p-value is not repeated here.
 
 **This gate ships with its own proof obligation undischarged, and that is stated
 rather than glossed.** The program commissioned to re-measure it pre-registered a
