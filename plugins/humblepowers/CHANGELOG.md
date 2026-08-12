@@ -5,6 +5,105 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.12.0 — 2026-08-12
+
+`choosing-models` learns where a routing decision belongs. Three calibration
+cycles asked whether the rubric's score predicts the right tier; the 2026-08-12
+fathom wave asked what *asking* costs, and found that the cost of consulting the
+rubric and the usefulness of consulting it both track the deciding context and
+run in opposite directions. The skill now settles that before any scoring
+happens. Minor bump rather than the 0.9.1 patch precedent: this changes what the
+skill tells you to do, not only how it says it. No threshold moved, no scoring
+mechanic changed, no lineup edit — see below for why the same wave does **not**
+license those.
+
+### Changed
+
+- **A deciding-context rule, ahead of the procedure (`choosing-models`).** A
+  strong-tier session routing a single task skips the rubric — it lands on the
+  tier it would have chosen unaided, at the highest price of any deciding
+  context. Scoring is for batches, taken at the weak tier, where the fixed cost
+  amortises and where the scoring is the only thing that changed a decision at
+  all; and because that is also where the rubric was seen misapplied, an emitted
+  tier is checked against the thresholds rather than taken as given.
+- **The oracle-coverage discount asks whether a gate sees the failure at all**,
+  not only whether the failure is diagnosable at the discounted tier. Where the
+  fix site sits outside the shipped suite's coverage, that suite caught none of
+  26 measured failures — so on exactly the task shapes the rubric's cross-shape
+  floor fires on, a discount presuming the failure will be caught buys nothing.
+- **`models.toml` provenance** carries the wave as `[meta] deciding_context`,
+  with the measured premiums and agreement rates, an explicit record of what the
+  evidence did *not* license, and the four questions it leaves open. The
+  `oracle_discount` entry takes the silent-failure count; the `calibration` entry
+  drops its stale "designed and unrun" reading of the tier-separating bank, which
+  has since run in part.
+
+### Removed
+
+- **The cost-caveats bullet from the skill body.** Two of its three clauses were
+  already in `models.toml` verbatim (the tokenizer caveat on the `mid` row, the
+  5–10× large-prompt multiplier in `[typical_cost]`); the third — cheaper is not
+  faster wall-clock — moved there to sit with them. Restating the data file in
+  the body is what the body has least room for.
+
+### What paid for the new prose
+
+The body is a ratchet, so the deciding-context rule and the sharpened oracle
+clause displaced rather than appended (1006 → 997 words). Beyond the
+cost-caveats bullet: the "Data and overrides" section stopped restating
+`models.toml`'s own header and now points at it; the intro's rubric-lineage
+sentence went, since step 1 and the rubric file both already say evidence moves
+the rubric; step 1's claim that scoring is **zero cost** went because this wave
+refutes it; steps 5 and 6, the staleness tripwire and the `choosing-tools`
+boundary shed clauses each duplicated elsewhere on the page; and the
+"silently pinning the top tier is the failure mode this skill ends" line went,
+its work already done by step 5's all-top-tier comparison row.
+
+### Measured — and, as much, what it does not license
+
+**The wave.** fathom `routing-decision-v1` (54 trials, $14.04) read beside
+`model-tier-v2`'s positive control and discordant slice (89 trials, $27.60).
+
+Rubric premium per task over deciding unaided: **$0.0021** at the weak deciding
+tier over a batch of nine, **$0.0748** at mid deciding one task, **$0.2026** at
+strong deciding one task. Agreement with the same session's unaided choice
+(modal route over 3 repeats, 9 briefs): **9/9 at strong, 8/9 at mid, 5/9 at
+weak**. So the rubric is pure overhead exactly where it is dearest to run: at
+strong on one task its break-even is 77.6% / 93.8% / 104.7% at a weak-tier pass
+rate of 1.0 / 0.8 / 0.7 — above 100%, it cannot pay at any correction rate. At
+mid on one task the bar is 28.6–38.6% against one disagreement in nine as the
+ceiling.
+
+**Not licensed, and not done.** No threshold moved: the only robust adequacy
+readings in the wave are one brief's `weak` and `mid` arms, and the
+pre-registration requires robust readings plus a cross-distribution rule. The
+points system stays: of the two escalations off `mid` that proved unnecessary,
+only one implicates the formula — on the other the formula said `mid` at score
+45 and a weak model *applying* it emitted `strong`, which is a decider error,
+not a design error. And no general over-provisioning claim: the four discordant
+briefs split **2–2 by tier pair**, right to escalate off `weak` and wrong off
+`mid`. The direction of error is not uniform either — every disagreement in the
+routing programme was the rubric routing *up*, which reads as conservative bias,
+but on one brief (a robust `weak` 0/5, `mid` 0/5, `strong` 5/5) it escalated in
+the right direction and **under**-escalated, so routing by it would still have
+shipped a silent failure.
+
+**Held open.** Whether the rubric routes *better* anywhere was never measured.
+The weak decider's four upgrades cost **+$0.0580/task** in extra execution — 28×
+its own decision premium — and only two of four were shown necessary. One brief
+sits at 0.62 against a 0.70 bar and needs n ≈ 200 on one arm, so it is
+permanently borderline at buyable n. And presentation moves the route: six of
+nine arms routed the one shared brief differently alone than inside a batch of
+nine, mechanism-independently — so batch and per-spawn routing are not
+interchangeable. That last one is n=3 on one brief; it is recorded here and in
+`models.toml`, and not leaned on.
+
+The `description` is **unchanged**, deliberately. It is under a spent holdout
+seal, the measurement says nothing about when the skill should be selected — it
+measured the price of injecting the body once selected — and the rule that
+landed is a judgment the body can carry with the nuance a trigger surface
+cannot.
+
 ## 0.11.0 — 2026-08-11
 
 > Renumbered from 0.10.0 before release. That number belongs to the
