@@ -84,19 +84,10 @@ verification-before-completion — its evidence rules govern the "done".
 
 ## Authoring and dispatch notes
 
-**Strip-on-save hooks.** If the project runs a format-on-save hook that strips
-unused imports or symbols, author each import in the *same* step that first
-references it. An "add the import now, use it later" sequence breaks: the hook
-removes the still-unused import the instant it lands, and the later step hits
-an undefined name — sequence the edit so the symbol is introduced and used
-together.
-
-**Per-phase commits in a multi-phase worktree.** Stage a phase's full file set
-and commit with no unrelated tracked-dirty files: pre-commit stashes whatever
-is unstaged, a format hook may auto-fix a staged file, and the stash-pop then
-conflicts — the commit aborts, the file left `MM` (staged + unstaged auto-fix).
-Recover by re-`git add`-ing the auto-fixed file; prevent it by committing each
-phase from an otherwise-clean tree.
+**Environment hazards that bite a delegated step** — format-on-save hooks
+rewriting the bytes you just wrote, an isolated worktree breaking `../` sibling
+paths, per-phase commits under a stashing pre-commit, and a backgrounded gate
+that ends a subagent's turn for good: [`references/dispatch-hazards.md`](references/dispatch-hazards.md).
 
 **Task granularity vs dispatch economics.** "Bite-sized" means one clear action
 per step, not one subagent per step. When several small steps form one
@@ -134,5 +125,10 @@ status protocol.
   work wants those, hand it off — this skill is deliberately lighter.
 - **test-driven-development** alone covers a single-loop change; a plan
   document for a one-test fix is ceremony.
+- **context-handoff** owns briefs that cross a boundary the harness will not
+  bridge — a fresh session, a human, a ticket. What an *in-session* subagent is
+  told is this skill's, in `subagent-prompts.md`: the two skills do not overlap,
+  and the operational rules a spawned agent needs belong with the template it
+  inherits.
 - Harness plan mode complements this skill: its approved plan is a valid
   input; the contract above is what makes the artifact executable cold.
