@@ -10,10 +10,14 @@ docs/design/2026-07-04-memory-suite-research.md).
 
 Lifecycle gates (T22a hardening):
 - FULL tier (anchor updated within STALE_AFTER_S): the HEAD — content above
-  the `<!-- anchor:tail -->` marker; whole file when marker-less.
-- POINTER tier (older): path + title + age + a confirm-to-expand line + the
-  close command. A dead track costs a paragraph, never 8K chars, until a
-  session confirms it — and it is never silently dropped either.
+  the `<!-- anchor:tail -->` marker; whole file when marker-less. Over budget,
+  the HEAD is spent top-down on whole sections and the dropped ones are named:
+  document order is the drop order, so the cut is a stated policy the author
+  controls rather than a byte offset that once landed mid "Resume steps".
+- POINTER tier (older): path + title + age + the cursor the anchor still
+  asserts + a confirm-to-expand line + the close command. A dead track costs a
+  paragraph, never 8K chars, until a session confirms it — and it is never
+  silently dropped either.
 - source=startup (fresh process, the crash-restart path) proceeds only when
   the anchor was updated within STARTUP_RECENT_S; an ordinary new session in
   a cwd with an old anchor stays untaxed. compact/resume/clear — explicit
@@ -49,7 +53,13 @@ ENV_GATE = 'SESSION_WORKFLOW_ANCHOR_HOOKS'
 MAX_CONTEXT_CHARS = 8_000
 STALE_AFTER_S = 24 * 3600  # older than this -> pointer tier, not the full body
 STARTUP_RECENT_S = 6 * 3600  # source=startup injects only within this window
+DORMANT_AFTER_S = 72 * 3600  # --list-dormant threshold: still active, long untouched
 MAX_NAMED_OPEN = 5  # cap the multi-track warning's name list; count the rest
+MAX_NAMED_DROPPED = 6  # cap the dropped-section name list the same way
+# A HEAD section boundary. Order is priority: the budget is spent top-down and
+# the first section that does not fit ends the injection, so what an author
+# writes first is what survives a cut.
+HEADING_RE = re.compile(r'^#{1,6}\s+(\S.*)$')
 # anchor/v1 two-tier structure: content above this marker line is the live HEAD
 # (mission, cursor, invariants, last-known-good, resume steps) and is injected;
 # the TAIL below (append-only decisions log, resolved history) stays on disk.
@@ -148,6 +158,107 @@ def split_head(text: str) -> tuple[str, bool]:
     return text, False
 
 
+def split_sections(head: str) -> list[tuple[str, str]]:
+    """(name, block) pairs in document order, lossless: joining the blocks with
+    newlines reproduces `head`. Content before the first heading is the preamble
+    and is named ''. Headings inside fenced code are not boundaries — an anchor
+    that pastes a shell transcript would otherwise be shredded at every `#`."""
+    sections: list[tuple[str, str]] = []
+    name = ''
+    block: list[str] = []
+    in_fence = False
+    for line in head.splitlines():
+        if line.lstrip().startswith('```'):
+            in_fence = not in_fence
+        match = None if in_fence else HEADING_RE.match(line)
+        if match:
+            if block:
+                sections.append((name, '\n'.join(block)))
+            name = match.group(1).strip()
+            block = [line]
+        else:
+            block.append(line)
+    if block:
+        sections.append((name, '\n'.join(block)))
+    return sections
+
+
+def fit_head(head: str) -> tuple[str, list[str], bool]:
+    """Spend the injection budget top-down on whole sections; return
+    (kept_text, dropped_section_names, was_byte_cut).
+
+    Document order IS the drop order: the first section that does not fit ends
+    the injection and everything after it is dropped, so a HEAD written
+    worst-loss-first degrades predictably instead of being cut mid-sentence —
+    the failure this replaces cut a real anchor inside "Resume steps", the one
+    section a cold start reads first.
+
+    The byte cut survives as the floor, for the two cases sections cannot help:
+    an anchor with no headings to cut on, and a first section that alone
+    overruns. Injecting nothing on the recovery path is the protocol's cardinal
+    failure, so a cut always beats silence — and the two signals stay distinct,
+    because "I dropped History" and "I cut you off mid-word" are different
+    things to tell a reader."""
+    if len(head) <= MAX_CONTEXT_CHARS:
+        return head, [], False
+    sections = split_sections(head)
+    if len(sections) < 2:
+        return head[:MAX_CONTEXT_CHARS], [], True
+    kept: list[str] = []
+    dropped: list[str] = []
+    used = 0
+    for name, block in sections:
+        cost = len(block) + 1
+        if dropped or used + cost > MAX_CONTEXT_CHARS:
+            dropped.append(name or '(preamble)')
+            continue
+        kept.append(block)
+        used += cost
+    if not kept:
+        # The first section alone overruns. Cut inside it, and still name the
+        # sections beyond it that were lost whole.
+        return head[:MAX_CONTEXT_CHARS], dropped[1:], True
+    return '\n'.join(kept), dropped, False
+
+
+def anchor_cursor(text: str) -> str:
+    """The cursor section's first content line — what a reader needs to judge
+    whether a dormant anchor's claim is still true. A pointer that shows only
+    path, title and age cannot be acted on; one that shows "Phase 1 IN PROGRESS"
+    against a four-day-old file can. '' when the HEAD names no cursor."""
+    head, _ = split_head(text)
+    for name, block in split_sections(head):
+        if 'cursor' in name.lower():
+            for line in block.splitlines()[1:]:
+                stripped = line.strip().lstrip('-*').strip()
+                if stripped:
+                    return stripped[:160]
+    return ''
+
+
+def list_dormant(anchors_dir: Path, min_age_s: float = DORMANT_AFTER_S) -> list[str]:
+    """Open, still-ACTIVE anchors untouched beyond min_age_s: name, age, title and
+    the cursor each still asserts. `list_stale` cannot reach these — it keys on
+    content that reads as done, and an anchor abandoned mid-cursor never says so.
+    Read at the moment a new anchor is armed, which is the one moment a human is
+    reliably present to answer close-or-adopt."""
+    now = time.time()
+    out = []
+    for f in find_open_anchors(anchors_dir):
+        age_s = now - _mtime(f)
+        if age_s < min_age_s:
+            continue
+        text = _read(f)
+        if is_content_terminal(text):
+            continue  # list_stale owns the closed-but-unrenamed ones
+        line = f'{f.name}  {int(age_s // 3600)}h  {anchor_title(text)}'
+        cursor = anchor_cursor(text)
+        if cursor:
+            line += f'  | cursor: {cursor}'
+        out.append(line)
+    return out
+
+
 def _other_open_warning(other_open: list[Path] | None) -> str:
     """The concurrent-tracks warning block, shared by both tiers; '' when alone."""
     if not other_open:
@@ -201,10 +312,7 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
     session closing it) degrades to a path-only context — never a raise that
     would skip both the injection AND the failure telemetry."""
     text, has_tail = split_head(_read(anchor))
-    truncated = False
-    if len(text) > MAX_CONTEXT_CHARS:
-        text = text[:MAX_CONTEXT_CHARS]
-        truncated = True
+    text, dropped, truncated = fit_head(text)
 
     header = [
         '<control-anchor>',
@@ -221,6 +329,11 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
         body.append(
             '[anchor tail (decisions log / resolved history) on disk - read the file if needed]'
         )
+    if dropped:
+        names = ', '.join(dropped[:MAX_NAMED_DROPPED])
+        if len(dropped) > MAX_NAMED_DROPPED:
+            names += f' and {len(dropped) - MAX_NAMED_DROPPED} more'
+        body.append(f'[dropped from injection, in HEAD order: {names} - read the file for them]')
     if truncated:
         body.append('[anchor truncated for injection - read the file for the rest]')
     return '\n'.join(header) + '\n---\n' + '\n'.join(body) + '\n</control-anchor>'
@@ -241,6 +354,12 @@ def build_pointer(anchor: Path, stale_s: float, other_open: list[Path] | None = 
         'of truth for its run state. If the track is finished, close it: '
         f'mv {anchor.name} {anchor.stem}.closed.md',
     ]
+    # The cursor is what makes a stale pointer actionable: path/title/age cannot be
+    # checked against reality, but "Phase 1 IN PROGRESS - workflow wf_..." on a
+    # four-day-old file can be, and was once wrong while the durable state said so.
+    cursor = anchor_cursor(_read(anchor))
+    if cursor:
+        lines.append(f'Cursor it still asserts: {cursor}')
     warn = _other_open_warning(other_open)
     if warn:
         lines.append(warn)
@@ -335,6 +454,14 @@ if __name__ == '__main__':
         base = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.cwd() / '.claude' / 'anchors'
         for cmd in list_stale(base):
             print(cmd)
+        sys.exit(0)
+    # Arm-time sweep entry: `python anchor_inject.py --list-dormant [anchors_dir]`
+    # prints the still-ACTIVE anchors nobody has touched in DORMANT_AFTER_S, with
+    # the cursor each still asserts, so arming a new track can offer close-or-adopt.
+    if len(sys.argv) > 1 and sys.argv[1] == '--list-dormant':
+        base = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.cwd() / '.claude' / 'anchors'
+        for line in list_dormant(base):
+            print(line)
         sys.exit(0)
     try:
         sys.exit(main())

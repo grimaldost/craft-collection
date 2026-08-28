@@ -12,8 +12,9 @@ Contract under test (panel-hardened design, memory-suite v2):
 - source=startup injects only when the anchor is recent (crash-restart window);
   compact/resume/clear always evaluate;
 - closed anchors (*.closed.md) are never injected;
-- oversized anchors are truncated to a bound (the anchor must not become the
-  token hog it exists to prevent);
+- oversized anchors are bounded by spending the budget top-down on whole
+  sections and NAMING the dropped ones -- document order is the drop order --
+  with a byte cut as the fallback when there are no headings to cut on;
 - an `<!-- anchor:tail -->` marker splits HEAD (injected) from TAIL (on disk
   only), so the live state is never the part the bound cuts; marker-less
   anchors keep the whole-file behavior;
@@ -278,13 +279,31 @@ def test_telemetry_carries_tier():
         assert tiers == ['full', 'pointer'], tiers
 
 
-def test_oversized_anchor_truncated():
+def test_oversized_anchor_drops_whole_sections_and_names_them():
+    # An over-budget HEAD is spent top-down on whole sections; what did not fit is
+    # named rather than cut mid-sentence. The bound still holds.
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
-        make_anchor(tmp, body='# Cursor\n' + ('x' * 50_000))
+        make_anchor(tmp, body='# Cursor\nnext: step 7\n# History\n' + ('x' * 50_000))
         proc = run_hook(tmp)
         out = json.loads(proc.stdout)
         ctx = out['hookSpecificOutput']['additionalContext']
+        assert len(ctx) < 20_000
+        assert 'dropped from injection' in ctx.lower()
+        assert 'History' in ctx, 'the dropped section must be named'
+        assert 'next: step 7' in ctx, 'the section that fit must survive'
+
+
+def test_headingless_oversized_anchor_falls_back_to_a_byte_cut():
+    # No headings means nothing to cut on. The byte-cut fallback stays: 0 useful
+    # bytes on the recovery path is worse than a cut, so it must never be silence.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchors = tmp / '.claude' / 'anchors'
+        anchors.mkdir(parents=True)
+        (anchors / 'run.md').write_text('x' * 50_000, encoding='utf-8')
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
         assert len(ctx) < 20_000
         assert 'truncated' in ctx.lower()
 
@@ -357,15 +376,17 @@ def test_tail_marker_injects_head_only():
 
 def test_oversized_head_still_bounded():
     # The marker does not repeal the bound: a HEAD that alone exceeds the budget
-    # still gets the truncation fallback, note included.
+    # is still bounded, and still says what it could not carry.
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
-        body = '# Cursor\n' + ('x' * 50_000) + '\n<!-- anchor:tail -->\ntail\n'
+        body = (
+            '# Cursor\nnext: step 7\n# Bulk\n' + ('x' * 50_000) + '\n<!-- anchor:tail -->\ntail\n'
+        )
         make_anchor(tmp, body=body)
         proc = run_hook(tmp)
         ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
         assert len(ctx) < 20_000
-        assert 'truncated' in ctx.lower()
+        assert 'dropped from injection' in ctx.lower()
 
 
 def test_multi_open_anchor_warning():
@@ -583,6 +604,123 @@ def test_emit_failure_logs_failure_event_not_success():
         assert 'anchor-inject' not in events, 'success logged for an injection that never emitted'
 
 
+def test_head_order_is_the_drop_order():
+    # The load-bearing claim of section-aware injection: what an author writes
+    # FIRST is what survives a cut. The same two sections in the opposite order
+    # must produce the opposite survivor - otherwise "order is the drop order"
+    # is a sentence in a skill body and not a property of the mechanism.
+    import anchor_inject as ai
+
+    bulk = 'x' * 20_000
+    resume_first = '# Resume steps\nrun the thing\n# History\n' + bulk + '\n'
+    history_first = '# History\n' + bulk + '\n# Resume steps\nrun the thing\n'
+
+    kept, dropped, cut = ai.fit_head(resume_first)
+    assert 'run the thing' in kept
+    assert dropped == ['History']
+    assert cut is False, 'a clean section boundary means no byte cut'
+
+    # Same two sections, opposite order, opposite survivor. The first section
+    # alone overruns here, so the byte-cut floor applies -- but the section
+    # beyond it is still named rather than lost silently.
+    kept, dropped, cut = ai.fit_head(history_first)
+    assert 'run the thing' not in kept, 'a late section must not survive an early overrun'
+    assert dropped == ['Resume steps']
+    assert cut is True
+
+
+def test_everything_after_the_first_overrun_is_dropped():
+    # Order is a priority, not a packing problem: a small section that happens to
+    # sit after a big one must not sneak in ahead of it.
+    import anchor_inject as ai
+
+    head = '# A\nkeep me\n# Big\n' + ('x' * 20_000) + '\n# Tiny\nlate\n'
+    kept, dropped, _cut = ai.fit_head(head)
+    assert 'keep me' in kept
+    assert 'late' not in kept
+    assert dropped == ['Big', 'Tiny']
+
+
+def test_headings_inside_fenced_code_are_not_section_boundaries():
+    # An anchor that pastes a shell transcript would otherwise be shredded at
+    # every '#' comment, and the dropped-section names would be nonsense.
+    import anchor_inject as ai
+
+    head = '# Cursor\nnext\n```sh\n# not a heading\necho hi\n```\n# Real\nyes\n'
+    names = [name for name, _ in ai.split_sections(head)]
+    assert names == ['Cursor', 'Real']
+
+
+def test_split_sections_is_lossless():
+    import anchor_inject as ai
+
+    head = 'preamble\n# One\na\n# Two\nb'
+    assert '\n'.join(block for _, block in ai.split_sections(head)) == head
+
+
+def test_stale_pointer_carries_the_cursor_it_asserts():
+    # A pointer showing only path/title/age cannot be checked against reality.
+    # The cursor can: a four-day-old file claiming "Phase 1 IN PROGRESS" is
+    # exactly the case that shipped a wrong cursor nobody surfaced.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(
+            tmp,
+            name='dormant.md',
+            body='# Remodel\n# Cursor\nPhase 1 IN PROGRESS - workflow wf_aed2f9b2\n',
+            age_s=96 * 3600,
+        )
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'Phase 1 IN PROGRESS' in ctx
+        assert 'wf_aed2f9b2' in ctx
+        assert len(ctx) < 1200, 'pointer tier must stay small even with the cursor'
+
+
+def test_pointer_without_a_cursor_section_still_emits():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='old.md', body='# Just a title\nbody\n', age_s=48 * 3600)
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'STALE' in ctx.upper()
+        assert 'Cursor it still asserts' not in ctx
+
+
+def test_list_dormant_names_untouched_active_anchors():
+    # list_stale keys on content that reads as done; an anchor abandoned
+    # mid-cursor never says so, which is why it needs its own reading.
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(
+            tmp,
+            name='abandoned.md',
+            body='# Remodel wave\n# Cursor\nPhase 1 IN PROGRESS\n',
+            age_s=96 * 3600,
+        )
+        lines = ai.list_dormant(tmp / '.claude' / 'anchors')
+        assert len(lines) == 1
+        assert 'abandoned.md' in lines[0]
+        assert '96h' in lines[0]
+        assert 'Remodel wave' in lines[0]
+        assert 'Phase 1 IN PROGRESS' in lines[0]
+        assert ai.list_stale(tmp / '.claude' / 'anchors') == [], (
+            'the sweep that already ships must provably NOT reach this case'
+        )
+
+
+def test_list_dormant_skips_fresh_and_content_terminal_anchors():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='fresh.md', body='# Cursor\ngoing\n')
+        make_anchor(tmp, name='done.md', body='**Status:** CLOSED\nfinished\n', age_s=96 * 3600)
+        assert ai.list_dormant(tmp / '.claude' / 'anchors') == []
+
+
 if __name__ == '__main__':
     test_injects_with_no_env_set()
     test_opt_out_silences_it()
@@ -600,7 +738,8 @@ if __name__ == '__main__':
     test_clear_source_injects()
     test_pointer_tier_still_warns_other_open_anchors()
     test_telemetry_carries_tier()
-    test_oversized_anchor_truncated()
+    test_oversized_anchor_drops_whole_sections_and_names_them()
+    test_headingless_oversized_anchor_falls_back_to_a_byte_cut()
     test_telemetry_line_appended()
     test_newest_non_closed_wins()
     test_non_ascii_anchor_survives_cp1252_stdout()
@@ -619,4 +758,12 @@ if __name__ == '__main__':
     test_active_other_anchor_has_no_rename_command()
     test_list_stale_emits_rename_commands()
     test_emit_failure_logs_failure_event_not_success()
+    test_head_order_is_the_drop_order()
+    test_everything_after_the_first_overrun_is_dropped()
+    test_headings_inside_fenced_code_are_not_section_boundaries()
+    test_split_sections_is_lossless()
+    test_stale_pointer_carries_the_cursor_it_asserts()
+    test_pointer_without_a_cursor_section_still_emits()
+    test_list_dormant_names_untouched_active_anchors()
+    test_list_dormant_skips_fresh_and_content_terminal_anchors()
     print('ok: all anchor_inject tests passed')
