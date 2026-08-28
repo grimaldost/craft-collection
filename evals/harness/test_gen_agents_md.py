@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,7 +47,25 @@ def main() -> int:
     committed = (ROOT / 'AGENTS.md').read_text(encoding='utf-8')
     assert committed == text, 'committed AGENTS.md is stale — regenerate'
 
-    print('ok: gen_agents_md determinism, population, hygiene, freshness')
+    # The GATE half, made to fail on purpose. Everything above asserts the
+    # generator renders correctly; nothing asserted that `--check` REJECTS a
+    # stale file, so the one branch that blocks a commit had no red proof and
+    # could have returned 0 unconditionally without a test noticing.
+    real_output = gen_agents_md.OUTPUT
+    with tempfile.TemporaryDirectory() as d:
+        stale = Path(d) / 'AGENTS.md'
+        stale.write_text('# AGENTS\n\nnot the generated index\n', encoding='utf-8')
+        gen_agents_md.OUTPUT = stale
+        try:
+            assert gen_agents_md.main(['--check']) == 1, '--check passed over a stale AGENTS.md'
+            # a missing file is stale too, not an empty pass
+            stale.unlink()
+            assert gen_agents_md.main(['--check']) == 1, '--check passed with no AGENTS.md at all'
+        finally:
+            gen_agents_md.OUTPUT = real_output
+    assert gen_agents_md.main(['--check']) == 0, '--check rejected the real, fresh AGENTS.md'
+
+    print('ok: gen_agents_md determinism, population, hygiene, freshness, stale-rejection')
     return 0
 
 
