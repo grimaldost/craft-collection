@@ -5,6 +5,73 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## 0.13.0 — 2026-08-28
+
+`planned-execution` takes ownership of what an in-session subagent is told, and
+`skill-authoring` gains the two rules a wave of failed evidence asked for. Minor
+bump: one skill's boundaries move and two shipping requirements change what an
+author must do. (2026-08-28 cross-cutting triage: T55a/T55b/T55c, T56a, T46c.)
+
+### Added
+
+- **`planned-execution/references/dispatch-hazards.md`** — the environment
+  traps that bite a delegated step, moved out of a body that was one word from
+  its ceiling and grown from two entries to four.
+- **`skill-authoring/references/shipping-gate.md`** — the two harness-ungateable
+  skill classes, the worked example of a threshold that could not move, and the
+  measured record behind the register rules.
+
+### Changed
+
+- **In-session subagent doctrine belongs to this skill, not `context-handoff`
+  (T55a).** A field report proposed landing it in `context-handoff`, whose own
+  description routes in-session parallel work to the Task tool and scopes itself
+  to briefs crossing a boundary the harness will not bridge — the one sibling
+  whose negative space excludes the case. `planned-execution` already ships the
+  implementer template a spawn brief inherits and a section of hazards of exactly
+  this genre. Boundaries now says so in a line.
+- **The implementer template says to run gates synchronously (T55a).** A
+  subagent that backgrounds a long gate and ends its turn waiting is never woken:
+  the completion notice wakes whoever spawned it. Five occurrences in one session
+  on 5-15 minute suites, about six manual resumes; zero recurrences once the
+  instruction was in the prompt. The rule sits in the template, where it binds
+  the agent that executes, rather than in the body, which is read by whoever
+  plans. Replaces "Run the commands; show their output" — no new bullet.
+- **The strip-on-save note was describing a hazard this stack cannot produce
+  (T55c).** It warned about a format-on-save hook that strips unused imports,
+  while `engineering-discipline`'s hook deliberately excludes the import-removing
+  autofix and a test guards that exclusion. The hazard it *does* create —
+  rewriting the file's bytes, so a patch keyed to remembered text misses — was
+  unnamed. Now stated as one cause with both consequences. A correction, not an
+  append.
+- **The isolated-worktree sibling trap (T55b)**, folded into the existing
+  worktree note rather than added beside it: a per-agent worktree nests at
+  `repo/.claude/worktrees/<agent>/`, so `../sibling-repo` resolves inside it.
+  Declare it in the brief; do not reach for a junction or a bulk copy — observed
+  once as a classifier refusal followed by the same thing done another way.
+- **A step whose executor is not the reader says so (T56a).** "Write each
+  reviewer's output to disk as it lands" reads as operator advice; a reader
+  building an automated panel implements the surrounding structure and drops the
+  step, and the evidence it existed to preserve is gone. Judgment-bound, no
+  mechanism reaches it, so this is prose — sharper prose, in the section that
+  already separates the layers.
+- **A registered threshold states what the design can detect (T46c)** — the
+  maximum movement attainable at the planned repeat count, and its p, computed
+  before the run. A description edit shipped against a bar it could not reach:
+  the target query moved 1/3 to 1/3 while the maximum at 3 repeats carries p
+  about 0.4, so a failed edit and a design incapable of succeeding left the same
+  record and $9.97 bought a result that answers nothing. Now requirement 5.
+- Ceilings ratcheted to measured counts: planned-execution 1069 -> 1029,
+  skill-authoring 1307 -> 1277.
+
+### What paid for the new prose
+
+`planned-execution`: two hazard notes became a one-line pointer, which is what
+funded the ownership line in Boundaries and the folded worktree clause.
+`skill-authoring`: the two harness-ungateable classes and the whole Evidence
+section moved to `references/` — provenance and rare-path detail, read by
+everyone and operative for almost no one.
+
 ## 0.12.0 — 2026-08-12
 
 `choosing-models` learns where a routing decision belongs. Three calibration
