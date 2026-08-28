@@ -16,9 +16,18 @@ serves the **installed/cached** copy, which can diverge from the working tree in
 
 So the manifest version and the executed version can disagree both ways. Read
 the working-tree `SKILL.md` before reporting on, or reconciling against, the
-skill's current behavior — and record in the report which copy you ran, flagging
-any skew. (`toolkit-awareness`'s scan flags installed-vs-source version skew
-mechanically.)
+skill's current behavior — and record in the report which copy you ran.
+`plugin_version.py` renders the version, its resolved install path, and any
+cache-versus-tree skew into the field for you.
+
+**Equal versions license reporting, not editing.** The two copies can differ in
+*bytes at the same version* — observed as line wrapping: same words, different
+line breaks. A body read from the cache and edited by literal match against the
+tree failed `NOT FOUND` three times before a byte comparison found it, and the
+first failure read as a charset fault because the console renders an em dash as
+`?`. So anything that patches a skill body matches on collapsed whitespace, or
+re-reads the target from the working tree first. Checking versions and finding
+them equal is not evidence that the text is identical.
 
 ## Destination precedence — the fine print
 

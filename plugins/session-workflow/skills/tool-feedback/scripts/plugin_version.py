@@ -101,6 +101,53 @@ def field_line(name: str, version: str, install_path: str, tree: str | None) -> 
     return f'{line}; working tree at {tree} - SKEW: name the copy you exercised'
 
 
+def checkout_currency(repo_root: Path) -> str:
+    """Whether the checkout is level with its upstream, as one readable line.
+
+    A triage reconciles "shipped or absent?" against a working tree and never
+    asks whether that tree is current. Three passes in one month ran against
+    trees 4, 29 and 2 commits behind, and the 29-commit one was a full release
+    behind with a remote-tracking ref 16 days stale, so even `git log
+    origin/main` lied until a fetch. Every shipped/absent verdict taken against
+    such a tree is wrong in the same direction, and the triage doc that results
+    becomes the status of record.
+
+    Fetches nothing: a read must not mutate the caller's repository. It reports
+    the tracking ref's own staleness so a stale ref cannot pass as agreement."""
+    import subprocess
+
+    def git(*args: str) -> str | None:
+        try:
+            done = subprocess.run(  # noqa: S603 - fixed argv, no shell
+                # `git` by PATH is deliberate: the caller's own git is the one
+                # whose config and credentials define the upstream.
+                ['git', '-C', str(repo_root), *args],  # noqa: S607
+                capture_output=True,
+                encoding='utf-8',
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return done.stdout.strip() if done.returncode == 0 else None
+
+    upstream = git('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}')
+    if not upstream:
+        return '  checkout currency: no upstream tracking ref - cannot tell if it is current'
+    counts = git('rev-list', '--left-right', '--count', 'HEAD...@{u}')
+    if not counts or len(counts.split()) != 2:
+        return f'  checkout currency: cannot compare against {upstream}'
+    ahead, behind = counts.split()
+    fetched = git('log', '-1', '--format=%cr', upstream) or 'unknown age'
+    if behind == '0':
+        return (
+            f'  checkout currency: level with {upstream} (its tip is {fetched}; fetch to be sure)'
+        )
+    return (
+        f'  checkout currency: {behind} commit(s) BEHIND {upstream}, {ahead} ahead - '
+        f'reconcile against the remote, not this tree (its tip is {fetched})'
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Emit a feedback report's Tool/version line from the install registry."
@@ -133,10 +180,28 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    tree = tree_version(Path(args.tree), entry['name']) if args.tree else None
+    tree = None
+    if args.tree:
+        tree_root = Path(args.tree)
+        tree = tree_version(tree_root, entry['name'])
+        if tree is None:
+            # A --tree that resolves no manifest used to return None, which
+            # renders exactly like "the tree agrees" - a failure to attribute
+            # reading as a clean bill of health, which is the one thing this
+            # script exists not to do. Observed: --tree pointed at the plugin
+            # directory instead of the repo root, and the line came back clean
+            # over a real cache-versus-tree release skew.
+            print(
+                f'error: no plugins/{entry["name"]}/.claude-plugin/plugin.json under '
+                f'{tree_root} - point --tree at the repo root, or omit it',
+                file=sys.stderr,
+            )
+            return 1
     print(
         f'- **Tool/version:** {field_line(entry["name"], entry["version"], entry["install_path"], tree)}'
     )
+    if args.tree:
+        print(checkout_currency(Path(args.tree)))
     return 0
 
 

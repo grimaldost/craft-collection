@@ -45,17 +45,24 @@ and CHANGELOGs belong to the tool's release process.
    pass (step 7). When the invocation names a different count or set, the
    directory is authoritative — note the discrepancy under **Inputs**. Note any triage doc already dated today and re-check at emit
    (step 7).
-2. **Reconcile shipped first.** Read the tool's CHANGELOG since the last triage —
-   on a first run, the whole CHANGELOG to date. For a component without its own
-   CHANGELOG (a harness, a scripts dir, a doc set), also read `git log` over
-   the window — increments land as commits, invisible to CHANGELOG-only
-   reconciliation. Map each finding to the version or commit that resolved it. Open the doc with **"Already shipped — NOT re-proposed"**; a
+2. **Reconcile shipped first — against a checkout you have confirmed is
+   current.** The reports come from the *installed* artifact and the grounding
+   comes from the *checkout*; nothing makes those meet on its own. `git fetch`,
+   then read the currency line `tool-feedback/scripts/plugin_version.py <plugin>
+   --tree <repo root>` prints beneath the version: it names how far behind the
+   checkout is and any cache-versus-tree skew. Then read the tool's CHANGELOG
+   since the last triage — on a first run, the whole CHANGELOG to date. For a
+   component without its own CHANGELOG (a harness, a scripts dir, a doc set),
+   also read `git log` over the window — increments land as commits, invisible to
+   CHANGELOG-only reconciliation. Map each finding to the version or commit that
+   resolved it. Open the doc with **"Already shipped — NOT re-proposed"**; a
    cluster that goes further than a shipped change is marked as *extending* it.
-   Reconcile OPEN rows too,
-   not only shipped ones: the INDEX's `## Triage coverage` lists every triage doc
-   in the dir, so carry or re-disposition each one's open `proposed`/`watch` rows
-   into this pass — a row is not closed until a later doc lists it. An
-   off-main-chain cycle-scoped triage otherwise orphans its rows (keel's
+   Reconcile OPEN rows too, and **read** them rather than recall them:
+   `feedback-triage/scripts/triage_audit.py open-rows <dir>` lists every row a
+   prior doc left `proposed`/`watch`, with the doc that set it. Carry or
+   re-disposition each — a row is not closed until a later doc lists it, and a
+   row recorded only in a prior doc's prose is the kind that orphans. An
+   off-main-chain cycle-scoped triage has the same failure (keel's
    `reflection-triage` P3a is the twin; co-land).
 3. **Cluster by underlying cause, not symptom.** Three reports saying "the cited
    file didn't exist", "the helper didn't handle our shape", and "the precedent
@@ -107,6 +114,13 @@ and CHANGELOGs belong to the tool's release process.
    justify themselves in the ledger or take `watch`. Under-promote rather
    than pollute; unpromoted clusters stay listed as raw, and the **Promotion-gate
    ledger** shows the gate's work either way.
+
+   Two limits on what grounding answers. The reinforcement bar governs proposed
+   *changes*; a statement in the tool's own shipped artefacts that grounding
+   proves **false** is corrected on sight and says so in the ledger. And source
+   answers "is the mechanism there?", never "was this already decided?" — before
+   declining anything for want of a home, check step 2's open-row set: an unbuilt
+   promoted row is a *pending* home, not a missing one.
 6. **Consolidate before you grow.** A standing debt check on every pass: a home
    that takes an appending promotion this round, carries clauses no report has
    exercised across recent rounds, or nears the validator's size cap gets a
@@ -120,15 +134,17 @@ and CHANGELOGs belong to the tool's release process.
    list only the new reports, the new table supersedes the baseline as status
    of record, a consolidated backlog table carries every open row, cluster IDs
    continue the baseline's namespace (`references/mechanics.md`). Before
-   emitting, assert **input coverage**: every finding `<stem>#<n>` in the Inputs'
-   INDEX entries appears in the doc under a disposition — a cluster's evidence,
-   Routed out, Declined, or an explicit "no action: <reason>" — so a finding
-   leaves the loop only with a disposition, never by omission (a dropped
-   extends-chain surfaced two passes late). Then re-list the dir: a same-corpus
-   triage doc that appeared since step 1 is reconciled with, not duplicated.
-   Close by re-running the index builder: just-triaged stems still under
-   `### Untriaged` mean the Inputs did not parse (fragmented stems) — fix
-   before ending.
+   emitting, assert **input coverage** with `triage_audit.py coverage <doc>
+   <dir>`: every finding of every report named under `## Inputs` must appear in
+   the doc under a disposition — a cluster's evidence, Routed out, Declined,
+   Forwarded, or an explicit "no action: <reason>" — so a finding leaves the loop
+   only with a disposition, never by omission. Write them as **full finding
+   ids**; `coverage --emit` prints the list to annotate, and an abbreviated stem
+   is the fragmentation the index parser already reads as zero coverage. Then
+   re-list the dir: a same-corpus triage doc that appeared since step 1 is
+   reconciled with, not duplicated. Close by re-running the index builder:
+   just-triaged stems still under `### Untriaged` mean the Inputs did not
+   parse — fix before ending.
 8. **Defer to a tool-owned template.** If the binding's `extras` registers a
    triage template (keel's `reflection-triage`), follow *its* structure and homes;
    otherwise the template below is authoritative — don't hunt for one. Triaging
@@ -187,21 +203,12 @@ namespaces, don't conflate them.)
 
 ## Anti-patterns — hunt these
 
-- **Re-proposing shipped work** — the reconciliation step exists to kill this.
-- **Symptom clusters** — grouping by where it hurt instead of why it happened
-  produces ten shallow clusters where two deep ones exist.
-- **Over-promotion** — a singleton observation promoted as if reinforced;
-  `watch` keeps the anchored singleton.
-- **Absorbing what should be routed** — an engine defect "fixed" with a method
-  doc; honor each tool's ledger and route out.
-- **Re-prosing a recurrence** — a finding that recurred past a shipped prose fix
-  needs a stronger enforcement layer, not a fourth sentence of the same advice.
-
-## Relationship to neighbors
-
-`tool-feedback` captures (per session, recall); this consolidates (per corpus,
-precision). (A governed series' own reflections belong to the owning tool's
-triage flow — see step 8.)
+- **Re-proposing shipped work.**
+- **Symptom clusters** — ten shallow ones where two deep ones exist.
+- **Over-promotion** — a singleton promoted as if reinforced.
+- **Absorbing what should be routed out.**
+- **Re-prosing a recurrence** — a fourth sentence where a rung is needed.
+- **A decline for want of a home that is already an open row.**
 
 ## What this skill does NOT do
 

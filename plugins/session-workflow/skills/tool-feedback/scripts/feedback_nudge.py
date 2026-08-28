@@ -81,6 +81,73 @@ def targets_file() -> Path | None:
         return None
 
 
+_TARGET_HEADER = re.compile(r'^\s*\[targets\.([^\]]+)\]\s*$')
+_TARGET_REPO = re.compile(r'^\s*repo\s*=\s*[\'"](.+?)[\'"]\s*$')
+_MCP_PLUGIN = re.compile(r'^mcp__plugin_([A-Za-z0-9_-]+?)_')
+
+
+def registered_repos(targets: Path) -> dict[str, Path]:
+    """{target name: repo path} read out of the feedback-targets file.
+
+    Line-parsed rather than via `tomllib`: this hook can run under whatever
+    python a hook runner resolves, and the file's own header promises it needs
+    no tooling to read."""
+    out: dict[str, Path] = {}
+    name = None
+    try:
+        lines = targets.read_text(encoding='utf-8').splitlines()
+    except OSError:
+        return {}
+    for line in lines:
+        header = _TARGET_HEADER.match(line)
+        if header:
+            name = header.group(1).strip()
+            continue
+        repo = _TARGET_REPO.match(line) if name else None
+        if repo:
+            out[name] = Path(repo.group(1))
+            name = None
+    return out
+
+
+def is_registered(tool: str, repos: dict[str, Path]) -> bool:
+    """Whether an exercised tool belongs to a registered feedback target.
+
+    The nudge used to name every `Skill` call as a "plugin tool", including
+    personal skills under ~/.claude/skills that are in no registry -- which sent
+    the reader to the registry to confirm a non-target, and a detector that lists
+    non-targets trains its reader to discount the list. The registry was already
+    being loaded; it just was not being consulted for the names.
+
+    A `<plugin>:<skill>` call belongs to the target whose repo ships that plugin;
+    an `mcp__plugin_<name>_...` tool names its plugin directly; a bare skill name
+    is registered only if it IS a target."""
+    mcp = _MCP_PLUGIN.match(tool)
+    candidate = mcp.group(1) if mcp else tool.split(':', 1)[0]
+    if candidate in repos:
+        return True
+    for repo in repos.values():
+        try:
+            if (repo / 'plugins' / candidate).is_dir():
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def registered_only(tools: list[str], targets: Path | None) -> list[str]:
+    """`tools` filtered to registered targets. Fails OPEN, deliberately: when no
+    repo path resolves (a registry that lists none, or checkouts that have moved)
+    the unfiltered list is returned, because a nudge that says too much is a
+    smaller failure than one that goes silent on a real debt."""
+    if targets is None:
+        return tools
+    repos = registered_repos(targets)
+    if not any(repo.is_dir() for repo in repos.values()):
+        return tools
+    return [t for t in tools if is_registered(t, repos)]
+
+
 def _safe_session(session_id: object) -> str:
     sid = session_id if isinstance(session_id, str) and session_id else 'unknown'
     safe = ''.join(c for c in sid if c.isalnum() or c in '-_') or 'unknown'
@@ -178,7 +245,7 @@ def _min_turns() -> int:
 def nudge_reason(skills: list[str]) -> str:
     shown = ', '.join(skills[:3]) + (' and more' if len(skills) > 3 else '')
     return (
-        f'feedback debt: this session exercised plugin tools ({shown}) and no '
+        f'feedback debt: this session exercised registered tools ({shown}) and no '
         'tool-feedback invocation is on record. Apply the tool-feedback skill '
         'now (write directly under a standing directive; otherwise emit its '
         'one-line offer), or finish if nothing is worth recording. This nudge '
@@ -189,7 +256,8 @@ def nudge_reason(skills: list[str]) -> str:
 def _stop_nudge() -> int:
     if os.environ.get(NUDGE_GATE) == '0':
         return 0
-    if targets_file() is None:
+    targets = targets_file()
+    if targets is None:
         return 0  # no registered tools: nothing to report to, so nothing to ask
     payload = _load_stdin_json()
     if payload.get('stop_hook_active'):
@@ -204,6 +272,9 @@ def _stop_nudge() -> int:
         return 0
     if any(DEBT_CLEARING_MARK in s for s in skills):
         return 0
+    skills = registered_only(skills, targets)
+    if not skills:
+        return 0  # only unregistered skills ran: there is no debt to owe
     if turns < _min_turns():
         return 0
     print(json.dumps({'decision': 'block', 'reason': nudge_reason(skills)}))
