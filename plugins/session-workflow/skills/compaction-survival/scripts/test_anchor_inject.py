@@ -721,6 +721,42 @@ def test_list_dormant_skips_fresh_and_content_terminal_anchors():
         assert ai.list_dormant(tmp / '.claude' / 'anchors') == []
 
 
+def test_sweeps_survive_a_cp1252_stdout():
+    # Both sweep arms print anchor CONTENT -- titles and cursors -- and campaign
+    # anchors essentially always carry arrows and accented prose. main() forces
+    # UTF-8 at that seam, but the CLI arms exit before main() ever runs, so an
+    # arrow in a cursor killed --list-dormant with a traceback on a cp1252
+    # console. Both arms are asserted, so neither regresses alone.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(
+            tmp,
+            name='acentuado.md',
+            body='# Remodelação — fase 2\n# Cursor\npróximo → passo\n',
+            age_s=400 * 3600,
+        )
+        make_anchor(tmp, name='done.md', body='**Status:** CLOSED\npronto\n')
+        for arm in ('--list-dormant', '--list-stale'):
+            env = dict(os.environ)
+            env['PYTHONIOENCODING'] = 'cp1252'
+            proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+                [sys.executable, str(SCRIPT), arm, str(tmp / '.claude' / 'anchors')],
+                capture_output=True,
+                env=env,
+                timeout=30,
+            )
+            assert proc.returncode == 0, f'{arm} died on a cp1252 stdout: {proc.stderr[-300:]}'
+        env = dict(os.environ)
+        env['PYTHONIOENCODING'] = 'cp1252'
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, str(SCRIPT), '--list-dormant', str(tmp / '.claude' / 'anchors')],
+            capture_output=True,
+            env=env,
+            timeout=30,
+        )
+        assert 'passo' in proc.stdout.decode('utf-8'), 'the cursor must survive the seam intact'
+
+
 if __name__ == '__main__':
     test_injects_with_no_env_set()
     test_opt_out_silences_it()
@@ -766,4 +802,5 @@ if __name__ == '__main__':
     test_pointer_without_a_cursor_section_still_emits()
     test_list_dormant_names_untouched_active_anchors()
     test_list_dormant_skips_fresh_and_content_terminal_anchors()
+    test_sweeps_survive_a_cp1252_stdout()
     print('ok: all anchor_inject tests passed')
