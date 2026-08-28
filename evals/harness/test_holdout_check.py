@@ -102,6 +102,90 @@ def test_dev_recall_pair_falls_back_to_pooled_pair() -> None:
     assert point == 0.9 and ci == [0.8, 0.95] and units == 'pooled'
 
 
+# --- stratified holdouts (T41e) -------------------------------------------
+# A holdout set whose cases are not all equally unseen has no single recall.
+# The 2026-08-11 data-engineering-discipline read is the case: 6 genuinely
+# unseen cases scored 0.75, 7 re-used spent-dev cases scored 0.50, and the
+# harness printed the pooled 0.62 as its headline. BASELINES.md then had to
+# say, in prose, that the printed number must not be read. A tool that
+# volunteers a figure its own doctrine forbids will have that figure quoted.
+
+STRATIFIED = [
+    {'query': 'a', 'should_trigger': True, 'stratum': 'unseen'},
+    {'query': 'b', 'should_trigger': True, 'stratum': 'unseen'},
+    {'query': 'c', 'should_trigger': True, 'stratum': 'spent-dev'},
+    {'query': 'd', 'should_trigger': False, 'stratum': 'unseen'},
+    {'query': 'e', 'should_trigger': False, 'stratum': 'spent-dev'},
+]
+
+PER_QUERY = [
+    {'query': 'a', 'should_trigger': True, 'k': 3, 'repeats': 3},
+    {'query': 'b', 'should_trigger': True, 'k': 0, 'repeats': 3},
+    {'query': 'c', 'should_trigger': True, 'k': 0, 'repeats': 3},
+    {'query': 'd', 'should_trigger': False, 'k': 0, 'repeats': 3},
+    {'query': 'e', 'should_trigger': False, 'k': 3, 'repeats': 3},
+]
+
+
+def test_strata_of_reads_the_declared_label_and_ignores_undeclared_sets() -> None:
+    assert holdout_check.strata_of(STRATIFIED)['a'] == 'unseen'
+    assert holdout_check.strata_of([{'query': 'x', 'should_trigger': True}]) == {}
+
+
+def test_stratify_reports_each_stratum_separately() -> None:
+    rows = holdout_check.stratify(PER_QUERY, holdout_check.strata_of(STRATIFIED))
+    by = {r['stratum']: r for r in rows}
+    assert set(by) == {'unseen', 'spent-dev'}
+    # unseen positives: a 3/3 + b 0/3 -> 3/6
+    assert by['unseen']['recall'] == 0.5
+    assert by['unseen']['n_positive_runs'] == 6
+    # spent-dev positives: c 0/3 -> 0/3
+    assert by['spent-dev']['recall'] == 0.0
+    # unseen negative d stayed quiet 3/3; spent-dev negative e fired every time
+    assert by['unseen']['specificity'] == 1.0
+    assert by['spent-dev']['specificity'] == 0.0
+
+
+def test_stratify_is_empty_when_the_set_declares_one_stratum_or_none() -> None:
+    # Nothing to separate: the pooled figure IS the finding, and the extra
+    # apparatus would be noise.
+    assert holdout_check.stratify(PER_QUERY, {}) == []
+    one = {q['query']: 'unseen' for q in STRATIFIED}
+    assert holdout_check.stratify(PER_QUERY, one) == []
+
+
+def test_a_stratum_with_no_positives_reports_none_rather_than_zero() -> None:
+    rows = holdout_check.stratify(
+        [
+            {'query': 'd', 'should_trigger': False, 'k': 0, 'repeats': 3},
+            {'query': 'a', 'should_trigger': True, 'k': 3, 'repeats': 3},
+        ],
+        {'d': 'neg-only', 'a': 'unseen'},
+    )
+    by = {r['stratum']: r for r in rows}
+    assert by['neg-only']['recall'] is None
+    assert by['neg-only']['specificity'] == 1.0
+
+
+def test_the_pooled_line_is_labelled_unreadable_when_strata_disagree() -> None:
+    rows = holdout_check.stratify(PER_QUERY, holdout_check.strata_of(STRATIFIED))
+    line = holdout_check.pooled_caveat(rows)
+    assert 'POOLED' in line
+    assert 'not the finding' in line
+    assert '2 strata' in line
+
+
+def test_there_is_no_pooled_caveat_when_there_is_nothing_to_pool_over() -> None:
+    assert holdout_check.pooled_caveat([]) == ''
+
+
+def test_the_caveat_is_ascii_because_it_prints_to_a_cp1252_console() -> None:
+    rows = holdout_check.stratify(PER_QUERY, holdout_check.strata_of(STRATIFIED))
+    holdout_check.pooled_caveat(rows).encode('ascii')
+    for r in rows:
+        holdout_check.format_stratum(r).encode('ascii')
+
+
 if __name__ == '__main__':
     test_no_args_returns_usage_code()
     test_missing_holdout_returns_1()
@@ -115,4 +199,11 @@ if __name__ == '__main__':
     test_holdout_excl_point_query_path_returns_none_not_mismatched_units()
     test_dev_recall_pair_prefers_matched_query_units()
     test_dev_recall_pair_falls_back_to_pooled_pair()
+    test_strata_of_reads_the_declared_label_and_ignores_undeclared_sets()
+    test_stratify_reports_each_stratum_separately()
+    test_stratify_is_empty_when_the_set_declares_one_stratum_or_none()
+    test_a_stratum_with_no_positives_reports_none_rather_than_zero()
+    test_the_pooled_line_is_labelled_unreadable_when_strata_disagree()
+    test_there_is_no_pooled_caveat_when_there_is_nothing_to_pool_over()
+    test_the_caveat_is_ascii_because_it_prints_to_a_cp1252_console()
     print('ok: holdout_check')

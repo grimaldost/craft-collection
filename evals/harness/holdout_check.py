@@ -87,6 +87,96 @@ def holdout_comparison(
     return line + '  -> within dev CI: generalizes'
 
 
+def strata_of(queries: list[dict]) -> dict[str, str]:
+    """query text -> its declared `stratum`, for the entries that declare one.
+
+    A holdout set whose cases are not all equally unseen has no single recall.
+    The set says so in its own data rather than in a doc the reader must
+    remember to apply: the 2026-08-11 data-engineering-discipline read scored
+    0.75 on 6 genuinely unseen cases and 0.50 on 7 re-used spent-dev cases,
+    while the harness printed the pooled 0.62 as its headline and BASELINES.md
+    had to warn in prose that the printed number must not be read."""
+    return {q['query']: q['stratum'] for q in queries if q.get('stratum')}
+
+
+def stratify(per_query: list[dict], strata: dict[str, str]) -> list[dict]:
+    """Per-stratum recall and specificity, or [] when there is nothing to split.
+
+    Returns [] for an unstratified set and for a set whose entries all carry
+    the SAME label: in both cases the pooled figure is the finding, and the
+    extra apparatus would be noise a reader has to see past. Pure."""
+    labels = {strata.get(pq['query']) for pq in per_query} - {None}
+    if len(labels) < 2:
+        return []
+    rows = []
+    for label in sorted(labels):
+        pos_k = pos_n = neg_ok = neg_n = 0
+        pos_q = neg_q = 0
+        for pq in per_query:
+            if strata.get(pq['query']) != label:
+                continue
+            if pq['should_trigger']:
+                pos_k += pq['k']
+                pos_n += pq['repeats']
+                pos_q += 1
+            else:
+                neg_ok += pq['repeats'] - pq['k']
+                neg_n += pq['repeats']
+                neg_q += 1
+        rows.append(
+            {
+                'stratum': label,
+                'recall': (run_triggers.pass_rate(pos_k, pos_n) if pos_n else None),
+                'recall_ci': (list(run_triggers.wilson_interval(pos_k, pos_n)) if pos_n else None),
+                'specificity': (run_triggers.pass_rate(neg_ok, neg_n) if neg_n else None),
+                'specificity_ci': (
+                    list(run_triggers.wilson_interval(neg_ok, neg_n)) if neg_n else None
+                ),
+                'n_positive': pos_q,
+                'n_negative': neg_q,
+                'n_positive_runs': pos_n,
+                'n_negative_runs': neg_n,
+            }
+        )
+    return rows
+
+
+def format_stratum(row: dict) -> str:
+    """One stratum's line. ASCII only - this prints to a cp1252 console."""
+
+    def fmt(point, ci, n_q, n_runs, kind):
+        if point is None:
+            return f'{kind} n/a (no {kind[:3]} cases in this stratum)'
+        lo, hi = ci
+        return f'{kind} {point:.2f} CI[{lo:.2f},{hi:.2f}] ({n_q} cases / {n_runs} runs)'
+
+    recall = fmt(
+        row['recall'], row['recall_ci'], row['n_positive'], row['n_positive_runs'], 'recall'
+    )
+    spec = fmt(
+        row['specificity'],
+        row['specificity_ci'],
+        row['n_negative'],
+        row['n_negative_runs'],
+        'specificity',
+    )
+    return f'  [{row["stratum"]}] {recall}   {spec}'
+
+
+def pooled_caveat(rows: list[dict]) -> str:
+    """The label the pooled figure carries once the strata disagree, or ''.
+
+    The harness used to print the pooled number as its headline and leave the
+    caveat to a doc. A number a tool volunteers will be quoted, so the caveat
+    travels with it."""
+    if len(rows) < 2:
+        return ''
+    return (
+        f'POOLED over {len(rows)} strata - not the finding. '
+        'Read the per-stratum lines above; a pooled rate mixes seen with unseen.'
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -153,8 +243,16 @@ def main(argv: list[str] | None = None) -> int:
             print(line)
         return 2
 
+    strata = stratify(score['per_query'], strata_of(queries))
+    if strata:
+        print('\nby stratum (the set declares more than one):')
+        for row in strata:
+            print(format_stratum(row))
+
     rlo, rhi = score['recall_ci']
     slo, shi = score['specificity_ci']
+    if strata:
+        print('\n' + pooled_caveat(strata))
     print(
         f'\nheld-out recall      = {score["recall"]:.2f}  CI[{rlo:.2f},{rhi:.2f}]  '
         f'(on {score["n_positive"]} unseen positives)'
@@ -211,16 +309,23 @@ def main(argv: list[str] | None = None) -> int:
     holdout_point = score['recall']
     if dev_units == 'query' and score.get('recall_query') is not None:
         holdout_point = score['recall_query']
-    print(
-        '\n'
-        + holdout_comparison(
-            dev_recall,
-            dev_ci,
-            holdout_point,
-            holdout_recall_excl=holdout_excl_point(score, dev_units),
-            n_err=score.get('errors_no_activation_positive', 0),
+    if strata:
+        print(
+            '\ndev-vs-held-out comparison withheld: it is defined on the pooled point, '
+            'which this set does not have. Compare the dev number against the stratum '
+            'you mean.'
         )
-    )
+    else:
+        print(
+            '\n'
+            + holdout_comparison(
+                dev_recall,
+                dev_ci,
+                holdout_point,
+                holdout_recall_excl=holdout_excl_point(score, dev_units),
+                n_err=score.get('errors_no_activation_positive', 0),
+            )
+        )
     return 0
 
 
