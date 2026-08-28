@@ -53,6 +53,11 @@ work proceeds once loaded. Keep the registers separate:
 - Catalogs of known failure modes and rationalizations are valuable — keep
   them as *descriptive* tables ("common shortcuts and what they miss"), so a
   reader recognizes the pattern without being accused of it.
+- A step whose executor is not the reader says so. "Write each reviewer's
+  output to disk as it lands" reads as something the operator does by hand; a
+  reader building an automated panel implements the surrounding structure and
+  drops the step, and the persisted evidence it existed to keep is gone. Name
+  the executor where it is not obviously the reader.
 
 ## Rigid or flexible — declare it
 
@@ -100,19 +105,18 @@ A skill ships when all of these exist, not before:
    a behavioral eval harness when one is available (craft-collection ships
    one: datasets under `evals/trigger/`, thresholds in `evals/config.json`,
    run mechanics owned by session-workflow's evaluate-skill). Standalone
-   installs keep requirements 1–3 as authored artifacts and run them with
+   installs keep requirements 1–3 and 5 as authored artifacts and run them with
    whatever harness they have — the discipline is the contract, the harness
    is one implementation.
+5. **A registered threshold states what the design can detect** — the maximum
+   movement attainable at the planned repeat count, and its p, computed before
+   the run. Without it a failed edit and a design incapable of succeeding leave
+   the same record. Cannot reach the bar: raise repeats, or do not register it.
 
-Two skill classes are **harness-ungateable** at trigger time: a skill whose
-trigger inherently depends on the cwd corpus (an empty eval cwd cannot fire
-it), and a heavy orchestration skill that fires and then exceeds the eval's
-turn cap (scored as an error, not an activation). For those, requirement 4
-becomes **manual-observation activation evidence** — it fires and correctly
-out-selects its named siblings in a populated, real context — plus clean
-specificity, with the harness-fixture follow-up recorded. Precedent:
-`corpus-review` shipped exactly this way; don't re-block the class on a 0.00
-recall artifact.
+Two skill classes cannot be gated at trigger time at all, and one worked example
+of a threshold that could not move:
+[`references/shipping-gate.md`](references/shipping-gate.md), which also carries
+the measured record behind the register rules.
 
 ## References between tools
 
@@ -137,18 +141,6 @@ Skills reference other tools without depending on them. Four rules and a test:
 
 The degradation test: uninstall every other tool — the skill still produces a
 correct, if less optimized, result.
-
-## Evidence
-
-The register question is measured, not aesthetic. The craft-collection record:
-calibrated descriptions reach 0.95–1.00 trigger recall on current models, and
-the one overfit description in the collection's history was caught by a sealed
-holdout collapsing (1.00 on the dev set, 0.25–0.50 unseen) — tuning pressure,
-not register, is what moves recall. The persuasion-style alternative rests on
-a compliance study (objectionable-request compliance under social-influence
-framings) whose outcome variable is not process adherence in agentic work;
-treat its transfer here as unsupported until the register ablation says
-otherwise.
 
 ## Authoring checklist
 
