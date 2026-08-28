@@ -1,0 +1,113 @@
+{
+  "_readme": "Every shipped script is classified here. proofs: a test that has been watched redden the check, named <test path>::<function> (the function must actually run under bare python - run_tests.py does not use pytest). gaps: it should have a red proof and does not, with why - this is a burn-down list, keep it shrinking. exempt: it is not a reject check at all, with why. An unclassified script fails evals/harness/test_red_proofs.py, which is the point: a new check cannot ship without someone deciding which bucket it is in.",
+  "proofs": {
+    "evals/harness/holdout_check.py": [
+      "evals/harness/test_holdout_check.py::test_missing_holdout_returns_1"
+    ],
+    "plugins/engineering-discipline/hooks/uv_enforce.py": [
+      "plugins/engineering-discipline/hooks/test_uv_enforce.py::test_blocks_pip_in_uv_project"
+    ],
+    "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/contract_check.py": [
+      "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/test_contract_check.py::test_violations_detected"
+    ],
+    "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/freshness_check.py": [
+      "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/test_freshness_check.py::test_stuck_cursor_fails"
+    ],
+    "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/mutate_check.py": [
+      "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/test_mutate_check.py::test_an_always_green_check_is_reported_vacuous_not_passed"
+    ],
+    "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/parity_check.py": [
+      "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/test_parity_check.py::test_row_count_mismatch_fails"
+    ],
+    "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/producer_census.py": [
+      "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/test_producer_census.py::test_two_producers_without_a_joint_run_is_a_finding"
+    ],
+    "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/schema_diff.py": [
+      "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/test_schema_diff.py::test_verdict_differences_still_report_differ"
+    ],
+    "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/which_copy.py": [
+      "plugins/engineering-discipline/skills/data-engineering-discipline/scripts/test_which_copy.py::test_an_editable_checkout_shadowing_an_installed_distribution_is_flagged"
+    ],
+    "plugins/engineering-discipline/skills/python-engineering/scripts/check_versions.py": [
+      "plugins/engineering-discipline/skills/python-engineering/scripts/test_check_versions.py::test_total_fetch_failure_yields_errors_and_exit_2"
+    ],
+    "plugins/engineering-discipline/skills/python-engineering/scripts/doctor.py": [
+      "plugins/engineering-discipline/skills/python-engineering/scripts/test_doctor.py::test_flags_tests_under_src"
+    ],
+    "plugins/engineering-discipline/skills/python-engineering/scripts/scaffold.py": [
+      "plugins/engineering-discipline/skills/python-engineering/scripts/test_scaffold.py::test_name_error_rejects_unimportable_package"
+    ],
+    "plugins/experiment-discipline/skills/experiment-rigor/scripts/render.py": [
+      "plugins/experiment-discipline/skills/experiment-rigor/scripts/test_render.py::test_check_detects_a_tampered_value"
+    ],
+    "plugins/experiment-discipline/skills/experiment-rigor/scripts/validate.py": [
+      "plugins/experiment-discipline/skills/experiment-rigor/scripts/test_validate.py::test_er_schema_missing_required_field"
+    ],
+    "plugins/humblepowers/skills/choosing-models/scripts/lineup_check.py": [
+      "plugins/humblepowers/skills/choosing-models/scripts/test_lineup_check.py::test_absent_model_reddens_and_names_the_refresh_command"
+    ],
+    "plugins/humblepowers/skills/verification-before-completion/scripts/subagent_gate.py": [
+      "plugins/humblepowers/skills/verification-before-completion/scripts/test_subagent_gate.py::test_armed_blocks_the_first_stop"
+    ],
+    "plugins/session-workflow/skills/feedback-triage/scripts/build_feedback_index.py": [
+      "plugins/session-workflow/skills/feedback-triage/scripts/test_build_feedback_index.py::test_refuses_to_overwrite_an_index_built_by_a_newer_builder"
+    ],
+    "plugins/session-workflow/skills/llm-signature/scripts/render_signature.py": [
+      "plugins/session-workflow/skills/llm-signature/scripts/test_render_signature.py::test_cli_unresolvable_model_fails_loud"
+    ],
+    "scripts/ascii_runtime_lint.py": [
+      "evals/harness/test_ascii_runtime_lint.py::test_ratchet_semantics"
+    ],
+    "scripts/check_uv_hygiene.py": [
+      "evals/harness/test_check_uv_hygiene.py::main"
+    ],
+    "scripts/experiment_rigor_gate.py": [
+      "evals/harness/test_experiment_rigor_gate.py::test_render_check_reddens_on_a_drifted_report"
+    ],
+    "scripts/gen_agents_md.py": [
+      "evals/harness/test_gen_agents_md.py::main"
+    ],
+    "scripts/lint_register.py": [
+      "evals/harness/test_lint_register.py::main"
+    ],
+    "scripts/run_tests.py": [
+      "evals/harness/test_run_tests.py::test_silent_exit0_module_fails_the_suite"
+    ],
+    "scripts/validate_plugins.py": [
+      "evals/harness/test_validate_plugins.py::test_invalid_hooks_json_is_flagged"
+    ],
+    "scripts/word_budget.py": [
+      "evals/harness/test_word_budget.py::test_check_budgets_flags_over_baseline"
+    ]
+  },
+  "gaps": {
+    "evals/harness/offer_probe.py": "Returns 0/1 over its probe results and has no paired test at all, so nothing has ever watched it fail. It gates a paid run, which is exactly where a hollow green is dearest. Burn down by feeding it a probe result set that must fail and asserting the exit code.",
+    "evals/harness/smoke.py": "Same shape as offer_probe: `0 if all(results) else 1` with no paired test. It is the go/no-go before spending a matrix, so a green it cannot fail is the most expensive kind here.",
+    "evals/harness/token_probe.py": "A measurement helper with no paired test. Classify properly on next contact - if it has no reject path it belongs in `exempt`, and if it does it needs a proof."
+  },
+  "exempt": {
+    "evals/harness/aggregate.py": "Eval driver, not a reject check; its scoring core is covered by test_aggregate.py and it is mirrored into the evaluate-skill plugin under the byte-identity gate test_scripts_in_sync.py.",
+    "evals/harness/claude_runner.py": "Spawn plumbing for the eval harness. It has no verdict of its own to redden; failures surface as errored trials that run_triggers scores.",
+    "evals/harness/grade_tasks.py": "Eval driver that produces grades rather than a pass/fail verdict; covered by test_grade_tasks.py and mirrored under test_scripts_in_sync.py.",
+    "evals/harness/judge.py": "Eval driver: it renders a judgement prompt and parses the reply. The verdict belongs to the model, not to this module, so there is no reject path to prove.",
+    "evals/harness/run_all.py": "Orchestrator over the other eval drivers; its argument guards are covered by test_build_command.py and it is mirrored under test_scripts_in_sync.py.",
+    "evals/harness/run_triggers.py": "Scoring and spawn driver. Its pure core (score_skill, validate_queries) is covered by several harness tests; the module itself reports rates rather than rejecting, and gate thresholds are applied by callers.",
+    "evals/harness/stats.py": "Pure statistics library with no CLI and no verdict. Its one refusal (no normal method below n=30) is proved at the validator level in experiment-rigor's test_validate.py.",
+    "plugins/engineering-discipline/hooks/harness_adapters.py": "A seam that forwards payloads to the two hook cores; the rejection it carries belongs to uv_enforce, which has its own proof.",
+    "plugins/engineering-discipline/hooks/ruff_format.py": "Formatter hook, deliberately incapable of rejecting: every path returns 0 so a format failure can never block a session. test_ruff_format.py pins that property, including that the destructive autofix is never added.",
+    "plugins/experiment-discipline/skills/experiment-rigor/scripts/from_fathom.py": "A reader that summarises a fathom ledger into record fields. Single `return 0`; the validation of what it produces is validate.py's job.",
+    "plugins/experiment-discipline/skills/experiment-rigor/scripts/stats.py": "Pure statistics library, no CLI, no verdict - same reading as the harness copy above.",
+    "plugins/humblepowers/skills/choosing-tools/scripts/inject_dispatch.py": "UserPromptSubmit hook that must fail open: a non-zero exit or a hang would block the user's prompt. test_inject_dispatch.py pins that every path exits 0, including on malformed stdin.",
+    "plugins/humblepowers/skills/choosing-tools/scripts/router.py": "Its CLI is a debug view that always returns 0; the router's real gate is the calibration floors in test_router.py, which carry their own reddening self-test for the backtracking detector.",
+    "plugins/session-workflow/skills/compaction-survival/scripts/anchor_inject.py": "SessionStart hook, fail-open by contract: every path including the outer except exits 0, because a hook that blocks session start is worse than a missing anchor.",
+    "plugins/session-workflow/skills/evaluate-skill/scripts/aggregate.py": "Mirrored copy of the harness driver; byte-identity is enforced by test_scripts_in_sync.py and the behaviour is tested on the harness side.",
+    "plugins/session-workflow/skills/evaluate-skill/scripts/claude_runner.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
+    "plugins/session-workflow/skills/evaluate-skill/scripts/grade_tasks.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
+    "plugins/session-workflow/skills/evaluate-skill/scripts/judge.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
+    "plugins/session-workflow/skills/evaluate-skill/scripts/run_all.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
+    "plugins/session-workflow/skills/evaluate-skill/scripts/run_triggers.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
+    "plugins/session-workflow/skills/evaluate-skill/scripts/stats.py": "Mirrored copy of the harness statistics library; byte-identity enforced by test_scripts_in_sync.py.",
+    "plugins/session-workflow/skills/tool-feedback/scripts/feedback_nudge.py": "Stop hook that must fail open; test_feedback_nudge.py pins that an unknown mode and garbage stdin both exit 0, because a nudge that blocks Stop is worse than a missed nudge.",
+    "plugins/session-workflow/skills/toolkit-awareness/scripts/scan_toolkit.py": "Diagnostic reporter: it prints caveats and always exits 0 by design, so the operator sees skew without the scan itself becoming a gate. Its findings-level negatives are covered in test_scan_toolkit.py."
+  }
+}

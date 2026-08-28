@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 
-from word_budget import body_word_count, check_budgets  # noqa: E402
+from word_budget import body_word_count, check_budgets, main, report_rows  # noqa: E402
 
 
 def test_body_word_count_excludes_frontmatter():
@@ -53,6 +53,40 @@ def test_check_budgets_passes_at_or_under_baseline():
     )
 
 
+def test_report_shows_headroom_so_nobody_has_to_subtract_by_hand():
+    # The recorded failure: an audit reported "body 2,658, gate 2,736, so 78
+    # words of headroom" when the gate's own count of that body was 2,736 -
+    # zero headroom. Both numbers came from the same single counter; only one
+    # of them came from running it.
+    rows = report_rows({'a/SKILL.md': 2736}, {'a/SKILL.md': 2736})
+    assert len(rows) == 1
+    assert '2736' in rows[0] and 'headroom' in rows[0]
+    assert 'headroom      0' in rows[0]
+
+
+def test_report_puts_the_tightest_budget_first():
+    rows = report_rows(
+        {'loose/SKILL.md': 10, 'tight/SKILL.md': 99}, {'loose/SKILL.md': 100, 'tight/SKILL.md': 100}
+    )
+    assert 'tight/SKILL.md' in rows[0]
+    assert 'loose/SKILL.md' in rows[1]
+
+
+def test_report_names_an_unbaselined_body_first_rather_than_omitting_it():
+    rows = report_rows({'new/SKILL.md': 5, 'old/SKILL.md': 5}, {'old/SKILL.md': 10})
+    assert 'new/SKILL.md' in rows[0]
+    assert '?' in rows[0]
+
+
+def test_report_is_ascii_because_it_prints_to_a_cp1252_console():
+    for line in report_rows({'a/SKILL.md': 1}, {'a/SKILL.md': 2}):
+        line.encode('ascii')
+
+
+def test_cli_report_mode_exits_zero_and_does_not_gate():
+    assert main(['--report']) == 0
+
+
 if __name__ == '__main__':
     test_body_word_count_excludes_frontmatter()
     test_body_word_count_no_frontmatter_counts_all()
@@ -60,4 +94,9 @@ if __name__ == '__main__':
     test_check_budgets_flags_over_baseline()
     test_check_budgets_flags_missing_baseline()
     test_check_budgets_passes_at_or_under_baseline()
+    test_report_shows_headroom_so_nobody_has_to_subtract_by_hand()
+    test_report_puts_the_tightest_budget_first()
+    test_report_names_an_unbaselined_body_first_rather_than_omitting_it()
+    test_report_is_ascii_because_it_prints_to_a_cp1252_console()
+    test_cli_report_mode_exits_zero_and_does_not_gate()
     print('ok: all word_budget tests passed')

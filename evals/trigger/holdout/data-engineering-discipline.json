@@ -1,18 +1,80 @@
 [
-  { "query": "Why isn't the warehouse fact table picking up new rows even though the nightly job finished clean?", "should_trigger": true, "note": "held-out freshness: incremental not advancing despite reported success" },
-  { "query": "The BI report's 'last refreshed' date hasn't moved since Tuesday — the customer feed looks stale, dig into why.", "should_trigger": true, "note": "held-out freshness: consumer-surface staleness, plain language" },
-  { "query": "We're porting the attribution pipeline to BigQuery and the per-channel totals have to match the old warehouse exactly.", "should_trigger": true, "note": "held-out classic (regression guard): migration with parity" },
-  { "query": "Add a region column to the accounts dataset that two finance models already consume.", "should_trigger": true, "note": "held-out classic (regression guard): schema evolution on a consumed dataset" },
-
-  { "query": "I'm reshaping the DataHub metadata emitter's serving payload and a separate catalog tool loads it — make sure I don't break the contract.", "should_trigger": true, "note": "held-out NEW case (T16a, sealed 0.1.15) — LEXICAL guard: echoes the description tokens (emitter/catalog/payload) to confirm the surface fires; not a generalization test on its own" },
-  { "query": "Our service writes a JSON document that another team's dashboard app ingests to show dataset ownership and freshness. I'm renaming some of its keys and dropping one — will that break what the dashboard relies on?", "should_trigger": true, "note": "held-out NEW case (T16a, sealed 0.1.15) — INTENT paraphrase: same emitter-with-consumer intent, avoids the added tokens (no metadata/catalog/emitter/payload/MCP), so the A/B measures intent coverage, not lexical overlap (trigger-lexical-ceiling)" },
-
-  { "query": "I maintain a hand-written YAML listing our tables and their columns, and a generator turns it into the CREATE TABLE statements we ship. I'm renaming two of its fields.", "should_trigger": true, "note": "held-out NEW case (T2.1b, sealed 0.5.0) — schema-as-data POSITIVE: code is generated from the document, so its fields are a contract even though the file has no rows, dtypes or freshness" },
-  { "query": "Our repo has a hand-authored lineage YAML that a separate ingestion job reads to build the catalog graph. I need to restructure how the upstream and downstream entries nest.", "should_trigger": true, "note": "held-out NEW case (T2.1b, sealed 0.5.0) — schema-as-data POSITIVE: a separate tool loads it, so the emitted shape is a consumer contract; deliberately avoids the tokens the 0.1.15 lexical guard uses" },
-  { "query": "This JSON is the source for an architecture diagram we render to SVG on the docs site — nothing else reads it. I want to rename the node keys so the labels read better.", "should_trigger": false, "note": "held-out NEW case (T2.1b, sealed 0.5.0) — schema-as-data NEGATIVE: the only consumer renders it, which the description now rules out explicitly. The pair with the two positives above is what makes the ruling decidable rather than silent" },
-
-  { "query": "The browser keeps serving stale CSS — the page won't pick up the new styles after I deploy.", "should_trigger": false, "note": "held-out over-fire guard: non-data 'stale/won't update' (browser cache)" },
-  { "query": "My npm lockfile didn't update after I edited package.json — sort out the install.", "should_trigger": false, "note": "held-out over-fire guard: non-data 'didn't update' (lockfile)" },
-  { "query": "Just poking at this parquet file in a scratch notebook; nothing depends on it.", "should_trigger": false, "note": "held-out classic near-miss: exploratory, no consumer" },
-  { "query": "Refactor the helper that formats our CLI's --help banner text; nothing consumes it as data.", "should_trigger": false, "note": "held-out over-fire guard (T16a, sealed 0.1.15): a 'payload/response' with no data-contract consumer" }
+  {
+    "query": "Why isn't the warehouse fact table picking up new rows even though the nightly job finished clean?",
+    "should_trigger": true,
+    "note": "held-out freshness: incremental not advancing despite reported success",
+    "stratum": "spent-dev"
+  },
+  {
+    "query": "The BI report's 'last refreshed' date hasn't moved since Tuesday — the customer feed looks stale, dig into why.",
+    "should_trigger": true,
+    "note": "held-out freshness: consumer-surface staleness, plain language",
+    "stratum": "spent-dev"
+  },
+  {
+    "query": "We're porting the attribution pipeline to BigQuery and the per-channel totals have to match the old warehouse exactly.",
+    "should_trigger": true,
+    "note": "held-out classic (regression guard): migration with parity",
+    "stratum": "spent-dev"
+  },
+  {
+    "query": "Add a region column to the accounts dataset that two finance models already consume.",
+    "should_trigger": true,
+    "note": "held-out classic (regression guard): schema evolution on a consumed dataset",
+    "stratum": "spent-dev"
+  },
+  {
+    "query": "I'm reshaping the DataHub metadata emitter's serving payload and a separate catalog tool loads it — make sure I don't break the contract.",
+    "should_trigger": true,
+    "note": "held-out NEW case (T16a, sealed 0.1.15) — LEXICAL guard: echoes the description tokens (emitter/catalog/payload) to confirm the surface fires; not a generalization test on its own",
+    "stratum": "unseen"
+  },
+  {
+    "query": "Our service writes a JSON document that another team's dashboard app ingests to show dataset ownership and freshness. I'm renaming some of its keys and dropping one — will that break what the dashboard relies on?",
+    "should_trigger": true,
+    "note": "held-out NEW case (T16a, sealed 0.1.15) — INTENT paraphrase: same emitter-with-consumer intent, avoids the added tokens (no metadata/catalog/emitter/payload/MCP), so the A/B measures intent coverage, not lexical overlap (trigger-lexical-ceiling)",
+    "stratum": "unseen"
+  },
+  {
+    "query": "I maintain a hand-written YAML listing our tables and their columns, and a generator turns it into the CREATE TABLE statements we ship. I'm renaming two of its fields.",
+    "should_trigger": true,
+    "note": "held-out NEW case (T2.1b, sealed 0.5.0) — schema-as-data POSITIVE: code is generated from the document, so its fields are a contract even though the file has no rows, dtypes or freshness",
+    "stratum": "unseen"
+  },
+  {
+    "query": "Our repo has a hand-authored lineage YAML that a separate ingestion job reads to build the catalog graph. I need to restructure how the upstream and downstream entries nest.",
+    "should_trigger": true,
+    "note": "held-out NEW case (T2.1b, sealed 0.5.0) — schema-as-data POSITIVE: a separate tool loads it, so the emitted shape is a consumer contract; deliberately avoids the tokens the 0.1.15 lexical guard uses",
+    "stratum": "unseen"
+  },
+  {
+    "query": "This JSON is the source for an architecture diagram we render to SVG on the docs site — nothing else reads it. I want to rename the node keys so the labels read better.",
+    "should_trigger": false,
+    "note": "held-out NEW case (T2.1b, sealed 0.5.0) — schema-as-data NEGATIVE: the only consumer renders it, which the description now rules out explicitly. The pair with the two positives above is what makes the ruling decidable rather than silent",
+    "stratum": "unseen"
+  },
+  {
+    "query": "The browser keeps serving stale CSS — the page won't pick up the new styles after I deploy.",
+    "should_trigger": false,
+    "note": "held-out over-fire guard: non-data 'stale/won't update' (browser cache)",
+    "stratum": "spent-dev"
+  },
+  {
+    "query": "My npm lockfile didn't update after I edited package.json — sort out the install.",
+    "should_trigger": false,
+    "note": "held-out over-fire guard: non-data 'didn't update' (lockfile)",
+    "stratum": "spent-dev"
+  },
+  {
+    "query": "Just poking at this parquet file in a scratch notebook; nothing depends on it.",
+    "should_trigger": false,
+    "note": "held-out classic near-miss: exploratory, no consumer",
+    "stratum": "spent-dev"
+  },
+  {
+    "query": "Refactor the helper that formats our CLI's --help banner text; nothing consumes it as data.",
+    "should_trigger": false,
+    "note": "held-out over-fire guard (T16a, sealed 0.1.15): a 'payload/response' with no data-contract consumer",
+    "stratum": "unseen"
+  }
 ]
