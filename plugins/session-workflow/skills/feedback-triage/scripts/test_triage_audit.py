@@ -187,6 +187,33 @@ def test_usage_error_without_a_mode():
     assert 'usage' in proc.stderr
 
 
+QUALIFIED_DOC = """# Triage - qualified
+
+| # | proposed promotion | fix shape | home | status |
+|---|---|---|---|---|
+| T9a | plain | prose | here | watch |
+| T9b | qualified with an em dash | prose | here | watch — pending a second measurement |
+| T9c | qualified with a hyphen | prose | here | proposed - blocked on the keel row |
+| T9d | shipped, qualified | prose | here | shipped(0.23.0) — landed in #127 |
+"""
+
+
+def test_a_qualified_status_is_still_an_open_row():
+    # The skill's own `watch` rule asks a single-wave row to NAME the replication
+    # it waits for, so the status cell routinely reads "watch - pending X". A
+    # status pattern that only accepted bare words dropped exactly those rows --
+    # the ones most likely to be forgotten -- and reported them as nothing.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / '2026-01-01-triage-q.md').write_text(QUALIFIED_DOC, encoding='utf-8')
+        rows = {r[0]: r[1] for r in ta.open_rows(root)}
+        assert 'T9a' in rows
+        assert 'T9b' in rows, 'an em-dash-qualified watch must not vanish'
+        assert 'T9c' in rows, 'a hyphen-qualified proposed must not vanish'
+        assert rows['T9b'].startswith('watch')
+        assert 'T9d' not in rows, 'a qualified shipped status is still closed'
+
+
 if __name__ == '__main__':
     test_covered_doc_passes()
     test_an_undispositioned_finding_reddens_coverage()
@@ -197,4 +224,5 @@ if __name__ == '__main__':
     test_open_rows_cli_reports_the_count()
     test_open_rows_on_a_corpus_with_no_triage_docs()
     test_usage_error_without_a_mode()
+    test_a_qualified_status_is_still_an_open_row()
     print('ok: all triage_audit tests passed')

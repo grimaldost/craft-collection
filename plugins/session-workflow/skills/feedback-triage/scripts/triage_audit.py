@@ -45,7 +45,14 @@ from build_feedback_index import (
 # A promotion row in a cluster table: `| T58a | ... | ... | ... | proposed |`.
 # Row ids are minted by the triage pass (T<n><letter>); report finding ids are a
 # different namespace and are deliberately not matched here.
-_ROW = re.compile(r'^\|\s*(T\d+[a-z]?)\s*\|(.+)\|\s*([A-Za-z][A-Za-z0-9_.()\- ]*?)\s*\|\s*$')
+#
+# The status cell takes anything but a pipe. A narrower character class dropped
+# every QUALIFIED status -- `watch - pending a second measurement` -- which is
+# the exact shape the skill's own `watch` rule asks for ("a row whose sole
+# evidence is one measured wave names the replication it is pending"). A reader
+# of open rows that silently loses the rows most likely to be forgotten is worse
+# than no reader at all.
+_ROW = re.compile(r'^\|\s*(T\d+[a-z]?)\s*\|(.+)\|\s*([A-Za-z][^|]*?)\s*\|\s*$')
 _OPEN_STATUSES = ('proposed', 'watch', 'accepted')
 
 
