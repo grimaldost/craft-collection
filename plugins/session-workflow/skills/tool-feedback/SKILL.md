@@ -51,9 +51,8 @@ filesystem.** Either shape carries the same fields:
   count.**
 - When the tool is a skill in a repo you are also developing, its authoritative
   body is the working-tree `SKILL.md` — the installed cache can run *behind* or
-  *ahead* of it. Read the working-tree file before reporting on the skill's
-  current behavior, and **record which copy you actually exercised**, flagging
-  any skew (`references/mechanics.md` has the two directions).
+  *ahead* of it. Read the working-tree file before reporting on current
+  behavior; step 4's version line records which copy you ran.
 
 ## Were you asked, or did you notice?
 
@@ -94,10 +93,11 @@ filesystem.** Either shape carries the same fields:
    collection's. If ownership is genuinely ambiguous, report it where it surfaced
    and say so — triage's ROUTE OUT is the backstop.
 4. **Draft each report** (per tool per distinct concern — step 1) using the
-   template below. Read the tool's version
-   from its manifest (`plugin.json`, `pyproject.toml`, `__version__`) — never
-   guess; under cache skew (above), record the version you actually ran and note
-   the discrepancy.
+   template below. For an installed plugin,
+   `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/tool-feedback/scripts/plugin_version.py" <name> [--tree <repo>]`
+   prints the whole `Tool/version` line — version, install path, and any
+   cache-vs-checkout skew already in it. Paste it. Otherwise read the version
+   from the tool's manifest and name the file.
 5. **Self-check, then write** each report to
    `<resolved destination>/<YYYY-MM-DD>-<source-slug>.md` (step 1), slug distinct
    per wave/phase so reports never clobber earlier ones. Then **rebuild that
@@ -110,7 +110,7 @@ filesystem.** Either shape carries the same fields:
 # <tool> feedback — <short title>
 
 - **Date:** YYYY-MM-DD
-- **Tool/version:** <name> <version — read from the manifest, never guessed>
+- **Tool/version:** <name> <version> (<install path, or the manifest file read>)
 - **Context:** <what the tool was applied to; which skills/components were exercised>
 - **Outcome:** <one-line headline of how the session went>
 
@@ -155,7 +155,7 @@ otherwise the downstream lander re-derives them and can land the wrong one.
 ## Self-check before writing
 
 - Every path the report cites exists.
-- Version came from the manifest, not memory.
+- The version field names the copy it was read from.
 - Repeats are `extends` refs, not restatements.
 - Severities present on friction, misses, and proposals; every miss names a phase;
   every proposal opens with its suspected cause.

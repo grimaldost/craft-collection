@@ -50,3 +50,31 @@ just describe the tools. A finding about tool X's own skill is otherwise
 misrouted to whichever tool the brief described in most detail (observed: a
 pr-pilot skill finding mistagged as craft-collection's because the brief
 detailed craft and only named pr-pilot).
+
+## A corpus split across several passes in one round
+
+A large backlog is sometimes triaged by scope rather than all at once — a
+cross-cutting pass first, then one pass per component. The delta form above
+assumes one pass per baseline and misfires here in two ways.
+
+**The consolidated backlog belongs to the LAST pass of the round.** If every
+partial pass carries "every open row, its current status, and which pass set it",
+the round ends with three competing status ledgers over one backlog — the
+orphaning failure the consolidated table exists to prevent, in a new form. An
+earlier partial pass reconciles only the rows it touches and says so; it names
+the pass that owes the consolidation.
+
+**A forwarded report stays un-triaged.** `## Inputs` doubles as the pass's input
+list and as its coverage claim, and those separate the moment a pass forwards.
+The coverage parser credits every known stem named anywhere in that section,
+prose included, so naming a report there closes it — and a report closed by a
+pass that did not disposition its findings vanishes from the next pass's input
+list. Name only what the pass closes; a report with any forwarded finding is
+named under a different heading and reappears as un-triaged, which is correct
+even though it means the later pass re-reads a report this one partly used.
+Prefer that overlap: it costs a re-read, where the alternative costs a finding.
+
+**Observed.** A cross-cutting pass over 6 of 29 reports named two
+un-dispositioned reports inside `## Inputs` while explaining why they were out of
+scope. Both were credited as covered and left `### Untriaged`. The step-7 rebuild
+caught it — the just-triaged check reads the same list from the other direction.
