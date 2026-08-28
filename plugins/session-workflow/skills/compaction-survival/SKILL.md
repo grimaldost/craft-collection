@@ -45,7 +45,11 @@ then a long run's live state is whatever the 8K bound keeps.
 
 HEAD — bounded, rewritten in place:
 
-- **Mission** — the goal in a sentence or two, and the hard constraints.
+- **Mission** — the goal in a sentence or two, the hard constraints, and any
+  user instruction that constrains *mechanism* rather than outcome, quoted in
+  the user's own words with a stable id. Paraphrase is where an order dies:
+  once the wording is gone a substituted mechanism reads as a design choice,
+  and a conformance check has nothing to point at.
 - **Plan pointer** — where the full plan lives (a separate doc), so the anchor
   stays a cursor, not a second copy of the plan.
 - **Cursor** — done / in progress / **next action on resume**: one imperative
@@ -147,14 +151,7 @@ An anchor that cannot be found is no anchor.
 
 ## Common failure modes
 
-| Pattern | What it costs |
-|---------|---------------|
-| Anchor created, then never updated | Resume reads a stale cursor; work is redone or skipped. |
-| State kept only in context | The compaction the anchor exists to survive erases it. |
-| Re-read skipped on resume | Acts on the summary's gaps; relitigates settled decisions. |
-| Anchor grown into a transcript | Becomes the token hog it was meant to prevent. |
-| Non-idempotent resume | Re-runs a finished irreversible step, or stacks a second attempt on a half-done one. |
-| Closed in prose, never renamed | Injection de-ranks it and offers the rename, but strays accumulate until renamed — sweep at wind-down. |
+The seven recurring ones and what each costs: [`references/failure-modes.md`](references/failure-modes.md).
 
 ## Boundaries
 
