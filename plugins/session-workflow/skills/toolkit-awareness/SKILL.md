@@ -29,6 +29,11 @@ exists, else a directory scan of its `plugins/*/skills/`.
 Prefer the scan over memory: a remembered list is wrong the moment something
 changes.
 
+**When a tool answers differently than it did a moment ago**, the cause is
+usually where it was invoked from, not what it was asked:
+[`references/environment-traps.md`](references/environment-traps.md) lists the
+recurring ones and the signature that identifies each fast.
+
 `--check-serving <transcript_path>` diffs the hook commands recorded in a
 session transcript against every installed `hooks.json` and warns on a mismatch
 — the signature of an app-level **frozen plugin snapshot**, where every disk

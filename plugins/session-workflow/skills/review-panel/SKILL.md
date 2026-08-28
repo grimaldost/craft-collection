@@ -43,16 +43,14 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
 ## The protocol — this is what makes it work
 
 1. **Curate a NEUTRAL artifact brief.** Like a context hand-off, but stripped of
-   your conclusions. Give reviewers the artifact and what to judge — **never**
-   "here's what I decided, do you agree?". Do not narrate the rounds you've been
-   through or the direction you favor; that re-anchors them on you. State facts,
-   not your verdict.
+   your conclusions: give reviewers the artifact and what to judge, never "here's
+   what I decided, do you agree?".
 2. **Pick the lenses.** Default quartet: **Skeptic/Minimalist**, **Best-Practices
    Auditor**, **End-User Advocate**, **Domain Expert**. For depth, load the persona
    pack for the artifact type (below) and tailor a couple of personas to specifics.
-3. **Make them blind and adversarial.** Each reviewer is blind to the others and to
-   this conversation. Frame the job as *refute / find what's missing*, not "review"
-   — independence over politeness.
+3. **Make them adversarial.** Frame the job as *refute / find what's missing*,
+   not "review" — independence over politeness. What blindness requires
+   mechanically is a guard-rail below.
 4. **Demand structured, comparable output** — a fixed per-reviewer schema (verdict +
    scores + reasons) so results sit side by side. See `references/prompt-template.md`.
 5. **Fire them — mechanism by ladder level.** Levels 1–2: one fresh reviewer per
@@ -75,6 +73,10 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    verify stage follows the lenses, collect the findings in a barrier before it —
    a pipeline that drops a finding on a verifier's error loses a real finding to a
    coarse failure, not to a refutation.
+   **When the panel is a script, this is a stage in the harness, not a step for
+   its operator** — write inside the stage that produces the output. Read as an
+   operator's step it gets implemented as nothing: one panel script persisted no
+   verdicts, and a dead synthesis would have taken a seven-agent corpus with it.
 7. **Synthesize — don't average.** Produce a comparison matrix, where they **agree**
    (consensus = high confidence), where they **disagree** (the tension worth
    examining), and — most important for an anchored author — **where the panel
@@ -104,14 +106,17 @@ The default quartet works for anything; the packs sharpen it. Mix and match.
 - **Reviewing a repo whose plugin is also installed?** State which copy the panel
   reads (working tree vs installed cache) — the two diverge in either direction
   mid-release.
-- **Independence is the whole point.** Brief reviewers with your conclusion and you
-  have wasted the panel. Keep the artifact brief neutral and the reviewers blind.
+- **Blindness is a filesystem boundary, not a briefing style.** A reviewer with
+  file tools is blind only to what it cannot open, so the brief enumerates the
+  out-of-bounds paths by name — including version-control history, which carries
+  your justification even when the diff does not. A rule scoped to the panel's
+  own output directory is nominal while the repo and the spec sit open on disk.
+  The template has the slot.
 - **You synthesize; they don't decide.** The panel informs; the call stays with the
   user. Surface the range, including the lone dissent — a 3–1 split is signal.
 
 ## What this does NOT do
 
-- Replace a quick factual check or a single obvious answer — just answer it.
 - Audit a large file corpus — that is a blind fan-out over many files; use
   `corpus-review`.
 - Auto-fire — it proposes and waits for the go-ahead.

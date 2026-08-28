@@ -3,6 +3,125 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.23.0 — 2026-08-28
+
+Doctrine that a mechanism enforces stopped being stated only in prose. The
+anchor's injection order, the triage loop's three preconditions, a panel's
+blindness and a fork's recipient were each a rule a reader was asked to keep,
+and each failed in the field while the rule sat right there. (2026-08-28
+session-workflow-local triage: clusters T58 through T66, plus rows T54b and
+T41g, and two promoted 2026-07-22 and never built.)
+
+### Added
+
+- **`compaction-survival`: section-aware injection.** The re-injection hook
+  spent its 8K budget with a byte slice, so what a cut took was decided by where
+  the bytes ran out — in one production compaction, inside "Resume steps", the
+  section a cold start reads first. The budget is now spent top-down on whole
+  sections and the dropped ones are named, so document order is the drop order.
+  The byte cut survives as the floor for an anchor with no headings and for a
+  first section that alone overruns; injecting nothing is worse than a cut, and
+  the two signals stay distinct.
+- **`compaction-survival`: `--list-dormant`.** Still-active anchors nobody has
+  touched in days, with the cursor each still asserts. `--list-stale` provably
+  cannot reach them: it keys on content that reads as done, and a track
+  abandoned mid-cursor never says so. Read it when arming, which is the one
+  moment a human is reliably present.
+- **`feedback-triage/scripts/triage_audit.py`** — two readings a pass performed
+  from memory. `coverage` fails when a report named under `## Inputs` has a
+  finding the doc never names (naming a report there closes it, so an
+  un-dispositioned finding leaves the loop by omission — two consecutive passes
+  shipped that defect and both were caught by luck); `--emit` prints the
+  checklist so the claim is read rather than retyped. `open-rows` lists every row
+  a prior doc left `proposed`/`watch` with the doc that set it — 158 over the
+  live corpus, the true size of a backlog nobody could enumerate.
+- **`toolkit-awareness/references/environment-traps.md`** — the note promoted
+  2026-07-22 and never built, at the Glob trap's fourth-plus recurrence, now with
+  this window's additions: background-vs-interactive `PATH` resolution (the
+  signature is *untouched files going red too*), non-ASCII through a heredoc, and
+  a shell `cwd` that is not preserved between calls. What unites them is that
+  each returns a plausible answer rather than an error.
+- **`scripts/check_gate_claims.py`** (repo tooling, no plugin surface) — reads
+  each hook's polarity from its own guard and fails prose that contradicts it.
+
+### Changed
+
+- **The anchor spec's order is its survival order (T58a).** Reordered to Mission,
+  Cursor, Resume steps, Invariants, Parallel tracks, In-flight work,
+  Last-known-good, Plan pointer, with the rule that a section's position is its
+  priority. Worth naming: 0.22.0 put verbatim user orders into Mission, which is
+  first and never dropped, so that change pushed the tail closer to the cliff.
+  This is what pays for it.
+- **The re-injection hook is documented as shipping on (T58c).** The body and
+  `cold-start.md` both said "off by default" for a full release after 0.21.0
+  shipped it on, while the manifest, the script, the tests, the README and the
+  CHANGELOG said otherwise. A reader who believes a mechanism is inert does not
+  reason about what it does. `check_gate_claims.py` is what stops it recurring.
+- **Anchor rows from the field:** a reversal of a standing rule names what it
+  supersedes (T54b); `Last-known-good` covers branches, PRs and tags (T58d);
+  resume steps use absolute paths (T63a — one artefact was written into the wrong
+  repository by a relative command that succeeded in the wrong place); a
+  conditional **Parallel tracks** slot (T62a); the fold rule covers the cursor's
+  own done-list, not only a closed phase's spec; closing is on the deliverable,
+  not the session, so a session that carries on arms the next anchor in the same
+  breath (T60a). The stale pointer carries the cursor it still asserts (T60c).
+- **`feedback-triage` step 2 confirms its checkout is current (T66a).** The
+  reports come from the installed artifact and the grounding from the checkout;
+  nothing made those meet. Three passes in one month ran against trees 4, 29 and
+  2 commits behind. `plugin_version.py --tree` now prints a currency line beside
+  the version.
+- **`plugin_version.py --tree` fails loudly on a path it cannot resolve.** It
+  returned `None`, which renders identically to "the tree agrees" — a failure to
+  attribute reading as a clean bill of health, in the one script written not to
+  do that, over a real release skew.
+- **Step 5 states two limits on grounding.** The reinforcement bar governs
+  proposed changes; a shipped statement grounding proves false is corrected on
+  sight. And source cannot answer "was this already decided?" — a decline for
+  want of a home checks the open-row set first, because an unbuilt promoted row
+  is a pending home, not a missing one. A pass declined three findings that way.
+- **The feedback nudge names only registered targets (T65a).** It matched every
+  `Skill` call and rendered the list as "plugin tools", so a personal skill in no
+  registry was reported as one. The registry was already loaded and was never
+  consulted for the names. Fails open when no repo resolves.
+- **The index reports identity, not only counts (T23b).** A rename passed as
+  `+0` while a stem was rewritten; a simultaneous arrival and departure read as
+  nothing happening.
+- **`tool-feedback` mechanics: equal versions license reporting, not editing
+  (T64a).** The two copies can differ in bytes at the same version — line
+  wrapping, observed — and a literal-match patch then fails in a way that reads
+  as a charset fault.
+- **`review-panel`: blindness is a filesystem boundary (T59a).** A reviewer with
+  file tools is blind only to what it cannot open, so the brief enumerates
+  out-of-bounds paths by name, version-control history included. The template
+  carries the slot. And step 6 marks its addressee (T59b): when the panel is a
+  script, persistence is a stage in the harness, not a step for the operator —
+  read as the latter, one script persisted nothing.
+- **`context-handoff`: an autonomous executor is a recipient class (T61a/T61b).**
+  Fork mode's opening sentence promised "the user will direct next steps", which
+  is exactly wrong for a session told to run unattended. The variant replaces it
+  with a grant and a stop condition and adds `## Acceptance criteria` and
+  `## Stop conditions`, with the wording that worked, so the next author does not
+  reinvent it — as three have.
+- **`test_red_proofs.py` states what a registry costs (T41g).** It cannot tell a
+  true entry from a plausible one; an entry is reviewed as evidence, not
+  configuration.
+
+### What paid for the new prose
+
+Every body is a ratchet. `compaction-survival` (1345 -> 1446): the Boundaries
+section, which restated the description's negative space three times over; the
+"Finding the anchor again" section, folded into Resume steps; Mission's forward
+reference to a gate in another tool that does not exist yet — and six new
+`references/failure-modes.md` entries carrying the reasons, so the body carries
+the rules. `feedback-triage` (1679 -> 1782): the Anti-patterns explanations,
+which each restated a rule stated above; the "Relationship to neighbors" section;
+and the evidence for steps 2 and 5, moved to `references/mechanics.md`.
+`review-panel` (1129 -> 1187): two of the three restatements of brief neutrality,
+and the "not a quick factual check" bullet the description already carries.
+`context-handoff` (1854 -> 1893): the Fork worked example, which restated the
+template above it with domain filler, and the Task-tool section's restatement of
+its own description.
+
 ## 0.22.0 — 2026-08-28
 
 Three load-bearing facts stopped being things a session remembers. A report's

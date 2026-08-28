@@ -15,13 +15,13 @@
   "plugins/humblepowers/skills/verification-before-completion/SKILL.md": 800,
   "plugins/session-workflow/skills/compaction-survival/SKILL.md": 1446,
   "plugins/session-workflow/skills/consolidate-knowledge/SKILL.md": 932,
-  "plugins/session-workflow/skills/context-handoff/SKILL.md": 1854,
+  "plugins/session-workflow/skills/context-handoff/SKILL.md": 1893,
   "plugins/session-workflow/skills/corpus-review/SKILL.md": 632,
   "plugins/session-workflow/skills/evaluate-skill/SKILL.md": 850,
   "plugins/session-workflow/skills/feedback-triage/SKILL.md": 1782,
   "plugins/session-workflow/skills/journaling-sessions/SKILL.md": 1761,
   "plugins/session-workflow/skills/llm-signature/SKILL.md": 412,
-  "plugins/session-workflow/skills/review-panel/SKILL.md": 1129,
+  "plugins/session-workflow/skills/review-panel/SKILL.md": 1187,
   "plugins/session-workflow/skills/tool-feedback/SKILL.md": 1187,
-  "plugins/session-workflow/skills/toolkit-awareness/SKILL.md": 515
+  "plugins/session-workflow/skills/toolkit-awareness/SKILL.md": 527
 }
