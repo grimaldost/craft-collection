@@ -163,6 +163,17 @@ where a frozen record cannot name its own commit sha before that commit exists.
   which reflows the whole file.
 - **Tests live beside code.** Every `script.py` ships a `test_script.py` that runs
   under plain `python` (no pytest). `scripts/run_tests.py` discovers them.
+- **Every shipped check declares how it was proved able to fail.**
+  `scripts/red_proofs.json` classifies every script under `scripts/`,
+  `plugins/*/skills/*/scripts/`, `plugins/*/hooks/` and `evals/harness/` as
+  **proved** (naming the test function that reddens it), a declared **gap**
+  (with why it has none yet), or **exempt** (with why it is not a reject check —
+  formatters, fail-open hooks, pure libraries). A script in none of the three
+  fails `evals/harness/test_red_proofs.py`, so a new check cannot ship without
+  that decision being made. A proof must name a function that actually runs
+  under bare `python`: a `def test_x` no runner block reaches is dead code that
+  reads as coverage. Three reddening shapes count — a non-zero exit, a non-empty
+  findings list from a pure core, and a hook's `decision: block` payload.
 - **Skills** follow the existing shape: `plugins/<plugin>/skills/<skill>/SKILL.md`
   with a trigger-focused `description` in the frontmatter, plus `references/` for
   on-demand depth and `scripts/` for runnable tools. Use a sibling skill as a model.
@@ -179,7 +190,11 @@ where a frozen record cannot name its own commit sha before that commit exists.
   into thinking they were the evidence.
 - **A new skill needs a word-budget baseline.** `scripts/validate_plugins.py`
   fails a `SKILL.md` body with no entry in `scripts/word_budget.json`; add the
-  one entry by hand. (`scripts/word_budget.py --seed` exists, but it rewrites
+  one entry by hand. Read current headroom with
+  `uv run --no-project -- python scripts/word_budget.py --report` (tightest
+  first) rather than counting by hand — there is exactly one counter in this
+  repo, and an audit that compared a hand count against the gate's ceiling once
+  reported 78 words of headroom where there were zero. (`scripts/word_budget.py --seed` exists, but it rewrites
   *every* baseline from the current tree, so it resets the ratchet — don't use it
   to add a single entry.) Growing an existing body means bumping its baseline in
   the same reviewed diff and naming what the growth displaces.
