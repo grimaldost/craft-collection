@@ -61,6 +61,9 @@
     "scripts/ascii_runtime_lint.py": [
       "evals/harness/test_ascii_runtime_lint.py::test_ratchet_semantics"
     ],
+    "scripts/check_gate_claims.py": [
+      "scripts/test_check_gate_claims.py::test_a_contradicting_doc_reddens_the_check"
+    ],
     "scripts/check_uv_hygiene.py": [
       "evals/harness/test_check_uv_hygiene.py::main"
     ],

@@ -21,6 +21,15 @@ hard to trust, which is the failure mode it exists to prevent. Instead:
     block calls is dead code that reads as coverage;
   * declared gaps are a burn-down list that is visible instead of invisible.
 
+What that costs, stated plainly: a registry is exactly as good as the honesty of
+whoever seeds it. Nothing here can distinguish a true entry from a plausible one
+-- a named test that exists, runs, and never exercises the reject path passes
+every check above. One such entry was written during the seeding pass itself and
+caught only by its author re-reading it. So a new or re-seeded entry is reviewed
+as EVIDENCE, not as configuration: open the named test and confirm it asserts
+the reject path. The first seeding is where a wrong entry is cheapest to make
+and hardest to see.
+
 The registry's `proofs` accept three reddening shapes, because the collection
 ships all three: a non-zero exit from `main()`, a non-empty findings/errors
 list from a pure core, and a `decision: block` payload from a hook. A test

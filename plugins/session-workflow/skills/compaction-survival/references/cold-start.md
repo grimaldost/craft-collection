@@ -70,8 +70,8 @@ plugin manifests, so use the absolute script path):
 }
 ```
 
-The env gate still applies: the hook stays inert unless
-`SESSION_WORKFLOW_ANCHOR_HOOKS=1` is set in the session's environment.
+The env gate still applies, and it is an opt-out: the hook runs unless
+`SESSION_WORKFLOW_ANCHOR_HOOKS=0` is set in the session's environment.
 
 ## Verify before trusting it
 
