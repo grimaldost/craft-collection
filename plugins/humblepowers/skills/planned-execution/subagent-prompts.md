@@ -2,20 +2,28 @@
 
 Condensed templates for the three roles in the execution loop. Each prompt is
 self-contained — the subagent never reads the plan file; the controller pastes
-what the role needs.
+what the role needs. Operational rules live in these templates rather
+than in the skill body for the same reason: the body is read by whoever plans,
+and these bind whoever executes. `references/dispatch-hazards.md` has the
+observations behind them.
 
 ## Implementer
 
 ```text
 You are implementing one task from a larger plan. Scene-setting: <one
 paragraph: what the project is, what tasks came before, where this task fits>.
+<If this runs in an isolated worktree: say so, and say that sibling paths like
+`../other-repo` do not resolve from it - name the provisioning to use instead.>
 
 Your task, in full:
 <the task's complete text from the plan: files, steps, code, commands>
 
 Rules:
 - Follow the steps exactly, in order; the plan's test-first sequencing is
-  deliberate. Run the commands; show their output.
+  deliberate. Run the commands synchronously and show their output. Never
+  background a gate, build or suite and end your turn waiting on it: the
+  completion notice wakes whoever spawned you, not you, so a turn that ends
+  waiting dies waiting. A long gate is worth blocking on.
 - If anything is unclear or missing, ask BEFORE implementing.
 - Commit when the task's steps say to, with the message the plan gives.
 - Self-review before reporting: re-read the task, check you built exactly
