@@ -43,6 +43,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: check-gate-claims
+        name: documented env-gate defaults match their guards
+        entry: uv run --no-project -- python scripts/check_gate_claims.py
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: validate-plugins
         name: validate marketplace structure
         entry: uv run --no-project --with pyyaml -- python scripts/validate_plugins.py

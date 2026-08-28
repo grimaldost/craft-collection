@@ -174,6 +174,24 @@ where a frozen record cannot name its own commit sha before that commit exists.
   under bare `python`: a `def test_x` no runner block reaches is dead code that
   reads as coverage. Three reddening shapes count — a non-zero exit, a non-empty
   findings list from a pure core, and a hook's `decision: block` payload.
+  **A new or re-seeded entry is reviewed as evidence, not as configuration** —
+  the reviewer opens the named test and confirms it asserts the reject path. The
+  gate is a registry, not a detector, by design, so nothing in the mechanism can
+  tell a true entry from a plausible one; the first seeding is where a wrong
+  entry is cheapest to make and hardest to see, and one shipped in the seeding
+  pass itself (a proof that ran, and did not exercise the branch it claimed).
+- **A documented env-gate default must match its guard.**
+  `scripts/check_gate_claims.py` reads each hook's polarity from the guard
+  itself — `os.environ.get(GATE) == '0'` ships on, `== '1'` ships off — and fails
+  when a plugin's prose says otherwise, by wrong control value or by an
+  "off by default" phrase in the same paragraph. Fenced code is exempt (a
+  verification recipe legitimately sets the variable) and so is `CHANGELOG.md`
+  (a dated record of what was true then). It exists because
+  `compaction-survival`'s body and its cold-start recipe both described the
+  re-injection hook as off by default for a full release after it shipped on,
+  while the manifest, the script, the tests, the README and the CHANGELOG all
+  said otherwise — and a reader who believes a mechanism is inert does not
+  reason about what it does.
 - **Skills** follow the existing shape: `plugins/<plugin>/skills/<skill>/SKILL.md`
   with a trigger-focused `description` in the frontmatter, plus `references/` for
   on-demand depth and `scripts/` for runnable tools. Use a sibling skill as a model.
