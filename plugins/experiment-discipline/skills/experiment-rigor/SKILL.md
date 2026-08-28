@@ -85,7 +85,9 @@ the rule.
   outcome's `role`, operationalization, and verifier hash, and `analysis_plan` —
   is reconstructed with `git show` on `plan_frozen_at.commit` and compared to the
   analyzed record. Any drift fails. A confirmatory verdict is legal only on an
-  outcome whose frozen `role` is `confirmatory`.
+  outcome whose frozen `role` is `confirmatory`. The two guards the freeze buys —
+  a null bank, and a pre-committed rule for what a finding must survive — are
+  worked, with the day they both fired, in `references/two-guards.md`.
 - **Declared-cells reconciliation (`ER-RECON`).** `N_expected` is the sum of
   `design.cells[].planned_n`, and it must equal the disposition total and every
   outcome's sum of arm denominators. The model tier is one named factor level, not
@@ -97,8 +99,7 @@ the rule.
 - **The small-n CI refusal (`ER-STATS`).** No CLT / normal method below a cell
   denominator of 30. Allowed: `wilson`, `clopper_pearson`, `beta_binomial`. Every
   stated interval is recomputed from `stats.py` and must match to four decimals.
-  `references/small-n-stats.md` also covers clustered and paired standard errors,
-  the Beta(1, 1) prior, and the within-experiment-only pooling boundary.
+  `references/small-n-stats.md` covers the rest.
 - **A rate needs both a numerator and a denominator (`ER-SCHEMA`).** A rate lives
   under `results.<outcome>.arms.<arm>` with both; a loose rate at the outcome
   level fails.
@@ -108,8 +109,7 @@ the rule.
 - **Probe self-labeling (`ER-PROBE`).** A probe carrying a confirmatory verdict or
   a posterior fails; the message names the graduation path to measurement.
 - **Threat coverage (`ER-THREAT`).** Every core threat in the closed enum carries
-  a row with a status and a statement; silence on one fails. The enum and what
-  each key means are in `references/threats-catalog.md`.
+  a row with a status and a statement; silence on one fails. The enum is in `references/threats-catalog.md`.
 
 ## What binds, role-generically
 

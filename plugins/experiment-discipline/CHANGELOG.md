@@ -3,6 +3,40 @@
 Notable changes to this plugin. Bump the `version` in `.claude-plugin/plugin.json`
 with each release.
 
+## 0.3.0 — 2026-08-28
+
+The discipline's central claim is that a frozen plan is worth its cost. This
+release writes down the day that claim paid — twice, against its own author's
+headline — because a guard that has never vetoed anything is indistinguishable
+from no guard. (2026-08-28 cross-cutting triage: T46a.)
+
+### Added
+
+- **`references/two-guards.md`** — the two guards the freeze buys, worked
+  through the 2026-07-25 wave where both fired in one day. A **null bank**
+  answers what a metric reads when there is nothing to find: a prescriptive gate
+  scored 1.00 on its primary metric and looked like the winner, then returned
+  0.58 `over_scope` on trivial edits — the 1.00 was measuring willingness to
+  act, not judgment about when to, and the primary-metric winner was vetoed by
+  its own control. A **pre-committed survival rule** then withdrew the doctrine
+  promotion already drafted off that result: the replication ran 165 trials,
+  produced 0.00 `over_scope` in every cell for two other disciplines, and closed
+  the gap at +0.00. The finding was plausible, evidenced, single-wave, and wrong.
+
+  The file also carries the cheap form of guard 1 — when two arms deliver
+  identical treatment over any subset, pre-register that subset's contrast as an
+  A/A calibration, one line in `exploratory_contrasts`. One returned a noise
+  floor of +0.0417 against a primary contrast of +0.0417.
+
+### Changed
+
+- **The freeze bright line points at what it buys.** `ER-PREREG` stated the
+  mechanism and stopped; it now names the two guards and where they are worked.
+  Body 1086 -> 1099. The growth displaces two reference-file tables of contents
+  that the reference files already carry: `small-n-stats.md`'s list of its own
+  sections, and `threats-catalog.md`'s. Net +13 words for a worked example on
+  the rung the whole skill rests on.
+
 ## 0.2.0 — 2026-08-11
 
 Backlog wave 1 (CRAF-B08). The plugin's central claim is that every load-bearing
