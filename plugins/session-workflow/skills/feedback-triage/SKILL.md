@@ -104,8 +104,7 @@ and CHANGELOGs belong to the tool's release process.
    (≥2 reports, ideally across arcs — a single-report **BLOCKER** is exempt),
    **specific** (a concrete change with a home), and **actionable**. The
    exemption's scope is the BLOCKER's own row — siblings from the same report
-   justify themselves in the ledger or take `watch` (the middle disposition:
-   keep the row, hold the build, wait for a second report). Under-promote rather
+   justify themselves in the ledger or take `watch`. Under-promote rather
    than pollute; unpromoted clusters stay listed as raw, and the **Promotion-gate
    ledger** shows the gate's work either way.
 6. **Consolidate before you grow.** A standing debt check on every pass: a home
@@ -181,7 +180,8 @@ and every Inputs finding is dispositioned (input coverage).>
 
 Status vocabulary: `proposed` / `watch` / `accepted` / `shipped(<version>)` /
 `declined` — `watch` parks an anchored-but-singleton row until a second report
-corroborates it; later passes update statuses. (Report finding IDs `<stem>#<n>`
+corroborates it, and a row whose sole evidence is one measured wave names the
+replication it is pending and waits there too. Later passes update statuses. (Report finding IDs `<stem>#<n>`
 are minted by `tool-feedback`; promotion IDs `T1a` are minted here — two
 namespaces, don't conflate them.)
 

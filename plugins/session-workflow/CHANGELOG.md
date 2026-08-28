@@ -9,7 +9,7 @@ Three load-bearing facts stopped being things a session remembers. A report's
 version field, the user's own words, and a triage doc's coverage claim were each
 governed by prose telling the author to be careful, and each failed in the field
 while the prose sat right there. (2026-08-28 cross-cutting triage: T53a/T53b,
-T54a, plus the loop-governance findings from that pass's own close-out report.)
+T54a, T46b, plus the loop-governance findings from that pass's own close-out report.)
 
 ### Added
 
@@ -57,12 +57,20 @@ T54a, plus the loop-governance findings from that pass's own close-out report.)
   scope named them inside `## Inputs`, both were credited as covered, and both
   left `### Untriaged`. The step-7 rebuild caught it, which is the check working;
   the contract is now stated where the ambiguity bites.
+- **A single-wave promotion says what replication it waits for (T46b).** Folded
+  into the existing `watch` definition rather than added as a status: a row whose
+  sole evidence is one measured wave names the replication it is pending and
+  parks there. The worked case — a plausible, evidenced, single-wave finding that
+  was withdrawn by its own pre-registered replication rule — lives in
+  experiment-rigor's `references/two-guards.md`, so the loop side does not restate
+  it. Displaces step 5's parenthetical gloss on `watch`, which the status
+  vocabulary already defines.
 - **`feedback-triage` gains a fourth disposition, `FORWARD`.** Route-out crosses
   tools; forward crosses passes over the same tool. A forwarded finding is not
   closed. `references/mechanics.md` carries the multi-pass shape: the last pass
   of a round owes the consolidated backlog, and an earlier partial pass
   reconciles only the rows it touches.
-- Ceilings ratcheted to measured counts: feedback-triage 1677 -> 1673,
+- Ceilings ratcheted to measured counts: feedback-triage 1677 -> 1679 (T46b, displaced),
   tool-feedback 1188 -> 1187, compaction-survival 1409 -> 1345. Slack in a
   ceiling buys a future append that never has to name what it displaces.
 
