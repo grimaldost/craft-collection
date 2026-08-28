@@ -3,6 +3,79 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.22.0 — 2026-08-28
+
+Three load-bearing facts stopped being things a session remembers. A report's
+version field, the user's own words, and a triage doc's coverage claim were each
+governed by prose telling the author to be careful, and each failed in the field
+while the prose sat right there. (2026-08-28 cross-cutting triage: T53a/T53b,
+T54a, plus the loop-governance findings from that pass's own close-out report.)
+
+### Added
+
+- **`tool-feedback/scripts/plugin_version.py`** — emits the whole
+  `Tool/version` line from `installed_plugins.json`: the version, and the
+  resolved install path whose last segment *is* that version. The number and its
+  evidence are one token, so a line that was pasted was read. A
+  cache-vs-checkout skew is rendered into the line rather than left for the
+  author to notice and narrate, and an unresolvable plugin exits 1 — a failure
+  to attribute is not a clean bill of health. Stdlib only.
+- **`compaction-survival/references/failure-modes.md`** — the failure-mode
+  table, moved out of the body it was crowding, plus a seventh entry for the one
+  this release addresses. The body keeps a one-line pointer.
+
+### Changed
+
+- **The `Tool/version` field carries its own provenance (T53a).** The skill said
+  "never guess" three times — in the step, in the template placeholder, and in
+  the self-check — and a report still attributed its evidence to
+  `engineering-discipline 0.1.3 (installed cache, plugin.json)` on a day when the
+  cache had held only `0.5.0` for eleven days and two sibling reports read it
+  correctly. A real historical version is exactly the shape that survives a
+  self-check, so a fourth sentence was not the fix. The step now names the script
+  and says paste its output; the template field is
+  `<version> (<install path, or the manifest file read>)`; the self-check asks a
+  checkable question — "the version field names the copy it was read from" —
+  instead of asserting an unobservable one about memory. Two of the three "never
+  guess" statements are gone, and the cache-skew bullet lost the sentence asking
+  the author to flag skew by hand, which the script now renders.
+- **The anchor's Mission slot takes the user's words, not a summary of them
+  (T54a).** Mission read "the goal in a sentence or two, and the hard
+  constraints" — an instruction to paraphrase — and the skill's only verbatim
+  rule pointed outward, at questions the session will ask. A user instruction
+  that fixed a *mechanism* therefore survived compaction as a summary, a later
+  substitution read as a design choice, and four blind pre-mortems audited the
+  spec against the code because the order existed nowhere a reviewer could read.
+  Mission now carries any instruction constraining mechanism rather than
+  outcome, quoted, with a stable id. Paid for by moving the failure-mode table to
+  `references/`: body 1407 -> 1345, ceiling ratcheted to the measured count.
+- **`feedback-triage`: `## Inputs` lists what the pass CLOSES.** The section
+  doubles as the input list and as the coverage claim, and the two separate the
+  moment a pass forwards or partly handles a report — the index builder credits
+  every stem named anywhere in it, prose included. Observed in the pass that
+  produced this release: a scope note explaining why two reports were out of
+  scope named them inside `## Inputs`, both were credited as covered, and both
+  left `### Untriaged`. The step-7 rebuild caught it, which is the check working;
+  the contract is now stated where the ambiguity bites.
+- **`feedback-triage` gains a fourth disposition, `FORWARD`.** Route-out crosses
+  tools; forward crosses passes over the same tool. A forwarded finding is not
+  closed. `references/mechanics.md` carries the multi-pass shape: the last pass
+  of a round owes the consolidated backlog, and an earlier partial pass
+  reconciles only the rows it touches.
+- Ceilings ratcheted to measured counts: feedback-triage 1677 -> 1673,
+  tool-feedback 1188 -> 1187, compaction-survival 1409 -> 1345. Slack in a
+  ceiling buys a future append that never has to name what it displaces.
+
+### What paid for the new prose
+
+Every body is a ratchet, so all four changes displaced. `feedback-triage`: the
+H1-detection aside (already in `references/mechanics.md`), the duplicate
+statement of the 1-report-delta rule, the closing aphorism that restated the
+sentence above it, the neighbour analogy, and one anti-pattern's back-reference
+to the step two lines up. `tool-feedback`: two of the three "never guess"
+statements and the hand-flag-the-skew sentence. `compaction-survival`: the
+failure-mode table.
+
 ## 0.21.0 — 2026-08-11
 
 Backlog wave 1. Four hooks became two, both on by default, and the feedback index
