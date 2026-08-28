@@ -376,16 +376,20 @@ def append_telemetry(anchors_dir: Path, record: dict) -> None:
         pass  # telemetry is best-effort, never load-bearing
 
 
+def _force_utf8_stdout() -> None:
+    """Hook runners on Windows hand this script a cp1252 stdout; campaign anchors
+    essentially always carry non-ASCII (arrows, accented prose), so any print of
+    anchor content would raise. Force UTF-8 at the seam instead of trusting the
+    platform default."""
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+
+
 def main() -> int:
     if os.environ.get(ENV_GATE) == '0':
         return 0
 
-    # Hook runners on Windows hand this script a cp1252 stdout; campaign anchors
-    # essentially always carry non-ASCII (arrows, accented prose), so the print
-    # below would raise and the fail-safe would swallow the whole injection.
-    # Force UTF-8 at the seam instead of trusting the platform default.
-    if hasattr(sys.stdout, 'reconfigure'):
-        sys.stdout.reconfigure(encoding='utf-8')
+    _force_utf8_stdout()
 
     try:
         payload = json.loads(sys.stdin.read() or '{}')
@@ -448,6 +452,11 @@ def main() -> int:
 
 
 if __name__ == '__main__':
+    # Before any CLI arm prints: both sweeps emit anchor CONTENT (titles, cursors),
+    # and campaign anchors essentially always carry non-ASCII. On a cp1252 console
+    # an arrow in a cursor raised UnicodeEncodeError and the sweep died with a
+    # traceback -- the same seam main() already forces, applied one scope out.
+    _force_utf8_stdout()
     # Explicit sweep entry: `python anchor_inject.py --list-stale [anchors_dir]` prints
     # the rename commands for the cycle-end /anchor close --stale sweep and exits.
     if len(sys.argv) > 1 and sys.argv[1] == '--list-stale':
