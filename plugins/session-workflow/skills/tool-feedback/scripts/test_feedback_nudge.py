@@ -325,6 +325,111 @@ def test_main_unknown_mode_and_garbage_stdin_exit_0():
     assert _run(['--stop-nudge'], b'\xff\xfe garbage')[0] == 0
 
 
+def _real_registry(td: Path) -> Path:
+    """A feedback-targets file in the shipped v1 shape, with one target whose
+    repo actually ships a plugin and one that does not."""
+    craft = td / 'craft-collection'
+    (craft / 'plugins' / 'session-workflow').mkdir(parents=True)
+    convoy = td / 'convoy'
+    convoy.mkdir()
+    p = td / 'real-targets.toml'
+    p.write_text(
+        '[targets.craft-collection]\n'
+        f'repo = "{craft.as_posix()}"\n'
+        'feedback_dir = "/tmp/fb"\n'
+        '\n'
+        '[targets.convoy]\n'
+        f'repo = "{convoy.as_posix()}"\n',
+        encoding='utf-8',
+    )
+    return p
+
+
+def test_registered_repos_parses_the_targets_file():
+    with tempfile.TemporaryDirectory() as td:
+        repos = fn.registered_repos(_real_registry(Path(td)))
+        assert sorted(repos) == ['convoy', 'craft-collection']
+
+
+def test_a_plugin_skill_resolves_through_the_repo_that_ships_it():
+    with tempfile.TemporaryDirectory() as td:
+        repos = fn.registered_repos(_real_registry(Path(td)))
+        assert fn.is_registered('session-workflow:compaction-survival', repos)
+
+
+def test_a_bare_personal_skill_is_not_registered():
+    # The observed defect: the nudge named `mantis-wisdom` -- a personal skill
+    # under ~/.claude/skills, in no registry -- as a "plugin tool", sending the
+    # reader to the registry to confirm a non-target.
+    with tempfile.TemporaryDirectory() as td:
+        repos = fn.registered_repos(_real_registry(Path(td)))
+        assert not fn.is_registered('mantis-wisdom', repos)
+
+
+def test_a_target_named_directly_is_registered():
+    with tempfile.TemporaryDirectory() as td:
+        repos = fn.registered_repos(_real_registry(Path(td)))
+        assert fn.is_registered('convoy', repos)
+
+
+def test_an_mcp_plugin_tool_resolves_to_its_plugin():
+    with tempfile.TemporaryDirectory() as td:
+        repos = fn.registered_repos(_real_registry(Path(td)))
+        assert fn.is_registered('mcp__plugin_convoy_convoy__convoy_run', repos)
+
+
+def test_filtering_drops_only_the_unregistered():
+    with tempfile.TemporaryDirectory() as td:
+        targets = _real_registry(Path(td))
+        tools = ['mantis-wisdom', 'session-workflow:compaction-survival', 'other-skill']
+        assert fn.registered_only(tools, targets) == ['session-workflow:compaction-survival']
+
+
+def test_the_filter_fails_open_when_no_repo_resolves():
+    # A registry whose checkouts moved must not silence a real debt: saying too
+    # much is a smaller failure than going quiet on a report that is owed.
+    with tempfile.TemporaryDirectory() as td:
+        targets = Path(td) / 'moved.toml'
+        targets.write_text('[targets.gone]\nrepo = "/nowhere/at/all"\n', encoding='utf-8')
+        tools = ['mantis-wisdom', 'session-workflow:compaction-survival']
+        assert fn.registered_only(tools, targets) == tools
+
+
+def test_a_session_of_only_unregistered_skills_owes_nothing():
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        targets = _real_registry(tdp)
+        transcript = tdp / 't.jsonl'
+        _write_transcript(
+            transcript, ['first prompt', 'second prompt'], [_skill_call('mantis-wisdom')]
+        )
+        with _nudge_env(td, str(targets)):
+            rc, out = _run(
+                ['--stop-nudge'], {'session_id': 'unreg', 'transcript_path': str(transcript)}
+            )
+        assert rc == 0
+        assert out.strip() == '', 'no registered tool ran, so there is no debt to nudge about'
+
+
+def test_a_registered_skill_beside_an_unregistered_one_still_nudges():
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        targets = _real_registry(tdp)
+        transcript = tdp / 't.jsonl'
+        _write_transcript(
+            transcript,
+            ['first prompt', 'second prompt'],
+            [_skill_call('mantis-wisdom'), _skill_call('session-workflow:compaction-survival')],
+        )
+        with _nudge_env(td, str(targets)):
+            rc, out = _run(
+                ['--stop-nudge'], {'session_id': 'mixed', 'transcript_path': str(transcript)}
+            )
+        assert rc == 0
+        assert 'compaction-survival' in out
+        assert 'mantis-wisdom' not in out, 'a non-target must not be named as a registered tool'
+
+
 def main() -> int:
     test_fires_once_with_no_env_set()
     test_silent_without_a_registered_targets_file()
@@ -339,6 +444,15 @@ def main() -> int:
     test_failed_print_does_not_burn_the_marker()
     test_min_turns_garbage_falls_back()
     test_main_unknown_mode_and_garbage_stdin_exit_0()
+    test_registered_repos_parses_the_targets_file()
+    test_a_plugin_skill_resolves_through_the_repo_that_ships_it()
+    test_a_bare_personal_skill_is_not_registered()
+    test_a_target_named_directly_is_registered()
+    test_an_mcp_plugin_tool_resolves_to_its_plugin()
+    test_filtering_drops_only_the_unregistered()
+    test_the_filter_fails_open_when_no_repo_resolves()
+    test_a_session_of_only_unregistered_skills_owes_nothing()
+    test_a_registered_skill_beside_an_unregistered_one_still_nudges()
     print('ok: feedback_nudge')
     return 0
 

@@ -52,6 +52,9 @@
     "plugins/session-workflow/skills/feedback-triage/scripts/build_feedback_index.py": [
       "plugins/session-workflow/skills/feedback-triage/scripts/test_build_feedback_index.py::test_refuses_to_overwrite_an_index_built_by_a_newer_builder"
     ],
+    "plugins/session-workflow/skills/feedback-triage/scripts/triage_audit.py": [
+      "plugins/session-workflow/skills/feedback-triage/scripts/test_triage_audit.py::test_an_undispositioned_finding_reddens_coverage"
+    ],
     "plugins/session-workflow/skills/llm-signature/scripts/render_signature.py": [
       "plugins/session-workflow/skills/llm-signature/scripts/test_render_signature.py::test_cli_unresolvable_model_fails_loud"
     ],

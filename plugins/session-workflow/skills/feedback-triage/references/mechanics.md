@@ -34,6 +34,28 @@ One new report over a baseline is a valid delta pass — statuses move and watch
 rows get their corroboration. "Nothing to cluster" prohibits only a corpus of
 one with no baseline.
 
+## Why step 2 checks the checkout, and step 5 checks the row set
+
+Both are readings a pass used to perform from memory and got wrong.
+
+**A stale checkout.** Three passes in one month reconciled against trees 4, 29
+and 2 commits behind their remotes. The 29-commit one was a full release behind
+with a remote-tracking ref 16 days stale, so even `git log origin/main` lied
+until a fetch; the 4-commit one sat at 0.2.0 while the field-exercised version
+was 0.3.0, and it was caught only because a report named a version the manifest
+did not have. Every shipped-or-absent verdict taken against such a tree is wrong
+in the same direction, and the doc that results becomes the status of record for
+passes that follow.
+
+**An unbuilt promoted row reads as an absent home.** Grounding against source
+answers "is the mechanism there?" and cannot answer "was this already decided?"
+A pass verified — correctly — that a skill had no environment-traps section and
+DECLINED three findings for want of a home, when that note had been a promoted
+row for five weeks and a prior baseline had already re-verified it absent. The
+same corpus had a whole document's rows never carried into the next doc at all.
+The row set is the only thing that answers the second question, so it is read,
+not recalled.
+
 ## Concurrent sessions on one corpus
 
 If another session may be triaging the same corpus: at scope, note any triage
