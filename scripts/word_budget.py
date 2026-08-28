@@ -82,13 +82,43 @@ def check_budgets(counts: dict[str, int], baselines: dict[str, int]) -> list[str
     return errors
 
 
+def report_rows(counts: dict[str, int], baselines: dict[str, int]) -> list[str]:
+    """One `body / ceiling  headroom N  path` line per skill, widest-first by
+    pressure. The reason this exists: an audit computed a body count by hand,
+    compared it against the gate's ceiling, and reported 78 words of headroom
+    where there were zero - so an additive edit would have tripped the gate the
+    audit said had room, and a plan was built on the wrong figure. There is
+    exactly one counter in this repo; the fix is to leave nothing to hand-count.
+    Pure."""
+    rows = []
+    for path, count in counts.items():
+        base = baselines.get(path)
+        if base is None:
+            rows.append((None, f'{count:>5} /     ?  headroom      ?  {path}'))
+        else:
+            rows.append(
+                (base - count, f'{count:>5} / {base:>5}  headroom {base - count:>6}  {path}')
+            )
+    # tightest first, unbaselined at the very top - those are the ones that bite
+    return [line for _, line in sorted(rows, key=lambda r: (r[0] is not None, r[0]))]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description='Skill-body word-budget ratchet (issue #54)')
     ap.add_argument(
         '--seed', action='store_true', help='(re)write word_budget.json from the current tree'
     )
+    ap.add_argument(
+        '--report',
+        action='store_true',
+        help='print body / ceiling / headroom per skill and exit 0 - quote this, never a hand count',
+    )
     args = ap.parse_args(argv)
     counts = current_counts()
+    if args.report:
+        for line in report_rows(counts, load_baselines()):
+            print(line)
+        return 0
     if args.seed:
         BUDGET_FILE.write_text(
             json.dumps(dict(sorted(counts.items())), indent=2) + '\n', encoding='utf-8'
