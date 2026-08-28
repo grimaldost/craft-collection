@@ -37,9 +37,8 @@ and CHANGELOGs belong to the tool's release process.
    `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`):
    its `### Untriaged` section is the input list — reports in no triage doc's
    **Inputs**, detection by input lists, not dates — and the `extends`-lookup in
-   steps 2–3 is one Read. A triage doc is detected by its `# Triage` H1 — the
-   rule the index builder stamps into its header; the filename is deliberately
-   NOT a signal (`references/mechanics.md` has the misclassification cases).
+   steps 2–3 is one Read. A triage doc is detected by its `# Triage` H1, never its filename
+   (`references/mechanics.md`).
    State the count: `N un-triaged
    reports`. N of 1 with no prior triage doc is too thin — stop with a note
    (nothing to cluster); 1 new report over an existing baseline is a valid delta
@@ -82,11 +81,14 @@ and CHANGELOGs belong to the tool's release process.
      the next layer, attack one rung down — advisory prose → required structure →
      script/gate → hook → linter/CI — instead of re-prosing the same advice. A
      judgment-bound recurrence no mechanism can reach (a dispatch-timing nudge, a
-     naming call) takes sharper prose or DECLINE, not a forced rung —
-     `skill-authoring`'s rule, loop-side: what needs caps to hold needs a
-     gate, not louder prose.
+     naming call) takes sharper prose or DECLINE, not a forced rung.
    - **ROUTE OUT** — it belongs to another registered tool; record the target.
    - **DECLINE** — project-specific or out of charter; record why.
+-
+     **FORWARD** — a sibling pass over *this same* tool owns it (a corpus split
+     by scope across several passes). Route-out crosses tools, forward crosses
+     passes, and a forwarded finding is **not closed**: name it outside `##
+     Inputs` so it stays un-triaged for the pass that clusters it.
 
    Tie-breaker when this tool's artifact participates in behavior another tool
    owns: route by **where the fix lands**, not where the artifact lives.
@@ -145,8 +147,10 @@ and CHANGELOGs belong to the tool's release process.
 <changelog reconciliation; clusters below that extend shipped work say so>
 
 ## Inputs
-<full report stems, one per line; the coverage parser matches whole stems —
-a factored-out date prefix reads as zero coverage>
+<stems this pass CLOSES, one per line — the parser credits every stem named
+anywhere in this section, prose included, so a report with any un-dispositioned
+or forwarded finding is named elsewhere and stays un-triaged; a factored-out
+date prefix reads as zero coverage>
 
 ## Headline
 <2–4 sentences: what this round establishes about the tool>
@@ -186,8 +190,8 @@ namespaces, don't conflate them.)
 - **Re-proposing shipped work** — the reconciliation step exists to kill this.
 - **Symptom clusters** — grouping by where it hurt instead of why it happened
   produces ten shallow clusters where two deep ones exist.
-- **Over-promotion** — a singleton observation promoted as if reinforced; the
-  gate exists to kill this, and `watch` keeps the anchored singleton.
+- **Over-promotion** — a singleton observation promoted as if reinforced;
+  `watch` keeps the anchored singleton.
 - **Absorbing what should be routed** — an engine defect "fixed" with a method
   doc; honor each tool's ledger and route out.
 - **Re-prosing a recurrence** — a finding that recurred past a shipped prose fix
@@ -196,13 +200,11 @@ namespaces, don't conflate them.)
 ## Relationship to neighbors
 
 `tool-feedback` captures (per session, recall); this consolidates (per corpus,
-precision) — the same shape as `journaling-sessions` → `consolidate-knowledge`,
-specialized to tool dogfooding. (A governed series' own reflections belong to the
-owning tool's triage flow — see step 8.)
+precision). (A governed series' own reflections belong to the owning tool's
+triage flow — see step 8.)
 
 ## What this skill does NOT do
 
 - Build promotions, edit the tool, bump versions, or write CHANGELOG entries.
-- Run proactively, or on a corpus of one report with no baseline (a 1-report
-  delta over an existing baseline is a valid later pass).
+- Run proactively.
 - Triage GitHub issues, PR queues, or task backlogs.
