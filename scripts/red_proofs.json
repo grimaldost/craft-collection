@@ -55,6 +55,9 @@
     "plugins/session-workflow/skills/llm-signature/scripts/render_signature.py": [
       "plugins/session-workflow/skills/llm-signature/scripts/test_render_signature.py::test_cli_unresolvable_model_fails_loud"
     ],
+    "plugins/session-workflow/skills/tool-feedback/scripts/plugin_version.py": [
+      "plugins/session-workflow/skills/tool-feedback/scripts/test_plugin_version.py::test_cli_refuses_an_unresolvable_plugin_and_names_nothing_plausible"
+    ],
     "scripts/ascii_runtime_lint.py": [
       "evals/harness/test_ascii_runtime_lint.py::test_ratchet_semantics"
     ],
