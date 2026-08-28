@@ -18,6 +18,12 @@ Frame the job as "refute / find what is missing", NOT "review">.
 facts and context a reviewer needs to judge it. DO NOT include your conclusions,
 the direction you favor, or the rounds of iteration you have been through.>
 
+## Out of bounds — do not open these
+<a reviewer with file tools is blind only to what it cannot open, so list the paths
+by name: the repo, the spec, the corpus contract, anything that states the intended
+design. Include the version-control history — `git log / show / blame` carry your
+justification even when the diff does not.>
+
 ## What to judge
 <the specific question(s): is it worth doing? is it well-designed / correct / going
 to work? what is the strongest objection?>

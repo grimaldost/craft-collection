@@ -18,12 +18,10 @@ the judgment about what to include.
 
 ## When to use this vs. the Task tool
 
-For in-session parallel work where results flow back automatically, use the Task
-tool / subagents — they solve that problem more completely. Reach for this skill
-when the handoff crosses a boundary the harness won't bridge: a brand-new
-session, a spawned background task you'll paste a result back from, a human
-teammate, or an issue/ticket. The deliverable is portable text someone (or some
-fresh instance) can act on with zero prior context.
+In-session parallel work belongs to the Task tool; this is for a handoff crossing
+a boundary the harness won't bridge — a brand-new session, a background task you
+paste a result back from, a human teammate, an issue. The deliverable is portable
+text someone acts on with zero prior context.
 
 ## Three modes
 
@@ -116,9 +114,12 @@ Length target: as long as needed, as short as possible.
 
 ## Output format
 
-Both templates below address a fresh or continuing Claude. **If the recipient is
-a human teammate or an issue ticket, drop the "You are a … Claude" opening line
-and lead with a one-sentence title** — the rest of the structure still applies.
+Both templates below address a fresh or continuing Claude. Two other recipient
+classes take the same structure with one change each. **A human teammate or an
+issue ticket:** drop the "You are a … Claude" opening line and lead with a
+one-sentence title. **An autonomous executor** — a session told to run to
+completion unattended — takes the Fork-mode variant below, because the shipped
+opening sentence promises it direction that is not coming.
 
 ### Subtask mode
 
@@ -164,6 +165,27 @@ You are continuing a prior Claude session. The previous session's relevant state
 ```
 
 No `REINTEGRATION_NOTE` for fork mode — nothing is coming back.
+
+**Autonomous variant.** When the recipient runs unattended, replace the opening
+sentence with a grant and a stop condition, and add two sections. Without them
+the executor either halts on every ambiguity, defeating the point, or guesses
+through the one that mattered — and every author reinvents the wording, so it
+ships here:
+
+```
+You are continuing a prior Claude session. The previous session's relevant state is below. Run this to completion autonomously: do not stop for direction. Stop only if you hit something genuinely undecidable that would make the work wrong if you guessed - and say precisely what and why.
+
+## Where things stood
+## Working context
+## Acceptance criteria
+<checkable conditions, numeric where possible; make the last one a cross-check against an independently measured value the executor can compare against>
+
+## Stop conditions
+<what warrants interrupting the user, stated as cases rather than as a feeling>
+```
+
+Both sections are for the autonomous case only: with a human steering, "done" is
+a conversation, and writing it down is overhead.
 
 ### Backlog mode
 
@@ -226,29 +248,10 @@ hints. Do not adjust the dates — only report them.
 
 REINTEGRATION_NOTE: The validator plugs into the schedule-generation path we were sketching, just before rows are inserted.
 
-### Fork
-
-**Invocation:** "fork this — continue the architecture discussion, now focused only on the Python↔native-extension boundary"
-
-```
-You are continuing a prior Claude session. The previous session's relevant state is below. Pick up from here — the user will direct next steps after you acknowledge the hand-off.
-
-## Where things stood
-We were designing a compute library: a Python frontend over a native (Rust)
-compute engine. We'd just narrowed to the Python↔Rust boundary — which operations
-live on which side and how data crosses. Decided so far: Rust handles the hot
-numeric loops; Python handles I/O, orchestration, and dataframe prep. Data
-interchange is via Arrow record batches.
-
-## Working context
-- Build: a native-extension toolchain for the Rust side; standard Python packaging
-- Open questions: (1) expose Rust types as classes, or keep everything as
-  function calls over Arrow data? (2) convert Rust errors to Python exceptions at
-  the boundary, or pass error columns back in the batch?
-
-## Suggested opening
-Start with question (1) — the function-vs-class boundary. Frame the tradeoffs, then we'll pick.
-```
+One worked example, deliberately: the templates above are literal, so a
+second one shows domain flavour rather than structure. What the example is
+for is the fact-density -- every line states something the executor cannot
+look up.
 
 ## What this skill does NOT do
 
