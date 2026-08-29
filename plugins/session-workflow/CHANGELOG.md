@@ -3,6 +3,28 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## 0.23.1 — 2026-08-29
+
+The two fixes that shipped the evening of the 0.23.0 release under an unchanged
+version. Claude Code only re-pulls a plugin when `plugin.json`'s version
+changes, so until this cut no installed copy could receive either one.
+
+### Fixed
+
+- **`feedback-triage`: `open-rows` sees qualified statuses.** The status
+  pattern accepted only bare words, so `watch - pending a second measurement` —
+  the exact shape the 0.22.0 watch rule asks a single-wave row to carry — was
+  dropped from the open set instead of reported. The status cell now takes
+  anything but a pipe, and the qualification rides through to the reader.
+  (`triage_audit.py`; `test_a_qualified_status_is_still_an_open_row` was
+  watched to fail against the old pattern.)
+- **`compaction-survival`: the sweep arms force UTF-8 before printing anchor
+  content.** `--list-stale` and `--list-dormant` exit before `main()`'s
+  encoding force runs, so an arrow in a cursor killed `--list-dormant` with a
+  traceback on a cp1252 console. The reconfigure is a named helper called from
+  both entry points. (`anchor_inject.py`;
+  `test_sweeps_survive_a_cp1252_stdout` covers both arms.)
+
 ## 0.23.0 — 2026-08-28
 
 Doctrine that a mechanism enforces stopped being stated only in prose. The
