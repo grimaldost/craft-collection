@@ -254,3 +254,11 @@ release-worthy change, **bump the semantic `version` in the affected plugin's
 `CHANGELOG.md` under a `## [X.Y.Z] - YYYY-MM-DD` heading. That is the one
 heading grammar (adopted 2026-08-29; the older `## X.Y.Z — date` headings were
 reformatted in place), so a single parser serves every plugin's changelog.
+
+CI enforces this on every PR: `scripts/check_release_discipline.py` fails a PR
+that touches `plugins/<p>/` (that plugin's `CHANGELOG.md`/`README.md` aside)
+unless the version is bumped **and** sits as the changelog's top heading. A
+change that genuinely ships nothing an installed copy could notice — a
+comment-only edit, a test-only refactor — declares itself instead with a
+commit-message trailer: `Release-note: none (<reason>)`. The reviewer judges
+the reason; the gate only checks that the decision was made.
