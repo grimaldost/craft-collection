@@ -41,10 +41,15 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = ROOT / 'scripts' / 'red_proofs.json'
+
+sys.path.insert(0, str(ROOT / 'scripts'))
+
+from run_tests import SEARCH_DIRS  # noqa: E402 - sys.path set up first
 
 # The shipped-script family. Mirrors the enumeration style of
 # test_git_env_isolation.py's repo-script sweep, widened to the plugins.
@@ -146,6 +151,26 @@ def broken_proofs(registry: dict, root: Path = ROOT) -> list[str]:
                     '(no such function, or no runner block calls it)'
                 )
     return problems
+
+
+def proofs_outside_discovery(registry: dict, search_dirs: tuple[str, ...]) -> list[str]:
+    """Proof references whose test module `run_tests.py` would never run.
+
+    The static checks above cannot see whether any gate actually executes a
+    proof's module: a test file outside the runner's `SEARCH_DIRS` roots
+    resolves, has a runner block, and is executed by nothing -- the
+    check_gate_claims suite shipped exactly that way (registered here,
+    discovered by no gate). The tuple is imported from `run_tests`, not
+    duplicated, so the two cannot drift apart silently. Pure.
+    """
+    roots = tuple(f'{d}/' for d in search_dirs)
+    out: list[str] = []
+    for script, refs in sorted((registry.get('proofs') or {}).items()):
+        for ref in refs if isinstance(refs, list) else [refs]:
+            rel = ref.split('::', 1)[0]
+            if not rel.startswith(roots):
+                out.append(f'{script}: proof module {rel} is outside the discovery roots')
+    return out
 
 
 def test_every_shipped_script_is_classified():
@@ -258,6 +283,33 @@ def test_broken_proofs_are_detected_not_assumed_fine():
         }
     }
     assert not broken_proofs(reg, ROOT), 'a real, runner-reachable proof was rejected'
+
+
+def test_every_proof_module_lives_under_a_discovered_root():
+    """The suite-membership half: a proof must live where run_tests.py looks."""
+    strays = proofs_outside_discovery(load_registry(), SEARCH_DIRS)
+    assert not strays, (
+        'red proofs no gate executes (outside run_tests.py SEARCH_DIRS '
+        + repr(sorted(SEARCH_DIRS))
+        + '):\n  '
+        + '\n  '.join(strays)
+    )
+
+
+def test_a_proof_outside_discovery_reddens_and_one_inside_does_not():
+    reg = {'proofs': {'s.py': ['tools/test_s.py::test_x']}}
+    assert proofs_outside_discovery(reg, ('plugins', 'evals')), (
+        'a proof outside every discovery root passed'
+    )
+    reg = {'proofs': {'s.py': ['scripts/test_s.py::test_x']}}
+    assert not proofs_outside_discovery(reg, ('plugins', 'evals', 'scripts')), (
+        'a proof inside a discovery root was rejected'
+    )
+    # a root name must match as a directory, not as a prefix of one
+    reg = {'proofs': {'s.py': ['scriptsx/test_s.py::test_x']}}
+    assert proofs_outside_discovery(reg, ('scripts',)), (
+        'a sibling directory sharing the root prefix passed'
+    )
 
 
 def test_the_family_glob_actually_finds_the_known_checks():
