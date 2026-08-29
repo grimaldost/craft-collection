@@ -271,3 +271,20 @@ change that genuinely ships nothing an installed copy could notice — a
 comment-only edit, a test-only refactor — declares itself instead with a
 commit-message trailer: `Release-note: none (<reason>)`. The reviewer judges
 the reason; the gate only checks that the decision was made.
+
+Tag each release with the grammar `claude plugin tag` produces — an annotated
+`<plugin>--v<X.Y.Z>`:
+
+```bash
+claude plugin tag plugins/<plugin> --push   # tags HEAD after validating plugin.json
+```
+
+Tag the release PR's **merge commit**, on `main`, right after the merge — one
+placement, never two, so a gate can enforce it and a tag always names exactly
+what `main` shipped (`claude plugin tag` tags HEAD: check out `main` at the
+merge before running it). Annotated tags only: a lightweight tag records no tagger date, so
+release timing becomes unrecoverable after the fact. Two older tag families
+are not releases under this convention: the single-dash `<plugin>-v0.1.1` tags
+(2026-06, kept as history — per-plugin tagging then went dormant while
+versions marched on, which this section exists to end), and `freeze/*` tags,
+which are experiment pre-registration pins.
