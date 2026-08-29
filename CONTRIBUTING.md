@@ -237,6 +237,14 @@ where a frozen record cannot name its own commit sha before that commit exists.
   - `fix(python-engineering): correct ruff pin in scaffold`
   - `docs(evals): clarify scorecard columns`
   - `build:` / `ci:` / `chore:` for tooling, CI, and housekeeping.
+
+  The format is mechanical, not just convention: a `commit-msg` lane rejects a
+  subject that is not a Conventional Commit, and rejects AI attribution in
+  either shape — a `Co-Authored-By: Claude/GPT/...` trailer or a
+  `Generated with ...` badge line — this repo does not stamp tools onto
+  authorship (`scripts/check_commit_msg.py`, red-proof registered like any
+  other gate). `uv tool run pre-commit install` installs the lane with the
+  other stages.
 - **Open a PR** and fill in the template. Keep changes focused; unrelated cleanups
   belong in their own PR.
 - PRs land via a **merge commit**, so your branch's own commits are preserved on
