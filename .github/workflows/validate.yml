@@ -6,6 +6,10 @@ on:
   pull_request: {}
   workflow_dispatch: {}
 
+# The job only checks out and runs the repo's own checks; nothing writes back.
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
