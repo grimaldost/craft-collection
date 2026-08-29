@@ -52,8 +52,9 @@ uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # struc
 ```
 
 The `validate` workflow re-runs the register linter, the plugin validator, the
-`AGENTS.md` freshness check, ruff, and the test suite on every PR; it must be green
-to merge. It does **not** run the pre-commit-only hooks — `check-json`,
+`AGENTS.md` freshness check, the env-gate claims check, the release-discipline
+gate (PRs only), ruff, and the test suite on every PR; it must be green to
+merge. It does **not** run the pre-commit-only hooks — `check-json`,
 `check-yaml`, `check-merge-conflict`, `check-added-large-files`, the ASCII runtime
 ratchet, or the two `experiment-rigor` record gates. Those exist at commit time
 only, which is what makes the exemptions below worth writing down.
@@ -236,6 +237,14 @@ where a frozen record cannot name its own commit sha before that commit exists.
   - `fix(python-engineering): correct ruff pin in scaffold`
   - `docs(evals): clarify scorecard columns`
   - `build:` / `ci:` / `chore:` for tooling, CI, and housekeeping.
+
+  The format is mechanical, not just convention: a `commit-msg` lane rejects a
+  subject that is not a Conventional Commit, and rejects AI attribution in
+  either shape — a `Co-Authored-By: Claude/GPT/...` trailer or a
+  `Generated with ...` badge line — this repo does not stamp tools onto
+  authorship (`scripts/check_commit_msg.py`, red-proof registered like any
+  other gate). `uv tool run pre-commit install` installs the lane with the
+  other stages.
 - **Open a PR** and fill in the template. Keep changes focused; unrelated cleanups
   belong in their own PR.
 - PRs land via a **merge commit**, so your branch's own commits are preserved on
@@ -250,4 +259,32 @@ where a frozen record cannot name its own commit sha before that commit exists.
 
 Claude Code only pulls a plugin update when its version changes. For a
 release-worthy change, **bump the semantic `version` in the affected plugin's
-`plugin.json`** as part of the PR, and note it in that plugin's `CHANGELOG.md`.
+`plugin.json`** as part of the PR, and record it in that plugin's
+`CHANGELOG.md` under a `## [X.Y.Z] - YYYY-MM-DD` heading. That is the one
+heading grammar (adopted 2026-08-29; the older `## X.Y.Z — date` headings were
+reformatted in place), so a single parser serves every plugin's changelog.
+
+CI enforces this on every PR: `scripts/check_release_discipline.py` fails a PR
+that touches `plugins/<p>/` (that plugin's `CHANGELOG.md`/`README.md` aside)
+unless the version is bumped **and** sits as the changelog's top heading. A
+change that genuinely ships nothing an installed copy could notice — a
+comment-only edit, a test-only refactor — declares itself instead with a
+commit-message trailer: `Release-note: none (<reason>)`. The reviewer judges
+the reason; the gate only checks that the decision was made.
+
+Tag each release with the grammar `claude plugin tag` produces — an annotated
+`<plugin>--v<X.Y.Z>`:
+
+```bash
+claude plugin tag plugins/<plugin> --push   # tags HEAD after validating plugin.json
+```
+
+Tag the release PR's **merge commit**, on `main`, right after the merge — one
+placement, never two, so a gate can enforce it and a tag always names exactly
+what `main` shipped (`claude plugin tag` tags HEAD: check out `main` at the
+merge before running it). Annotated tags only: a lightweight tag records no tagger date, so
+release timing becomes unrecoverable after the fact. Two older tag families
+are not releases under this convention: the single-dash `<plugin>-v0.1.1` tags
+(2026-06, kept as history — per-plugin tagging then went dormant while
+versions marched on, which this section exists to end), and `freeze/*` tags,
+which are experiment pre-registration pins.

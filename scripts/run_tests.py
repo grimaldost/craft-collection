@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Discover and run every `test_*.py` under plugins/ and evals/.
+"""Discover and run every `test_*.py` under plugins/, evals/, and scripts/.
 
 Each test module is self-contained (no pytest required): it prints an `ok:`
 line on success (or an explicit `skip: <reason>` when a dependency is
@@ -12,6 +12,10 @@ from) and FAILS the suite. Run from the repo root:
 
 `root` (optional) points the discovery at another tree — used by the runner's
 own tests. Exits non-zero if any module fails. Used by CI and the pre-push hook.
+
+Discovery walks the working tree (`rglob`), not the git index, so untracked or
+gitignored test files run locally and do not run in CI — the local module count
+can legitimately exceed CI's.
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SEARCH_DIRS = ('plugins', 'evals')
+SEARCH_DIRS = ('plugins', 'evals', 'scripts')
 
 
 def discover(root: Path = ROOT) -> list[Path]:

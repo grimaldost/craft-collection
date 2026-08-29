@@ -64,8 +64,14 @@
     "scripts/ascii_runtime_lint.py": [
       "evals/harness/test_ascii_runtime_lint.py::test_ratchet_semantics"
     ],
+    "scripts/check_commit_msg.py": [
+      "scripts/test_check_commit_msg.py::test_an_ai_attribution_trailer_exits_1"
+    ],
     "scripts/check_gate_claims.py": [
       "scripts/test_check_gate_claims.py::test_a_contradicting_doc_reddens_the_check"
+    ],
+    "scripts/check_release_discipline.py": [
+      "scripts/test_check_release_discipline.py::test_a_plugin_touching_no_bump_diff_exits_1"
     ],
     "scripts/check_uv_hygiene.py": [
       "evals/harness/test_check_uv_hygiene.py::main"

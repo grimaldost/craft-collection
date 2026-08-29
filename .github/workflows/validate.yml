@@ -32,5 +32,12 @@ jobs:
         run: python scripts/validate_plugins.py
       - name: AGENTS.md freshness (derived-artifact integrity, ADR-0001)
         run: python scripts/gen_agents_md.py --check
+      - name: Env-gate claims match their guards
+        run: python scripts/check_gate_claims.py
+      - name: Release discipline (a plugin-touching PR bumps and logs, or declares)
+        # PR-only: the check reads the merge-base diff against the PR's base
+        # branch; a push to main has no base to diff against.
+        if: github.event_name == 'pull_request'
+        run: python scripts/check_release_discipline.py --base "origin/${{ github.base_ref }}"
       - name: Run tests
         run: python scripts/run_tests.py

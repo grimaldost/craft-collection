@@ -3,7 +3,11 @@
 #   Run now:  uv tool run pre-commit run --all-files
 # Versions are pinned to match the python-engineering skill's house standard.
 minimum_pre_commit_version: '3.5.0'
-default_install_hook_types: [pre-commit, pre-push]
+default_install_hook_types: [pre-commit, pre-push, commit-msg]
+# Hooks that name no stages: run at pre-commit and pre-push only. Without this,
+# installing the commit-msg lane re-fires every always_run repo gate a second
+# time per commit, at the commit-msg stage.
+default_stages: [pre-commit, pre-push]
 # Pin the hook interpreter to the 3.13 baseline CONTRIBUTING names for CI and uv.
 # Without this the local interpreter floats to whatever `python` resolves to, which
 # silently drifted these hooks onto 3.14 and rebuilt their venv shims.
@@ -29,8 +33,33 @@ repos:
         args: [--fix]
       - id: ruff-format                         # format to ruff.toml (100-col, single quotes)
 
+  # Commit-msg lane, mirrored from the estate's canonical floor (sealore): the
+  # Conventional Commits rule and the no-AI-attribution rule both lived only in
+  # CONTRIBUTING prose; these make them mechanical at the commit boundary.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.6.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - feat
+          - fix
+          - docs
+          - style
+          - refactor
+          - perf
+          - test
+          - chore
+          - build
+          - ci
+
   - repo: local
     hooks:
+      - id: no-ai-attribution
+        name: reject AI attribution in commit messages
+        entry: uv run --no-project -- python scripts/check_commit_msg.py
+        language: system
+        stages: [commit-msg]
       - id: lint-register
         name: register linter (humblepowers doctrine)
         entry: uv run --no-project -- python scripts/lint_register.py

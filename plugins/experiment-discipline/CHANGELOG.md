@@ -3,7 +3,7 @@
 Notable changes to this plugin. Bump the `version` in `.claude-plugin/plugin.json`
 with each release.
 
-## 0.3.0 — 2026-08-28
+## [0.3.0] - 2026-08-28
 
 The discipline's central claim is that a frozen plan is worth its cost. This
 release writes down the day that claim paid — twice, against its own author's
@@ -37,7 +37,7 @@ from no guard. (2026-08-28 cross-cutting triage: T46a.)
   sections, and `threats-catalog.md`'s. Net +13 words for a worked example on
   the rung the whole skill rests on.
 
-## 0.2.0 — 2026-08-11
+## [0.2.0] - 2026-08-11
 
 Backlog wave 1 (CRAF-B08). The plugin's central claim is that every load-bearing
 rule is a gate rather than a line of prose — and both gates lived only in this
@@ -89,7 +89,7 @@ enforcement.
   closed, so nothing passes hollow. The plugin README carries a working
   `repo: local` + `language: system` recipe that pins the interpreter.
 
-## 0.1.0 — 2026-07-25
+## [0.1.0] - 2026-07-25
 
 Birth of the plugin. The `experiment-rigor` skill was built inside humblepowers
 (as 0.9.0 and 0.10.0, neither released) and is extracted here per
