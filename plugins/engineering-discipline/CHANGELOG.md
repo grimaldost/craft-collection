@@ -3,7 +3,7 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
-## 0.5.0 — 2026-08-11
+## [0.5.0] - 2026-08-11
 
 `data-engineering-discipline` vNext: a re-tiering with three new rejecting
 checks. Every word now sits in a cost tier and earns that tier by passing that
@@ -127,7 +127,7 @@ mutation harness; description 223 -> 243 words, itemised under Changed.
   harness. Modes 11 and 14 stay, and the numbering is unchanged so older
   citations still resolve.
 
-## 0.4.0 — 2026-08-11
+## [0.4.0] - 2026-08-11
 
 Backlog wave 1. The hook rule for the whole collection: a hook ships on with a
 documented opt-out, or it does not ship. A hook whose gate nobody sets has never
@@ -154,7 +154,7 @@ run, which reads as enforcement in the manifest and is absent in the session.
 - The README states that both remaining hooks are unconditional, and why there
   is no third one.
 
-## 0.3.0 — 2026-07-23
+## [0.3.0] - 2026-07-23
 
 ### Fixed
 
@@ -190,7 +190,7 @@ run, which reads as enforcement in the manifest and is absent in the session.
   The existing command-position anchoring keeps `uv pip install`, quoted
   mentions, and words merely ending in "py" (`numpy`, `happy`) unmatched.
 
-## 0.2.0 — 2026-07-16
+## [0.2.0] - 2026-07-16
 
 ### Changed
 
@@ -211,7 +211,7 @@ run, which reads as enforcement in the manifest and is absent in the session.
   parse_json_payload) plus thin Claude Code payload adapters; the seam for
   other harnesses' hook systems (ADR-0003).
 
-## 0.1.15 — 2026-07-14
+## [0.1.15] - 2026-07-14
 
 Build round for the 2026-07-14 craft triage (rows T16, T17, and DED1). A
 consumer-contract-breaking DataHub emitter shipped because the discipline was
@@ -253,7 +253,7 @@ edit — the `description` change carries a holdout reseal obligation.
 - Word budget re-seeded: data-engineering-discipline 2544→2736 (the scoped lane,
   the emitter trigger/parity lines, the scenarios resource row; no clause retired).
 
-## 0.1.14 — 2026-07-05
+## [0.1.14] - 2026-07-05
 
 Corpus-review doc-accuracy round (PR #74) plus the post-merge consistency pass
 (2026-07-05 polish session: blind audit + fresh-eyes round 2). Docs only; no
@@ -282,7 +282,7 @@ skill `description` changed.
 - marketplace.json (repo-level): description synced to plugin.json
   ("toolchain manifest").
 
-## 0.1.13 — 2026-07-05
+## [0.1.13] - 2026-07-05
 
 Triage row N31a (2026-07-05 craft triage): the schema-evolution guidance is
 discoverable from the eager body for non-tabular contracts. Two arcs re-derived
@@ -301,7 +301,7 @@ changed.
   new symbol or default-preserving overload is additive; a new raise/guard on
   a previously-silent path is breaking, whatever the docstring says.
 
-## 0.1.12 — 2026-07-03
+## [0.1.12] - 2026-07-03
 
 ### Changed
 
@@ -310,7 +310,7 @@ changed.
   `` `NONE` ``) — correct markdown for literal enum values, and it clears the
   register linter's all-caps-run check now that the linter runs marketplace-wide.
 
-## 0.1.11 — 2026-07-02
+## [0.1.11] - 2026-07-02
 
 Seam fixes from the second (post-fix) stress-review panel: five confirmed defects
 sitting at the edges of the 0.1.10 fixes, each fixed test-first. Hooks / scripts
@@ -340,7 +340,7 @@ only — no skill `description` changed, so no holdout re-seal.
   cardinality 1 == 1 — the check vacuously passed. `compare()` now raises
   `ValueError`, and the CLI exits 2 (usage error, distinct from parity-fail 1).
 
-## 0.1.10 — 2026-07-02
+## [0.1.10] - 2026-07-02
 
 Mechanical-layer bug fixes from the GitHub issue #51 stress-review panel — nine
 confirmed false-pass / false-block defects in the hooks and runnable scripts, each
@@ -389,7 +389,7 @@ skill `description` changed (hooks / scripts only), so no holdout re-seal.
   distinguishable from a clean stack *for consumers that read `errors` or the exit
   code* (a caller that only reads `behind_count` still sees "no drift").
 
-## 0.1.9 — 2026-06-28
+## [0.1.9] - 2026-06-28
 
 From the 2026-06-28 structural review. No skill `description` changed (body /
 references / scripts only), so no holdout re-seal.
@@ -423,7 +423,7 @@ references / scripts only), so no holdout re-seal.
 - Deferred follow-up: `doctor.py` `@override`-on-structural-Protocol and
   `from __future__ import annotations`-on-3.14 checks (hard static analysis).
 
-## 0.1.8 — 2026-06-19
+## [0.1.8] - 2026-06-19
 
 (0.1.7 is the concurrent hooks/pre-commit `python`-portability fix; this N17a
 change ceded it and took 0.1.8 since it is eval-gated and lands later.)
@@ -444,7 +444,7 @@ tests the over-fire (not just the held-out recall, which is verdict-only).
 `run_triggers.py data-engineering-discipline` (specificity ≥ 0.9, recall ≥ 0.8) and
 `holdout_check.py data-engineering-discipline` (held-out recall within the dev CI).
 
-## 0.1.7 — 2026-06-19
+## [0.1.7] - 2026-06-19
 
 Hook `python`-invocation portability. The three hooks — `ruff_format` (PostToolUse),
 `uv_enforce` (PreToolUse), `stop_nudge` (Stop) — invoked a bare `python`, which on a
@@ -458,7 +458,7 @@ shells to `uvx`. CI (`validate.yml`) is unaffected — `actions/setup-python` pu
 on PATH there. Hook-manifest / repo-config only; no skill `description` changed, so no
 holdout re-seal.
 
-## 0.1.6 — 2026-06-19
+## [0.1.6] - 2026-06-19
 
 From the 2026-06-19 triage, hardened by a pre-mortem + 3-lens blind review before any
 code. **N16a** — a new runnable freshness gate
@@ -475,7 +475,7 @@ behind a global max. Red-green tested; Recipe 14 + a pre-shipping checklist line
 "Runnable checks" entry wire it in. Script / reference / body only — no skill
 `description` changed, so no holdout re-seal.
 
-## 0.1.5 — 2026-06-17
+## [0.1.5] - 2026-06-17
 
 From the 2026-06-17 triage (revised by a fresh-eyes review panel). The headline is
 **N10** — the recurring strip-on-save trap, fixed at last at the **hook** layer after
@@ -518,7 +518,7 @@ Deferred (watch): the incremental-freshness gate (`scripts/freshness_check.py`, 
 — single-arc, so by this round's own escalation rule a new mechanism waits for a
 reinforced recurrence; the trigger-phrasing tuning (`#N12b`) is reseal-gated.
 
-## 0.1.4 — 2026-06-15
+## [0.1.4] - 2026-06-15
 
 Clears the carried-forward axiom-2 corollaries the 2026-06-13 / 2026-06-14
 triages marked "still UNBUILT" (`2026-06-09-triage-craft-collection` clusters
@@ -580,7 +580,7 @@ eval-gated trigger surface) changed, so no holdout re-seal.
   non-optional) (`T13`), with a pointer added from the `SKILL.md` reference-files
   index.
 
-## 0.1.3 — 2026-06-14
+## [0.1.3] - 2026-06-14
 
 Acts on the data-engineering backlog from the 2026-06-13 / 2026-06-14 triages
 (`2026-06-13-triage-craft-collection#T1`/`#T6`, reinforced by the
@@ -633,7 +633,7 @@ Carried forward (still unbuilt): the prior triage's axiom-2 corollaries
 fail-open tooling) and the `N2e` behavior-change-no-output proxy (`watch`).
 *Update: the four axiom-2 corollaries shipped in 0.1.4; `N2e` remains `watch`.*
 
-## 0.1.2 — 2026-06-07
+## [0.1.2] - 2026-06-07
 
 ### Changed
 
@@ -644,12 +644,12 @@ fail-open tooling) and the `N2e` behavior-change-no-output proxy (`watch`).
   current?" asks remain a triggering-threshold limit (the model answers them
   directly) and were left unforced rather than overfit.
 
-## 0.1.1 — 2026-06-05
+## [0.1.1] - 2026-06-05
 
 - Fixed: corrected the `repository` URL to `grimaldost/craft-collection` (the
   previous `grimaldo-stanzani` owner did not resolve).
 
-## 0.1.0 — 2026-06-04
+## [0.1.0] - 2026-06-04
 
 Initial release.
 

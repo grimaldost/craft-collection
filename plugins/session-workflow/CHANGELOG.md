@@ -3,7 +3,7 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
-## 0.23.1 — 2026-08-29
+## [0.23.1] - 2026-08-29
 
 The two fixes that shipped the evening of the 0.23.0 release under an unchanged
 version. Claude Code only re-pulls a plugin when `plugin.json`'s version
@@ -25,7 +25,7 @@ changes, so until this cut no installed copy could receive either one.
   both entry points. (`anchor_inject.py`;
   `test_sweeps_survive_a_cp1252_stdout` covers both arms.)
 
-## 0.23.0 — 2026-08-28
+## [0.23.0] - 2026-08-28
 
 Doctrine that a mechanism enforces stopped being stated only in prose. The
 anchor's injection order, the triage loop's three preconditions, a panel's
@@ -144,7 +144,7 @@ and the "not a quick factual check" bullet the description already carries.
 template above it with domain filler, and the Task-tool section's restatement of
 its own description.
 
-## 0.22.0 — 2026-08-28
+## [0.22.0] - 2026-08-28
 
 Three load-bearing facts stopped being things a session remembers. A report's
 version field, the user's own words, and a triage doc's coverage claim were each
@@ -225,7 +225,7 @@ to the step two lines up. `tool-feedback`: two of the three "never guess"
 statements and the hand-flag-the-skew sentence. `compaction-survival`: the
 failure-mode table.
 
-## 0.21.0 — 2026-08-11
+## [0.21.0] - 2026-08-11
 
 Backlog wave 1. Four hooks became two, both on by default, and the feedback index
 stopped being able to quietly downgrade itself.
@@ -280,7 +280,7 @@ stopped being able to quietly downgrade itself.
   shipped runner's schema, read by nothing, and thinner than the
   `evals/trigger/` sets they shadowed. (CRAF-B49)
 
-## 0.20.0 — 2026-07-24
+## [0.20.0] - 2026-07-24
 
 Triage 2026-07-23 row T2a (Inputs coverage contract), reconciled against what
 the parser actually does: `extract_inputs_coverage` was verified ALREADY
@@ -301,7 +301,7 @@ appeared), which no parser can safely reconstruct.
   boundary — fragmented stems yield zero coverage, full stems parse from any
   surrounding format.
 
-## 0.19.0 — 2026-07-23
+## [0.19.0] - 2026-07-23
 
 Backlog P1-5 (triage T22a): anchor lifecycle hardening in `anchor_inject.py`.
 A contract change, deliberate: a stale anchor is no longer injected in full.
@@ -331,7 +331,7 @@ replaced by pointer-tier assertions (body withheld, close command present,
 bounded size), plus startup-window, clear-source, boundary (23h), and
 telemetry-tier cases.
 
-## 0.18.0 — 2026-07-23
+## [0.18.0] - 2026-07-23
 
 Backlog P1-4: mechanize the standing tool-feedback default. Both hooks ship
 wired but inert (house rule); enabling is two env vars.
@@ -371,7 +371,7 @@ Test sibling `test_exercise_ledger.py` covers gates, matcher mirror, hostile
 session ids, marker semantics, debt clearing, synthetic-turn exclusion, and
 garbage stdin.
 
-## 0.17.0 — 2026-07-23
+## [0.17.0] - 2026-07-23
 
 `toolkit-awareness` / `scan_toolkit.py` gains three related staleness defenses,
 all in the SessionStart path. Minor bump: the scan script gained capability, no
@@ -418,7 +418,7 @@ Fifteen new fixture/NDJSON tests (skill-list skew, fingerprint sensitivity, cach
 hit/miss/TTL/corrupt, transcript parsing, matched-vs-frozen serving diff, and the
 `--check-serving` CLI). Existing version-skew and stale-checkout tests unchanged.
 
-## 0.16.2 — 2026-07-22
+## [0.16.2] - 2026-07-22
 
 ### Fixed
 
@@ -430,7 +430,7 @@ hit/miss/TTL/corrupt, transcript parsing, matched-vs-frozen serving diff, and th
   untouched. The recurrence argues for a mechanical lint over per-instance fixes;
   that gate is tracked in `docs/design/2026-07-22-hooks-program.md`.
 
-## 0.16.1 — 2026-07-22
+## [0.16.1] - 2026-07-22
 
 ### Fixed
 
@@ -442,7 +442,7 @@ hit/miss/TTL/corrupt, transcript parsing, matched-vs-frozen serving diff, and th
   the hook conventions already ban for hook stdout; runtime-emitted text in
   bundled scripts now follows it too (docstrings/comments unaffected).
 
-## 0.16.0 — 2026-07-17
+## [0.16.0] - 2026-07-17
 
 New capability: provenance signing for agent-assisted work. Minor bump: a new
 skill and script. Maintainer-directed design decisions, recorded: the signature
@@ -546,7 +546,7 @@ defects reproduced by execution and fixed test-first:
   no holdout is sealed without a birth number.
 - Word budget seeded: llm-signature 365.
 
-## 0.15.0 — 2026-07-16
+## [0.15.0] - 2026-07-16
 
 ### Changed
 
@@ -563,7 +563,7 @@ defects reproduced by execution and fixed test-first:
   AgentRunner protocol with headless Claude Code as its only backend today;
   trigger numbers remain measured on Claude Code (plugin mirror re-synced).
 
-## 0.14.3 — 2026-07-14
+## [0.14.3] - 2026-07-14
 
 ### Fixed
 
@@ -585,7 +585,7 @@ defects reproduced by execution and fixed test-first:
   excluding them, recall was 1.00. `aggregate.py` is copied to the bundled
   template; `test_scripts_in_sync` guards the pair.
 
-## 0.14.2 — 2026-07-14
+## [0.14.2] - 2026-07-14
 
 ### Changed
 
@@ -594,7 +594,7 @@ defects reproduced by execution and fixed test-first:
   choosing-models, per its stakes rule); the ladder and the step-5 "Opus for
   high stakes" default stay as the standalone fallback. Net −1 word.
 
-## 0.14.1 — 2026-07-14
+## [0.14.1] - 2026-07-14
 
 ### Fixed
 
@@ -609,7 +609,7 @@ defects reproduced by execution and fixed test-first:
   shared `_git_env()`. Regression test sets `GIT_DIR` to a decoy repo and
   asserts the real answer; it fails without the fix.
 
-## 0.14.0 — 2026-07-14
+## [0.14.0] - 2026-07-14
 
 Build round for the 2026-07-14 triage. The 0.13.0 anchor wave shipped the close
 *mechanism* (rename) without a lifecycle *trigger*, and terminal anchors piled up
@@ -689,7 +689,7 @@ hook and two skills gained capability.
   was found already shipped (SKILL.md durable-pre-authorization line) during
   triage grounding — confirmed, not re-built.
 
-## 0.13.0 — 2026-07-09
+## [0.13.0] - 2026-07-09
 
 Build round for the 2026-07-09 triage: the anchor gains machine-readable
 structure the hook can honor (the root cause behind the whole truncation
@@ -783,7 +783,7 @@ the T4a pass, contradicting the new granularity) now reads "each report (per
 tool per distinct concern)", and step 2 restates at the point of action that
 the rebuild targets the registered dir (budget 1170→1188).
 
-## 0.12.0 — 2026-07-06
+## [0.12.0] - 2026-07-06
 
 Build round for the 2026-07-06 triage (the tu-v16 campaign reports + the
 polish-session residuals): the anchor hook's Windows encoding defect with its
@@ -849,7 +849,7 @@ scripts and the pack library gained capability.
 Word budgets re-seeded and named: compaction-survival 908→952 (cold-start
 pointer bullet), review-panel 1062→1082 (pack table row).
 
-## 0.11.0 — 2026-07-05
+## [0.11.0] - 2026-07-05
 
 Corpus-review round from the 2026-07-05 polish session (PRs #76–#78, #80, #81 +
 the post-merge consistency pass): a vacuous-gate fix, two new trigger-harness
@@ -906,7 +906,7 @@ the bundled eval-engine scripts gained capability.
   holdout predates the edit and should be re-baselined before the next
   description-tuning round.
 
-## 0.10.0 — 2026-07-05
+## [0.10.0] - 2026-07-05
 
 First build round of the 2026-07-05 triage (`docs/feedback/2026-07-05-triage-craft-collection.md`,
 clusters N25–N32). Body, reference, and script work only — no skill `description`
@@ -942,7 +942,7 @@ changed, no holdout implications.
   (contracts, worked examples, fresh doctrine), per the verify-redundancy-first
   contingency the rows carry.
 
-## 0.9.0 — 2026-07-05
+## [0.9.0] - 2026-07-05
 
 The digestion side of the feedback loop gains a structural-fix preference and a
 standing shrink path — the direct response to the stress panel's accretion
@@ -971,7 +971,7 @@ Body-only — no skill `description` changed, no holdout implications.
   (minutes, $, retries — the corpus's strongest findings are the quantified
   ones), and the self-check verifies cause-before-symptom.
 
-## 0.8.0 — 2026-07-04
+## [0.8.0] - 2026-07-04
 
 The anchor gains its mechanical layer: automatic re-injection after compaction
 or resume. Evidence-gated per the memory-suite v2 design — shipped only after
@@ -1007,7 +1007,7 @@ while the on-disk anchor survived). No skill `description` changed.
   4/4-unanimous analyst panel scored its value-of-information below cost, and
   retrospective mining of real session history supersedes it as evidence.
 
-## 0.7.0 — 2026-07-04
+## [0.7.0] - 2026-07-04
 
 The anchor gains an explicit command surface. No skill `description` changed —
 no holdout implications; the new command has no auto-trigger surface at all
@@ -1032,7 +1032,7 @@ no holdout implications; the new command has no auto-trigger surface at all
   boundary between the two is stated — the backstop replaces the prose ask,
   not the cadence. Body-only edit; the trigger description is untouched.
 
-## 0.6.5 — 2026-07-02
+## [0.6.5] - 2026-07-02
 
 context-handoff trigger-surface retune, closing the 0.6.4 holdout re-validation
 flag. **The skill `description` changed again**; the spent 2026-06 holdout is
@@ -1071,7 +1071,7 @@ never-run holdout hid this skill's overfit for four days).
   backlog (competition arm / trigger-mechanics, issue #54) rather than another
   rewording round.
 
-## 0.6.4 — 2026-07-02
+## [0.6.4] - 2026-07-02
 
 Nine fixes from the second (post-fix) stress-review panel — seams of the 0.6.3/
 eval-harness fixes plus loop-closing gaps. Code fixes test-first. **One skill
@@ -1130,7 +1130,7 @@ as spent for the next description-tuning round.**
 - Plugin README: added the two shipped-but-unlisted skills
   (`compaction-survival`, `corpus-review`).
 
-## 0.6.3 — 2026-07-02
+## [0.6.3] - 2026-07-02
 
 Five fixes from the #52 stress-review panel. No skill
 `description` (the eval-gated trigger surface) changed, so no holdout re-seal.
@@ -1179,7 +1179,7 @@ Five fixes from the #52 stress-review panel. No skill
   phrases in the skill's description, so a cold user typing `/subtask` got an
   unknown-command failure) in favor of naming the trigger phrasing ("spin this
   off", "hand this off", "new session for this").
-## 0.6.2 — 2026-07-02
+## [0.6.2] - 2026-07-02
 
 Eval-harness correctness (from the 2026-07-02 adversarial stress panel). Fixes the
 bundled `evaluate-skill` engine and `evals/harness/` in lockstep (`#49`).
@@ -1207,7 +1207,7 @@ bundled `evaluate-skill` engine and `evals/harness/` in lockstep (`#49`).
   consumes the query-level bound so a within-noise held-out recall no longer trips a
   spurious "overfit" verdict.
 
-## 0.6.1 — 2026-07-01
+## [0.6.1] - 2026-07-01
 
 ### Fixed
 
@@ -1218,7 +1218,7 @@ bundled `evaluate-skill` engine and `evals/harness/` in lockstep (`#49`).
   the report count and emitting a spurious `## BACKLOG` section. Regression test
   added.
 
-## 0.6.0 — 2026-06-28
+## [0.6.0] - 2026-06-28
 
 Structural-hardening release (from the 2026-06-28 structural review).
 
@@ -1257,7 +1257,7 @@ Structural-hardening release (from the 2026-06-28 structural review).
   through `run_tests.py` → pre-push + CI). No existing skill `description`
   changed.
 
-## 0.5.1 — 2026-06-24
+## [0.5.1] - 2026-06-24
 
 Two fixes from a headless + leak-closed validation pass on the `step-digest` style.
 (1) **Activation value corrected.** The plugin ships the style under its namespaced
@@ -1270,7 +1270,7 @@ message, a value), the digest now carries it verbatim rather than only describin
 the change — a strict digest-only relay (no files crossing between steps) flagged
 this as a major gap. No skill `description` changed, so no holdout re-seal.
 
-## 0.5.0 — 2026-06-24
+## [0.5.0] - 2026-06-24
 
 New `step-digest` **output style** (`output-styles/step-digest.md`) — the plugin's first
 output style. It installs two communication registers while keeping Claude's coding behaviour
@@ -1286,7 +1286,7 @@ forced over a user's other output-style choices. Design:
 coverage is the deferred Phase 2). New artifact — no skill `description` changed, so no holdout
 re-seal.
 
-## 0.4.4 — 2026-06-23
+## [0.4.4] - 2026-06-23
 
 `review-panel` "When to convene" — name the **design/spec-before-build** case explicitly (a
 qualifier on the high-stakes trigger, where pre-code defects are cheapest to catch) **with a
@@ -1297,7 +1297,7 @@ across two design-stage arcs — `2026-06-17-backlog-remediation-design-build#2`
 `2026-06-19-triage-round-review-panel#1`); a blind fresh-eyes review of the proposal added the
 maturity guard. Body-only — no `description` change, so no holdout re-seal.
 
-## 0.4.3 — 2026-06-19
+## [0.4.3] - 2026-06-19
 
 `feedback-triage` index-builder (`scripts/build_feedback_index.py`) false-exclusion fix.
 `_is_report` dropped any file whose name contained the substring `triage`, treating it as
@@ -1311,7 +1311,7 @@ now detected by their `# Triage` H1 (`_is_triage_doc`), not a filename substring
 whose slug merely contains `triage` is indexed. (`digest` stays name-based — no observed
 false-exclusion.) Script + test only — no skill `description` changed, so no holdout re-seal.
 
-## 0.4.2 — 2026-06-19
+## [0.4.2] - 2026-06-19
 
 Hook `python`-invocation portability: the SessionStart toolkit-inventory hook
 (`toolkit-awareness/scripts/scan_toolkit.py`) ran via a bare `python` (the
@@ -1319,7 +1319,7 @@ Microsoft-Store app-execution stub trap on Windows without Python on PATH). Now 
 --no-project -- python …` — completing the portability fix begun in 0.4.1 (the feedback
 index-builder invocation). Hook-manifest only — no skill `description` changed.
 
-## 0.4.1 — 2026-06-19
+## [0.4.1] - 2026-06-19
 
 From the 2026-06-19 triage. **N18a** — the `feedback-triage` index-builder
 (`scripts/build_feedback_index.py`) docstring and the `tool-feedback` /
@@ -1332,7 +1332,7 @@ Known broader scope (out of this fix, tracked separately): the plugins' `hooks.j
 the pre-commit `lint_register` / `run_tests` entries invoke a bare `python` and have the
 same failure on that setup.
 
-## 0.4.0 — 2026-06-17
+## [0.4.0] - 2026-06-17
 
 Two changes from the 2026-06-17 triage, both shaped by a fresh-eyes review panel.
 Body/doctrine only — neither skill's `description` (the eval-gated trigger surface)
@@ -1373,7 +1373,7 @@ changed, so no holdout re-seal.
   (`#N9c`) stays routed to the user's CLAUDE.md — a `TARGETS.md` under the gitignored
   `docs/feedback/` would not travel.
 
-## 0.3.1 — 2026-06-15
+## [0.3.1] - 2026-06-15
 
 Two watch-item refinements from the backlog; body-only, descriptions unchanged (no
 holdout re-seal).
@@ -1389,7 +1389,7 @@ holdout re-seal).
   outcome/task-bank harness (dyno-style), not this single-skill behavioral eval (per
   `2026-06-14-humble-vs-super-run#2`, the `#N7a` watch row).
 
-## 0.3.0 — 2026-06-15
+## [0.3.0] - 2026-06-15
 
 Feedback-loop ergonomics from the carried-forward 2026-06-14 triage backlog (`#T3`,
 `#T5`, context-handoff `#T7`) plus the owner-tagging fix from
@@ -1428,7 +1428,7 @@ Deliberately not done: a committed `docs/feedback/README.md` (`#T5b`) — craft'
 skill's own report template stays the format authority; a gitignored README would
 only duplicate and drift.
 
-## 0.2.3 — 2026-06-14
+## [0.2.3] - 2026-06-14
 
 Body-only refinements to `tool-feedback` from the 2026-06-14 feedback batch
 (`2026-06-13-dyno-skilleval-design-build-run`, `2026-06-14-humble-vs-super-design`
@@ -1449,7 +1449,7 @@ holdout re-seal.
   template and note the missing README as a maintainer gap (per
   `2026-06-14-humble-vs-super-design` §Friction, reinforced by `-run`).
 
-## 0.2.2 — 2026-06-13
+## [0.2.2] - 2026-06-13
 
 Two strands land together: body/process fixes from the three-tool digest run
 (`2026-06-13-feedback-loop-multitool-run`), and trigger-surface calibration from
@@ -1506,7 +1506,7 @@ and the canonical imperative fires 0/3 (a likely triggering-threshold limit, to
 flag as expected-hard rather than chase). Treat recall as provisional until the
 harness damps flail.
 
-## 0.2.1 — 2026-06-09
+## [0.2.1] - 2026-06-09
 
 Wording promotions from the feedback-loop skills' first dogfood run, recorded
 in `2026-06-09-feedback-skills-first-run` (craft-collection's feedback dir).
@@ -1557,7 +1557,7 @@ Deliberately not in this release: per-task rubric support in the
 `evaluate-skill` engine (2026-06-09-feedback-skills-first-run#6) — an engine
 schema change, left recorded for a separate initiative.
 
-## 0.2.0 — 2026-06-09
+## [0.2.0] - 2026-06-09
 
 ### Added
 
@@ -1577,7 +1577,7 @@ schema change, left recorded for a separate initiative.
   Defers to tool-registered triage templates (e.g. keel's reflection-triage).
   `/feedback-triage`.
 
-## 0.1.3 — 2026-06-07
+## [0.1.3] - 2026-06-07
 
 ### Changed
 
@@ -1588,7 +1588,7 @@ schema change, left recorded for a separate initiative.
   0.79 (FAIL) → 1.00, with 0.92 on held-out unseen paraphrases and specificity
   1.00.
 
-## 0.1.2 — 2026-06-06
+## [0.1.2] - 2026-06-06
 
 Make `journaling-sessions` output faithful to a structured memory store without
 losing its store-agnostic default — every addition below is optional, and with no
@@ -1616,7 +1616,7 @@ losing its store-agnostic default — every addition below is optional, and with
 - Documented `area`/`author` as downstream scope/partition keys, with an enum
   subset rule (matching value **and** case) for stores that strict-parse enums.
 
-## 0.1.1 — 2026-06-05
+## [0.1.1] - 2026-06-05
 
 ### Added
 
@@ -1641,7 +1641,7 @@ losing its store-agnostic default — every addition below is optional, and with
 - Corrected the `repository` URL to `grimaldost/craft-collection` (the previous
   `grimaldo-stanzani` owner did not resolve).
 
-## 0.1.0 — 2026-06-04
+## [0.1.0] - 2026-06-04
 
 Initial release.
 

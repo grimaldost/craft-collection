@@ -5,7 +5,7 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
-## 0.13.0 — 2026-08-28
+## [0.13.0] - 2026-08-28
 
 `planned-execution` takes ownership of what an in-session subagent is told, and
 `skill-authoring` gains the two rules a wave of failed evidence asked for. Minor
@@ -72,7 +72,7 @@ funded the ownership line in Boundaries and the folded worktree clause.
 section moved to `references/` — provenance and rare-path detail, read by
 everyone and operative for almost no one.
 
-## 0.12.0 — 2026-08-12
+## [0.12.0] - 2026-08-12
 
 `choosing-models` learns where a routing decision belongs. Three calibration
 cycles asked whether the rubric's score predicts the right tier; the 2026-08-12
@@ -171,7 +171,7 @@ measured the price of injecting the body once selected — and the rule that
 landed is a judgment the body can carry with the nuance a trigger surface
 cannot.
 
-## 0.11.0 — 2026-08-11
+## [0.11.0] - 2026-08-11
 
 > Renumbered from 0.10.0 before release. That number belongs to the
 > `data-engineering-discipline` vNext entry directly below, which ships
@@ -294,7 +294,7 @@ evidence does. Also declined and recorded there rather than left implicit: a
 tier clause, a config protocol row, an adversarial-re-read section, and any
 growth of the failure-mode catalog.
 
-## 0.10.0 — 2026-08-11
+## [0.10.0] - 2026-08-11
 
 ### Added
 
@@ -345,7 +345,7 @@ growth of the failure-mode catalog.
   itself stayed in `data-engineering-discipline` and was audit-classed
   keep-worthy, so its one external pointer had simply been deleted.
 
-## 0.9.1 — 2026-08-11
+## [0.9.1] - 2026-08-11
 
 Calibration pass on `choosing-models`, on evidence from the 2026-08-11 fathom
 `model-tier-v1` recalibration (5 arms x 7 tasks x 5 repeats, adding
@@ -391,7 +391,7 @@ the executing model authored a regression test in 70% of trials where four other
 models did so in 0–3% — first evidence for the authored-oracle clause above, from
 a bank not designed to test it.
 
-## 0.9.0 — 2026-08-11
+## [0.9.0] - 2026-08-11
 
 Backlog wave 1. The dispatch hook ships on, the hint became a decidable check,
 and the tier data caught up with the lineup the machines are actually served.
@@ -452,7 +452,7 @@ and the tier data caught up with the lineup the machines are actually served.
   growth against a 32x bound, versus ~8.7x for the shipped rules).
   (CRAF-B26 / T50c)
 
-## Unreleased
+## [Unreleased]
 
 The `experiment-rigor` skill shipped on this branch as 0.9.0 and 0.10.0 and is
 extracted into its own plugin before either was released
@@ -471,7 +471,7 @@ change humblepowers actually owns.
   byte-unchanged and both sealed router holdouts are unmoved (they contain no
   experiment-rigor case). This row doubles as the pointer to the new plugin.
 
-## 0.8.0 — 2026-07-23
+## [0.8.0] - 2026-07-23
 
 Dispatch retirement (redesign step R1). A 2026-07 content A/B (fathom
 `inject-content-v1`, 30 sonnet-5 trials) measured the generic 8-step dispatch
@@ -510,7 +510,7 @@ action-stream layers as measured, gated follow-ups.
   record age). A fail-open-silent hook needs a way to prove it is alive; this is
   it.
 
-## 0.7.4 — 2026-07-23
+## [0.7.4] - 2026-07-23
 
 Router recall recalibration (backlog item 4), run seal-first: a fresh blind
 recall holdout was authored (by a subagent forbidden from reading the router,
@@ -549,7 +549,7 @@ goes to the semantic layer (cadence-vs-content A/B; the 0.18.0
 exercise-ledger activation telemetry), not to more patterns. The PT-BR arm
 still requires its own labeled dev set before any PT tuning.
 
-## 0.7.3 — 2026-07-23
+## [0.7.3] - 2026-07-23
 
 Two doctrine one-liners from the 2026-07-23 triage, each reinforced across two
 report arcs; both SKILL.md bodies held under their word budgets by trimming
@@ -568,7 +568,7 @@ existing prose (the displaced words are the flabbier phrasings, not content).
   Evidence: recurred in the himed campaign past a written handoff warning
   (extends the convoy-backlog claims-over-unread-signals miss).
 
-## 0.7.2 — 2026-07-23
+## [0.7.2] - 2026-07-23
 
 ### Fixed
 
@@ -579,7 +579,7 @@ existing prose (the displaced words are the flabbier phrasings, not content).
   prefixes and skips them silently before any state read or cadence increment,
   the same treatment as a slash command.
 
-## 0.7.1 — 2026-07-22
+## [0.7.1] - 2026-07-22
 
 ### Fixed
 
@@ -637,7 +637,7 @@ in a real `claude -p` process; these close the failure modes the attacks found.
 - **hooks.json:** the SessionStart inject entry gains `timeout: 10` for
   consistency with the two prompt entries.
 
-## 0.7.0 — 2026-07-22
+## [0.7.0] - 2026-07-22
 
 ### Added
 
@@ -671,7 +671,7 @@ in a real `claude -p` process; these close the failure modes the attacks found.
   unchanged. `inject_dispatch.py` gains its missing test sibling
   (`test_inject_dispatch.py`).
 
-## 0.6.0 — 2026-07-16
+## [0.6.0] - 2026-07-16
 
 ### Changed
 
@@ -684,7 +684,7 @@ in a real `claude -p` process; these close the failure modes the attacks found.
   baseline bumped for choosing-tools (+9 words): the growth displaces nothing —
   it widens the fallback source list.
 
-## 0.5.0 — 2026-07-14
+## [0.5.0] - 2026-07-14
 
 The capacity-dispatch pair: choosing-models + /refresh-models, per the accepted
 design `docs/design/2026-07-14-choosing-models-skill.md` (successor to
@@ -733,7 +733,7 @@ bump: two new skills.
   its owner (`— choosing-models`); the case stays a negative for
   choosing-tools and is the new skill's first positive.
 
-## 0.4.10 — 2026-07-09
+## [0.4.10] - 2026-07-09
 
 Two red-shape clarifications in test-driven-development, from the 2026-07-09
 craft triage (T9a/T9b; evidence `convoy-backlog-build#2`,
@@ -758,7 +758,7 @@ collided with an honest red).
 - Word budget re-seeded: test-driven-development 927→999 (the two rows above;
   no clause retired — both sharpen existing bright-line scope).
 
-## 0.4.9 — 2026-07-05
+## [0.4.9] - 2026-07-05
 
 pr-pilot → convoy rename completion (PRs #75, #81 from the 2026-07-05 polish
 session's corpus review) plus a marketplace-description sync.
@@ -782,7 +782,7 @@ session's corpus review) plus a marketplace-description sync.
   been missing since planned-execution shipped in 0.3.0 (the release updated
   plugin.json but not the marketplace copy).
 
-## 0.4.8 — 2026-07-05
+## [0.4.8] - 2026-07-05
 
 First humblepowers round of the 2026-07-05 craft triage (rows N25a, N28b, N29a,
 N30a). Body/script edits only — no skill `description` changed, no holdout
@@ -814,7 +814,7 @@ implications.
   commit (file left `MM`); recovery is re-`git add`. Second arc of the
   strip-on-save family.
 
-## 0.4.7 — 2026-07-03
+## [0.4.7] - 2026-07-03
 
 Doc accuracy: the register linter went marketplace-wide (repo-tooling change,
 `scripts/lint_register.py`), so the README's "gates this plugin's markdown"
@@ -828,7 +828,7 @@ became an understatement.
   humblepowers. Notes the one scoped exception: `non-negotiable` is flagged only
   in a frontmatter description, allowed as domain terminology in body prose.
 
-## 0.4.6 — 2026-07-02
+## [0.4.6] - 2026-07-02
 
 README-honesty fixes from the second (post-fix) stress-review panel. Docs only —
 no skill `description` changed, no holdout re-seal.
@@ -854,7 +854,7 @@ no skill `description` changed, no holdout re-seal.
   negatives — one query moves recall by 0.25), and a direction-not-points
   reading.
 
-## 0.4.5 — 2026-07-02
+## [0.4.5] - 2026-07-02
 
 Reference-doctrine correctness from a stress-review pass. The only `description`
 edit is a factual scope correction to `skill-authoring`'s trailing linter clause
@@ -884,7 +884,7 @@ edit is a factual scope correction to `skill-authoring`'s trailing linter clause
   `data-engineering-discipline` …"). Closes the plugin's own degradation-test
   failure (dead pointers on a solo install).
 
-## 0.4.4 — 2026-06-28
+## [0.4.4] - 2026-06-28
 
 From the 2026-06-28 structural review. Body / doc only — no `description`
 changed, so no holdout re-seal.
@@ -904,7 +904,7 @@ changed, so no holdout re-seal.
 - `systematic-debugging`: Phase 4's "no while-I'm-here" now cross-links
   `data-engineering-discipline` Principle 17 as the canonical scope-bounding rule.
 
-## 0.4.3 — 2026-06-19
+## [0.4.3] - 2026-06-19
 
 Hook `python`-invocation portability: the SessionStart dispatch hook
 (`choosing-tools/scripts/inject_dispatch.py`) ran via a bare `python`, which hits the
@@ -912,7 +912,7 @@ Microsoft-Store app-execution stub on a Windows machine without Python on PATH. 
 `uv run --no-project -- python …`. Inert-by-default and once-per-session, so the uv
 startup cost is negligible. Hook-manifest only — no skill `description` changed.
 
-## 0.4.2 — 2026-06-17
+## [0.4.2] - 2026-06-17
 
 The debugging facet of the 2026-06-17 triage's reinforced "observe, don't infer"
 cluster (4 reports / 2 arcs), plus the choosing-tools re-dispatch refinement. Body
@@ -944,7 +944,7 @@ skills state their own facet and cross-link by name.
   opening choice for hours (per `2026-06-16-model-tier-calibration#1`,
   `2026-06-16-context-size-calibration#1`).
 
-## 0.4.1 — 2026-06-15
+## [0.4.1] - 2026-06-15
 
 A `skill-authoring` correctness note (the prior triage's `#T8a` watch item); body
 only, no description changed.
@@ -959,7 +959,7 @@ only, no description changed.
   time (per `2026-06-10-humblepowers-build#5`). (`#T8b`, an Edit-tool anchor-hygiene
   note, was declined as a niche, single-report workflow item.)
 
-## 0.4.0 — 2026-06-15
+## [0.4.0] - 2026-06-15
 
 Close the regression-test gap the humblepowers-vs-superpowers eval found (N4): on a
 small bug fix the worth-loading bar declines the full `test-driven-development` skill,
@@ -989,7 +989,7 @@ Pareto-dominates superpowers on these tasks.
   gains the regression-test-after-fix line (interactive sessions with
   `HUMBLEPOWERS_DISPATCH_INJECT=1`).
 
-## 0.3.2 — 2026-06-14
+## [0.3.2] - 2026-06-14
 
 `planned-execution` hardening from its first real-feature dogfood
 (`2026-06-13-dyno-skilleval-design-build-run`, craft-collection feedback): a

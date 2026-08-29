@@ -250,4 +250,7 @@ where a frozen record cannot name its own commit sha before that commit exists.
 
 Claude Code only pulls a plugin update when its version changes. For a
 release-worthy change, **bump the semantic `version` in the affected plugin's
-`plugin.json`** as part of the PR, and note it in that plugin's `CHANGELOG.md`.
+`plugin.json`** as part of the PR, and record it in that plugin's
+`CHANGELOG.md` under a `## [X.Y.Z] - YYYY-MM-DD` heading. That is the one
+heading grammar (adopted 2026-08-29; the older `## X.Y.Z — date` headings were
+reformatted in place), so a single parser serves every plugin's changelog.
