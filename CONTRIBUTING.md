@@ -52,8 +52,9 @@ uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # struc
 ```
 
 The `validate` workflow re-runs the register linter, the plugin validator, the
-`AGENTS.md` freshness check, ruff, and the test suite on every PR; it must be green
-to merge. It does **not** run the pre-commit-only hooks — `check-json`,
+`AGENTS.md` freshness check, the env-gate claims check, the release-discipline
+gate (PRs only), ruff, and the test suite on every PR; it must be green to
+merge. It does **not** run the pre-commit-only hooks — `check-json`,
 `check-yaml`, `check-merge-conflict`, `check-added-large-files`, the ASCII runtime
 ratchet, or the two `experiment-rigor` record gates. Those exist at commit time
 only, which is what makes the exemptions below worth writing down.
