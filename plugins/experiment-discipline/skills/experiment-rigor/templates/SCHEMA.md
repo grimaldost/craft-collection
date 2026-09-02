@@ -85,7 +85,7 @@ The `tier` field selects the required-field set and which context gates apply: p
 
 ## Field shapes
 
-- **amendment**: `commit`, `timestamp`, `scope`
+- **amendment**: `commit`, `timestamp`, `scope`, `governs_first_run_at`, `cells`
 - **ci**: `method`, `low`, `high`, `alpha`
 - **cluster_cell**: `numerator`, `denominator`
 - **comprehension_reader**: `identity`, `family`, `context`, `answers`, `correct`, `transcript_path`

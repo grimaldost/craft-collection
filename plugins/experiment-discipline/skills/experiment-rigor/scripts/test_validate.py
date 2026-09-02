@@ -1328,6 +1328,63 @@ def test_f6_fabricated_amendment_timestamp_fails():
         assert 'ER-PREREG' in fail_codes(check(rec, path))
 
 
+def test_a_design_amendment_re_plans_the_expected_n():
+    # The frozen cells say 48 + 48; the wave-2 amendment cuts one cell to 40. ER-RECON
+    # reconciles against 88, and ER-PREREG sees no drift because design.cells is untouched.
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _git_init(d)
+        (d / 'amend.txt').write_text('budget cut', encoding='utf-8')
+        amend_sha = _git_commit(d, '2026-01-10T00:00:00', msg='amend')
+        rec = _measurement_record()
+        rec['design']['amendments'] = [
+            {
+                'commit': amend_sha,
+                'timestamp': '2026-01-10T00:00:00',
+                'scope': 'budget: without_gate cut to 40',
+                'governs_first_run_at': '2026-02-15T00:00:00',
+                'cells': [{'name': 'without_gate', 'planned_n': 40}],
+            }
+        ]
+        rec['disposition'] = {'completed': 88, 'excluded': 0, 'total': 88}
+        rec['results']['footprint']['arms']['without_gate'] = {
+            'numerator': 15,
+            'denominator': 40,
+            'ci': {'method': 'wilson', 'alpha': 0.05, 'low': 0.2385, 'high': 0.5323},
+        }
+        path = write_record(d, rec)
+        freeze_sha = _git_commit(d, '2026-01-20T00:00:00', msg='freeze')
+        rec['plan_frozen_at']['commit'] = freeze_sha
+        write_record(d, rec)
+        codes = fail_codes(check(rec, path))
+        assert 'ER-RECON' not in codes, codes
+        assert 'ER-PREREG' not in codes, codes
+        assert validate.effective_planned_n(rec['design']) == {'with_gate': 48, 'without_gate': 40}
+
+
+def test_a_design_amendment_may_not_add_a_cell_or_skip_history():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _git_init(d)
+        rec = _measurement_record()
+        rec['design']['amendments'] = [
+            {
+                'commit': 'f' * 40,
+                'timestamp': '2026-01-10T00:00:00',
+                'scope': 'invented',
+                'cells': [{'name': 'third_arm', 'planned_n': 10}],
+            }
+        ]
+        path = write_record(d, rec)
+        freeze_sha = _git_commit(d, '2026-01-20T00:00:00', msg='freeze')
+        rec['plan_frozen_at']['commit'] = freeze_sha
+        write_record(d, rec)
+        report = check(rec, path)
+        messages = [f.message for f in report.failures if f.code == 'ER-PREREG']
+        assert any('does not declare' in m for m in messages), messages
+        assert any('absent from git history' in m for m in messages), messages
+
+
 def test_f6_fabricated_amendment_commit_not_in_history_fails():
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)

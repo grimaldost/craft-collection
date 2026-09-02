@@ -1,7 +1,7 @@
 {
   "name": "experiment-discipline",
   "displayName": "Experiment Discipline",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Discipline for evaluation acts: structure an experiment and its write-up so the Methods reconstruct without the conversation and the uncertainty is declared, not hidden \u2014 a typed record.yaml across a probe / measurement / decision tier ladder, with every load-bearing rule a script that exits non-zero rather than a line of prose.",
   "author": {
     "name": "Grimaldo Stanzani",

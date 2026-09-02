@@ -1,9 +1,23 @@
 {
   "schema_version": 1.1,
-  "known_versions": [1, 1.1],
-  "tiers": ["probe", "measurement", "decision"],
+  "known_versions": [
+    1,
+    1.1
+  ],
+  "tiers": [
+    "probe",
+    "measurement",
+    "decision"
+  ],
   "required_fields": {
-    "probe": ["schema_version", "tier", "experiment", "design", "outcomes", "threats"],
+    "probe": [
+      "schema_version",
+      "tier",
+      "experiment",
+      "design",
+      "outcomes",
+      "threats"
+    ],
     "measurement": [
       "schema_version",
       "tier",
@@ -24,9 +38,27 @@
     ]
   },
   "optional_fields": {
-    "probe": ["disposition", "results", "run", "updates"],
-    "measurement": ["disposition", "results", "run", "plan_frozen_at", "updates"],
-    "decision": ["disposition", "results", "run", "plan_frozen_at", "updates", "comprehension"]
+    "probe": [
+      "disposition",
+      "results",
+      "run",
+      "updates"
+    ],
+    "measurement": [
+      "disposition",
+      "results",
+      "run",
+      "plan_frozen_at",
+      "updates"
+    ],
+    "decision": [
+      "disposition",
+      "results",
+      "run",
+      "plan_frozen_at",
+      "updates",
+      "comprehension"
+    ]
   },
   "threat_enum": [
     "contamination_familiarity",
@@ -39,19 +71,41 @@
     "selection_exclusion",
     "generalization"
   ],
-  "threat_status_enum": ["controlled", "residual"],
-  "role_enum": ["confirmatory", "exploratory"],
+  "threat_status_enum": [
+    "controlled",
+    "residual"
+  ],
+  "role_enum": [
+    "confirmatory",
+    "exploratory"
+  ],
   "verdict_enum": [
     "confirmatory_supported",
     "confirmatory_null",
     "exploratory_signal",
     "inconclusive"
   ],
-  "confirmatory_verdicts": ["confirmatory_supported", "confirmatory_null"],
-  "ci_methods": ["wilson", "clopper_pearson", "beta_binomial"],
-  "contrast_estimators": ["paired_difference"],
-  "contrast_interval_methods": ["paired_t"],
-  "certainty_enum": ["high", "moderate", "low", "very_low"],
+  "confirmatory_verdicts": [
+    "confirmatory_supported",
+    "confirmatory_null"
+  ],
+  "ci_methods": [
+    "wilson",
+    "clopper_pearson",
+    "beta_binomial"
+  ],
+  "contrast_estimators": [
+    "paired_difference"
+  ],
+  "contrast_interval_methods": [
+    "paired_t"
+  ],
+  "certainty_enum": [
+    "high",
+    "moderate",
+    "low",
+    "very_low"
+  ],
   "small_n_floor": 30,
   "field_shapes": {
     "outcome": [
@@ -62,9 +116,21 @@
       "verifier.hash",
       "added_after_freeze"
     ],
-    "rate": ["numerator", "denominator", "ci"],
-    "ci": ["method", "low", "high", "alpha"],
-    "cluster_cell": ["numerator", "denominator"],
+    "rate": [
+      "numerator",
+      "denominator",
+      "ci"
+    ],
+    "ci": [
+      "method",
+      "low",
+      "high",
+      "alpha"
+    ],
+    "cluster_cell": [
+      "numerator",
+      "denominator"
+    ],
     "contrast": [
       "name",
       "arms",
@@ -75,11 +141,36 @@
       "interval",
       "sign_test"
     ],
-    "contrast_interval": ["method", "alpha", "low", "high", "t_quantile"],
-    "contrast_sign_test": ["p_value", "effective_n", "positive"],
-    "decision_rule": ["metric", "comparison", "threshold", "direction"],
-    "amendment": ["commit", "timestamp", "scope"],
-    "plan_frozen_at": ["commit", "path", "timestamp"],
+    "contrast_interval": [
+      "method",
+      "alpha",
+      "low",
+      "high",
+      "t_quantile"
+    ],
+    "contrast_sign_test": [
+      "p_value",
+      "effective_n",
+      "positive"
+    ],
+    "decision_rule": [
+      "metric",
+      "comparison",
+      "threshold",
+      "direction"
+    ],
+    "amendment": [
+      "commit",
+      "timestamp",
+      "scope",
+      "governs_first_run_at",
+      "cells"
+    ],
+    "plan_frozen_at": [
+      "commit",
+      "path",
+      "timestamp"
+    ],
     "run": [
       "source",
       "ledger_path",
@@ -89,7 +180,11 @@
       "hand_reason",
       "attestation"
     ],
-    "update": ["certainty", "downgrade_reasons", "prior.source_id"],
+    "update": [
+      "certainty",
+      "downgrade_reasons",
+      "prior.source_id"
+    ],
     "comprehension_reader": [
       "identity",
       "family",
