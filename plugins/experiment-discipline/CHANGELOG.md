@@ -3,6 +3,27 @@
 Notable changes to this plugin. Bump the `version` in `.claude-plugin/plugin.json`
 with each release.
 
+## [0.3.1] - 2026-09-02
+
+A budget that runs out after the freeze, or an incident that voids trials, had no
+legal representation: `design.cells` is frozen, `ER-RECON` binds `N_expected` to
+its `planned_n`, and `analysis_plan.amendments[]` could not touch the cells — so a
+truncated matrix could only pass the gate by lying about its plan or fail it while
+telling the truth. (The fixture-contamination incident on fathom's
+`multiagent-composition-v2`, 2026-09-02, where 16 trials were voided and n was
+re-declared 16 → 13 within a fixed budget.)
+
+### Added
+
+- **`design.amendments[]`** — re-plan declared cells' `planned_n` after the freeze.
+  Each entry carries `commit`, `timestamp`, `scope`, optional
+  `governs_first_run_at`, and `cells: [{name, planned_n}]`; the frozen `design.cells`
+  stay as frozen (no `ER-PREREG` drift), the amendment's commit must exist and
+  predate the first run of the wave it governs (the same F6 chronology as plan
+  amendments), and it may only re-plan a cell the frozen design declares — adding
+  a cell is what the freeze forbids. `ER-RECON` reconciles against the amended
+  total; `render.py` shows `cell=16->13 (amended)` and lists the amendments.
+
 ## [0.3.0] - 2026-08-28
 
 The discipline's central claim is that a frozen plan is worth its cost. This

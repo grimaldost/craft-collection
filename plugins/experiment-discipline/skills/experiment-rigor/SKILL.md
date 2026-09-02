@@ -84,12 +84,14 @@ the rule.
 - **The freeze (`ER-PREREG`).** The pre-registration subset — `design.cells`, each
   outcome's `role`, operationalization, and verifier hash, and `analysis_plan` —
   is reconstructed with `git show` on `plan_frozen_at.commit` and compared to the
-  analyzed record. Any drift fails. A confirmatory verdict is legal only on an
+  analyzed record. Any drift fails; a cut forced after the freeze is an amendment,
+  not a drift — `design.amendments[]` re-plans declared cells' `planned_n` under
+  `analysis_plan.amendments[]`'s chronology. A confirmatory verdict is legal only on an
   outcome whose frozen `role` is `confirmatory`. The two guards the freeze buys —
   a null bank, and a pre-committed rule for what a finding must survive — are
   worked, with the day they both fired, in `references/two-guards.md`.
 - **Declared-cells reconciliation (`ER-RECON`).** `N_expected` is the sum of
-  `design.cells[].planned_n`, and it must equal the disposition total and every
+  `design.cells[].planned_n` (as amended), and it must equal the disposition total and every
   outcome's sum of arm denominators. The model tier is one named factor level, not
   a separate multiplier.
 - **The confirmatory / exploratory partition.** `outcomes[].role` belongs to the

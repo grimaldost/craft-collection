@@ -472,12 +472,28 @@ def render_report(record: dict[str, Any], record_path: str | Path | None = None)
     design = record.get('design') or {}
     cells = design.get('cells') if isinstance(design, dict) else None
     if isinstance(cells, list) and cells:
-        planned = ', '.join(
-            f'{c.get("name")}={c.get("planned_n")}' for c in cells if isinstance(c, dict)
-        )
+        amended = _amended_planned_n(design)
+        parts = []
+        for c in cells:
+            if not isinstance(c, dict):
+                continue
+            name, frozen_n = c.get('name'), c.get('planned_n')
+            now_n = amended.get(str(name), frozen_n)
+            parts.append(
+                f'{name}={frozen_n}'
+                if now_n == frozen_n
+                else f'{name}={frozen_n}->{now_n} (amended)'
+            )
+        planned = ', '.join(parts)
         lines.append(
             f'- Design: {len(cells)} cell(s) ({planned}); shared_tasks={design.get("shared_tasks")}'
         )
+        for amd in design.get('amendments') or []:
+            if isinstance(amd, dict):
+                lines.append(
+                    f'  - amended at {amd.get("commit", "?")[:12]} ({amd.get("timestamp", "?")}): '
+                    f'{amd.get("scope", "")}'
+                )
     disp = record.get('disposition')
     if isinstance(disp, dict):
         lines.append(
@@ -906,6 +922,21 @@ def journal_envelope(
     lines.append(content)
     lines.append('--- ENTRY_END ---')
     return '\n'.join(lines) + '\n'
+
+
+def _amended_planned_n(design: dict) -> dict[str, int]:
+    """Cell name -> planned_n after design.amendments[], latest winning (mirrors validate)."""
+    out: dict[str, int] = {}
+    for amd in design.get('amendments') or []:
+        if not isinstance(amd, dict):
+            continue
+        for cell in amd.get('cells') or []:
+            if isinstance(cell, dict) and 'name' in cell:
+                try:
+                    out[str(cell['name'])] = int(cell['planned_n'])
+                except (KeyError, TypeError, ValueError):
+                    continue
+    return out
 
 
 # --- the SCHEMA.md generator ------------------------------------------------

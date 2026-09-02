@@ -643,10 +643,10 @@ def check_recon(record: dict) -> list[Finding]:
     cells = design.get('cells') if isinstance(design, dict) else None
     if not isinstance(cells, list) or not cells:
         return out  # schema gate already flags a missing design/cells
-    try:
-        n_expected = sum(int(c['planned_n']) for c in cells)
-    except (KeyError, TypeError, ValueError):
+    planned = effective_planned_n(design)
+    if planned is None:
         return [_fail('ER-RECON', 'design.cells[] each need an integer planned_n to reconcile')]
+    n_expected = sum(planned.values())
 
     disp = record.get('disposition')
     if isinstance(disp, dict):
@@ -1290,12 +1290,89 @@ def _plan_without_amendments(plan: object) -> object:
     return plan
 
 
-def _check_amendments(record: dict, cwd: Path) -> list[Finding]:
-    """Each analysis_plan.amendments[] entry must be frozen in history and predate the
-    first run of the wave it governs (F6). The reference is the amendment's own
-    governs_first_run_at when given, else the experiment's run.first_run_at."""
+def effective_planned_n(design: object) -> dict[str, int] | None:
+    """Each cell's planned_n after `design.amendments[]`, latest amendment winning.
+
+    The frozen `design.cells` never changes; a cut forced after the freeze — a budget
+    that ran out, an instrument incident that voided trials — is declared as an
+    amendment that names the cells it re-plans, and ER-RECON reconciles against the
+    amended total. `None` when the cells cannot be read (the schema gate reports that).
+    """
+    if not isinstance(design, dict):
+        return None
+    cells = design.get('cells')
+    if not isinstance(cells, list) or not cells:
+        return None
+    try:
+        planned = {str(c['name']): int(c['planned_n']) for c in cells}
+    except (KeyError, TypeError, ValueError):
+        return None
+    for amd in design.get('amendments') or []:
+        if not isinstance(amd, dict):
+            continue
+        for cell in amd.get('cells') or []:
+            if isinstance(cell, dict) and str(cell.get('name')) in planned:
+                try:
+                    planned[str(cell['name'])] = int(cell['planned_n'])
+                except (KeyError, TypeError, ValueError):
+                    continue
+    return planned
+
+
+def _design_amendment_findings(record: dict) -> list[Finding]:
+    """A design amendment names cells the frozen design declares, each with an integer
+    planned_n — a cell that does not exist is a new cell, which is what the freeze
+    forbids, not a re-plan of a declared one."""
     out: list[Finding] = []
-    amendments = (record.get('analysis_plan') or {}).get('amendments') or []
+    design = record.get('design') or {}
+    declared = {
+        str(c.get('name'))
+        for c in (design.get('cells') or [])
+        if isinstance(c, dict) and 'name' in c
+    }
+    for i, amd in enumerate(design.get('amendments') or []):
+        if not isinstance(amd, dict):
+            continue
+        cells = amd.get('cells')
+        if not isinstance(cells, list) or not cells:
+            out.append(
+                _fail(
+                    'ER-PREREG',
+                    f'design amendment[{i}] names no cells (cells: [{{name, planned_n}}])',
+                )
+            )
+            continue
+        for cell in cells:
+            name = str(cell.get('name')) if isinstance(cell, dict) else None
+            if name not in declared:
+                out.append(
+                    _fail(
+                        'ER-PREREG',
+                        f'design amendment[{i}] re-plans {name!r}, which the frozen design does '
+                        f'not declare; an amendment re-plans a declared cell, never adds one',
+                    )
+                )
+                continue
+            if not isinstance(cell, dict) or not _is_int(cell.get('planned_n')):
+                out.append(
+                    _fail(
+                        'ER-PREREG',
+                        f'design amendment[{i}] cell {name!r} needs an integer planned_n',
+                    )
+                )
+    return out
+
+
+def _check_amendments(record: dict, cwd: Path) -> list[Finding]:
+    """Each amendment — analysis_plan.amendments[] and design.amendments[] — must be
+    frozen in history and predate the first run of the wave it governs (F6). The
+    reference is the amendment's own governs_first_run_at when given, else the
+    experiment's run.first_run_at. A design amendment re-plans declared cells' planned_n
+    (the frozen cells stay as frozen; ER-RECON reconciles against the amended total)."""
+    out: list[Finding] = _design_amendment_findings(record)
+    plan_amendments = (record.get('analysis_plan') or {}).get('amendments') or []
+    design_amendments = (record.get('design') or {}).get('amendments') or []
+    amendments = [*plan_amendments, *design_amendments]
     experiment_first_run = (record.get('run') or {}).get('first_run_at')
     for i, amd in enumerate(amendments):
         if not isinstance(amd, dict):
