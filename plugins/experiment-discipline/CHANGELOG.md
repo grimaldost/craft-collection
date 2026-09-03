@@ -3,6 +3,17 @@
 Notable changes to this plugin. Bump the `version` in `.claude-plugin/plugin.json`
 with each release.
 
+## [0.3.2] - 2026-09-03
+
+### Fixed
+
+- **`validate.py` decoded `git show` output with the locale codec.** On a Windows
+  console (cp1252) an em dash in a frozen record came back from `git show` as three
+  characters, so `ER-PREREG` reported drift on a record nobody had changed (fathom's
+  `multiagent-composition-v2` record, 2026-09-03, at the readout rehearsal). The
+  frozen blob is now decoded as UTF-8, which is what git emits and how the analyzed
+  record is read.
+
 ## [0.3.1] - 2026-09-02
 
 A budget that runs out after the freeze, or an incident that voids trials, had no
