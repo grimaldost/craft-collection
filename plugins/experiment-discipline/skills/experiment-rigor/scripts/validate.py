@@ -299,10 +299,16 @@ def _git_env() -> dict[str, str]:
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
+    # git emits the blob's bytes and ASCII metadata; the record is UTF-8 on disk and
+    # is read as UTF-8, so the frozen copy must be decoded the same way. With the
+    # locale codec (cp1252 on a Windows console) an em dash in a frozen field came
+    # back as three characters and ER-PREREG reported drift on an unchanged record.
     return subprocess.run(  # noqa: S603 - fixed argv, no shell
         ['git', '-C', str(cwd), *args],  # noqa: S607 - git resolved from PATH
         capture_output=True,
         text=True,
+        encoding='utf-8',
+        errors='replace',
         env=_git_env(),
     )
 

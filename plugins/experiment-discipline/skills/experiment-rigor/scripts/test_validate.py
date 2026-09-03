@@ -789,6 +789,27 @@ def test_er_prereg_clean_no_drift():
         assert 'ER-PREREG' not in fail_codes(check(rec, path))
 
 
+def test_er_prereg_reads_the_frozen_record_as_utf8():
+    # `git show` emits the blob's bytes; decoded with the locale codec (cp1252 on a
+    # Windows console) an em dash in a frozen operationalization became three
+    # characters and an unchanged record read as drift. The frozen text must
+    # round-trip exactly, whatever the console's codec.
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _git_init(d)
+        rec = _measurement_record()
+        text = 'passes iff every criterion holds \u2014 graded blind to arm'
+        rec['outcomes'][0]['operationalization'] = text
+        path = write_record(d, rec)
+        sha = _git_commit(d, '2026-01-01T00:00:00')
+        rec['plan_frozen_at']['commit'] = sha
+        write_record(d, rec)
+        frozen = validate._show_at(d, sha, 'record.yaml')
+        assert frozen is not None
+        assert frozen['outcomes'][0]['operationalization'] == text
+        assert 'ER-PREREG' not in fail_codes(check(rec, path))
+
+
 def test_er_prereg_not_in_history_downgrades_by_tier():
     # measurement: WARN; decision: FAIL (Q5 hand ladder).
     with tempfile.TemporaryDirectory() as td:
