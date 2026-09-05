@@ -8,12 +8,17 @@ on:
     - cron: '0 9 1 * *'   # 09:00 UTC on the 1st of each month
   workflow_dispatch: {}
 
+# Read by default; the one job that needs to write says so itself. Declaring
+# `issues: write` at workflow level would hand it to every job this file ever grows,
+# including one added later for an unrelated reason.
 permissions:
-  issues: write
   contents: read
 
 jobs:
   check-drift:
+    permissions:
+      contents: read
+      issues: write # opens or updates the single drift issue, and nothing else
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
