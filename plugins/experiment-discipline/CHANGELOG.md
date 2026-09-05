@@ -3,6 +3,28 @@
 Notable changes to this plugin. Bump the `version` in `.claude-plugin/plugin.json`
 with each release.
 
+## [0.3.3] - 2026-09-05
+
+### Changed
+
+- **The journal envelope names sealore, which owns the parser it targets.** The
+  emitter and its fixtures called the output "the mantis journal envelope" and
+  imported `mantis.ingestion.journal_v2`. The memory project is sealore; mantis is
+  not, and the parser now lives at `sealore/src/sealore/ingestion/journal_v2.py`
+  with its written contract beside it in `ENVELOPE.md`. `render.py`'s envelope
+  section says so and points at both paths, so the next reader does not re-derive
+  it.
+- **`_MANTIS_REQUIRED` is now `_ENVELOPE_REQUIRED`**, with a comment recording why
+  seven keys are emitted when the current parser requires six: v2 dropped
+  `language`, and emitting it costs nothing while keeping an older deployment
+  working.
+- **`test_mantis_envelope.py` and `test_mantis_fallback.py` are renamed** to
+  `test_sealore_envelope.py` and `test_sealore_fallback.py`. Real-parser mode now
+  imports `sealore.ingestion.journal_v2` and reads **`SEALORE_SRC`** instead of
+  `MANTIS_SRC` — the one change that can affect an existing setup, and the reason
+  this is a release rather than a declaration. Documented-contract mode, which is
+  what runs without the store installed, is unchanged.
+
 ## [0.3.2] - 2026-09-03
 
 ### Fixed

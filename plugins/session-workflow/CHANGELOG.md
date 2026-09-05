@@ -3,6 +3,18 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## [0.23.2] - 2026-09-05
+
+### Changed
+
+- **`journaling-sessions`: the store-binding example journals into sealore.** The
+  worked example walked a reader through "journaling into mantis", with
+  `mantis_engineering` as the bound area. The memory project is sealore; mantis is
+  not. The example now binds to sealore with an area from sealore's own vocabulary,
+  and the envelope schema's second `area` example follows. The skill stays
+  store-agnostic: only the illustration changed, and the generic default output is
+  byte-for-byte what it was.
+
 ## [0.23.1] - 2026-08-29
 
 The two fixes that shipped the evening of the 0.23.0 release under an unchanged
