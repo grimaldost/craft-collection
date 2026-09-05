@@ -43,8 +43,17 @@
     "plugins/experiment-discipline/skills/experiment-rigor/scripts/validate.py": [
       "plugins/experiment-discipline/skills/experiment-rigor/scripts/test_validate.py::test_er_schema_missing_required_field"
     ],
+    "plugins/humblepowers/skills/choosing-models/scripts/emit_lineup.py": [
+      "plugins/humblepowers/skills/choosing-models/scripts/test_emit_lineup.py::test_an_unknown_tier_names_the_known_ones_and_exits_one"
+    ],
     "plugins/humblepowers/skills/choosing-models/scripts/lineup_check.py": [
       "plugins/humblepowers/skills/choosing-models/scripts/test_lineup_check.py::test_absent_model_reddens_and_names_the_refresh_command"
+    ],
+    "plugins/humblepowers/skills/refresh-models/scripts/mirror_check.py": [
+      "plugins/humblepowers/skills/refresh-models/scripts/test_mirror_check.py::test_a_site_with_neither_backlog_nor_status_is_a_finding",
+      "plugins/humblepowers/skills/refresh-models/scripts/test_mirror_check.py::test_a_stale_stamp_is_a_finding_and_names_both_dates",
+      "plugins/humblepowers/skills/refresh-models/scripts/test_mirror_check.py::test_a_retired_string_still_present_is_a_finding",
+      "plugins/humblepowers/skills/refresh-models/scripts/test_mirror_check.py::test_unreadable_bindings_cannot_answer_and_exits_two"
     ],
     "plugins/humblepowers/skills/verification-before-completion/scripts/subagent_gate.py": [
       "plugins/humblepowers/skills/verification-before-completion/scripts/test_subagent_gate.py::test_armed_blocks_the_first_stop"
