@@ -5,6 +5,35 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## [0.13.1] - 2026-09-05
+
+The 2026-09-05 lineup refresh: the frontier row moves to Fable 5.1, two model
+facts land in `models.toml`, and the environment tripwire stops reading a dotted
+successor as a snapshot of its predecessor.
+
+### Fixed
+
+- **`choosing-models/scripts/lineup_check.py` no longer accepts a bare api-string
+  prefix as "the same model".** Only a dated snapshot (`-YYYYMMDD`) and a
+  bracketed context-window variant (`[1m]`) count; `claude-fable-5-1` next to
+  `claude-fable-5` now exits 1. The prefix rule kept the tripwire green through a
+  lineup change, which is the one job it has. Regression test added.
+
+### Changed
+
+- **`choosing-models/models.toml`**: frontier `claude-fable-5` -> `claude-fable-5-1`
+  (`Fable 5.1`; same tier, same price, Fable 5 noted as legacy); the Haiku row
+  gains its two model facts (no `effort` parameter; 200K context against 1M on
+  the other tiers); the Sonnet note records the $2/$10 price as confirmed
+  permanent on 2026-08-31 instead of an intro window; `lineup_reconciled` stops
+  claiming the family-keyed price copies are correct (they carried Sonnet 4.6's
+  $3/$15 for three weeks - a price row is a mirror the walk has to check);
+  `deciding_context` records that no frontier decider arm was measured.
+  `last_reviewed` 2026-09-05, `review_by` 2026-12-05.
+- **`choosing-models/SKILL.md` § Effort defaults**: `xhigh` is no longer described
+  as a strong-tier knob (Sonnet 5 exposes it), and the weak tier is named as
+  having no effort knob at all.
+
 ## [0.13.0] - 2026-08-28
 
 `planned-execution` takes ownership of what an in-session subagent is told, and
