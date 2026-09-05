@@ -90,7 +90,7 @@ resolution_audit:
     residual: ADR Consequences:139 still calls SCHEMA.md canonical — the E6 pivot was not propagated to the ADR (R2-2)
   - id: E7  # missing definitions
     status: PARTIALLY-RESOLVED
-    evidence: GRADE shape §3:281-283; decision_rule Q4:169-171; ledger_path §3:272; mantis fallback Q8/§5; 9 ER codes in §2
+    evidence: GRADE shape §3:281-283; decision_rule Q4:169-171; ledger_path §3:272; envelope fallback Q8/§5; 9 ER codes in §2
     residual: the "error codes" sub-item is incomplete — the comprehension gate (§5) and the post-hoc gate (§5 acceptance) have NO ER-codes, and the post-hoc gate has no logic at all (R2-1, R2-5)
 ```
 

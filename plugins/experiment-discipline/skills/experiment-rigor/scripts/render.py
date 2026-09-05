@@ -740,34 +740,37 @@ def render_chain(record_path: str | Path) -> str:
     return '\n'.join(lines) + '\n'
 
 
-# --- the mantis journal envelope (Q8) ---------------------------------------
+# --- the journal envelope (Q8) -----------------------------------------------
 #
-# render.py emits the record's belief-update as a journaling-sessions envelope so
-# the mantis ingestion pipeline can compost it into the long-term store. Two shapes:
+# render.py emits the record's belief-update as a journal envelope so the memory
+# project's ingestion pipeline can compost it into the long-term store. That project
+# is SEALORE: it owns the parser (sealore/src/sealore/ingestion/journal_v2.py) and the
+# written contract (sealore/src/sealore/ingestion/ENVELOPE.md). It is not mantis, which
+# held the role earlier in the chain cognitive-memory -> cogmem -> mantis -> sealore.
+# Two shapes:
 #
-#   PRIMARY (default) -- the full journaling-sessions envelope carrying the update
-#   and its provenance as EXTRA header fields (experiment, tier, certainty, ...): a
-#   SUPERSET of the required keys. Both real mantis parsers collect header lines into
-#   a dict and consume only the keys they know, ignoring the rest -- verified against
-#   mantis-ai/src/mantis/ingestion/{journal.py, journal_v2.py}; neither enforces
-#   additionalProperties. So the superset ingests without loss.
+#   PRIMARY (default) -- the full envelope carrying the update and its provenance as
+#   EXTRA header fields (experiment, tier, certainty, ...): a SUPERSET of the required
+#   keys. The real parser collects header lines into a dict and consumes only the keys
+#   it knows, ignoring the rest; it does not enforce additionalProperties. So the
+#   superset ingests without loss.
 #
 #   STRICT FALLBACK (--strict) -- for a hypothetical parser that DOES reject unknown
-#   keys (an additionalProperties:false JSON-schema validator): the mantis-required
-#   keys only, plus a record_ref path and a record_sha256, no rich-provenance
-#   superset. The provenance is not dropped, it is LINKED: the envelope points at the
-#   typed record, hash-pinned. test_mantis_fallback.py mocks a rejecting parser and
-#   asserts the fallback is well-formed and resolvable (the R2 fold: the fallback
-#   shape is defined and tested, not left as prose).
+#   keys (an additionalProperties:false JSON-schema validator): the required keys only,
+#   plus a record_ref path and a record_sha256, no rich-provenance superset. The
+#   provenance is not dropped, it is LINKED: the envelope points at the typed record,
+#   hash-pinned. test_sealore_fallback.py mocks a rejecting parser and asserts the
+#   fallback is well-formed and resolvable (the R2 fold: the fallback shape is defined
+#   and tested, not left as prose).
 #
 # The standing journal contract: field / enum / required-key mismatches fail SILENTLY
 # in that pipeline, so the emitter matches the contract exactly -- ISO timestamps, a
-# valid EntryType, one of the four journal origins, and the seven-field required set
-# (the v1 union, so both JournalParser and JournalParserV2 accept the entry).
+# valid entry type, one of the journal origins, and every required key present.
 
-# The mantis journal-ingestion required header set: the union of the v1 and v2 parser
-# contracts (v1 requires 'language', v2 does not -- emitting it satisfies both).
-_MANTIS_REQUIRED: tuple[str, ...] = (
+# The required header set. The current parser (v2) requires six: it dropped 'language',
+# which the earlier v1 parser demanded. Emitting seven costs nothing and satisfies both,
+# so a record rendered today still ingests into an older deployment.
+_ENVELOPE_REQUIRED: tuple[str, ...] = (
     'type',
     'author',
     'timestamp',
@@ -798,7 +801,7 @@ def _slug(text: str) -> str:
 
 def _iso(value: Any) -> str:
     """Normalize a timestamp to ISO 8601 with a 'T' separator. PyYAML auto-parses an
-    ISO string into a datetime, whose str() uses a space; the mantis parser tolerates
+    ISO string into a datetime, whose str() uses a space; the parser tolerates
     both, but the T form matches the envelope contract's examples and stays stable."""
     if hasattr(value, 'isoformat'):
         return value.isoformat()
@@ -857,7 +860,7 @@ def journal_envelope(
     """Render the record's belief-update as a journaling-sessions envelope.
 
     PRIMARY (strict=False): the required set plus the update's provenance as extra
-    header fields (a superset the tolerant mantis parsers ingest without loss).
+    header fields (a superset sealore's tolerant parser ingests without loss).
     STRICT (strict=True): the required set plus record_ref + record_sha256 only.
 
     `journaled_at` defaults to the record's own freeze timestamp (else its first-run
@@ -1159,7 +1162,7 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument(
         '--emit-journal',
         action='store_true',
-        help='print the record as a mantis journaling-sessions envelope',
+        help='print the record as a journal envelope for sealore ingestion',
     )
     mode.add_argument(
         '--activation-line',

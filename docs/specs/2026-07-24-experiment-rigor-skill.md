@@ -3,7 +3,7 @@
 - **Date:** 2026-07-24
 - **Status:** ready (DoR passed)
 - **Audience:** implementing agents + reviewer
-- **Output artifact(s):** `plugins/humblepowers/skills/experiment-rigor/SKILL.md`; `scripts/{stats,validate,render,from_fathom}.py` and their `test_*.py` under that skill (plus `test_mantis_fallback.py`); `templates/{probe,measurement,decision}.yaml`, `templates/schema.json`, and `templates/SCHEMA.md`; `references/{threats-catalog,small-n-stats}.md`; `examples/rg-2x2/{record.yaml,report.md}`; `evals/trigger/experiment-rigor.json`; `evals/trigger/holdout/experiment-rigor.json` and a baseline row in `evals/trigger/holdout/BASELINES.md`; the regenerated `AGENTS.md` index; one row in `plugins/humblepowers/skills/choosing-tools/scripts/router_rules.json`; a baseline in `scripts/word_budget.json`; and a local hook in `.pre-commit-config.yaml`.
+- **Output artifact(s):** `plugins/humblepowers/skills/experiment-rigor/SKILL.md`; `scripts/{stats,validate,render,from_fathom}.py` and their `test_*.py` under that skill (plus `test_sealore_fallback.py`); `templates/{probe,measurement,decision}.yaml`, `templates/schema.json`, and `templates/SCHEMA.md`; `references/{threats-catalog,small-n-stats}.md`; `examples/rg-2x2/{record.yaml,report.md}`; `evals/trigger/experiment-rigor.json`; `evals/trigger/holdout/experiment-rigor.json` and a baseline row in `evals/trigger/holdout/BASELINES.md`; the regenerated `AGENTS.md` index; one row in `plugins/humblepowers/skills/choosing-tools/scripts/router_rules.json`; a baseline in `scripts/word_budget.json`; and a local hook in `.pre-commit-config.yaml`.
 
 ## Context
 
@@ -81,7 +81,7 @@ chronology check whose residual is named); run cross-check equality with a per-t
 policy; the small-n CI refusal; threat-coverage over a closed enum; probe refusal; the
 `schema_version` freeze read from a machine-readable schema; the decision-tier
 comprehension gate (a block-plus-evidence-trail check whose residual is named); the
-standing deletion rule for degraded gates; the mantis journal-envelope superset-tolerance
+standing deletion rule for degraded gates; the journal-envelope superset-tolerance
 constraint; and the sealed-holdout-before-tuning trigger-dataset discipline. This work
 also touches four existing, already-enforced invariants: register doctrine, the
 word-budget ratchet, structural marketplace validity, and `AGENTS.md` derived-artifact
@@ -104,7 +104,7 @@ integrity.
 | schema_version freeze (unknown versions rejected, message names known versions) | planned | `validate.py` reading `templates/schema.json` (§2, §3) |
 | comprehension gate before decision tier (block + resolving transcript paths; genuineness ceded to review) | planned | `validate.py` decision branch (§5) |
 | machine-readable schema sync (`schema.json` ↔ `SCHEMA.md`) | planned | sync gate under `run_tests.py` (§3) |
-| mantis journal-envelope superset tolerance (with a defined strict fallback) | planned | `test_mantis_fallback.py` parser-rejection fixture (§5) |
+| journal-envelope superset tolerance (with a defined strict fallback) | planned | `test_sealore_fallback.py` parser-rejection fixture (§5) |
 | standing deletion rule (a degraded gate is deleted, not tolerated) | review-only | governance (ADR-0007); review checklist |
 | sealed-holdout-before-tuning (trigger-dataset discipline) | review-only | skill-authoring doctrine; the `BASELINES.md` record (§4) |
 | register doctrine (calibrated skill text) | enforced | `scripts/lint_register.py` in pre-commit + CI |
@@ -118,7 +118,7 @@ integrity.
 |---|---|
 | Exact CIs, within-experiment Beta-Binomial, paired/clustered SE | `plugins/humblepowers/skills/experiment-rigor/scripts/stats.py` (to be created) |
 | The central gate (schema+tier, reconciliation, anchor, cross-check, stats-integrity, parity, links, threats, probe refusal, comprehension) | `plugins/humblepowers/skills/experiment-rigor/scripts/validate.py` (to be created) |
-| Report derivation, semantic-digest drift check, chain walk, mantis envelope emit | `plugins/humblepowers/skills/experiment-rigor/scripts/render.py` (to be created) |
+| Report derivation, semantic-digest drift check, chain walk, journal envelope emit | `plugins/humblepowers/skills/experiment-rigor/scripts/render.py` (to be created) |
 | Fathom ledger bridge — run-derived fields, craft side | `plugins/humblepowers/skills/experiment-rigor/scripts/from_fathom.py` (to be created) |
 | Tier skeleton | `plugins/humblepowers/skills/experiment-rigor/templates/probe.yaml` (to be created) |
 | Machine-readable canonical schema (types, per-tier required fields, enums, versions) | `plugins/humblepowers/skills/experiment-rigor/templates/schema.json` (to be created) |
@@ -189,9 +189,9 @@ These close the brief's open questions and are bound as-is; they are not reopene
 - **Q7 — probe refusal.** Hard refuse (exit 1) when a probe carries a `results.*.verdict`
   in the `confirmatory_*` class or any `updates.posterior`; the message names the
   graduation path to measurement. (Bound in §2, §3.)
-- **Q8 — mantis envelope.** §5 adds `test_mantis_fallback.py` against the mantis
+- **Q8 — journal envelope.** §5 adds `test_sealore_fallback.py` against sealore
   journal-ingestion parser contract; if the parser does not tolerate superset keys, the
-  emitter falls back to a strict envelope of a defined shape (the mantis-required keys plus
+  emitter falls back to a strict envelope of a defined shape (the required keys plus
   a `record_ref` path and a `record_sha256`, no superset). The standing journal-contract
   constraint applies — field, enum, and required-key mismatches fail silently, so the
   fixture mocks a parser rejection and asserts the fallback envelope is well-formed and
@@ -288,7 +288,7 @@ the canonical typed blocks as fenced YAML; `render.py --check` is the drift gate
 semantic re-parse and digest of the embedded blocks against a fresh render, not a
 whole-file byte diff — and joins `validate.py` in the pre-commit hook over committed pairs.
 `render.py --chain` walks `updates.prior.source_id` links into a lineage view, and
-`render.py` emits the mantis journal envelope. `from_fathom.py` reads a fathom
+`render.py` emits the journal envelope. `from_fathom.py` reads a fathom
 `ledger/<bank>.jsonl` located by the `run.ledger_path` schema field and maps it to the real
 ledger schema: `n` as a row count, disposition derived from each graded `trial`
 row's `verifier_results` (the rows fathom grades) via the same pass predicate, `cost_usd_est`
@@ -350,8 +350,8 @@ per the stated fallback); the correct-usage rubric checks that a produced record
 
 ### §5 Dogfood fixture, decision tier, and the bridges
 Create `examples/rg-2x2/record.yaml` and its generated `examples/rg-2x2/report.md`; extend
-`validate.py` with the decision-tier comprehension gate; and add the mantis journal-envelope
-emit to `render.py` with `test_mantis_fallback.py`. The RG-2×2 record is the first node of
+`validate.py` with the decision-tier comprehension gate; and add the journal-envelope
+emit to `render.py` with `test_sealore_fallback.py`. The RG-2×2 record is the first node of
 the update chain and the acceptance fixture; a fathom-side emitter is out of this series
 (the bridge reads the ledger directly). The corrected record marks the footprint outcome
 `role: exploratory` with its Beta-Binomial posterior under the exploratory quarantine and the
@@ -361,7 +361,7 @@ measurement/decision tier, distinct from the probe posterior refusal); the activ
 is the `role: confirmatory` one that failed. The comprehension gate (Q3) requires a decision-tier
 record to carry a `comprehension` block with each reader's four verbatim answers and a
 resolving `transcript_path`, and passes only on unanimous four-question reconstruction. The
-mantis emit (Q8) writes the update/provenance envelope, and `test_mantis_fallback.py` mocks
+journal emit (Q8) writes the update/provenance envelope, and `test_sealore_fallback.py` mocks
 a parser rejection to assert the strict linking fallback (`record_ref` + `record_sha256`) is
 well-formed.
 **Acceptance criterion:** a defect-seeded RG-2×2 fixture carrying the case's six known
@@ -372,7 +372,7 @@ verdict while its frozen `role` is `exploratory` (`ER-PREREG`); and the absent C
 `validate.py` exit 1 naming all six by error code, and the corrected `examples/rg-2x2/record.yaml` exits 0 with
 `render.py --check` showing no drift against the committed `report.md`; a decision-tier
 record missing the comprehension block, with an unresolvable `transcript_path`, or with any
-reader reconstructing fewer than four questions, exits 1 (`ER-COMPREHEND`); and `test_mantis_fallback.py`
+reader reconstructing fewer than four questions, exits 1 (`ER-COMPREHEND`); and `test_sealore_fallback.py`
 passes under `run_tests.py`.
 
 ## PR ↔ section manifest
@@ -474,7 +474,7 @@ decision tier and the founding-case regression fixture.
 | E4 per-tier source-hand policy | §2 + Q5 | `docs/specs/2026-07-24-experiment-rigor-skill.md:178` `at decision it is a` | yes |
 | E5 temporal-anchor honest claim | ADR + §2 | `docs/adr/0007-experiment-rigor-delivery.md:88` `backdated commit (push-to-remote` | yes |
 | E6 machine-readable schema.json + sync gate | §3 + Q9 | `docs/specs/2026-07-24-experiment-rigor-skill.md:200` `machine-readable field list` | yes |
-| E7 missing definitions (GRADE shape, decision_rule, error codes, ledger_path, mantis fallback) | §3 + §5 | `docs/specs/2026-07-24-experiment-rigor-skill.md:305` `cross-experiment GRADE update shape` | yes |
+| E7 missing definitions (GRADE shape, decision_rule, error codes, ledger_path, envelope fallback) | §3 + §5 | `docs/specs/2026-07-24-experiment-rigor-skill.md:305` `cross-experiment GRADE update shape` | yes |
 | R2-1 pre-registration partition + ER-PREREG gate (BLOCKER) | §2 + §3 + §5 | `docs/specs/2026-07-24-experiment-rigor-skill.md:264` `reconstructs the frozen` | yes |
 | R2-2 ADR schema.json-canonical reconciliation | ADR Consequences | `docs/adr/0007-experiment-rigor-delivery.md:139` `canonical machine-readable` | yes |
 | R2-3 trial-row ledger terminology | §3 | `docs/specs/2026-07-24-experiment-rigor-skill.md:293` `each graded` | yes |

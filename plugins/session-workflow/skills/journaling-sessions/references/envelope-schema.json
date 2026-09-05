@@ -31,7 +31,7 @@
     "area": {
       "type": "string",
       "description": "Single-valued scope key. Consolidation is typically author+area-scoped, so reuse the target store's existing area vocabulary when one is given, or the entry is silently orphaned.",
-      "examples": ["platform_engineering", "mantis_engineering"]
+      "examples": ["platform_engineering", "language_learning"]
     },
     "language": {
       "type": "string",
