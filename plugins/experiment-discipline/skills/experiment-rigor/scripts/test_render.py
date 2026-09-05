@@ -406,7 +406,7 @@ def test_chain_marks_an_unresolvable_link():
         assert any(not n['resolved'] for n in chain), chain
 
 
-# --- the mantis journal envelope emit (--emit-journal) ----------------------
+# --- the journal envelope emit (--emit-journal) -----------------------------
 
 
 def test_cli_emit_journal_primary_and_strict():

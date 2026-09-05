@@ -65,8 +65,8 @@ machinery, never data.
 - **choosing-tools** gains one registration row so dispatch shortlists the
   discipline at experiment-shaped task starts; negative space keeps it apart from
   `fathom-eval` (which owns "run the matrix").
-- **mantis journal ingestion** — `render.py` emits the update/provenance block in
-  the mantis journal-envelope shape; the record YAML is a tolerated superset. The
+- **journal ingestion** — `render.py` emits the update/provenance block in the
+  journal-envelope shape sealore parses; the record YAML is a tolerated superset. The
   spec verifies the ingestion parser tolerates the extra keys, and falls back to a
   strict envelope that links to the record if it does not — the standing
   journal-contract constraint (silent field / enum / required failure modes).
@@ -125,7 +125,8 @@ machinery, never data.
 - **Renderer server / MkDocs / tracking DB** — rejected: tools die (Model Card
   Toolkit archived, Neptune sunset); a flat file plus one script survives.
 - **Ship the comprehension spawner inside the plugin** — rejected: it would import
-  local gitignored, key-from-mantis tooling and break on any other install; the
+  local gitignored tooling whose key lives in the mantis-research-runner checkout, and
+  break on any other install; the
   contract ships in the validator, the automation binds role-generically.
 
 ## Consequences

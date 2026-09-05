@@ -1,17 +1,17 @@
-"""Parser-tolerance fixture for the mantis journal envelope (spec section 5, Q8).
+"""Parser-tolerance fixture for the sealore journal envelope (spec section 5, Q8).
 
 render.py emits a record's belief-update as a journaling-sessions envelope carrying the
 provenance as EXTRA header fields -- a SUPERSET of the required keys. This is only safe
-if the mantis ingestion parser tolerates unknown keys (ignores them rather than dropping
+if sealore's ingestion parser tolerates unknown keys (ignores them rather than dropping
 the entry), because field / enum / required-key mismatches fail SILENTLY in that pipeline.
 
 This module tests that tolerance two ways, and PRINTS which one ran:
 
-  * REAL-PARSER mode -- if mantis.ingestion.journal_v2 is importable (set MANTIS_SRC to
-    the mantis `src` dir and have its deps installed), the emitted superset envelope is
+  * REAL-PARSER mode -- if sealore.ingestion.journal_v2 is importable (set SEALORE_SRC
+    to sealore's `src` dir and have its deps installed), the emitted superset envelope is
     parsed by the real JournalParserV2 and must yield exactly one fragment, zero skipped.
   * DOCUMENTED-CONTRACT mode (the portable default under `--with pyyaml`, where the
-    mantis package and its structlog dependency are absent) -- the envelope is checked
+    sealore package and its structlog dependency are absent) -- the envelope is checked
     against the documented contract: the same header regex the real parser uses, the
     required-key set, the origin enum, and the type enum from the journaling-sessions
     `references/envelope-schema.json`. The extra provenance keys prove it is a superset.
@@ -26,9 +26,7 @@ from __future__ import annotations
 try:
     import yaml
 except ImportError:  # pragma: no cover - exercised only on a broken toolchain
-    print(
-        'FAIL: PyYAML is required for the mantis-envelope fixture (mechanism spine must not skip)'
-    )
+    print('FAIL: PyYAML is required for the envelope fixture (mechanism spine must not skip)')
     raise SystemExit(1) from None
 
 import json
@@ -55,7 +53,7 @@ ENVELOPE_SCHEMA = (
 sys.path.insert(0, str(EXAMPLE_DIR))
 import finalize  # noqa: E402 - path inserted just above
 
-# The exact header-line regex both real mantis parsers use (journal.py / journal_v2.py).
+# The exact header-line regex the real parser uses (sealore/ingestion/journal_v2.py).
 _HEADER_FIELD = re.compile(r'^([a-z_][a-z_0-9]*)\s*:\s*(.*?)$', re.MULTILINE)
 _JOURNAL_ORIGINS = {'chat', 'code', 'meeting', 'reading'}
 
@@ -79,12 +77,13 @@ def _documented_enums() -> tuple[set[str], set[str]]:
 
 
 def _try_real_parser():
-    src = os.environ.get('MANTIS_SRC')
+    src = os.environ.get('SEALORE_SRC')
     if src and Path(src).is_dir() and src not in sys.path:
         sys.path.insert(0, src)
-    # Any import failure (mantis absent, structlog absent, ...) -> documented-contract mode.
+    # Any import failure (sealore absent, structlog absent, ...) -> documented-contract
+    # mode.
     try:
-        from mantis.ingestion.journal_v2 import JournalParserV2
+        from sealore.ingestion.journal_v2 import JournalParserV2
     except Exception:
         return None
     return JournalParserV2
@@ -95,15 +94,15 @@ def test_primary_envelope_is_a_tolerated_superset():
     envelope = render.journal_envelope(record, record_ref='record.yaml')
     headers = _split_headers(envelope)
 
-    # The seven-field required set (v1 union) is present and non-blank -> a tolerant
-    # parser has everything it needs.
-    for key in render._MANTIS_REQUIRED:
+    # The seven-field required set (the v1 union, a superset of what v2 asks) is present
+    # and non-blank -> a tolerant parser has everything it needs.
+    for key in render._ENVELOPE_REQUIRED:
         assert headers.get(key), (key, headers)
     assert headers['origin'] in _JOURNAL_ORIGINS, headers['origin']
 
     # It is a SUPERSET: it carries provenance keys beyond the required set. These are
-    # exactly the keys a strict additionalProperties parser would reject (test_mantis_fallback).
-    extras = set(headers) - set(render._MANTIS_REQUIRED)
+    # exactly the keys a strict additionalProperties parser would reject (test_sealore_fallback).
+    extras = set(headers) - set(render._ENVELOPE_REQUIRED)
     assert {'experiment', 'tier', 'record_ref', 'record_sha256'} <= extras, extras
 
     parser = _try_real_parser()
@@ -114,13 +113,13 @@ def test_primary_envelope_is_a_tolerated_superset():
             result = parser().parse(p)
         assert len(result.fragments) == 1, (result.fragments, result.skipped)
         assert result.skipped == {}, result.skipped
-        print('mode: REAL-PARSER (mantis.ingestion.journal_v2 imported)')
+        print('mode: REAL-PARSER (sealore.ingestion.journal_v2 imported)')
     else:
         type_enum, required = _documented_enums()
         assert headers['type'] in type_enum, headers['type']
         # The documented required set is a subset of what the envelope carries.
         assert required <= set(headers), (required, set(headers))
-        print('mode: DOCUMENTED-CONTRACT (envelope-schema.json; mantis parser not importable)')
+        print('mode: DOCUMENTED-CONTRACT (envelope-schema.json; sealore parser not importable)')
 
 
 def test_envelope_is_deterministic():
@@ -154,4 +153,4 @@ if __name__ == '__main__':
     if failed:
         print(f'{failed} test(s) failed')
         sys.exit(1)
-    print('ok: all mantis-envelope tests passed')
+    print('ok: all sealore-envelope tests passed')

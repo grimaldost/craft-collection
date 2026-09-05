@@ -23,7 +23,7 @@ it must never do.
 ```yaml
 target_store:                       # optional; absent ⇒ generic behavior, unchanged
   author: user:grimaldo-stanzani    # canonical author id for this store — use verbatim
-  areas: [mantis_engineering, data_tooling]   # existing area vocabulary to REUSE
+  areas: [platform_engineering, data_tooling] # existing area vocabulary to REUSE
   allowed_types:   [decision, finding, observation, tradeoff, hypothesis, contradiction, connection, pattern, anti_pattern]  # optional — the enum the store strict-parses
   allowed_origins: [chat, code, meeting, reading]          # optional
   required_fields: [type, author, timestamp, area, language, origin, session]  # optional
@@ -62,8 +62,8 @@ is the default and must stay byte-for-byte unchanged.
 ## Example — an entry written *with* the profile above
 
 Note the bound `author` (`user:grimaldo-stanzani`, not a placeholder), an `area` drawn
-from the profile's vocabulary (`mantis_engineering`, not the generic
-`platform_engineering` example), and `validated: true` alongside the in-prose
+from the profile's vocabulary (`platform_engineering`, not a freshly minted one),
+and `validated: true` alongside the in-prose
 VALIDATED marker:
 
 ```
@@ -71,21 +71,21 @@ VALIDATED marker:
 type: DECISION
 author: user:grimaldo-stanzani
 timestamp: 2026-06-06T18:20:00Z
-area: mantis_engineering
+area: platform_engineering
 language: en
 origin: chat
 visibility: private
 session: journal-envelope-store-binding
 domains: memory_systems, ingestion, schema_design
-entities: mantis, journaling-sessions
+entities: sealore, journaling-sessions
 confidence: 0.85
 validated: true
 summary: Bind the journal envelope's author/area to the target store's existing vocabulary, because consolidation is author+area-scoped and a novel area silently orphans the entry.
 --- CONTENT ---
-Decided that when journaling into mantis, `area` must be drawn from mantis's existing
-area vocabulary (here `mantis_engineering`) rather than the skill's generic
-`platform_engineering` example. The reason is concrete: mantis runs consolidation
-author+area-scoped, so an entry filed under a novel area ingests cleanly but is never
+Decided that when journaling into sealore, `area` must be drawn from sealore's
+existing area vocabulary (here `platform_engineering`) rather than one minted for the
+session. The reason is concrete: sealore runs consolidation author+area-scoped, so an
+entry filed under a novel area ingests cleanly but is never
 seen by a consolidation pass over the real corpus — it is silently orphaned from the
 cluster it belongs to. Rejected letting the skill mint a fresh area per session, which
 maximises orphaning. VALIDATED: survived questioning on whether a generic area is

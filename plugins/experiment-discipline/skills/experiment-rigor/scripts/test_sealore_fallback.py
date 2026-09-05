@@ -1,9 +1,9 @@
-"""Strict-fallback fixture for the mantis journal envelope (spec section 5, Q8; R2 fold).
+"""Strict-fallback fixture for the sealore journal envelope (spec section 5, Q8; R2 fold).
 
 The primary envelope carries the update's provenance as EXTRA header fields, which the
-real mantis parsers tolerate (test_mantis_envelope.py). But the journaling contract warns
+sealore's real parser tolerates (test_sealore_envelope.py). But the journaling contract warns
 that a store MAY strict-parse and SILENTLY DROP an entry it does not like. So the emitter
-defines a STRICT FALLBACK: the mantis-required keys plus a `record_ref` path and a
+defines a STRICT FALLBACK: the required keys plus a `record_ref` path and a
 `record_sha256`, no provenance superset -- the provenance is not carried, it is LINKED,
 hash-pinned to the typed record.
 
@@ -26,9 +26,7 @@ from __future__ import annotations
 try:
     import yaml
 except ImportError:  # pragma: no cover - exercised only on a broken toolchain
-    print(
-        'FAIL: PyYAML is required for the mantis-fallback fixture (mechanism spine must not skip)'
-    )
+    print('FAIL: PyYAML is required for the fallback fixture (mechanism spine must not skip)')
     raise SystemExit(1) from None
 
 import re
@@ -64,14 +62,14 @@ class _StrictParserRejectionError(Exception):
 
 def _strict_parse(envelope: str, allowed_keys: set[str]) -> dict[str, str]:
     """A MOCK parser that enforces additionalProperties:false over the header keys AND the
-    mantis required-field / origin contract. Rejects (raises) on any unknown key, or on a
+    required-field / origin contract. Rejects (raises) on any unknown key, or on a
     malformed required set -- the silent-drop failure mode this fallback guards against,
     surfaced loudly here for the test."""
     headers = _headers(envelope)
     unknown = set(headers) - allowed_keys
     if unknown:
         raise _StrictParserRejectionError(f'unknown header keys: {sorted(unknown)}')
-    missing = [k for k in render._MANTIS_REQUIRED if not headers.get(k)]
+    missing = [k for k in render._ENVELOPE_REQUIRED if not headers.get(k)]
     if missing:
         raise _StrictParserRejectionError(f'missing required keys: {missing}')
     if headers['origin'] not in _JOURNAL_ORIGINS:
@@ -108,7 +106,7 @@ def test_strict_fallback_is_accepted_and_well_formed():
     # Accepted by the same strict parser that rejected the primary.
     headers = _strict_parse(strict, allowed)
     # Well-formed: the required set present, a valid journal origin, and NO provenance superset.
-    assert set(render._MANTIS_REQUIRED) <= set(headers)
+    assert set(render._ENVELOPE_REQUIRED) <= set(headers)
     assert 'experiment' not in headers and 'certainty' not in headers, headers
     assert headers['record_ref'] and headers['record_sha256']
 
@@ -135,7 +133,7 @@ def test_fallback_and_primary_differ_only_by_the_superset():
     record = _finalized_record()
     primary = _headers(render.journal_envelope(record, record_ref='record.yaml'))
     strict = _headers(render.journal_envelope(record, strict=True, record_ref='record.yaml'))
-    for key in render._MANTIS_REQUIRED:
+    for key in render._ENVELOPE_REQUIRED:
         assert primary[key] == strict[key], (key, primary.get(key), strict.get(key))
     assert set(strict) < set(primary), 'the fallback must be a strict subset of the primary keys'
 
@@ -152,4 +150,4 @@ if __name__ == '__main__':
     if failed:
         print(f'{failed} test(s) failed')
         sys.exit(1)
-    print('ok: all mantis-fallback tests passed')
+    print('ok: all sealore-fallback tests passed')
