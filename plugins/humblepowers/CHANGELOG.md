@@ -5,6 +5,46 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## [0.14.0] - 2026-09-05
+
+The mirror walk stops being an instruction a reader performs. Minor bump: a
+skill's step 6 changes what the operator must do, and two scripts join the
+plugin's surface.
+
+### Added
+
+- **`refresh-models/scripts/mirror_check.py`** — the mirror walk as a command.
+  Two arms: per registered site it checks the path still exists, that a
+  `backlog` row or a `status` accounts for it, and that its freshness `stamp`
+  equals the canonical `[meta].last_reviewed`; across the registered roots it
+  greps for `[[retired]]` patterns, which is the arm that finds a copy nobody
+  wrote down. Exit 0 clean, 1 on findings, 2 when the registry cannot be read.
+  An absent registry stays correct behaviour and is now *reported* (`mirror walk
+  SKIPPED`, naming the path it looked for) instead of leaving "nothing to walk"
+  indistinguishable from "no registry" — the state that let two sibling
+  estimators carry a superseded price for three weeks.
+- **`choosing-models/scripts/emit_lineup.py`** — prints the resolved lineup for
+  pasting into an execution artefact: a `model` line, a harness alias, or a
+  `[governance.tier_models]` block. Every emission carries two dates, so a fresh
+  emission off a stale table can be aged by the older one, and the stamp it
+  writes is the one `mirror_check.py` verifies. Thresholds are never emitted:
+  they are calibratable routing policy, not lineup.
+
+### Changed
+
+- **`refresh-models/SKILL.md` step 6 is an invocation**, and requires the
+  script's closing line in the changeset verbatim, the SKIPPED case included.
+  The skill keeps the half only it can do: deciding what each finding means in
+  its own repository. Growth is 14 words, displacing the first half of the
+  *source of truth is observable* guardrail, which restated steps 1 and 2 as a
+  rule; step 1's list of reference sources is shortened to two.
+- **`refresh-models/references/mirrors-file.md`** documents the fields the
+  script enforces: top-level `canonical`, per-site `role`
+  (`resolution-path` | `fallback` | `example` | `prose`, where
+  `resolution-path` is reported as a finding by design) and `stamp`, plus
+  `[[retired]]` and `[[exclude]]`. Records why the stamp is checked for equality
+  rather than age: two clocks let a copy certify itself fresh.
+
 ## [0.13.1] - 2026-09-05
 
 The 2026-09-05 lineup refresh: the frontier row moves to Fable 5.1, two model

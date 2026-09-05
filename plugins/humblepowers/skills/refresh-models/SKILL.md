@@ -31,11 +31,10 @@ overrides of that file are refreshed the same way, in their own location.
    It exits 1 and names the absent model when the session is running on
    something the tier data does not list — the environment tripwire, as a
    command. Then compare `models.toml` against the platform's model reference
-   (e.g. the claude-api skill's current-models table, the session environment's
-   lineup note where present, or the published models documentation via
-   WebFetch) for the drift a single id cannot show: a current model missing from
-   the table, a listed model no longer current, or `review_by` in the past. No
-   drift and not past `review_by` → report "lineup current" and stop.
+   (the claude-api skill's table, or the published models page via WebFetch) for
+   the drift a single id cannot show: a current model missing from the table, a
+   listed model no longer current, or `review_by` in the past. No drift and not
+   past `review_by` → report "lineup current" and stop.
 
 2. **Read the changes.** For each drifted entry, read the vendor's release
    notes or model documentation for what actually changed — capability tier,
@@ -57,24 +56,33 @@ overrides of that file are refreshed the same way, in their own location.
    list.
 
 5. **On approval:** apply the mechanical edits (and only explicitly approved
-   guidance edits). Stamp `last_reviewed` and advance `review_by` (quarterly
-   by default) in `models.toml`.
+   guidance edits). Stamp `last_reviewed` and advance `review_by` (quarterly by
+   default). `scripts/emit_lineup.py` then prints the block authoring pastes
+   into an artefact, carrying that stamp.
 
-6. **Walk the mirror sites.** Downstream copies of tier/model/price data are
-   registered in a bindings file — `$MODEL_MIRRORS_FILE`, else
-   `~/.claude/model-mirrors.toml` — because a plugin cannot know a given
-   stack's mirrors. Absent, ask once and proceed without the walk; never hunt
-   the filesystem. Walk each registered site, honour its `vocabulary` (a
-   family-named copy is translated, not substituted), and propose the edit in
-   that repo's own change process. Close with the grep either way: search for
-   the *outgoing* model string and report any hit as a candidate mirror.
-   Format, fields, and the rule it enforces: `references/mirrors-file.md`.
+6. **Walk the mirror sites** — run it, do not perform it:
+
+   ```bash
+   uv run --no-project -- python \
+     "${CLAUDE_PLUGIN_ROOT}/skills/refresh-models/scripts/mirror_check.py"
+   ```
+
+   It reads the bindings file (`$MODEL_MIRRORS_FILE`, else
+   `~/.claude/model-mirrors.toml`), holds each site's stamp against
+   `[meta].last_reviewed`, and greps the registered roots for `[[retired]]`
+   strings — the catch-all for a mirror nobody wrote down.
+
+   **Report its closing line verbatim, the SKIPPED case included**: an absent
+   registry is fine, but then nothing was checked, and that must never read as
+   all-clean. Then do the part only you can — decide what each finding means in
+   its own repository, honour its `vocabulary` (a family-named copy is
+   translated, not substituted), and propose the edit in that repo's process.
+   Fields and the rule the registry enforces: `references/mirrors-file.md`.
 
 ## Guardrails
 
-- *Source of truth is observable*: verify against the platform reference and
-  release notes, never infer; *all change is intentional and traceable*: a
-  reviewed diff with cited rationale, never a silent edit.
+- *All change is intentional and traceable*: a reviewed diff with cited
+  rationale, never a silent edit.
 - Threshold and tier-assignment changes without calibration evidence are
   needs-human by definition.
 - Leave the plugin `version` bump and commit to the user.
