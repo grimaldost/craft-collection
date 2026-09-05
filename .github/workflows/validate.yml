@@ -14,14 +14,15 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Full history: the experiment-rigor freeze gates reconstruct a frozen
           # pre-registration with `git show <freeze commit>:<path>`, and the RG-2x2
           # acceptance suite fails LOUD (never skips) when that object is absent. A
           # depth-1 clone is expected to fail it; the fix is depth, not a skip.
           fetch-depth: 0
-      - uses: actions/setup-python@v7
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
       - name: Install tooling
@@ -42,6 +43,22 @@ jobs:
         # PR-only: the check reads the merge-base diff against the PR's base
         # branch; a push to main has no base to diff against.
         if: github.event_name == 'pull_request'
-        run: python scripts/check_release_discipline.py --base "origin/${{ github.base_ref }}"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python scripts/check_release_discipline.py --base "origin/${BASE_REF}"
       - name: Run tests
         run: python scripts/run_tests.py
+
+  zizmor:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - name: Run zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uvx zizmor==1.30.0 --min-severity high .github/workflows
