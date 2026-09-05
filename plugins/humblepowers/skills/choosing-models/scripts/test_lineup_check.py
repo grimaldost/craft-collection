@@ -41,6 +41,25 @@ def test_dated_snapshot_and_context_variant_pass():
         assert _run([variant]) == (0, ''), variant
 
 
+def test_a_dotted_successor_is_not_a_variant_of_its_predecessor():
+    """`claude-fable-5-1` is a new model, not a snapshot of `claude-fable-5`. The
+    bare-prefix rule swallowed it, so the tripwire stayed green through a lineup
+    change (2026-09-05). Only a dated snapshot (-YYYYMMDD) or a bracketed
+    context-window variant ([1m]) is the same model as its api_string."""
+    api = {'claude-fable-5', 'claude-opus-5'}
+    alias = {'fable', 'opus'}
+    for same in ('claude-opus-5-20260115', 'claude-opus-5[1m]', 'claude-opus-5-20260115[1m]'):
+        assert lc.is_known(same, api, alias), same
+    for other in (
+        'claude-fable-5-1',
+        'claude-opus-5-1',
+        'claude-opus-5-1-20261001',
+        'claude-opus-50',
+        'claude-opus-5-turbo',
+    ):
+        assert not lc.is_known(other, api, alias), f'{other} passed as a variant'
+
+
 def test_absent_model_reddens_and_names_the_refresh_command():
     """The tripwire, made to fire on purpose. It was prose the reader had to
     perform by hand, so it fired by luck; this is the same rule as a command."""
@@ -81,6 +100,7 @@ def main() -> int:
     test_reads_the_real_tier_data()
     test_every_shipped_api_string_and_alias_passes()
     test_dated_snapshot_and_context_variant_pass()
+    test_a_dotted_successor_is_not_a_variant_of_its_predecessor()
     test_absent_model_reddens_and_names_the_refresh_command()
     test_nothing_to_check_is_not_a_finding()
     test_env_fallback()

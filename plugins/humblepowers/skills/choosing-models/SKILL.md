@@ -90,8 +90,8 @@ unaided choice rises as the decider gets dearer. So:
 ## Effort defaults
 
 Defaults, not calibrated thresholds: `high` unless a row below applies —
-mechanical, tightly scoped work runs `low`–`medium`; hard agentic or coding
-work at the strong tier runs `xhigh` where the surface exposes it; `max` only
+mechanical, tightly scoped work runs `low`–`medium`, hard agentic or coding
+work `xhigh`, both from mid up (the weak tier has no effort knob); `max` only
 where correctness dominates cost. A surface without an effort knob (the Agent
 tool today) inherits the session's setting — say so rather than pretending.
 
