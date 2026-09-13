@@ -230,6 +230,70 @@ def test_merge_skew_equal_or_unknown_is_silent():
     assert 'source' not in rows[0]['name']
 
 
+def test_multiple_installed_copies_are_named_in_the_ordinary_scan():
+    # Nine reports: several versions of one plugin coexist in the cache and the
+    # oldest can be the one serving. The version skew this scan already reports is
+    # installed-vs-SOURCE, which reads clean while two installed copies sit side by
+    # side. The inventory is what a session reads at the start; an on-demand
+    # command is not.
+    from scan_toolkit import _multi_copy_caveats
+
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d) / 'cache' / 'craft-collection' / 'session-workflow'
+        for v in ('0.21.0', '0.23.1', '0.23.2'):
+            (base / v).mkdir(parents=True)
+        rows = [
+            {
+                'plugin': 'session-workflow',
+                'version': '0.23.2',
+                'installPath': str(base / '0.23.2'),
+            }
+        ]
+        caveats = _multi_copy_caveats(rows)
+    assert len(caveats) == 1
+    assert 'session-workflow' in caveats[0]
+    assert '0.21.0' in caveats[0]
+    assert caveats[0].isascii()
+
+
+def test_a_single_copy_or_an_unresolvable_path_produces_no_caveat():
+    # Absence of evidence is not skew, the same reading the installed-vs-source
+    # caveat already takes: a lone copy and a checkout install both say nothing.
+    from scan_toolkit import _multi_copy_caveats
+
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d) / 'cache' / 'craft-collection' / 'humblepowers'
+        (base / '0.14.0').mkdir(parents=True)
+        (Path(d) / 'checkout' / 'plugins' / 'humblepowers').mkdir(parents=True)
+        (Path(d) / 'checkout' / 'plugins' / 'session-workflow').mkdir(parents=True)
+        assert (
+            _multi_copy_caveats(
+                [
+                    {
+                        'plugin': 'humblepowers',
+                        'version': '0.14.0',
+                        'installPath': str(base / '0.14.0'),
+                    }
+                ]
+            )
+            == []
+        )
+        # a --plugin-dir checkout: the parent holds sibling PLUGINS, not versions
+        assert (
+            _multi_copy_caveats(
+                [
+                    {
+                        'plugin': 'humblepowers',
+                        'version': '0.14.0',
+                        'installPath': str(Path(d) / 'checkout' / 'plugins' / 'humblepowers'),
+                    }
+                ]
+            )
+            == []
+        )
+        assert _multi_copy_caveats([{'plugin': 'x', 'version': '1.0.0'}]) == []
+
+
 def test_read_frontmatter_handles_folded_scalar():
     # A `description: >` folded block must be captured in full, not truncated to ">".
     with tempfile.TemporaryDirectory() as d:
@@ -632,6 +696,8 @@ if __name__ == '__main__':
     test_source_manifest_version_missing_is_none()
     test_merge_skew_annotates_stale_install()
     test_merge_skew_equal_or_unknown_is_silent()
+    test_multiple_installed_copies_are_named_in_the_ordinary_scan()
+    test_a_single_copy_or_an_unresolvable_path_produces_no_caveat()
     test_enumerate_plugin_components_walks_install_path()
     test_enumerate_plugin_components_missing_path_is_empty()
     test_read_frontmatter_handles_folded_scalar()

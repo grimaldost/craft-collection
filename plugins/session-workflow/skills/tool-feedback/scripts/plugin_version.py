@@ -74,6 +74,43 @@ def resolve_entry(registry: dict, plugin: str) -> dict | None:
     return None
 
 
+def _version_key(name: str) -> tuple:
+    """Sort key for a version directory name. '0.9.1' must sort below '0.10.0',
+    which a plain string sort gets backwards; anything unparseable sorts last
+    under its own name rather than raising."""
+    parts = name.split('.')
+    try:
+        return (0, tuple(int(p) for p in parts))
+    except ValueError:
+        return (1, name)
+
+
+def installed_versions(install_path: str, version: str) -> list[str]:
+    """Every version of this plugin present beside the resolved install path,
+    oldest first — or [] when the path is not a cache install at all.
+
+    Nine reports record two to four copies of one plugin in one directory with
+    the OLDEST serving: a session that loaded 0.21.0 while 0.23.1 sat beside it
+    ran on doctrine two releases old, and the missing rule was causally
+    responsible for a real defect in that session's anchor. The install path's
+    last segment IS the version (that is what makes `field_line`'s provenance
+    work), so its parent is the directory holding every copy — one glob of a
+    path this script already had in hand.
+
+    The last-segment check is the guard against over-reach: a `--plugin-dir`
+    checkout resolves to `.../plugins/<name>`, whose parent holds sibling
+    PLUGINS, and enumerating those as versions of this one would be a confident
+    wrong answer. Absence of the cache layout is not evidence of a single copy,
+    so that case reports nothing at all."""
+    if not install_path or Path(install_path).name != version:
+        return []
+    try:
+        names = [p.name for p in Path(install_path).parent.iterdir() if p.is_dir()]
+    except OSError:
+        return []
+    return sorted(names, key=_version_key)
+
+
 def tree_version(repo_root: Path, plugin: str) -> str | None:
     """`plugins/<plugin>/.claude-plugin/plugin.json`'s version, or None."""
     manifest = repo_root / 'plugins' / plugin / '.claude-plugin' / 'plugin.json'
@@ -85,15 +122,28 @@ def tree_version(repo_root: Path, plugin: str) -> str | None:
     return str(version) if version else None
 
 
-def field_line(name: str, version: str, install_path: str, tree: str | None) -> str:
+def field_line(
+    name: str,
+    version: str,
+    install_path: str,
+    tree: str | None,
+    copies: list[str] | None = None,
+) -> str:
     """The report's `Tool/version` value, carrying its own provenance.
 
     The install path ends in the version, so the number and the evidence for it
     are one token: a line that was pasted was read. When a checkout disagrees,
     the disagreement is rendered here rather than left to the author, because
-    the author is exactly who did not notice it.
+    the author is exactly who did not notice it. Several copies installed side
+    by side are rendered the same way and for the same reason: the registry
+    names one of them and any of them can be the one that served.
     """
     line = f'{name} {version} (installed cache: {install_path})'
+    if copies and len(copies) > 1:
+        line += (
+            f'; {len(copies)} copies installed there ({", ".join(copies)}) - '
+            'an older one can serve, so say which you exercised'
+        )
     if tree is None:
         return line
     if tree == version:
@@ -197,8 +247,10 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+    copies = installed_versions(entry['install_path'], entry['version'])
     print(
-        f'- **Tool/version:** {field_line(entry["name"], entry["version"], entry["install_path"], tree)}'
+        '- **Tool/version:** '
+        + field_line(entry['name'], entry['version'], entry['install_path'], tree, copies)
     )
     if args.tree:
         print(checkout_currency(Path(args.tree)))
