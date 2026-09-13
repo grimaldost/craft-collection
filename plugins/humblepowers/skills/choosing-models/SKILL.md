@@ -38,7 +38,10 @@ unaided choice rises as the decider gets dearer. So:
 
 - **A strong-tier session routing a single task skips the rubric.** It lands
   on the tier it would have chosen unaided, at the highest price of any
-  deciding context — a break-even no correction rate reaches.
+  deciding context — a break-even no correction rate reaches. **Two or more
+  agents dispatched in one decision are a batch, and this exception does not
+  reach a batch**: twenty un-routed dispatches took their alibi from this
+  bullet while the work ran in lots of 4, 5, 6, 13 and 34.
 - **Score batches, and score them at the weak tier.** The fixed cost amortises
   there, and that is the only deciding context where the scoring changed any
   decision at all. It is also the tier where the rubric was seen misapplied, so
@@ -87,43 +90,12 @@ unaided choice rises as the decider gets dearer. So:
   models attempting more ambitious strategies can be *less* reliable on
   long-horizon irreversible work.
 
-## Effort defaults
+## Emission, effort, and staleness
 
-Defaults, not calibrated thresholds: `high` unless a row below applies —
-mechanical, tightly scoped work runs `low`–`medium`, hard agentic or coding
-work `xhigh`, both from mid up (the weak tier has no effort knob); `max` only
-where correctness dominates cost. A surface without an effort knob (the Agent
-tool today) inherits the session's setting — say so rather than pretending.
-
-## Emission surfaces
-
-Tier names are not shared across surfaces — emit each surface's own words:
-
-| Surface | Emits | Vocabulary |
-|---|---|---|
-| series-file governance (e.g. convoy) | `tier` or `model`, plus `effort` | `weak/mid/strong/frontier` or API string |
-| Agent-tool spawn | `model` | family alias (`haiku/sonnet/opus/fable`) |
-| workflow `agent()` | `model` + `effort` | family alias + effort level |
-| planning-tool per-PR tier (e.g. keel) | tier per task | family names — translate, don't assume |
-| direct API tooling | model id | undated API string |
-
-A workflow `agent()` with no `model` inherits the session model (possibly
-frontier); no engine-level cap exists — under a tier cap, every call carries
-an explicit `model`.
-
-While an engine is series-global (no per-task keys): score every task anyway,
-set the series tier to the modal tier, and consider splitting at a tier
-boundary when the spread is two or more tiers — splitting buys tier fit at
-coordination cost; sometimes accepting the overpay is right.
-
-## Staleness tripwires
-
-- **Age (always fires):** `models.toml` carries `review_by`; past that date,
-  offer `/refresh-models` before trusting the table.
-- **Environment (partial):** `scripts/lineup_check.py <model id>` exits 1 when
-  the session's own model is not in `models.toml` — run it rather than checking
-  by hand. It cannot see a model the session doesn't know about; the age check
-  is for that.
+Effort defaults, each surface's own tier vocabulary, and the two tripwires that
+say when the table has stopped being trustworthy:
+[references/emission-and-effort.md](references/emission-and-effort.md). Read it
+when writing a tier out, not while deciding one.
 
 ## Data and overrides
 

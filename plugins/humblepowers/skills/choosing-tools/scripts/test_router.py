@@ -322,6 +322,59 @@ def test_verification_holdout_precision_on_near_misses():
     assert hits >= 1, 'row fires on no held-out positive - the precision check is vacuous'
 
 
+MODELS_ID = 'humblepowers:choosing-models'
+
+
+def test_choosing_models_is_routed_on_spawn_vocabulary():
+    """The measured hole: `choosing-models` took ZERO invocations across a 40-hour,
+    139-subagent programme, against a written owner order transcribed three times.
+    It had no row here at all, so the one lexical mechanism this plugin ships could
+    not name it — while `\\bsubagents?\\b` appeared in the rules exactly once, as a
+    DENIAL on context-handoff. The spawn vocabulary removed a candidate and added
+    none."""
+    rules = _rules()
+    assert MODELS_ID in _routed_ids(rules)
+    spawn_prompts = [
+        "I'm spawning three subagents for this sweep - which model should each get?",
+        'Fan out this review across parallel agents and price it.',
+        'Set the model and effort for the workflow agents in this pipeline.',
+    ]
+    for prompt in spawn_prompts:
+        assert MODELS_ID in _fired_ids(prompt, rules), prompt
+
+
+def test_the_context_handoff_denial_on_subagent_still_holds():
+    """`\\bsubagents?\\b` is a negative pattern on context-handoff — in-session
+    delegation is the Task tool's job, not a handoff — and a sealed holdout case
+    protects that denial. Adding the same token as a POSITIVE on a different skill
+    must not weaken it: denials are resolved per skill."""
+    rules = _rules()
+    handoff = 'session-workflow:context-handoff'
+    for prompt in (
+        'Delegate the test-writing to a subagent and bring the results straight back.',
+        'Kick off three subagents to refactor these modules at once.',
+    ):
+        assert handoff not in _fired_ids(prompt, rules), prompt
+
+
+def test_choosing_models_holdout_precision_on_near_misses():
+    """The held-out near-misses are all model FACTS (price, context window) and
+    inventory questions — the two neighbours this skill's description disclaims.
+    A row that cannot tell "which tier for this spawn" from "what does Opus cost"
+    would fire on every conversation that mentions a model name."""
+    holdout = TRIGGER_DIR / 'holdout' / 'choosing-models.json'
+    if not holdout.exists():
+        return  # dataset optional in a partial checkout
+    rules = _rules()
+    cases = json.loads(holdout.read_text(encoding='utf-8'))
+    neg = [c['query'] for c in cases if not c['should_trigger']]
+    pos = [c['query'] for c in cases if c['should_trigger']]
+    false_fires = [q for q in neg if MODELS_ID in _fired_ids(q, rules)]
+    hits = sum(1 for q in pos if MODELS_ID in _fired_ids(q, rules))
+    assert not false_fires, f'held-out near-miss fired: {false_fires}'
+    assert hits >= 1, 'row fires on no held-out positive - the precision check is vacuous'
+
+
 def test_hint_renders_the_activation_test_not_the_matched_words():
     # The measured-weaker output shape named the matched token, which the matched
     # skill's own description explicitly does not rest on -- nothing to decide
