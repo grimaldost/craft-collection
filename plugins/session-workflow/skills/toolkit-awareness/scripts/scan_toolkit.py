@@ -425,6 +425,45 @@ def _merge_skew(rows: list[dict], locations: dict[str, str]) -> list[str]:
     return []
 
 
+def _version_sort_key(name: str) -> tuple:
+    """'0.9.1' must sort below '0.10.0'; anything unparseable sorts last."""
+    try:
+        return (0, tuple(int(p) for p in name.split('.')))
+    except ValueError:
+        return (1, name)
+
+
+def _multi_copy_caveats(rows: list[dict]) -> list[str]:
+    """One caveat per plugin with more than one copy in its install directory.
+
+    The skew beside `_merge_skew`'s: installed-vs-source reads clean while two
+    INSTALLED copies sit side by side and the session may be served by the
+    older. Nine reports, including four unsupervised hours run on
+    two-release-old doctrine. An install path's last segment is the version, so
+    its parent holds every copy; when the last segment is NOT the version the
+    install is a checkout rather than a cache entry, whose parent holds sibling
+    plugins — say nothing there rather than call them versions."""
+    out: list[str] = []
+    for r in rows:
+        path, version = r.get('installPath'), r.get('version')
+        if not path or not version or Path(path).name != str(version):
+            continue
+        try:
+            copies = sorted(
+                (p.name for p in Path(path).parent.iterdir() if p.is_dir()),
+                key=_version_sort_key,
+            )
+        except OSError:
+            continue
+        if len(copies) > 1:
+            out.append(
+                f'{r.get("plugin")}: {len(copies)} copies installed '
+                f'({", ".join(copies)}); the registry names {version}, and an older '
+                'copy can be the one a session is served -- remove the stale ones'
+            )
+    return out
+
+
 def _git_env() -> dict[str, str]:
     """The environment minus every GIT_* variable. A git hook exports GIT_DIR and
     friends, and GIT_DIR takes precedence over `-C`, so a child git inherits the
@@ -541,6 +580,9 @@ def scan(roots: list[Path]) -> dict[str, list[dict]]:
         locations = _marketplace_locations()
         result['_caveats'].extend(_merge_skew(plugins, locations))
         result['_caveats'].extend(_stale_checkout_caveats(locations))
+        # And the skew beside both: several INSTALLED copies of one plugin, where
+        # the registry names one and an older one can be what actually serves.
+        result['_caveats'].extend(_multi_copy_caveats(plugins))
         # Version skew can't see a lag when the install carries no plugin.json; a
         # skill-directory diff catches skills present in source but missing locally.
         result['_caveats'].extend(_skill_list_skew(plugins, locations))

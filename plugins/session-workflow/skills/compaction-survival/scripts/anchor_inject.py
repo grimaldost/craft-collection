@@ -11,9 +11,10 @@ docs/design/2026-07-04-memory-suite-research.md).
 Lifecycle gates (T22a hardening):
 - FULL tier (anchor updated within STALE_AFTER_S): the HEAD — content above
   the `<!-- anchor:tail -->` marker; whole file when marker-less. Over budget,
-  the HEAD is spent top-down on whole sections and the dropped ones are named:
-  document order is the drop order, so the cut is a stated policy the author
-  controls rather than a byte offset that once landed mid "Resume steps".
+  the cursor section is reserved first and the rest of the HEAD is spent
+  top-down on whole sections, with the dropped ones named: document order is the
+  drop order for everything except the one section a resuming session cannot do
+  without. Measure a draft against that budget with `--head-fit <anchor>`.
 - POINTER tier (older): path + title + age + the cursor the anchor still
   asserts + a confirm-to-expand line + the close command. A dead track costs a
   paragraph, never 8K chars, until a session confirms it — and it is never
@@ -48,6 +49,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 ENV_GATE = 'SESSION_WORKFLOW_ANCHOR_HOOKS'
 MAX_CONTEXT_CHARS = 8_000
@@ -58,7 +60,8 @@ MAX_NAMED_OPEN = 5  # cap the multi-track warning's name list; count the rest
 MAX_NAMED_DROPPED = 6  # cap the dropped-section name list the same way
 # A HEAD section boundary. Order is priority: the budget is spent top-down and
 # the first section that does not fit ends the injection, so what an author
-# writes first is what survives a cut.
+# writes first is what survives a cut — the cursor excepted, which `fit_head`
+# reserves before spending the rest.
 HEADING_RE = re.compile(r'^#{1,6}\s+(\S.*)$')
 # anchor/v1 two-tier structure: content above this marker line is the live HEAD
 # (mission, cursor, invariants, last-known-good, resume steps) and is injected;
@@ -97,6 +100,9 @@ _TERMINAL_STATUS = re.compile(
     r'^status\s*:?\s*(?:closed|done|complete|completed|landed|shipped|merged)'
     r'(?:\s+(?:on|to)\s+\w+)?[.\s]*$'
 )
+# The frontmatter line `/anchor` writes on every snapshot; one of the two signals
+# that a `*.md` in anchors/ is an anchor rather than a document parked there.
+_FORMAT_LINE = re.compile(r'^\s*format\s*:\s*anchor/', re.I)
 
 
 def is_content_terminal(text: str) -> bool:
@@ -121,14 +127,39 @@ def find_open_anchors(anchors_dir: Path) -> list[Path]:
     return sorted(candidates, key=_mtime, reverse=True)
 
 
+def is_anchor_shaped(text: str) -> bool:
+    """True when a file in `anchors/` actually looks like one: the
+    `format: anchor/...` frontmatter `/anchor` writes, or a cursor section.
+
+    A 79 KB design document dropped into the directory was selected purely
+    because it was the newest `*.md`, and the whole injection budget went to a
+    file with no cursor in it. Two signals rather than one because the v0
+    anchors in the wild carry no `format:` line, and a predicate that silenced
+    them would silence exactly the long-running tracks this protocol is for."""
+    head, _ = split_head(text)
+    lines = head.splitlines()
+    if lines and lines[0].strip() == '---':
+        for line in lines[1:]:
+            if line.strip() == '---':
+                break
+            if _FORMAT_LINE.match(line):
+                return True
+    return any(_is_cursor_section(name) for name, _ in split_sections(head))
+
+
 def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
     """Choose the anchor to inject plus the others to warn about. The primary is the
-    newest genuinely-active anchor; a content-terminal-but-unrenamed anchor is
-    de-ranked and becomes primary only when nothing active remains (the recovery
-    path never drops to zero bytes). `open_anchors` is newest-first; `others` keeps
-    that order minus the primary."""
-    active = [a for a in open_anchors if not is_content_terminal(_read(a))]
-    primary = active[0] if active else open_anchors[0]
+    newest genuinely-active anchor; a file that is not shaped like an anchor at all,
+    and a content-terminal-but-unrenamed anchor, are de-ranked and become primary
+    only when nothing better remains (the recovery path never drops to zero bytes).
+    `open_anchors` is newest-first; the sort is stable, so recency still decides
+    within a rank, and `others` keeps that order minus the primary."""
+
+    def rank(a: Path) -> tuple[bool, bool]:
+        text = _read(a)
+        return (not is_anchor_shaped(text), is_content_terminal(text))
+
+    primary = sorted(open_anchors, key=rank)[0]
     return primary, [a for a in open_anchors if a != primary]
 
 
@@ -183,42 +214,91 @@ def split_sections(head: str) -> list[tuple[str, str]]:
     return sections
 
 
-def fit_head(head: str) -> tuple[str, list[str], bool]:
-    """Spend the injection budget top-down on whole sections; return
-    (kept_text, dropped_section_names, was_byte_cut).
+class HeadFit(NamedTuple):
+    """What `fit_head` decided: the text to inject, the sections it could not
+    afford, whether it had to cut inside one, and the cursor section it reserved
+    ('' when the HEAD names none). A named tuple rather than a bare triple
+    because the drop line has to SAY the cursor was held back: a manifest that
+    reads the same whether or not the reserve happened is the manifest the
+    operator already learned to distrust."""
 
-    Document order IS the drop order: the first section that does not fit ends
-    the injection and everything after it is dropped, so a HEAD written
-    worst-loss-first degrades predictably instead of being cut mid-sentence —
-    the failure this replaces cut a real anchor inside "Resume steps", the one
-    section a cold start reads first.
+    text: str
+    dropped: list[str]
+    byte_cut: bool
+    cursor_reserved: str
 
-    The byte cut survives as the floor, for the two cases sections cannot help:
-    an anchor with no headings to cut on, and a first section that alone
-    overruns. Injecting nothing on the recovery path is the protocol's cardinal
-    failure, so a cut always beats silence — and the two signals stay distinct,
-    because "I dropped History" and "I cut you off mid-word" are different
-    things to tell a reader."""
+
+def _is_cursor_section(name: str) -> bool:
+    """The one matcher for "this heading is the cursor", shared by the reserve
+    and by `anchor_cursor` so the two can never disagree about which section
+    the protocol's load-bearing one is."""
+    return 'cursor' in name.lower()
+
+
+def fit_head(head: str) -> HeadFit:
+    """Reserve the cursor, then spend the rest of the injection budget top-down
+    on whole sections.
+
+    Document order is still the drop order for everything else: the first
+    section that does not fit ends the injection and everything after it is
+    dropped, so a HEAD written worst-loss-first degrades predictably instead of
+    being cut mid-sentence.
+
+    The cursor is the exception, and it is the reason this function changed. Pure
+    document order lost the cursor on four separate nights AFTER the survival-order
+    doctrine and the drop manifest shipped, because the natural anchor grows
+    chronologically and an author who obeys the order still writes a standing-
+    directives block above the cursor. Naming a section in a manifest does not
+    return it to the reader; the cursor is the one section a resuming session
+    cannot do without, so it is taken off the top of the budget and re-inserted in
+    its own document position — the reserve changes what survives, not where it
+    appears.
+
+    The byte cut survives as the floor, for the cases sections cannot help: an
+    anchor with no headings to cut on, a first section that alone overruns, and a
+    cursor that alone overruns (kept and cut, because a bloated cursor still beats
+    no cursor). Injecting nothing on the recovery path is the protocol's cardinal
+    failure, so a cut always beats silence — and the signals stay distinct, because
+    "I dropped History", "I held the cursor back" and "I cut you off mid-word" are
+    different things to tell a reader."""
     if len(head) <= MAX_CONTEXT_CHARS:
-        return head, [], False
+        return HeadFit(head, [], False, '')
     sections = split_sections(head)
     if len(sections) < 2:
-        return head[:MAX_CONTEXT_CHARS], [], True
-    kept: list[str] = []
-    dropped: list[str] = []
-    used = 0
-    for name, block in sections:
-        cost = len(block) + 1
-        if dropped or used + cost > MAX_CONTEXT_CHARS:
-            dropped.append(name or '(preamble)')
+        return HeadFit(head[:MAX_CONTEXT_CHARS], [], True, '')
+    cursor_idx = next((i for i, (name, _) in enumerate(sections) if _is_cursor_section(name)), None)
+    if cursor_idx is not None:
+        cursor_name, cursor_block = sections[cursor_idx]
+        if len(cursor_block) + 1 > MAX_CONTEXT_CHARS:
+            others = [n or '(preamble)' for i, (n, _) in enumerate(sections) if i != cursor_idx]
+            return HeadFit(cursor_block[:MAX_CONTEXT_CHARS], others, True, cursor_name)
+    return _spend_budget(head, sections, cursor_idx)
+
+
+def _spend_budget(head: str, sections: list[tuple[str, str]], cursor_idx: int | None) -> HeadFit:
+    """Fill the budget in document order, with the cursor section (if any) already
+    paid for. Kept sections are re-joined in document order, so the injected HEAD
+    still reads as the file it came from."""
+    reserved = 0 if cursor_idx is None else len(sections[cursor_idx][1]) + 1
+    kept: set[int] = set() if cursor_idx is None else {cursor_idx}
+    used = reserved
+    overran = False
+    for i, (_name, block) in enumerate(sections):
+        if i == cursor_idx:
             continue
-        kept.append(block)
+        cost = len(block) + 1
+        if overran or used + cost > MAX_CONTEXT_CHARS:
+            overran = True  # order is a priority, not a packing problem
+            continue
+        kept.add(i)
         used += cost
+    dropped = [name or '(preamble)' for i, (name, _) in enumerate(sections) if i not in kept]
     if not kept:
-        # The first section alone overruns. Cut inside it, and still name the
-        # sections beyond it that were lost whole.
-        return head[:MAX_CONTEXT_CHARS], dropped[1:], True
-    return '\n'.join(kept), dropped, False
+        # No cursor to reserve and the first section alone overruns. Cut inside
+        # it, and still name the sections beyond it that were lost whole.
+        return HeadFit(head[:MAX_CONTEXT_CHARS], dropped[1:], True, '')
+    text = '\n'.join(sections[i][1] for i in sorted(kept))
+    return HeadFit(text, dropped, False, '' if cursor_idx is None else sections[cursor_idx][0])
 
 
 def anchor_cursor(text: str) -> str:
@@ -234,6 +314,28 @@ def anchor_cursor(text: str) -> str:
                 if stripped:
                     return stripped[:160]
     return ''
+
+
+def head_fit_report(anchor: Path) -> list[str]:
+    """What the injection would do to this anchor at its current size: head bytes,
+    the budget, the cursor section reserved, and the sections that would drop.
+
+    The hook computes exactly this on every injection and the author had no way to
+    ask for it — so the byte counter was hand-written three times in one session
+    and a head still went out 118 bytes over budget. Measuring the HEAD, not the
+    file, is the point: the TAIL stays on disk and shrinking it buys nothing."""
+    head, has_tail = split_head(_read(anchor))
+    fit = fit_head(head)
+    over = len(head) - MAX_CONTEXT_CHARS
+    verdict = f'OVER by {over}' if over > 0 else f'headroom {-over}'
+    lines = [f'head: {len(head)} bytes / budget {MAX_CONTEXT_CHARS}  {verdict}']
+    if has_tail:
+        lines.append('tail: below the marker, on disk, not injected')
+    lines.append(f'cursor reserved: {fit.cursor_reserved or "(none - this HEAD names no cursor)"}')
+    lines.append(f'would drop: {", ".join(fit.dropped) if fit.dropped else "(nothing)"}')
+    if fit.byte_cut:
+        lines.append('and would still be cut mid-section: one section alone overruns the budget')
+    return lines
 
 
 def list_dormant(anchors_dir: Path, min_age_s: float = DORMANT_AFTER_S) -> list[str]:
@@ -271,6 +373,14 @@ def _other_open_warning(other_open: list[Path] | None) -> str:
         'Concurrent tracks share this cwd; if this anchor is not your '
         "track's, read the right one before acting."
     )
+    strays = [f for f in other_open if not is_anchor_shaped(_read(f))]
+    if strays:
+        names = ', '.join(f.name for f in strays[:MAX_NAMED_OPEN])
+        more = len(strays) - MAX_NAMED_OPEN
+        warn += (
+            f' {len(strays)} of them read as "not an anchor" (no format: anchor/... line and '
+            f'no cursor section): {names}' + (f' (+{more} more)' if more > 0 else '') + '.'
+        )
     terminal = [f for f in other_open if is_content_terminal(_read(f))]
     if terminal:
         cmds = '; '.join(f'mv {f.name} {f.stem}.closed.md' for f in terminal[:MAX_NAMED_OPEN])
@@ -311,8 +421,10 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
     Race-safe read: an anchor renamed/deleted after selection (a concurrent
     session closing it) degrades to a path-only context — never a raise that
     would skip both the injection AND the failure telemetry."""
-    text, has_tail = split_head(_read(anchor))
-    text, dropped, truncated = fit_head(text)
+    raw = _read(anchor)
+    text, has_tail = split_head(raw)
+    fit = fit_head(text)
+    text = fit.text
 
     header = [
         '<control-anchor>',
@@ -321,6 +433,15 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
         'real state (git log, files on disk), then continue from its cursor. '
         'Treat it as the source of truth for run state over any summary above.',
     ]
+    if not is_anchor_shaped(raw):
+        # It was the best candidate in the directory, so it is injected - but say
+        # that it does not read as an anchor, rather than letting a design document
+        # arrive wearing the anchor's authority.
+        header.append(
+            'CAUTION - this file reads as "not an anchor" (no format: anchor/... '
+            'line and no cursor section); it was injected because nothing better '
+            'was open in that directory.'
+        )
     warn = _other_open_warning(other_open)
     if warn:
         header.append(warn)
@@ -329,12 +450,18 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
         body.append(
             '[anchor tail (decisions log / resolved history) on disk - read the file if needed]'
         )
-    if dropped:
-        names = ', '.join(dropped[:MAX_NAMED_DROPPED])
-        if len(dropped) > MAX_NAMED_DROPPED:
-            names += f' and {len(dropped) - MAX_NAMED_DROPPED} more'
-        body.append(f'[dropped from injection, in HEAD order: {names} - read the file for them]')
-    if truncated:
+    if fit.dropped:
+        names = ', '.join(fit.dropped[:MAX_NAMED_DROPPED])
+        if len(fit.dropped) > MAX_NAMED_DROPPED:
+            names += f' and {len(fit.dropped) - MAX_NAMED_DROPPED} more'
+        note = f'[dropped from injection, in HEAD order: {names}'
+        if fit.cursor_reserved:
+            # Say the reserve happened. A manifest that reads identically whether
+            # or not the cursor was held back cannot tell the reader which of the
+            # two worlds they are in, and the cursor is the whole question.
+            note += f' - cursor reserved ahead of them ("{fit.cursor_reserved}")'
+        body.append(note + ' - read the file for them]')
+    if fit.byte_cut:
         body.append('[anchor truncated for injection - read the file for the rest]')
     return '\n'.join(header) + '\n---\n' + '\n'.join(body) + '\n</control-anchor>'
 
@@ -470,6 +597,22 @@ if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--list-dormant':
         base = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.cwd() / '.claude' / 'anchors'
         for line in list_dormant(base):
+            print(line)
+        sys.exit(0)
+    # Authoring entry: `python anchor_inject.py --head-fit <anchor>` prints the fit
+    # the hook would compute, so a head is measured before it ships rather than
+    # after a night's cursor is named in a drop line. A reporter, not a gate: it
+    # exits 0 whatever the verdict, and 2 only when it was pointed at nothing (a
+    # path typo must not render as a clean measurement).
+    if len(sys.argv) > 1 and sys.argv[1] == '--head-fit':
+        target = Path(sys.argv[2]) if len(sys.argv) > 2 else None
+        if target is None or not target.is_file():
+            print(
+                f'error: --head-fit needs the path to one anchor file (got: {target})',
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        for line in head_fit_report(target):
             print(line)
         sys.exit(0)
     try:

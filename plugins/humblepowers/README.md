@@ -107,6 +107,44 @@ as no better than no injection, and the wall-clock / prompt-count cadence was
 never validated. Only the concrete-candidate router hint — the one shape the
 A/B favored — survives.
 
+## Spawn-routing hint (on by default)
+
+A PreToolUse hook on the spawn surface
+(`skills/choosing-models/scripts/inject_spawn_routing.py`, matched on `Agent`
+and on `Workflow` where the harness has one) injects the `choosing-models`
+activation test when a spawn names **no** model — the case where the subagent
+inherits whatever the parent is running on.
+
+It exists because `choosing-models` had no trigger at the one moment it governs.
+Measured: zero invocations across a 40-hour, 139-subagent programme, under a
+written owner instruction repeated three times, with 65% of output tokens left
+at the top tier; twenty frontier-tier subagents in one day and 23 the next. The
+hook is the rung below prose, and it is the only shape that scales with a
+fan-out: a 54-item batch is reminded once, at the script.
+
+Three silences keep it quiet. A spawn that already carries `model` has been
+routed — the field is present only when the caller passed one — so it says
+nothing. It emits at most once per session per ten minutes. And it ignores
+anything that is not a spawn.
+
+It is **advisory**: the payload is `additionalContext` with no
+`permissionDecision`, so it never changes whether a tool call is allowed. One
+consequence to know: context added during a turn reaches the model's next turn,
+so the hint does not stop the spawn that triggered it — it stands in front of the
+rest of the batch and the rest of the run, which is where the measured loss
+accumulated.
+
+It ships **on**, for the same reason the dispatch hint does. Opt out in the `env`
+block of your settings file:
+
+```json
+{ "env": { "HUMBLEPOWERS_SPAWN_ROUTING_HINT": "0" } }
+```
+
+The block names the activation test and the batch counter-rule and points at the
+skill. It does not restate the tier thresholds: `models.toml` owns those, and a
+second copy inside a hook is the drift this pack pays for elsewhere.
+
 ## Verification gate (off by default, opt in)
 
 A SubagentStop hook

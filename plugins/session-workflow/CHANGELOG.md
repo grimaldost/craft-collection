@@ -3,6 +3,64 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+## [0.24.0] - 2026-09-13
+
+The injection stops losing the one section it exists to carry, and a version
+attribution stops naming one copy out of several. Minor bump: the anchor hook
+changes what survives a cut, two scripts gain output an installed copy will see,
+and `anchor_inject.py` gains a CLI arm. (2026-09-13 consolidating triage:
+clusters T67 and T70, plus the T84b consolidation they ride on.)
+
+### Added
+
+- **`anchor_inject.py --head-fit <anchor>`** — the fit the hook computes on
+  every injection, as a command: head bytes against the budget, the cursor
+  section it would reserve, and the sections that would drop at the current
+  size. The author had no way to ask for this, so a byte counter was
+  hand-written three times in one session and a head still went out 118 bytes
+  over budget. It reports and exits 0 (2 only when pointed at no file), like the
+  two sweep arms beside it. Named from protocol step 5 and from `/anchor` step 4.
+- **`compaction-survival/references/anchor-spec.md`** — the per-section prose of
+  the anchor spec, moved out of the body. The body keeps the section list,
+  because the order *is* the survival order and a reader has to see it whole.
+
+### Changed
+
+- **The anchor injection reserves the cursor before spending the rest of the
+  budget.** `fit_head` budgeted in pure document order, so a HEAD whose Cursor
+  sat below a standing-directives block lost the cursor to a cut — recorded on
+  four separate nights *after* 0.23.0 shipped both the survival-order rule and
+  section-aware truncation with a drop manifest. Naming a section in a manifest
+  does not return it to the reader. The cursor is now taken off the top of the
+  budget and re-inserted in its own document position, so the reserve changes
+  what survives and not where it appears; a cursor that alone overruns is kept
+  and cut rather than dropped. Document order remains the drop order for
+  everything else. `fit_head` returns a named tuple carrying the reserved
+  section's name, and the drop line says the reserve happened rather than
+  reading identically either way.
+- **A file in `anchors/` is ranked by shape before recency.** One with no
+  `format: anchor/...` line and no cursor section is de-ranked below every real
+  anchor and named as "not an anchor" in the warning, after a 79 KB design
+  document was selected as the anchor and spent the whole budget. It is never
+  refused outright: zero useful bytes on the recovery path is the protocol's
+  cardinal failure, so a lone stray still injects, with a caution line.
+- **`plugin_version.py` names every installed copy, not just the registered
+  one.** Nine reports record two to four versions of one plugin in one cache
+  directory with the oldest serving — one of them ran four unsupervised hours on
+  doctrine two releases old. The install path's last segment is the version, so
+  its parent holds every copy: `field_line` now renders "N copies installed
+  there (...)" into the pasted attribution. It reports nothing when the last
+  segment is not the version, because a `--plugin-dir` checkout's parent holds
+  sibling plugins and calling those versions would be a confident wrong answer.
+- **`scan_toolkit.py` carries the same fact as an ordinary caveat**, beside
+  installed-versus-source and stale-checkout. The inventory is read at session
+  start; the on-demand `--check-serving` is not.
+- **The Cursor bullet owns its own accumulation rule** — the newest two steps,
+  older ones folded into the TAIL at each boundary. It displaces protocol step
+  5's parenthetical naming the cursor's own done-list, which it absorbs; step 5
+  gains the `--head-fit` measurement in its place. Body 1446 → 1265 words, with
+  the baseline ratcheted down to match.
+
 ## [0.23.2] - 2026-09-05
 
 ### Changed

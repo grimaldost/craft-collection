@@ -44,45 +44,29 @@ tiers, split by a literal `<!-- anchor:tail -->` marker line: above it the live
 then a long run's live state is whatever the 8K bound keeps.
 
 HEAD — bounded, rewritten in place. **The order below is the survival order.**
-The injection spends its budget top-down and drops whole trailing sections,
-naming them, so a section's position is its priority and putting one above
-another demotes that other.
+The injection reserves the cursor, then spends what is left top-down and drops
+whole trailing sections, naming them: a section's position is its priority for
+everything except the cursor, and putting one above another demotes that other.
 
-- **Mission** — the goal in a sentence or two, the hard constraints, and any
-  user instruction that constrains *mechanism* rather than outcome, quoted in
-  the user's own words with a stable id. Paraphrase is where an order dies:
-  once the wording is gone a substituted mechanism reads as a design choice.
-  A reversal of a standing rule is quoted the same way and names what it
-  supersedes; the old rule lives in other copies and will not overwrite itself.
-- **Cursor** — done / in progress / **next action on resume**: one imperative
-  step plus the precondition to verify before it, rewritten in place as it
-  mutates. An unanswered question or approval is armed here for verbatim
-  re-ask after the reset. This is the part that earns the anchor.
-- **Resume steps** — how a cold reader re-orients: read this file, check the
-  real state (version control log, the artifact on disk), continue from the
-  cursor. They run somewhere they were not authored, so write them in
-  **absolute paths** — a relative command does not fail after a restart, it
-  succeeds in the wrong place. Record the anchor's own absolute path where the
-  environment surfaces it next turn: an anchor that cannot be found is no anchor.
-- **Invariants** — decisions and constraints that hold across the whole run, so
-  a post-compaction turn does not relitigate them.
-- **Parallel tracks** — only when a peer run shares these trees: the other
-  track's anchor path and this track's never-touch surface, written before any
-  work. Disclose on every commit that touches shared surface, and route a
-  cross-track lesson into both anchors.
-- **In-flight work** — background or async tasks the cursor depends on: their
-  ids, log paths, and a "do not relaunch over the same output" guard. A run that
-  fans out to background work records them here as first-class cursor state, so
-  each async boundary resumes idempotently instead of being re-derived.
-- **Last-known-good** — the concrete recoverable state: commit hashes, branches
-  and PRs opened, tags pushed, the files written, the checkpoint reached.
-- **Plan pointer** — where the full plan lives (a separate doc), so the anchor
-  stays a cursor, not a second copy of the plan.
+1. **Mission** — the goal, the hard constraints, and any user instruction about
+   *mechanism*, quoted verbatim with a stable id.
+2. **Cursor** — done / in progress / **next action on resume**, rewritten in
+   place. The newest two steps; older ones fold into the TAIL at each boundary.
+   This is the part that earns the anchor.
+3. **Resume steps** — how a cold reader re-orients, in absolute paths.
+4. **Invariants** — what a post-compaction turn must not relitigate.
+5. **Parallel tracks** — a peer run's anchor path and this track's never-touch
+   surface, when the trees are shared.
+6. **In-flight work** — background tasks the cursor depends on, with a
+   do-not-relaunch guard.
+7. **Last-known-good** — commits, branches, PRs, tags, files, checkpoints.
+8. **Plan pointer** — where the full plan lives, so the anchor stays a cursor.
 
-TAIL — append-only, read on demand:
+TAIL — append-only, read on demand: the decisions log, and closed phases' folded
+one-line outcomes.
 
-- **Decisions log** — why the non-obvious calls were made.
-- **Folded history** — closed phases' one-line outcomes, resolved incidents.
+What each section holds and why, and how to measure a draft against the
+injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
 
 ## The protocol
 
@@ -104,8 +88,9 @@ TAIL — append-only, read on demand:
    than scattering state across several; a half-written or duplicated anchor is
    worse than a terse one.
 5. **Keep the HEAD bounded.** As a phase closes, fold its detail into a
-   one-line outcome in the TAIL, below the marker — a closed phase's spec, and
-   **the cursor's own done-list**, which is what actually accumulates.
+   one-line outcome in the TAIL, below the marker. Measure rather than estimate:
+   `anchor_inject.py --head-fit <anchor>` prints the head's bytes against the
+   budget and the sections a cut would take.
 6. **Make resume idempotent.** The resume steps let a fresh context recover the
    run from the anchor and the real on-disk state alone; re-entering a
    half-finished step checks the artifact before redoing it, so re-reading is
@@ -139,11 +124,13 @@ TAIL — append-only, read on demand:
   re-injects the newest **active** anchor's HEAD (to the tail marker) into fresh
   context mechanically — the re-read step stops depending on the model
   remembering the protocol. Without session-start hooks, the manual re-read at
-  each turn start is the whole mechanism. Over budget, the HEAD is spent
-  top-down on whole sections and the dropped ones are named, so the survival
-  order above is a policy the author sets rather than wherever the bytes ran
-  out. An anchor marked done in-content is de-ranked below live tracks, and the
-  injection names any other open anchors; the rename to `*.closed.md` remains
+  each turn start is the whole mechanism. Over budget, the cursor is reserved
+  first and the rest is spent top-down on whole sections whose names the drop
+  line carries, so the survival order above is a policy the author sets rather
+  than wherever the bytes ran out — and the one section a cut cannot take is the
+  live cursor. An anchor marked done in-content, or one that does not read as an
+  anchor at all, is de-ranked below live tracks, and the injection names any
+  other open anchors; the rename to `*.closed.md` remains
   the only signal that stops injection entirely. An anchor untouched for 24h
   injects as a short pointer — path, title, age, close command, and the cursor
   it still asserts, which is the part a reader can check against reality.

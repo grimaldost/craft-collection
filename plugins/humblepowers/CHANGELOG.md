@@ -5,6 +5,70 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+## [0.15.0] - 2026-09-13
+
+`choosing-models` gets a trigger at the moment it governs. Minor bump: a new
+hook ships on, the dispatch router gains a routed skill, and a skill body's
+reference material moves out from under it. (2026-09-13 consolidating triage:
+cluster T68, and the T84a consolidation it rides on.)
+
+The failure this answers is the most expensive in that corpus by an order of
+magnitude. `choosing-models` took **zero** invocations across a 40-hour,
+139-subagent programme, against a written owner instruction transcribed verbatim
+three times and repeated in the anchor's every cursor block — 198 textual
+mentions, zero loads — with 65% of output and 81% of uncached input left at the
+top tier. Twenty frontier-tier subagents in one day ($14.48, ten of them
+mechanical rewriters); 23 more the next, killed by the owner mid-run. The
+content of the routing policy was confirmed correct wherever it was applied.
+Prose had already failed against the strongest instruction channel available, so
+this round is the rung below it.
+
+### Added
+
+- **`choosing-models/scripts/inject_spawn_routing.py`** — a `PreToolUse` hook on
+  the spawn surface (`Agent`, and `Workflow` where the harness has one). It
+  fires only when a spawn names **no** model: that field is present in
+  `tool_input` only when the caller passed one, so its absence is exactly the
+  inheritance the hook exists to interrupt, and a routed spawn is left alone. It
+  emits at most once per session per ten minutes, so a 54-item fan-out costs one
+  reminder instead of one per agent — the only shape that scales with a batch.
+  Advisory by construction: `additionalContext` with no `permissionDecision`, so
+  it never changes whether a tool call is allowed. The block names the
+  activation test and the batch counter-rule and points at the skill; it does
+  not restate the tier thresholds, because `models.toml` owns those and a second
+  copy inside a hook is the drift this pack pays for elsewhere. Ships **on**;
+  `HUMBLEPOWERS_SPAWN_ROUTING_HINT=0` is the opt-out. Worth knowing: context
+  added during a turn reaches the model's next turn, so the hint does not stop
+  the spawn that triggered it — it stands in front of the rest of the batch.
+- **`choosing-models/references/emission-and-effort.md`** — the effort-defaults
+  table, the emission-surfaces table and the staleness-tripwire mechanics,
+  moved out of the body. Reference rather than decision: read when writing a
+  tier out, not while deciding one.
+
+### Changed
+
+- **`router_rules.json` v4 routes `choosing-models`.** The skill had no row at
+  all, so the one lexical mechanism this plugin ships could not name it — while
+  `\bsubagents?\b` appeared in the file exactly once, as a *denial* on
+  `context-handoff`: the spawn vocabulary removed a candidate and added none.
+  The new row keys on spawn and tier vocabulary and deliberately not on bare
+  model names, which belong to the platform's model reference and appear in
+  every price and context-window question. Dev recall 7/8 with zero false fires;
+  held-out precision 4/4 positives, zero near-miss fires. Both sealed sets are
+  unmoved — adversarial 2/20 and recall-holdout nulls 2/28 are the same cases —
+  and no existing skill's dev recall changed, so the row crowds nothing out of
+  `max_candidates`. The `context-handoff` denial is untouched and still tested.
+  Three denials drafted beside the surviving one were dropped after measuring
+  that they bought nothing; a cost/price denial in particular would have
+  silenced the batch-pricing prompts procedure step 5 exists for.
+- **The single-task exception gains its boundary**: two or more agents
+  dispatched in one decision are a batch, and the exception does not reach a
+  batch. Twenty un-routed dispatches took their alibi from that bullet's
+  unqualified breadth while the work ran in lots of 4, 5, 6, 13 and 34. The
+  clause displaces that breadth rather than adding a second sentence beneath it,
+  and the three reference blocks moved out above pay for it: body 1002 → 786
+  words, with the baseline ratcheted down to match.
+
 ## [0.14.0] - 2026-09-05
 
 The mirror walk stops being an instruction a reader performs. Minor bump: a

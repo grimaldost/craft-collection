@@ -62,6 +62,68 @@ def test_the_field_line_carries_the_path_so_the_number_cannot_be_produced_withou
     assert line.count('0.5.0') >= 2
 
 
+def _cache(root: Path, plugin: str, versions: list[str]) -> Path:
+    for v in versions:
+        (root / 'craft-collection' / plugin / v).mkdir(parents=True)
+    return root / 'craft-collection' / plugin / versions[-1]
+
+
+def test_every_installed_copy_is_named_because_the_oldest_one_can_serve():
+    # Nine reports: two to four versions of one plugin sit side by side and the
+    # session loads the oldest. One of them ran four hours of unsupervised work on
+    # two-release-old doctrine. The resolved install path's last segment IS the
+    # version, so its parent holds every copy - the check is one glob of a path the
+    # script already had in hand.
+    from plugin_version import installed_versions
+
+    with tempfile.TemporaryDirectory() as d:
+        path = _cache(Path(d), 'session-workflow', ['0.21.0', '0.23.1', '0.23.2'])
+        assert installed_versions(str(path), '0.23.2') == ['0.21.0', '0.23.1', '0.23.2']
+
+
+def test_copies_are_ordered_by_version_not_by_string():
+    from plugin_version import installed_versions
+
+    with tempfile.TemporaryDirectory() as d:
+        path = _cache(Path(d), 'humblepowers', ['0.9.1', '0.10.0'])
+        assert installed_versions(str(path), '0.10.0') == ['0.9.1', '0.10.0']
+
+
+def test_an_install_path_that_is_not_a_version_directory_reports_nothing():
+    # A --plugin-dir checkout resolves to a path whose last segment is a plugin
+    # name, and globbing ITS parent would enumerate every sibling plugin as if it
+    # were a version of this one. Absence of the cache layout is not evidence.
+    from plugin_version import installed_versions
+
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / 'plugins' / 'session-workflow'
+        (root).mkdir(parents=True)
+        (Path(d) / 'plugins' / 'humblepowers').mkdir(parents=True)
+        assert installed_versions(str(root), '0.23.2') == []
+        assert installed_versions('', '0.23.2') == []
+
+
+def test_a_single_copy_adds_nothing_to_the_line():
+    line = field_line('humblepowers', '0.14.0', '/cache/humblepowers/0.14.0', None, ['0.14.0'])
+    assert 'copies' not in line
+
+
+def test_more_than_one_copy_is_rendered_into_the_pasted_line():
+    # The attribution has to carry the ambiguity: a report saying "0.23.2" while
+    # 0.23.1 sat beside it and may have been what actually served is a version
+    # claim the reader cannot check.
+    line = field_line(
+        'session-workflow',
+        '0.23.2',
+        '/cache/session-workflow/0.23.2',
+        '0.23.2',
+        ['0.23.1', '0.23.2'],
+    )
+    assert '2 copies installed' in line
+    assert '0.23.1' in line
+    assert line.isascii()
+
+
 def test_a_working_tree_that_disagrees_forces_the_disclosure_into_the_pasted_line():
     line = field_line('humblepowers', '0.12.0', '/cache/humblepowers/0.12.0', '0.9.1')
     assert 'SKEW' in line
@@ -121,6 +183,11 @@ if __name__ == '__main__':
     test_an_unknown_plugin_resolves_to_nothing_rather_than_a_plausible_guess()
     test_a_marketplace_qualified_name_resolves_the_same_as_a_bare_one()
     test_the_field_line_carries_the_path_so_the_number_cannot_be_produced_without_it()
+    test_every_installed_copy_is_named_because_the_oldest_one_can_serve()
+    test_copies_are_ordered_by_version_not_by_string()
+    test_an_install_path_that_is_not_a_version_directory_reports_nothing()
+    test_a_single_copy_adds_nothing_to_the_line()
+    test_more_than_one_copy_is_rendered_into_the_pasted_line()
     test_a_working_tree_that_disagrees_forces_the_disclosure_into_the_pasted_line()
     test_a_working_tree_that_agrees_says_so_rather_than_going_silent()
     test_the_rendered_line_is_ascii_because_reports_are_pasted_into_cp1252_consoles()
