@@ -548,6 +548,49 @@ def test_active_other_anchor_has_no_rename_command():
         assert 'mv other-active.md' not in ctx
 
 
+def test_a_design_doc_in_the_anchors_dir_does_not_outrank_a_real_anchor():
+    # A 79 KB design document dropped into .claude/anchors/ was selected as the
+    # anchor because it was newest, and the injection spent its whole budget on a
+    # file with no cursor in it. Shape, not mtime, decides what is an anchor: the
+    # `format: anchor/...` frontmatter /anchor already writes, or a cursor section.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='real-run.md', age_s=600)
+        anchors = tmp / '.claude' / 'anchors'
+        (anchors / 'design.md').write_text(
+            '# Service layer design\n\n' + ('prose. ' * 200), encoding='utf-8'
+        )
+        ctx = json.loads(run_hook(tmp).stdout)['hookSpecificOutput']['additionalContext']
+        assert 'next: step 7' in ctx, 'the real anchor must be the one injected'
+        assert 'design.md' in ctx
+        assert 'not an anchor' in ctx.lower(), 'the stray file must be named as one'
+
+
+def test_a_cursor_section_alone_makes_a_file_an_anchor():
+    # The v0 anchors in the wild carry no `format:` line. A cursor section is the
+    # second, sufficient signal - otherwise this predicate would silence exactly
+    # the long-running tracks the protocol exists for.
+    import anchor_inject as ai
+
+    assert ai.is_anchor_shaped('# Run\n## Cursor\nnext: step 4\n')
+    assert ai.is_anchor_shaped('---\nformat: anchor/v1\n---\n# Run\nno cursor yet\n')
+    assert not ai.is_anchor_shaped('# Service layer design\n\nprose about the design.\n')
+
+
+def test_a_lone_stray_file_is_still_injected_rather_than_nothing():
+    # Zero useful bytes on the recovery path is the protocol's cardinal failure, so
+    # the predicate de-ranks and it never refuses.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchors = tmp / '.claude' / 'anchors'
+        anchors.mkdir(parents=True)
+        (anchors / 'design.md').write_text('# Service layer design\nprose\n', encoding='utf-8')
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'Service layer design' in ctx
+
+
 def test_list_stale_emits_rename_commands():
     # The /anchor close --stale sweep is mechanical — list_stale returns the exact
     # rename commands for content-terminal-but-unrenamed anchors, nothing else.
@@ -615,18 +658,155 @@ def test_head_order_is_the_drop_order():
     resume_first = '# Resume steps\nrun the thing\n# History\n' + bulk + '\n'
     history_first = '# History\n' + bulk + '\n# Resume steps\nrun the thing\n'
 
-    kept, dropped, cut = ai.fit_head(resume_first)
-    assert 'run the thing' in kept
-    assert dropped == ['History']
-    assert cut is False, 'a clean section boundary means no byte cut'
+    fit = ai.fit_head(resume_first)
+    assert 'run the thing' in fit.text
+    assert fit.dropped == ['History']
+    assert fit.byte_cut is False, 'a clean section boundary means no byte cut'
 
     # Same two sections, opposite order, opposite survivor. The first section
     # alone overruns here, so the byte-cut floor applies -- but the section
     # beyond it is still named rather than lost silently.
-    kept, dropped, cut = ai.fit_head(history_first)
-    assert 'run the thing' not in kept, 'a late section must not survive an early overrun'
-    assert dropped == ['Resume steps']
-    assert cut is True
+    fit = ai.fit_head(history_first)
+    assert 'run the thing' not in fit.text, 'a late section must not survive an early overrun'
+    assert fit.dropped == ['Resume steps']
+    assert fit.byte_cut is True
+
+
+def test_the_cursor_is_reserved_before_the_budget_is_spent():
+    # The failure this reserve exists for, measured on four separate nights AFTER
+    # the survival-order doctrine shipped: an author who obeys the order still puts
+    # a standing-directives block above the cursor, the budget is spent on it, and
+    # the injection ends "[dropped ...: Cursor]" - the one section a resuming
+    # session cannot do without. Order remains the drop order for everything else.
+    import anchor_inject as ai
+
+    head = (
+        '# Standing directives\n'
+        + ('x' * 20_000)
+        + '\n# Cursor\nnext: verify the probe, then run wave 12\n# History\nold\n'
+    )
+    fit = ai.fit_head(head)
+    assert 'run wave 12' in fit.text, 'the cursor must survive a cut it did not cause'
+    assert fit.cursor_reserved == 'Cursor'
+    assert 'Cursor' not in fit.dropped
+    assert 'Standing directives' in fit.dropped
+    assert len(fit.text) <= ai.MAX_CONTEXT_CHARS
+
+
+def test_a_reserved_cursor_keeps_its_document_position():
+    # The reserve changes what survives, not where it appears: a reader whose HEAD
+    # is re-assembled out of order cannot tell the anchor from a summary of it.
+    import anchor_inject as ai
+
+    head = '# Mission\nship it\n# Bulk\n' + ('x' * 20_000) + '\n# Cursor\nnext: step 7\n'
+    fit = ai.fit_head(head)
+    assert fit.text.index('ship it') < fit.text.index('next: step 7')
+    assert fit.dropped == ['Bulk']
+
+
+def test_the_drop_line_says_the_cursor_was_reserved():
+    # A drop manifest that does not say the cursor was held back reads exactly like
+    # the old one, and the operator learned to distrust it.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(
+            tmp,
+            body='# Standing directives\n' + ('x' * 20_000) + '\n# Cursor\nnext: step 7\n',
+        )
+        ctx = json.loads(run_hook(tmp).stdout)['hookSpecificOutput']['additionalContext']
+        assert 'next: step 7' in ctx
+        assert 'cursor reserved' in ctx.lower()
+
+
+def test_a_cursor_that_alone_overruns_is_kept_and_cut_not_dropped():
+    # Degradation floor: a bloated cursor still beats no cursor. Everything else is
+    # named as dropped rather than lost silently.
+    import anchor_inject as ai
+
+    head = '# Mission\nship it\n# Cursor\nnext: ' + ('y' * 20_000) + '\n# History\nold\n'
+    fit = ai.fit_head(head)
+    assert 'next: yyy' in fit.text
+    assert fit.byte_cut is True
+    assert fit.cursor_reserved == 'Cursor'
+    assert set(fit.dropped) == {'Mission', 'History'}
+    assert len(fit.text) <= ai.MAX_CONTEXT_CHARS
+
+
+def test_a_head_with_no_cursor_section_still_spends_top_down():
+    # No cursor to reserve is the old behaviour exactly, and the drop line must not
+    # claim a reserve that did not happen.
+    import anchor_inject as ai
+
+    fit = ai.fit_head('# A\nkeep me\n# Big\n' + ('x' * 20_000) + '\n')
+    assert 'keep me' in fit.text
+    assert fit.dropped == ['Big']
+    assert fit.cursor_reserved == ''
+
+
+def _head_fit(*args):
+    env = dict(os.environ)
+    env['PYTHONIOENCODING'] = 'utf-8'
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(SCRIPT), '--head-fit', *args],
+        capture_output=True,
+        encoding='utf-8',
+        env=env,
+        timeout=30,
+    )
+
+
+def test_head_fit_reports_the_number_the_author_was_counting_by_hand():
+    # The authoring half of the same failure: the hook computes this fit on every
+    # injection and the author could not ask for it, so a byte counter was
+    # hand-written three times in one session and a head still shipped 118 bytes
+    # over budget. Bytes, budget and overrun all come from the mechanism.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(
+            tmp,
+            body='# Standing directives\n'
+            + ('x' * 20_000)
+            + '\n# Cursor\nnext: step 7\n# History\nold\n',
+        )
+        proc = _head_fit(str(anchor))
+        assert proc.returncode == 0, proc.stderr
+        out = proc.stdout
+        assert '8000' in out, 'the budget must be printed, not assumed'
+        assert 'OVER' in out.upper()
+        assert 'Standing directives' in out, 'a section that would drop must be named'
+        assert 'History' in out
+        assert 'Cursor' in out, 'the reserved cursor must be named'
+
+
+def test_head_fit_on_an_anchor_that_fits_says_so_and_drops_nothing():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp)
+        proc = _head_fit(str(anchor))
+        assert proc.returncode == 0
+        assert 'headroom' in proc.stdout.lower()
+        assert 'OVER' not in proc.stdout.upper()
+
+
+def test_head_fit_measures_the_head_not_the_whole_file():
+    # The TAIL stays on disk, so counting the file would tell the author to shrink
+    # something the injection never carried.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(
+            tmp, body='# Cursor\nnext: step 7\n<!-- anchor:tail -->\n' + ('z' * 30_000)
+        )
+        proc = _head_fit(str(anchor))
+        assert proc.returncode == 0
+        assert 'headroom' in proc.stdout.lower(), 'the 30K tail must not count against the head'
+
+
+def test_head_fit_refuses_a_path_that_is_not_there_rather_than_printing_a_clean_bill():
+    with tempfile.TemporaryDirectory() as d:
+        proc = _head_fit(str(Path(d) / 'nope.md'))
+        assert proc.returncode == 2
+        assert proc.stdout.strip() == '', 'a missing anchor must not render as a measurement'
+    assert _head_fit().returncode == 2
 
 
 def test_everything_after_the_first_overrun_is_dropped():
@@ -635,10 +815,10 @@ def test_everything_after_the_first_overrun_is_dropped():
     import anchor_inject as ai
 
     head = '# A\nkeep me\n# Big\n' + ('x' * 20_000) + '\n# Tiny\nlate\n'
-    kept, dropped, _cut = ai.fit_head(head)
-    assert 'keep me' in kept
-    assert 'late' not in kept
-    assert dropped == ['Big', 'Tiny']
+    fit = ai.fit_head(head)
+    assert 'keep me' in fit.text
+    assert 'late' not in fit.text
+    assert fit.dropped == ['Big', 'Tiny']
 
 
 def test_headings_inside_fenced_code_are_not_section_boundaries():
@@ -792,9 +972,21 @@ if __name__ == '__main__':
     test_all_terminal_falls_back_to_newest()
     test_terminal_other_anchor_gets_rename_command()
     test_active_other_anchor_has_no_rename_command()
+    test_a_design_doc_in_the_anchors_dir_does_not_outrank_a_real_anchor()
+    test_a_cursor_section_alone_makes_a_file_an_anchor()
+    test_a_lone_stray_file_is_still_injected_rather_than_nothing()
     test_list_stale_emits_rename_commands()
     test_emit_failure_logs_failure_event_not_success()
     test_head_order_is_the_drop_order()
+    test_the_cursor_is_reserved_before_the_budget_is_spent()
+    test_a_reserved_cursor_keeps_its_document_position()
+    test_the_drop_line_says_the_cursor_was_reserved()
+    test_a_cursor_that_alone_overruns_is_kept_and_cut_not_dropped()
+    test_a_head_with_no_cursor_section_still_spends_top_down()
+    test_head_fit_reports_the_number_the_author_was_counting_by_hand()
+    test_head_fit_on_an_anchor_that_fits_says_so_and_drops_nothing()
+    test_head_fit_measures_the_head_not_the_whole_file()
+    test_head_fit_refuses_a_path_that_is_not_there_rather_than_printing_a_clean_bill()
     test_everything_after_the_first_overrun_is_dropped()
     test_headings_inside_fenced_code_are_not_section_boundaries()
     test_split_sections_is_lossless()

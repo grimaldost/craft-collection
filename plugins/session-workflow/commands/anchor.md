@@ -78,7 +78,11 @@ motivated this).
    - **Decisions log** — append-only; why the non-obvious calls were made.
    Keep the HEAD bounded: cursor plus pointers, not a transcript. Fold closed
    phases into one-line outcomes below the marker, pointing at the commit or
-   artifact that carries the detail.
+   artifact that carries the detail. Then measure it rather than eyeballing it —
+   `python <this-plugin>/skills/compaction-survival/scripts/anchor_inject.py --head-fit <the anchor>`
+   prints head bytes against the injection budget, the cursor it would reserve,
+   and the sections a cut would take. A hand-counted head went out 118 bytes
+   over.
 5. **Append telemetry** to `.claude/anchors/log.ndjson`:
    `{"event":"anchor-write","source":"command","date":"<YYYY-MM-DD HH:MM>","step":<N>,"file":"<basename>"}`
 6. **Confirm in one line:** path, step number, and — when the user is about to
