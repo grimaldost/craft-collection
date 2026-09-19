@@ -250,6 +250,7 @@ class Settings(BaseSettings):
     OTEL_SERVICE_NAME: str = 'my-service'
     # ...
 
+
 settings = Settings()
 configure_logging(log_level=settings.LOG_LEVEL)
 configure_telemetry(service_name=settings.OTEL_SERVICE_NAME)

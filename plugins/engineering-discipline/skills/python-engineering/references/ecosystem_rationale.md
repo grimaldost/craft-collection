@@ -130,8 +130,10 @@ parameters. The `interface/` layer provides concrete implementations.
 # core/services.py
 from typing import Protocol
 
+
 class PaymentGateway(Protocol):
     async def charge(self, amount: Decimal, currency: str) -> str: ...
+
 
 class PaymentService:
     def __init__(self, gateway: PaymentGateway) -> None:

@@ -136,10 +136,13 @@ aligns with Python's duck-typing nature and keeps classes decoupled.
 ```python
 from typing import Protocol
 
+
 class Repository(Protocol):
     """Any class with save() and get() satisfies this contract."""
+
     def save(self, entity: dict) -> str: ...
     def get(self, entity_id: str) -> dict | None: ...
+
 
 # No inheritance needed — just implement the methods
 class PostgresRepository:
