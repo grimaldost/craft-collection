@@ -7,7 +7,7 @@ as given, then complete the task below.
 def page_count(n_items: int, page_size: int) -> int:
     """Number of pages needed to show n_items at page_size per page."""
     if page_size <= 0:
-        raise ValueError("page_size must be positive")
+        raise ValueError('page_size must be positive')
     return (n_items + page_size - 1) // page_size  # ceil division (just fixed)
 ```
 

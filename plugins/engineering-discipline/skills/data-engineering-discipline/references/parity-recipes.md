@@ -50,10 +50,12 @@ surface.
 import polars as pl
 from typing import NamedTuple
 
+
 class SchemaDiff(NamedTuple):
     missing_in_new: set[str]
     extra_in_new: set[str]
     dtype_changes: dict[str, tuple[pl.DataType, pl.DataType]]
+
 
 def schema_diff(baseline: pl.DataFrame, new: pl.DataFrame) -> SchemaDiff:
     baseline_cols = set(baseline.columns)
@@ -69,10 +71,11 @@ def schema_diff(baseline: pl.DataFrame, new: pl.DataFrame) -> SchemaDiff:
         },
     )
 
+
 diff = schema_diff(baseline, new)
-assert not diff.missing_in_new, f"missing columns: {diff.missing_in_new}"
-assert not diff.extra_in_new, f"unexpected columns: {diff.extra_in_new}"
-assert not diff.dtype_changes, f"dtype changes: {diff.dtype_changes}"
+assert not diff.missing_in_new, f'missing columns: {diff.missing_in_new}'
+assert not diff.extra_in_new, f'unexpected columns: {diff.extra_in_new}'
+assert not diff.dtype_changes, f'dtype changes: {diff.dtype_changes}'
 ```
 
 ### 1b. SQL (Snowflake / BigQuery / Postgres / DuckDB)
@@ -140,15 +143,14 @@ def cardinality_check(
     n_new = new.height
     delta = abs(n_baseline - n_new) / max(n_baseline, 1)
     assert delta <= tolerance, (
-        f"row count delta {delta:.4%} exceeds tolerance {tolerance:.4%}: "
-        f"baseline={n_baseline}, new={n_new}"
+        f'row count delta {delta:.4%} exceeds tolerance {tolerance:.4%}: '
+        f'baseline={n_baseline}, new={n_new}'
     )
 
     g_baseline = baseline.select(group_keys).unique().height
     g_new = new.select(group_keys).unique().height
     assert g_baseline == g_new, (
-        f"group cardinality mismatch on {group_keys}: "
-        f"baseline={g_baseline}, new={g_new}"
+        f'group cardinality mismatch on {group_keys}: baseline={g_baseline}, new={g_new}'
     )
 ```
 
@@ -191,8 +193,9 @@ def null_rate_diff(
             drift[col] = (l_rate, n_rate)
     return drift
 
+
 drift = null_rate_diff(baseline, new)
-assert not drift, f"null-rate drift: {drift}"
+assert not drift, f'null-rate drift: {drift}'
 ```
 
 ---
@@ -245,6 +248,7 @@ When exhaustive row-level comparison is too expensive, sample.
 ```python
 import polars as pl
 
+
 def sampled_row_diff(
     baseline: pl.DataFrame,
     new: pl.DataFrame,
@@ -258,12 +262,11 @@ def sampled_row_diff(
     # Join on keys
     joined = (
         baseline.select(key_cols + value_cols)
-        .rename({c: f"{c}__baseline" for c in value_cols})
+        .rename({c: f'{c}__baseline' for c in value_cols})
         .join(
-            new.select(key_cols + value_cols)
-            .rename({c: f"{c}__new" for c in value_cols}),
+            new.select(key_cols + value_cols).rename({c: f'{c}__new' for c in value_cols}),
             on=key_cols,
-            how="full",
+            how='full',
         )
     )
     # Sample
@@ -272,8 +275,8 @@ def sampled_row_diff(
     # Find disagreements
     diffs = []
     for col in value_cols:
-        l_col = f"{col}__baseline"
-        n_col = f"{col}__new"
+        l_col = f'{col}__baseline'
+        n_col = f'{col}__new'
         delta = (sampled[l_col] - sampled[n_col]).abs()
         rel_delta = delta / sampled[l_col].abs().clip(lower_bound=1e-12)
         bad = sampled.filter(rel_delta > rel_tol)
@@ -292,6 +295,7 @@ feasible.
 
 ```python
 import polars as pl
+
 
 def exhaustive_row_diff(
     baseline: pl.DataFrame,
@@ -366,11 +370,12 @@ def multi_partition_parity(
             conn,
         )
         results[date] = {
-            "schema_diff": schema_diff(baseline_df, new_df),
-            "cardinality": cardinality_check(baseline_df, new_df, key_cols),
-            "aggregates": aggregate_diff(baseline_df, new_df, numeric_cols),
+            'schema_diff': schema_diff(baseline_df, new_df),
+            'cardinality': cardinality_check(baseline_df, new_df, key_cols),
+            'aggregates': aggregate_diff(baseline_df, new_df, numeric_cols),
         }
     return results
+
 
 # Recommended partition set for migration parity:
 # - Most recent week (typical case)
@@ -394,11 +399,11 @@ def replay_idempotency(
     n_runs: int = 2,
 ) -> None:
     """Run the pipeline n times; assert outputs are identical."""
-    outputs = [pipeline_fn(inputs, partition_key=partition_key)
-               for _ in range(n_runs)]
+    outputs = [pipeline_fn(inputs, partition_key=partition_key) for _ in range(n_runs)]
     for i in range(1, n_runs):
         pl.testing.assert_frame_equal(
-            outputs[0], outputs[i],
+            outputs[0],
+            outputs[i],
             check_exact=True,  # idempotency means exact match
         )
 ```
@@ -497,18 +502,20 @@ import hashlib
 import json
 import polars as pl
 
+
 def contract_fingerprint(df: pl.DataFrame) -> str:
     """A byte-stable token over a dataset's contract surface: columns, dtypes,
     and the canonically-ordered data. Deterministic across runs."""
     schema = sorted((name, str(dtype)) for name, dtype in df.schema.items())
     # Canonical ordering so row/column order can't change the token.
     body = df.select(sorted(df.columns)).sort(sorted(df.columns)).write_csv()
-    payload = json.dumps({"schema": schema, "rows": df.height}, sort_keys=True) + body
+    payload = json.dumps({'schema': schema, 'rows': df.height}, sort_keys=True) + body
     return hashlib.sha256(payload.encode()).hexdigest()
 
+
 # Pin: store the token at the agreed / sealed commit, checked into the repo.
-SEALED = "a1b2c3..."
-assert contract_fingerprint(build_output()) == SEALED, "contract surface drifted"
+SEALED = 'a1b2c3...'
+assert contract_fingerprint(build_output()) == SEALED, 'contract surface drifted'
 ```
 
 For a *set* of datasets (a multi-wave surface), fingerprint each and hash the
@@ -566,8 +573,8 @@ happened to think of.
 # set from the source of truth, then assert the parity gate touches each one.
 from mylib.dispatch import REGISTERED_OPS  # the source-of-truth registry
 
-covered = set(parity_cases.keys())          # what the gate actually checks
-expected = set(REGISTERED_OPS)              # what it must check
+covered = set(parity_cases.keys())  # what the gate actually checks
+expected = set(REGISTERED_OPS)  # what it must check
 missing = expected - covered
 assert not missing, f'parity gate omits {len(missing)} units: {sorted(missing)}'
 ```
@@ -581,11 +588,10 @@ check over a sample will not see it, because the extra input simply isn't in
 the sample.
 
 ```python
-old_inputs = inputs_read_by(old_mechanism)   # enumerate, don't assume
+old_inputs = inputs_read_by(old_mechanism)  # enumerate, don't assume
 new_inputs = inputs_read_by(new_mechanism)
 assert old_inputs == new_inputs, (
-    f'input set changed: only-old={old_inputs - new_inputs}, '
-    f'only-new={new_inputs - old_inputs}'
+    f'input set changed: only-old={old_inputs - new_inputs}, only-new={new_inputs - old_inputs}'
 )
 ```
 

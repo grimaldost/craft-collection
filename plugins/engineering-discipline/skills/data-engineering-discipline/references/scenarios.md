@@ -218,10 +218,12 @@ logic." Run the data through both versions and diff.
 
 ```python
 import polars as pl
+
 old = run_old_pipeline(sample_input)
 new = run_new_pipeline(sample_input)
 pl.testing.assert_frame_equal(
-    new.sort(key_cols), old.sort(key_cols),
+    new.sort(key_cols),
+    old.sort(key_cols),
     check_exact=False,
     rel_tol=1e-9,
 )

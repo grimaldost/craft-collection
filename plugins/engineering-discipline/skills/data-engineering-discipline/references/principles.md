@@ -60,11 +60,12 @@ break the next morning.
 ```python
 # Polars: schema diff against a baseline
 import polars as pl
-new = pl.read_parquet("new_output.parquet")
-baseline = pl.read_parquet("baseline_output.parquet")
+
+new = pl.read_parquet('new_output.parquet')
+baseline = pl.read_parquet('baseline_output.parquet')
 assert set(new.columns) == set(baseline.columns), (
-    f"missing: {set(baseline.columns) - set(new.columns)}; "
-    f"extra: {set(new.columns) - set(baseline.columns)}"
+    f'missing: {set(baseline.columns) - set(new.columns)}; '
+    f'extra: {set(new.columns) - set(baseline.columns)}'
 )
 ```
 
@@ -106,7 +107,7 @@ the producer's lens; consumers find their charts missing values.
 required = set(baseline.columns)  # or from the declared contract
 present = set(new.columns)
 missing = required - present
-assert not missing, f"missing required columns: {missing}"
+assert not missing, f'missing required columns: {missing}'
 ```
 
 dbt-utils' `equal_column_subset` for SQL. dbt contracts declare every
@@ -160,9 +161,7 @@ SELECT COUNT(*) FROM (
 # Polars equivalent
 baseline_groups = baseline.select(keys).unique().height
 new_groups = new.select(keys).unique().height
-assert baseline_groups == new_groups, (
-    f"group cardinality changed: {baseline_groups} → {new_groups}"
-)
+assert baseline_groups == new_groups, f'group cardinality changed: {baseline_groups} → {new_groups}'
 ```
 
 **LLM gotcha.** LLMs read group-by clauses without internalizing that
@@ -200,15 +199,13 @@ adopted the new output.
 ```python
 # Per-column dtype assertion
 expected_schema = {
-    "trade_date": pl.Date,
-    "amount": pl.Float64,
-    "client_id": pl.Utf8,
+    'trade_date': pl.Date,
+    'amount': pl.Float64,
+    'client_id': pl.Utf8,
 }
 for col, expected_dtype in expected_schema.items():
     actual = new.schema[col]
-    assert actual == expected_dtype, (
-        f"{col}: expected {expected_dtype}, got {actual}"
-    )
+    assert actual == expected_dtype, f'{col}: expected {expected_dtype}, got {actual}'
 ```
 
 dbt contracts with `data_type:` enforce this in CI before
@@ -373,12 +370,14 @@ Each cost a debug round.
 # 10-line smoke script per unfamiliar primitive
 import inspect
 from mylib.compute import weighted_average
+
 print(inspect.signature(weighted_average))
 # (df, value_col, weight_col, group_cols, **kwargs) -> DataFrame
 # Now you know it's group_cols, not keys.
 
 # For string identifiers, list before referencing
 from mylib.calendars import list_calendars
+
 print(list_calendars())
 # ['calendar_a', 'calendar_b', ...]
 ```

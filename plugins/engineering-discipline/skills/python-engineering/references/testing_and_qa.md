@@ -175,11 +175,13 @@ from inline_snapshot import snapshot
 def test_api_response_shape():
     """Verify the API response structure."""
     result = build_response(user_id='u_1')
-    assert result == snapshot({
-        'user_id': 'u_1',
-        'status': 'active',
-        'permissions': ['read', 'write'],
-    })
+    assert result == snapshot(
+        {
+            'user_id': 'u_1',
+            'status': 'active',
+            'permissions': ['read', 'write'],
+        }
+    )
 ```
 
 Install: `uv add --group test inline-snapshot`
@@ -241,6 +243,7 @@ For testing code that calls external HTTP APIs:
 import httpx
 import respx
 
+
 @respx.mock
 async def test_fetch_user():
     respx.get('https://api.example.com/users/1').respond(
@@ -276,8 +279,10 @@ def test_settings(tmp_path):
 @pytest.fixture
 def sample_data():
     """Factory fixture for sample data."""
+
     def _make(n: int = 10):
         return list(range(1, n + 1))
+
     return _make
 ```
 
