@@ -95,30 +95,56 @@ def uncovered(doc: Path, feedback_dir: Path) -> tuple[list[str], list[str]]:
     return stems, missing
 
 
-def rows_in(doc: Path) -> list[tuple[str, str]]:
-    """(row id, status) pairs a triage doc declares, in document order."""
+def rows_in(doc: Path) -> list[tuple[str, str, str]]:
+    """(row id, description, status) triples a triage doc declares, in document
+    order. `description` is the row's own middle cells (proposed promotion, fix
+    shape, home) verbatim -- it is never displayed, only compared, so a row
+    reused under the same id can be told apart from a genuine restatement of
+    the same row (T94b)."""
     out = []
     for line in doc.read_text(encoding='utf-8', errors='replace').splitlines():
         match = _ROW.match(line.strip())
         if match:
-            out.append((match.group(1), match.group(3).strip()))
+            out.append((match.group(1), match.group(2).strip(), match.group(3).strip()))
     return out
 
 
 def open_rows(feedback_dir: Path) -> list[tuple[str, str, str]]:
     """(row id, latest status, the doc that set it) for every row still open.
 
-    Docs are read oldest-first by filename, so the newest mention of a row wins
-    -- which is the rule the delta form already states in prose and no pass has
-    been able to apply without re-reading every document."""
-    latest: dict[str, tuple[str, str]] = {}
+    Before ids became globally unique (T67), each triage pass re-minted its own
+    local `T1a`, `T2a`, ... -- so the same bare id can name two unrelated rows
+    from two unrelated docs, not one row restated. Keying purely by id let a
+    later doc's unrelated row silently replace an earlier doc's still-open one
+    (T94b; measured: 2026-06-09 and 2026-06-13's distinct, both-`proposed` T1a
+    rows were both hidden behind 2026-07-23's T1a).
+
+    A row is instead tracked per (id, description): two mentions of the same id
+    are the SAME row -- and the later one's status wins, which is the rule the
+    delta form already states in prose ("a row named in a table below takes the
+    status given here") -- only when their description cells also match. A
+    changed description under a repeated id is read as a distinct row, set by
+    whichever doc most recently stated it, rather than assumed to be a reworded
+    carry; that assumption is exactly what over-counts in the heuristic scan
+    that found this bug, and the doubt is left for the reconciliation read
+    rather than resolved by guessing here. Since ids have been globally unique
+    since T67, this only ever recovers rows the old keying hid -- it prints
+    nothing extra for a post-T67 id, which is never reused."""
+    lineages: dict[str, list[dict[str, str]]] = {}
     for doc in sorted(p for p in feedback_dir.glob('*.md') if _is_triage_doc(p)):
-        for row_id, status in rows_in(doc):
-            latest[row_id] = (status, doc.stem)
+        for row_id, description, status in rows_in(doc):
+            group = lineages.setdefault(row_id, [])
+            lineage = next((ln for ln in group if ln['description'] == description), None)
+            if lineage is None:
+                group.append({'description': description, 'status': status, 'doc': doc.stem})
+            else:
+                lineage['status'] = status
+                lineage['doc'] = doc.stem
     return sorted(
-        (row_id, status, source)
-        for row_id, (status, source) in latest.items()
-        if status.lower().startswith(_OPEN_STATUSES)
+        (row_id, lineage['status'], lineage['doc'])
+        for row_id, group in lineages.items()
+        for lineage in group
+        if lineage['status'].lower().startswith(_OPEN_STATUSES)
     )
 
 

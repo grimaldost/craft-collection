@@ -1,4 +1,6 @@
 [
+  { "query": "I just finished this 40-page assessment recommending we change the auth model — before I send it to the team who'll act on it, I want it checked.", "should_trigger": true, "note": "T88a: hand-off of a finished, self-authored recommendation to someone who will act on it" },
+  { "query": "This design doc is done. Before I hand it to the people who'll build from it, give it an independent look.", "should_trigger": true, "note": "T88a: hand-off of a finished design, not a decision about to be executed" },
   { "query": "I've been going round and round on this design for days — give me fresh eyes on it.", "should_trigger": true, "note": "anchored after many rounds" },
   { "query": "Can I get a second opinion on this architecture before I commit to it?", "should_trigger": true, "note": "second opinion, high-stakes commit" },
   { "query": "Red team this plan — I'm too close to it to see the holes.", "should_trigger": true, "note": "explicit red-team / anchoring" },
@@ -8,6 +10,7 @@
   { "query": "Before we ship this irreversible migration plan, I want a hard independent review from several perspectives.", "should_trigger": true, "note": "high-stakes irreversible + multi-perspective" },
   { "query": "Convene a panel to critique this proposal from different perspectives.", "should_trigger": true, "note": "explicit panel request" },
 
+  { "query": "This section's still a rough first draft I'm actively reworking — take a quick look before I keep going.", "should_trigger": false, "note": "T88a: a draft still being worked, not a finished hand-off — the narrowed negative clause must still exclude this" },
   { "query": "What is 2 + 2?", "should_trigger": false, "note": "trivial fact" },
   { "query": "Quickly check this function for off-by-one errors.", "should_trigger": false, "note": "near-miss: single quick check, not an anchored/high-stakes panel" },
   { "query": "Give me your opinion on this sentence's wording.", "should_trigger": false, "note": "near-miss: one-pass feedback, not a panel" },

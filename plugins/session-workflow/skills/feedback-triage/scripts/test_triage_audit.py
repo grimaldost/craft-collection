@@ -190,6 +190,48 @@ def test_open_rows_cli_reports_the_count():
         assert 'T1a' in proc.stdout
 
 
+COLLISION_DOC_A = """# Triage - collision-a
+
+| # | proposed promotion | fix shape | home | status |
+|---|---|---|---|---|
+| T1a | verify a subagent's completion claim | prose | here | proposed |
+"""
+
+COLLISION_DOC_B = """# Triage - collision-b
+
+| # | proposed promotion | fix shape | home | status |
+|---|---|---|---|---|
+| T1a | a fabricated telemetry failure mode | prose | here | proposed |
+"""
+
+
+def test_a_bare_id_reused_by_an_unrelated_doc_does_not_mask_the_earlier_row():
+    # THE RED PROOF for T94b. Before ids became globally unique (T67), each
+    # triage pass re-minted its own local `T1a`, `T2a`, ... for unrelated rows.
+    # Keying `open_rows` by the bare id alone let a later doc's unrelated `T1a`
+    # silently replace an earlier doc's still-open `T1a` -- exactly the failure
+    # measured against the real corpus (2026-06-09 and 2026-06-13's T1a rows,
+    # both `proposed`, hidden behind 2026-07-23's T1a). Both rows are genuinely
+    # open and distinct (different description text under the same id), so both
+    # must surface, each naming the doc that set it.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / '2026-06-09-triage-craft-collection.md').write_text(
+            COLLISION_DOC_A, encoding='utf-8'
+        )
+        (root / '2026-06-13-triage-craft-collection.md').write_text(
+            COLLISION_DOC_B, encoding='utf-8'
+        )
+        rows = ta.open_rows(root)
+        t1a_rows = [r for r in rows if r[0] == 'T1a']
+        sources = {r[2] for r in t1a_rows}
+        assert sources == {
+            '2026-06-09-triage-craft-collection',
+            '2026-06-13-triage-craft-collection',
+        }, 'a bare id reused by an unrelated doc must not mask the earlier row'
+        assert len(t1a_rows) == 2, 'both unrelated T1a rows must surface, not just the newest'
+
+
 def test_open_rows_on_a_corpus_with_no_triage_docs():
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
@@ -240,6 +282,7 @@ if __name__ == '__main__':
     test_a_doc_without_a_triage_h1_is_refused()
     test_emit_lists_every_finding_once()
     test_open_rows_takes_the_newest_status_and_names_its_doc()
+    test_a_bare_id_reused_by_an_unrelated_doc_does_not_mask_the_earlier_row()
     test_open_rows_cli_reports_the_count()
     test_open_rows_on_a_corpus_with_no_triage_docs()
     test_usage_error_without_a_mode()
