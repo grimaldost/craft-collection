@@ -6,6 +6,45 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.24.2] - 2026-09-19
+
+Three reporting fixes: `anchor_inject.py --head-fit` names the cursor it used to
+deny and labels its figure in the unit the budget is spent in, and
+`build_feedback_index.py` credits a stem a triage doc abbreviates with an
+ellipsis. Patch bump. (Two 2026-09-17 feedback reports, and a real triage doc in
+another tool's feedback folder whose 21 inputs read as untriaged for three
+months.)
+
+### Fixed
+
+- **`--head-fit` said "this HEAD names no cursor" on every head that fits.**
+  `fit_head` returns early on a head within budget with nothing reserved, and the
+  report read that empty reservation as "no cursor section" — a false statement
+  about the anchor on the common case, which sent an author into the hook's
+  source to check a heading that was fine. The report now finds the cursor in the
+  head itself: `cursor: <name> (no reservation needed - the head fits)`, or `(not
+  reserved - no other section to drop)` for a head that is one cursor section
+  over budget. "No cursor" is printed only when the head has none.
+- **`--head-fit` labelled characters as bytes.** The budget is spent as `len()`
+  over a string, so the figure is characters; on a non-ASCII anchor the two
+  differ, and near the budget the difference decides whether the author trims.
+  The report now reads `head: N chars / budget 8000 chars`, and the skill body,
+  `references/anchor-spec.md` and the `/anchor` command say characters too.
+- **An abbreviated stem in a triage doc now counts when it names one report.**
+  A backticked stem with an explicit `…` at one end — `…c2-authoring` (date
+  elided) or `2026-09-05-hand-rolled…` (tail elided) — covers the one report it
+  resolves to. An elided date that several stems end in resolves to the stem whose
+  slug after the date is exactly the fragment (`…c3-execution` names
+  `<date>-c3-execution`, not `<date>-compute-c3-execution`). One that still names
+  several reports credits none and gets an `- ambiguous:` line under its triage
+  doc in `## Triage coverage`, naming the candidates. Unmarked fragments are still
+  not reconstructed, and `triage_audit.py coverage` audits an abbreviation-closed
+  report's findings like any other. Measured on a copy of one tool's feedback
+  folder with its newest triage doc removed (the state a 2026-09-17 report
+  measured): Untriaged 37 before, 1 after; the one left is a report no June pass
+  saw. On the full copy, and on copies of every other registered folder,
+  Untriaged is unchanged.
+
 ## [0.24.1] - 2026-09-19
 
 `build_feedback_index.py`'s coverage parser missed two Inputs shapes real triage docs
