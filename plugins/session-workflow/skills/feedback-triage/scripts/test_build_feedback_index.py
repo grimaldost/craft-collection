@@ -359,6 +359,58 @@ def test_coverage_is_fence_aware_and_credits_prose_disposition():
     assert '`2026-02-01-listed`' not in untriaged
 
 
+def test_coverage_credits_a_counted_inputs_heading():
+    # Real triage docs title the section "## Inputs (N reports)" — a parenthetical
+    # count after the heading word, not bare "## Inputs". That parenthetical must not
+    # stop the heading from being recognized as a coverage section.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-03-01-a.md').write_text('# a feedback — x\n', encoding='utf-8')
+        (dd / '2026-03-02-b.md').write_text('# b feedback — y\n', encoding='utf-8')
+        (dd / '2026-03-03-triage.md').write_text(
+            '# Triage — backlog (2 reports)\n'
+            '## Inputs (2 reports)\n'
+            '- `2026-03-01-a.md` (D)\n'
+            '- `2026-03-02-b.md` (X)\n'
+            '## Headline\nwords\n',
+            encoding='utf-8',
+        )
+        idx = build_index(dd)
+    assert '- covers: `2026-03-01-a`' in idx
+    assert '- covers: `2026-03-02-b`' in idx
+    untriaged = idx.split('\n### Untriaged', 1)[1]
+    assert '`2026-03-01-a`' not in untriaged
+    assert '`2026-03-02-b`' not in untriaged
+
+
+def test_coverage_credits_a_labeled_inputs_bullet():
+    # Some triage docs open with a metadata bullet block instead of an "## Inputs"
+    # heading — "- **Inputs:** `stem1.md` (...), `stem2.md` (...)." right under the
+    # H1, alongside sibling "- **Date:**" / "- **Purpose:**" bullets. That labeled
+    # bullet (plus its indented continuation lines) must count as a coverage source
+    # even though it never opens an "## Inputs" section.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-04-01-a.md').write_text('# a feedback — x\n', encoding='utf-8')
+        (dd / '2026-04-02-b.md').write_text('# b feedback — y\n', encoding='utf-8')
+        (dd / '2026-04-03-triage.md').write_text(
+            '# Triage — tail\n'
+            '\n'
+            '- **Date:** 2026-04-03\n'
+            '- **Inputs:** `2026-04-01-a.md` (76 findings, clusters C1-C11),\n'
+            '  `2026-04-02-b.md` (5 proposals), on main (PR #9).\n'
+            '- **Purpose:** close the residual tail.\n'
+            '## Headline\nwords\n',
+            encoding='utf-8',
+        )
+        idx = build_index(dd)
+    assert '- covers: `2026-04-01-a`' in idx
+    assert '- covers: `2026-04-02-b`' in idx
+    untriaged = idx.split('\n### Untriaged', 1)[1]
+    assert '`2026-04-01-a`' not in untriaged
+    assert '`2026-04-02-b`' not in untriaged
+
+
 def test_digest_carries_severity_and_extends_referent():
     # The index is the input to every recurrence check. Stripping the severity tag
     # and burying the `extends` target inside prose made "same cause?" a four-report
@@ -554,6 +606,8 @@ if __name__ == '__main__':
     test_triage_doc_without_inputs_covers_nothing()
     test_addendum_section_credits_coverage()
     test_coverage_is_fence_aware_and_credits_prose_disposition()
+    test_coverage_credits_a_counted_inputs_heading()
+    test_coverage_credits_a_labeled_inputs_bullet()
     test_help_flag_returns_zero_not_swallowed_as_dir()
     test_help_emits_utf8_bytes_under_cp1252()
     print('ok: all build_feedback_index tests passed')
