@@ -8,6 +8,29 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.16.0] - 2026-09-19
+
+`test-driven-development` sanctions one recovery path the Red step previously
+left unaddressed: for a **non-executable** artifact whose change preceded its
+test, restoring the artifact's previous version, watching the new assertions
+fail against it, and restoring the change now counts as a watched red. Code
+is unaffected — running new tests against old code is still not a substitute,
+and code that preceded its test is still deleted and redone test-first. Minor
+bump: new sanctioned behavior in the skill body, no removal.
+
+### Added
+
+- **Red-step exception for non-executable artifacts.** Documentation,
+  templates, prompt or directive text, and configuration read as data can
+  reach a watched red by restoring the artifact's prior version from version
+  control instead of a delete-and-redo rewrite. A triage owner decision
+  (2026-09-19) drew the boundary after a session recovered a red for a
+  documentation change by running new tests against the artifact's committed
+  history, which the skill's bright line had not distinguished from doing the
+  same to code. A new docs-truth check
+  (`test-driven-development/scripts/check_red_exception.py`) guards the
+  wording and the code boundary against a later edit dropping either half.
+
 ## [0.15.1] - 2026-09-19
 
 The spawn-routing hint stops firing on every `Workflow` call. Patch bump: a
