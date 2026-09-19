@@ -55,6 +55,9 @@
       "plugins/humblepowers/skills/refresh-models/scripts/test_mirror_check.py::test_a_retired_string_still_present_is_a_finding",
       "plugins/humblepowers/skills/refresh-models/scripts/test_mirror_check.py::test_unreadable_bindings_cannot_answer_and_exits_two"
     ],
+    "plugins/humblepowers/skills/test-driven-development/scripts/check_red_exception.py": [
+      "plugins/humblepowers/skills/test-driven-development/scripts/test_check_red_exception.py::test_a_body_with_no_exception_reddens_the_check"
+    ],
     "plugins/humblepowers/skills/verification-before-completion/scripts/subagent_gate.py": [
       "plugins/humblepowers/skills/verification-before-completion/scripts/test_subagent_gate.py::test_armed_blocks_the_first_stop"
     ],

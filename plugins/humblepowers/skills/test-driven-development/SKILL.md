@@ -81,6 +81,13 @@ absence. Keeping the old code "as reference" turns into adapting it, and
 adapting it is test-after with extra steps — the tests end up describing what
 the code does instead of what it should do.
 
+**Exception, non-executable artifacts only** (docs, templates, prompt or
+directive text, configuration read as data — never code): restore the
+artifact's previous version from version control, watch the new assertions
+fail against it, then restore the change. That counts as a watched failure.
+Code has no such substitute; running new tests against old code stays
+disallowed.
+
 ## Why the order matters
 
 - Tests written after the code pass immediately, and a test that has never
