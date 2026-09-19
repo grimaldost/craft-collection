@@ -6,6 +6,31 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.24.3] - 2026-09-19
+
+Two owner-approved rows from the 2026-09-19 craft-collection triage: an open-row
+reader correction, and a trigger-surface fix for the panel that handling a
+finished hand-off had been quietly excluding.
+
+### Fixed
+
+- **`feedback-triage`'s `triage_audit.py open-rows` keyed a row by its bare id,
+  so an id reused by an unrelated triage doc masked an earlier doc's still-open
+  row.** Before ids became globally unique (T67), each triage pass re-minted its
+  own local `T1a`, `T2a`, ... A row is now tracked per (id, description): the
+  same id with the same description is one row and its newest status still
+  wins, but the same id under different description text is read as a distinct
+  row, set by whichever doc most recently stated it. `open-rows` now surfaces
+  both of two historical `T1a` rows a reconciliation read found genuinely open
+  and hidden behind a later, unrelated doc's `T1a`.
+- **`review-panel`'s description excluded the one case that cost the most in the
+  2026-09-19 triage: handing a finished, self-authored assessment to someone who
+  will act on it.** The negative clause "a first-pass review of something just
+  created" read literally over a finished artifact about to be delivered, not
+  only a draft still being worked. The description now names the hand-off case
+  as a positive trigger and narrows the negative clause to a draft still being
+  worked.
+
 ## [0.24.2] - 2026-09-19
 
 Three reporting fixes: `anchor_inject.py --head-fit` names the cursor it used to
