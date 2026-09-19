@@ -41,7 +41,7 @@ One file, at a stable path the run can find again after a reset. It has two
 tiers, split by a literal `<!-- anchor:tail -->` marker line: above it the live
 **HEAD** — the only part the re-injection hook emits — and below it the
 **TAIL**, which stays on disk. A marker-less anchor still injects whole, but
-then a long run's live state is whatever the 8K bound keeps.
+then a long run's live state is whatever the 8,000-character bound keeps.
 
 HEAD — bounded, rewritten in place. **The order below is the survival order.**
 The injection reserves the cursor, then spends what is left top-down and drops
@@ -89,8 +89,8 @@ injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
    worse than a terse one.
 5. **Keep the HEAD bounded.** As a phase closes, fold its detail into a
    one-line outcome in the TAIL, below the marker. Measure rather than estimate:
-   `anchor_inject.py --head-fit <anchor>` prints the head's bytes against the
-   budget and the sections a cut would take.
+   `anchor_inject.py --head-fit <anchor>` prints the head's characters against
+   the budget and the sections a cut would take.
 6. **Make resume idempotent.** The resume steps let a fresh context recover the
    run from the anchor and the real on-disk state alone; re-entering a
    half-finished step checks the artifact before redoing it, so re-reading is
@@ -127,7 +127,7 @@ injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
   each turn start is the whole mechanism. Over budget, the cursor is reserved
   first and the rest is spent top-down on whole sections whose names the drop
   line carries, so the survival order above is a policy the author sets rather
-  than wherever the bytes ran out — and the one section a cut cannot take is the
+  than wherever the budget ran out — and the one section a cut cannot take is the
   live cursor. An anchor marked done in-content, or one that does not read as an
   anchor at all, is de-ranked below live tracks, and the injection names any
   other open anchors; the rename to `*.closed.md` remains

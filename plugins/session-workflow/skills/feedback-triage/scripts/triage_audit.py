@@ -130,11 +130,11 @@ def _row_sort_key(row: tuple[str, str, str]) -> tuple[int, str]:
 def cmd_emit(doc: Path, feedback_dir: Path) -> int:
     """Print the coverage checklist for a doc's Inputs, ready to annotate.
 
-    The claim has to carry FULL finding ids to be checkable -- an abbreviated
-    stem is exactly the fragmentation that already reads as zero coverage to the
-    index parser. Sixty-one ids is not something to retype from memory, which is
-    how the hand-written version came to be unverifiable, so the list is read out
-    of the index instead."""
+    The claim has to carry FULL finding ids to be checkable -- `uncovered`
+    matches whole ids, so an abbreviated one reads as undispositioned. Sixty-one
+    ids is not something to retype from memory, which is how the hand-written
+    version came to be unverifiable, so the list is read out of the index
+    instead."""
     text = doc.read_text(encoding='utf-8', errors='replace')
     stems = extract_inputs_coverage(text, report_stems(feedback_dir))
     for stem in stems:

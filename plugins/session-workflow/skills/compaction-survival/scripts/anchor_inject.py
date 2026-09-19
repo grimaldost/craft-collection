@@ -317,21 +317,39 @@ def anchor_cursor(text: str) -> str:
 
 
 def head_fit_report(anchor: Path) -> list[str]:
-    """What the injection would do to this anchor at its current size: head bytes,
-    the budget, the cursor section reserved, and the sections that would drop.
+    """What the injection would do to this anchor at its current size: head
+    characters, the budget, the cursor section reserved, and the sections that
+    would drop.
 
     The hook computes exactly this on every injection and the author had no way to
     ask for it — so the byte counter was hand-written three times in one session
     and a head still went out 118 bytes over budget. Measuring the HEAD, not the
-    file, is the point: the TAIL stays on disk and shrinking it buys nothing."""
+    file, is the point: the TAIL stays on disk and shrinking it buys nothing.
+
+    The unit is characters because that is what `fit_head` spends: `len()` over a
+    str. A figure labelled bytes differs from it on any non-ASCII anchor, and near
+    the budget that difference decides whether the author trims.
+
+    The cursor line reads the HEAD itself rather than `fit.cursor_reserved`: a head
+    within budget returns early with nothing reserved, and reading that empty
+    reservation as "no cursor" told an author a false thing about the anchor on
+    the common case."""
     head, has_tail = split_head(_read(anchor))
     fit = fit_head(head)
     over = len(head) - MAX_CONTEXT_CHARS
     verdict = f'OVER by {over}' if over > 0 else f'headroom {-over}'
-    lines = [f'head: {len(head)} bytes / budget {MAX_CONTEXT_CHARS}  {verdict}']
+    lines = [f'head: {len(head)} chars / budget {MAX_CONTEXT_CHARS} chars  {verdict}']
     if has_tail:
         lines.append('tail: below the marker, on disk, not injected')
-    lines.append(f'cursor reserved: {fit.cursor_reserved or "(none - this HEAD names no cursor)"}')
+    cursor = next((name for name, _ in split_sections(head) if _is_cursor_section(name)), '')
+    if fit.cursor_reserved:
+        lines.append(f'cursor reserved: {fit.cursor_reserved}')
+    elif not cursor:
+        lines.append('cursor reserved: (none - this HEAD names no cursor)')
+    elif over <= 0:
+        lines.append(f'cursor: {cursor} (no reservation needed - the head fits)')
+    else:
+        lines.append(f'cursor: {cursor} (not reserved - no other section to drop)')
     lines.append(f'would drop: {", ".join(fit.dropped) if fit.dropped else "(nothing)"}')
     if fit.byte_cut:
         lines.append('and would still be cut mid-section: one section alone overruns the budget')

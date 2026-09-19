@@ -139,8 +139,8 @@ and CHANGELOGs belong to the tool's release process.
    the doc under a disposition — a cluster's evidence, Routed out, Declined,
    Forwarded, or an explicit "no action: <reason>" — so a finding leaves the loop
    only with a disposition, never by omission. Write them as **full finding
-   ids**; `coverage --emit` prints the list to annotate, and an abbreviated stem
-   is the fragmentation the index parser already reads as zero coverage. Then
+   ids**; `coverage --emit` prints the list to annotate, and the audit matches
+   whole ids, so an abbreviated one reads as undispositioned. Then
    re-list the dir: a same-corpus triage doc that appeared since step 1 is
    reconciled with, not duplicated. Close by re-running the index builder:
    just-triaged stems still under `### Untriaged` mean the Inputs did not
