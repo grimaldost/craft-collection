@@ -260,9 +260,11 @@ def test_fragmented_stems_read_as_zero_coverage():
     # The 2026-07-22 emit failure class (T2a): Inputs written as compressed
     # prose with the date prefix factored out ("2026-01-04: foo, bar") never
     # contains a full stem, so coverage is zero and the reports resurface as
-    # Untriaged. No parser can safely reconstruct fragments — the contract is
-    # full stems (any surrounding format), and the skill's step-7 self-check
-    # (re-run the builder, read Untriaged) is the gate that catches this.
+    # Untriaged. No parser can safely reconstruct unmarked fragments — the
+    # contract is full stems (any surrounding format), or a backticked stem with
+    # an explicit ellipsis that names one report (tests below), and the skill's
+    # step-7 self-check (re-run the builder, read Untriaged) is the gate that
+    # catches the rest.
     with tempfile.TemporaryDirectory() as d:
         dd = Path(d)
         (dd / '2026-01-04-foo.md').write_text('# foo feedback — a\n', encoding='utf-8')
@@ -284,6 +286,87 @@ def test_fragmented_stems_read_as_zero_coverage():
         )
         idx = build_index(dd)
     assert '- covers: `2026-01-04-foo`' in idx
+
+
+ELL = chr(0x2026)  # the ellipsis a triage doc writes to mark an elided part of a stem
+
+
+def _abbreviation_corpus(dd: Path, stems: list[str], inputs: str) -> str:
+    for stem in stems:
+        (dd / f'{stem}.md').write_text(f'# {stem} feedback\n', encoding='utf-8')
+    (dd / '2026-02-09-triage-x.md').write_text(
+        f'# Triage - x\n## Inputs (n reports)\n{inputs}\n## Headline\nwords\n',
+        encoding='utf-8',
+    )
+    return build_index(dd)
+
+
+def test_an_elided_date_prefix_credits_the_one_report_it_names():
+    # A real keel triage doc lists its 21 inputs as `...c2-authoring` with the date
+    # elided; none was credited, so all 21 read as untriaged for three months.
+    # The explicit ellipsis is a marked abbreviation, not an unmarked fragment,
+    # and it is read when it resolves to exactly one report.
+    with tempfile.TemporaryDirectory() as d:
+        idx = _abbreviation_corpus(
+            Path(d),
+            ['2026-02-07-c2-authoring', '2026-02-07-compute-c2-execution', '2026-02-07-other'],
+            f'- **compute C2** - `{ELL}c2-authoring` (D), `{ELL}compute-c2-execution.md` (X)\n'
+            f'- noise - `{ELL}uthoring`, `{ELL}/Downloads/feedbacks/`',
+        )
+    assert '- covers: `2026-02-07-c2-authoring`' in idx
+    assert '- covers: `2026-02-07-compute-c2-execution`' in idx
+    untriaged = idx.split('\n### Untriaged', 1)[1]
+    assert '`2026-02-07-other`' in untriaged
+    assert '`2026-02-07-c2-authoring`' not in untriaged
+    assert '- ambiguous:' not in idx, 'a mid-word or path fragment is not a stem abbreviation'
+
+
+def test_an_elided_tail_credits_the_one_report_it_prefixes():
+    with tempfile.TemporaryDirectory() as d:
+        idx = _abbreviation_corpus(
+            Path(d),
+            ['2026-02-05-hand-rolled-fanout', '2026-02-05-other'],
+            f'- `2026-02-05-hand-rolled{ELL}` (X)',
+        )
+    assert '- covers: `2026-02-05-hand-rolled-fanout`' in idx
+    assert '`2026-02-05-other`' in idx.split('\n### Untriaged', 1)[1]
+
+
+def test_an_ambiguous_abbreviation_credits_nothing_and_says_so():
+    with tempfile.TemporaryDirectory() as d:
+        idx = _abbreviation_corpus(
+            Path(d),
+            [
+                '2026-02-05-foo-a',
+                '2026-02-05-foo-b',
+                '2026-02-05-bar-review',
+                '2026-02-06-x-review',
+            ],
+            f'- `2026-02-05-foo{ELL}`, `{ELL}review`',
+        )
+    coverage = idx.split('\n## Triage coverage', 1)[1].split('\n### Untriaged', 1)[0]
+    assert '- covers:' not in coverage, coverage
+    assert f'- ambiguous: `2026-02-05-foo{ELL}` matches 2 reports' in coverage, coverage
+    assert '`2026-02-05-foo-a`, `2026-02-05-foo-b`' in coverage
+    assert f'- ambiguous: `{ELL}review` matches 2 reports' in coverage, coverage
+    untriaged = idx.split('\n### Untriaged', 1)[1]
+    assert '`2026-02-05-foo-a`' in untriaged and '`2026-02-05-foo-b`' in untriaged
+
+
+def test_an_elided_date_prefers_the_report_whose_whole_slug_it_is():
+    # The same keel doc lists `...c3-execution` (the whole-wave report) next to
+    # `...compute-c3-execution` (a PR report). Both stems end in c3-execution, but
+    # an elided date names the slug after the date exactly - only one report has
+    # that slug, so the listing is not ambiguous.
+    with tempfile.TemporaryDirectory() as d:
+        idx = _abbreviation_corpus(
+            Path(d),
+            ['2026-02-08-c3-execution', '2026-02-08-compute-c3-execution'],
+            f'- `{ELL}c3-execution` (X, whole-wave)',
+        )
+    assert '- covers: `2026-02-08-c3-execution`' in idx
+    assert '- ambiguous:' not in idx
+    assert '`2026-02-08-compute-c3-execution`' in idx.split('\n### Untriaged', 1)[1]
 
 
 def test_triage_doc_without_inputs_covers_nothing():
@@ -603,6 +686,10 @@ if __name__ == '__main__':
     test_triage_coverage_and_untriaged_sections()
     test_coverage_stem_match_is_boundary_aware()
     test_fragmented_stems_read_as_zero_coverage()
+    test_an_elided_date_prefix_credits_the_one_report_it_names()
+    test_an_elided_tail_credits_the_one_report_it_prefixes()
+    test_an_ambiguous_abbreviation_credits_nothing_and_says_so()
+    test_an_elided_date_prefers_the_report_whose_whole_slug_it_is()
     test_triage_doc_without_inputs_covers_nothing()
     test_addendum_section_credits_coverage()
     test_coverage_is_fence_aware_and_credits_prose_disposition()

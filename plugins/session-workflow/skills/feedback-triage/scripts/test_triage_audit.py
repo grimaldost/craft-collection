@@ -6,7 +6,8 @@ Contract under test:
   closed without being dispositioned;
 - coverage PASSES when every finding id appears, in any surrounding prose;
 - a stem named in Inputs but absent from the doc's body still fails, because
-  naming a report there is what closes it;
+  naming a report there is what closes it - including a stem abbreviated with
+  an ellipsis, which the index credits when it names one report;
 - a doc with no `# Triage` H1 is not a triage doc;
 - `--emit` prints one line per finding, so the claim is read rather than typed;
 - open-rows reports the newest status per row and names the doc that set it;
@@ -114,6 +115,23 @@ def test_a_partially_dispositioned_report_still_fails():
         assert 'r-one#1' not in proc.stdout, 'a dispositioned finding must not be reported'
 
 
+def test_a_report_closed_by_an_abbreviated_stem_is_still_audited():
+    # The index credits `...one` (date elided, one report matches) as covered, so
+    # the audit must see the same claim: a report closed by abbreviation whose
+    # findings the doc never dispositions has to redden, not slip past.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / '2026-01-01-r-one.md').write_text(REPORT, encoding='utf-8')
+        doc = root / '2026-01-02-triage-demo.md'
+        doc.write_text(
+            f'# Triage - demo\n\n## Inputs\n\n- `{chr(0x2026)}r-one`\n\n## Clusters\n\nnothing.\n',
+            encoding='utf-8',
+        )
+        proc = run_cli('coverage', str(doc), str(root))
+        assert proc.returncode == 1, proc.stdout + proc.stderr
+        assert '2026-01-01-r-one#1' in proc.stdout
+
+
 def test_a_doc_without_a_triage_h1_is_refused():
     with tempfile.TemporaryDirectory() as d:
         doc, root = _corpus(Path(d), COVERED.replace('# Triage - demo', '# demo feedback'))
@@ -218,6 +236,7 @@ if __name__ == '__main__':
     test_covered_doc_passes()
     test_an_undispositioned_finding_reddens_coverage()
     test_a_partially_dispositioned_report_still_fails()
+    test_a_report_closed_by_an_abbreviated_stem_is_still_audited()
     test_a_doc_without_a_triage_h1_is_refused()
     test_emit_lists_every_finding_once()
     test_open_rows_takes_the_newest_status_and_names_its_doc()
