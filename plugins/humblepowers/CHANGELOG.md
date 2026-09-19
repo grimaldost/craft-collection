@@ -8,6 +8,34 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.15.1] - 2026-09-19
+
+The spawn-routing hint stops firing on every `Workflow` call. Patch bump: a
+fix to a hook that shipped in 0.15.0. (A 2026-09-17 feedback report from a
+batch dispatch: one Workflow with eight `agent()` calls, each passing `model`
+and `effort`, still drew "This spawn names no model".)
+
+### Fixed
+
+- **`inject_spawn_routing.py` reads the Workflow script.** The predicate read a
+  top-level `model` field, which the Workflow tool never has — routing lives in
+  the script, per `agent()` call — so it fired on every workflow, routed or not.
+  A signal that fires on every script trains the reader to ignore it, which
+  removes the protection for the unrouted script it exists for. On `Workflow`
+  the hook now reads the script (inline `script`, or the file at `scriptPath`,
+  resolved against the session's `cwd`) and fires only when at least one
+  `agent()` call names no model; the hint then says how many of how many. The
+  scan blanks strings, template text, comments and regex literals before
+  matching, so a prompt that mentions `agent(` or a comment that mentions
+  `model:` changes nothing; only a top-level `model` key counts, so a schema
+  property named `model` or a `meta.phases` entry routes nothing; and shared
+  options passed as a `const` or through a spread are followed. Unsure stays
+  loud: a script it cannot read or parse, a saved workflow launched by name, a
+  nested `workflow()` call, and options it cannot resolve all keep the hint.
+  The `Agent` path is unchanged. Over 240 workflow scripts persisted by past
+  sessions on the maintainer's machine, every one parsed; 170 name a model on
+  every call and now pass silently, where the old predicate fired on all 240.
+
 ## [0.15.0] - 2026-09-13
 
 `choosing-models` gets a trigger at the moment it governs. Minor bump: a new

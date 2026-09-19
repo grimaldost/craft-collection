@@ -124,7 +124,10 @@ fan-out: a 54-item batch is reminded once, at the script.
 
 Three silences keep it quiet. A spawn that already carries `model` has been
 routed — the field is present only when the caller passed one — so it says
-nothing. It emits at most once per session per ten minutes. And it ignores
+nothing. `Workflow` has no top-level `model`, so there the hook reads the script
+(inline, or the file at `scriptPath`) and stays silent only when every
+`agent()` call names a model; a script it cannot read or resolve keeps the
+hint. It emits at most once per session per ten minutes. And it ignores
 anything that is not a spawn.
 
 It is **advisory**: the payload is `additionalContext` with no

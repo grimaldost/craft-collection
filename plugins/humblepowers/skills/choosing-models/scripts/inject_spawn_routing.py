@@ -23,7 +23,12 @@ Three silences keep it from becoming the noise that gets hooks switched off:
 
   - a spawn that already carries `model` has been routed. The field is present
     in `tool_input` only when the caller passed one, so its presence IS the
-    evidence that a decision was taken rather than inherited;
+    evidence that a decision was taken rather than inherited. `Workflow` has no
+    top-level `model`: routing lives in the script, per `agent()` call, so the
+    script (inline `script`, or the file at `scriptPath`) is read and the hint
+    stays silent only when every `agent()` call names a model. A script it
+    cannot read, a call whose options it cannot resolve, and a script that runs
+    another workflow all keep the hint - unsure must not become silent;
   - at most one hint per session per HINT_COOLDOWN_S;
   - anything that is not a spawn surface.
 
@@ -52,6 +57,7 @@ import argparse
 import contextlib
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -68,11 +74,26 @@ STATE_NAME = 'spawn-hint.json'
 SPAWN_TOOLS = ('Agent', 'Workflow')
 HINT_COOLDOWN_S = 600  # one reminder per session per 10 minutes
 MAX_TRACKED_SESSIONS = 50  # the state file is a cooldown, not a history
+MAX_SCRIPT_BYTES = 2_000_000  # a workflow script larger than this is not parsed
+MAX_RESOLVE_DEPTH = 4  # const / spread hops followed to find shared options
 
-HINT = (
+AGENT_LEAD = (
     'This spawn names no model, so the agent inherits this session tier: a '
     "(model, effort) pair is being set for someone else's run by default "
-    'rather than by decision.\n'
+    'rather than by decision.'
+)
+WORKFLOW_COUNT_LEAD = (
+    '{unrouted} of {total} agent() calls in this workflow script name no model '
+    'this hook can see, so those agents inherit this session tier: a (model, '
+    "effort) pair is being set for someone else's run by default rather than by "
+    'decision.'
+)
+WORKFLOW_UNKNOWN_LEAD = (
+    'This workflow script could not be read here, or it runs another workflow, '
+    'so whether each agent() call names a model is unknown; an agent() call '
+    'with no model inherits this session tier.'
+)
+HINT_BODY = (
     'Activation test: is a (model, effort) pair about to be chosen for someone '
     "else's run? If yes, score it with the humblepowers:choosing-models rubric "
     'and pass an explicit model - that skill and its models.toml own the '
@@ -81,6 +102,7 @@ HINT = (
     'single-task exception does not apply to a batch.\n'
     f'(Once per session per {HINT_COOLDOWN_S // 60} min; {GATE}=0 silences it.)'
 )
+HINT = AGENT_LEAD + '\n' + HINT_BODY
 
 
 def _ascii(text: str) -> str:
@@ -98,11 +120,249 @@ def is_spawn(tool_name: str) -> bool:
     return tool_name in SPAWN_TOOLS
 
 
-def needs_hint(tool_name: str, tool_input: dict) -> bool:
-    """True when this call is a spawn that has NOT been routed. `model` absent
-    means the subagent's model is resolved later from its frontmatter, an env
-    var, or the parent conversation - none of which is a decision taken here."""
-    return is_spawn(tool_name) and not tool_input.get('model')
+class _UnparsedError(ValueError):
+    """The script is not balanced the way this scanner reads it."""
+
+
+def _mask(src: str) -> str:
+    """`src` with comment text and string/template contents blanked, offsets and
+    newlines kept, so brackets and names can be matched on code alone. The code
+    inside a template's `${...}` stays visible. Raises _UnparsedError on an
+    unterminated literal. A `/` opens a regex literal where an operand is
+    expected (after an operator, an opening bracket, or a keyword such as
+    `return`); a misread there fails the parse, which fails toward the hint."""
+    out = list(src)
+    n = len(src)
+
+    def blank(a: int, b: int) -> None:
+        for k in range(a, min(b, n)):
+            if out[k] not in '\r\n':
+                out[k] = ' '
+
+    def literal_end(i: int, close: str) -> int:
+        # Index of the unescaped `close` that ends a literal whose body starts
+        # at `i`; inside a regex, a `[...]` class may hold an unescaped `/`.
+        in_class = False
+        while i < n:
+            ch = src[i]
+            if ch == '\\':
+                i += 2
+                continue
+            if ch == '\n':
+                raise _UnparsedError
+            if close == '/' and in_class:
+                in_class = ch != ']'
+            elif close == '/' and ch == '[':
+                in_class = True
+            elif ch == close:
+                return i
+            i += 1
+        raise _UnparsedError
+
+    def regex_can_start(i: int) -> bool:
+        k = i - 1
+        while k >= 0 and out[k].isspace():
+            k -= 1
+        if k < 0 or out[k] in _OPERAND_EXPECTED:
+            return True
+        word = _TRAILING_WORD.search(''.join(out[max(0, k - 9) : k + 1]))
+        return bool(word) and word.group(0) in _REGEX_KEYWORDS
+
+    def code(i: int, in_expr: bool) -> int:
+        depth = 0
+        while i < n:
+            c = src[i]
+            if src.startswith('//', i):
+                j = src.find('\n', i)
+                j = n if j < 0 else j
+                blank(i, j)
+                i = j
+            elif src.startswith('/*', i):
+                j = src.find('*/', i + 2)
+                if j < 0:
+                    raise _UnparsedError
+                blank(i, j + 2)
+                i = j + 2
+            elif c in '\'"' or (c == '/' and regex_can_start(i)):
+                j = literal_end(i + 1, c)
+                blank(i + 1, j)
+                i = j + 1
+            elif c == '`':
+                i = template(i + 1)
+            elif in_expr and c == '{':
+                depth += 1
+                i += 1
+            elif in_expr and c == '}':
+                if depth == 0:
+                    return i
+                depth -= 1
+                i += 1
+            else:
+                i += 1
+        if in_expr:
+            raise _UnparsedError
+        return i
+
+    def template(i: int) -> int:
+        while i < n:
+            if src[i] == '\\':
+                blank(i, i + 2)
+                i += 2
+            elif src[i] == '`':
+                return i + 1
+            elif src.startswith('${', i):
+                blank(i, i + 2)
+                j = code(i + 2, True)
+                blank(j, j + 1)
+                i = j + 1
+            else:
+                blank(i, i + 1)
+                i += 1
+        raise _UnparsedError
+
+    code(0, False)
+    return ''.join(out)
+
+
+_OPERAND_EXPECTED = frozenset('(,=:[!&|?{};+-*%<>~^')
+_TRAILING_WORD = re.compile(r'[A-Za-z_$][\w$]*$')
+_REGEX_KEYWORDS = frozenset(
+    {'return', 'typeof', 'case', 'in', 'of', 'void', 'delete', 'throw', 'yield', 'await'}
+)
+_OPEN = {'(': ')', '[': ']', '{': '}'}
+_CLOSE = frozenset(')]}')
+_AGENT_CALL = re.compile(r'(?<![\w$.])agent\s*\(')
+_NESTED_WORKFLOW = re.compile(r'(?<![\w$.])workflow\s*\(')
+_FUNCTION_NAME = re.compile(r'function\s*\*?\s*$')
+_IDENT = re.compile(r'[A-Za-z_$][\w$]*')
+_KEY = re.compile(r'\s*(?:([\'"])([^\'"]*)\1|([A-Za-z_$][\w$]*))\s*(:?)')
+_NO_VALUE = frozenset({'undefined', 'null', "''", '""', '``'})
+
+
+def _split_top(mask: str, start: int) -> tuple[list[tuple[int, int]], int]:
+    """Top-level comma-separated spans inside the bracket opening at `start`,
+    and the index of its closing bracket. Raises _UnparsedError when unbalanced."""
+    stack = [_OPEN[mask[start]]]
+    spans: list[tuple[int, int]] = []
+    begin = start + 1
+    for i in range(begin, len(mask)):
+        c = mask[i]
+        if c in _OPEN:
+            stack.append(_OPEN[c])
+        elif c in _CLOSE:
+            if c != stack.pop():
+                raise _UnparsedError
+            if not stack:
+                spans.append((begin, i))
+                return [(a, b) for a, b in spans if mask[a:b].strip()], i
+        elif c == ',' and len(stack) == 1:
+            spans.append((begin, i))
+            begin = i + 1
+    raise _UnparsedError
+
+
+def _const_object(name: str, mask: str) -> tuple[int, int] | None:
+    """The span of the object literal a `const|let|var NAME = {...}` binds."""
+    pattern = rf'(?<![\w$.])(?:const|let|var)\s+{re.escape(name)}\s*=\s*\{{'
+    m = re.search(pattern, mask)
+    if not m:
+        return None
+    _, close = _split_top(mask, m.end() - 1)
+    return m.end() - 1, close + 1
+
+
+def _names_model(span: tuple[int, int], src: str, mask: str, depth: int = 0) -> bool:
+    """Whether the expression at `span` is an options object with a top-level
+    `model` key - directly, as shorthand, or through a spread or a const. Only
+    the top level counts: a schema property named `model` routes nothing."""
+    if depth > MAX_RESOLVE_DEPTH:
+        return False
+    a, b = span
+    text = mask[a:b].strip()
+    if _IDENT.fullmatch(text):
+        bound = _const_object(text, mask)
+        return bound is not None and _names_model(bound, src, mask, depth + 1)
+    if not (text.startswith('{') and text.endswith('}')):
+        return False
+    props, _ = _split_top(mask, a + mask[a:b].index('{'))
+    for pa, pb in props:
+        if mask[pa:pb].strip().startswith('...'):
+            inner = pa + mask[pa:pb].index('...') + 3
+            if _names_model((inner, pb), src, mask, depth + 1):
+                return True
+            continue
+        m = _KEY.match(src, pa, pb)
+        if not m or (m.group(2) or m.group(3)) != 'model':
+            continue
+        if not m.group(4):
+            return True  # shorthand `{ model }`
+        if src[m.end() : pb].strip() not in _NO_VALUE:
+            return True
+    return False
+
+
+def workflow_routing(script: str) -> tuple[int, int] | None:
+    """(unrouted, total) over the script's `agent()` calls, or None when the
+    answer is unknowable here: an unparseable script, no `agent()` call found,
+    or a nested `workflow()` whose agents live in another script."""
+    try:
+        mask = _mask(script)
+        if _NESTED_WORKFLOW.search(mask):
+            return None
+        total = unrouted = 0
+        for m in _AGENT_CALL.finditer(mask):
+            if _FUNCTION_NAME.search(mask[max(0, m.start() - 20) : m.start()]):
+                continue  # a definition named agent, not a call
+            args, _ = _split_top(mask, m.end() - 1)
+            total += 1
+            if not any(_names_model(arg, script, mask) for arg in args):
+                unrouted += 1
+    except (_UnparsedError, IndexError, ValueError):
+        return None
+    return (unrouted, total) if total else None
+
+
+def _workflow_script(tool_input: dict, cwd: str) -> str | None:
+    script = tool_input.get('script')
+    if isinstance(script, str) and script.strip():
+        return script
+    script_path = tool_input.get('scriptPath')
+    if not isinstance(script_path, str) or not script_path:
+        return None  # e.g. a saved workflow launched by name
+    path = Path(script_path)
+    if not path.is_absolute() and cwd:
+        path = Path(cwd) / path
+    try:
+        if path.stat().st_size > MAX_SCRIPT_BYTES:
+            return None
+        return path.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return None
+
+
+def hint_lead(tool_name: str, tool_input: dict, cwd: str = '') -> str | None:
+    """The hint's opening line when this call is a spawn that has NOT been
+    routed, else None. On `Agent`, `model` absent means the subagent's model is
+    resolved later from its frontmatter, an env var, or the parent conversation -
+    none of which is a decision taken here. On `Workflow` the decision is taken
+    per `agent()` call inside the script."""
+    if not is_spawn(tool_name):
+        return None
+    if tool_name != 'Workflow':
+        return None if tool_input.get('model') else AGENT_LEAD
+    script = _workflow_script(tool_input, cwd)
+    routing = workflow_routing(script) if script is not None else None
+    if routing is None:
+        return WORKFLOW_UNKNOWN_LEAD
+    unrouted, total = routing
+    if not unrouted:
+        return None
+    return WORKFLOW_COUNT_LEAD.format(unrouted=unrouted, total=total)
+
+
+def needs_hint(tool_name: str, tool_input: dict, cwd: str = '') -> bool:
+    """True when this call is a spawn that has NOT been routed."""
+    return hint_lead(tool_name, tool_input, cwd) is not None
 
 
 def due(last_ts: float, now: float, cooldown_s: int = HINT_COOLDOWN_S) -> bool:
@@ -144,7 +404,9 @@ def _pre_tool_use() -> int:
     tool_name = tool_name if isinstance(tool_name, str) else ''
     tool_input = payload.get('tool_input')
     tool_input = tool_input if isinstance(tool_input, dict) else {}
-    if not needs_hint(tool_name, tool_input):
+    cwd = payload.get('cwd')
+    lead = hint_lead(tool_name, tool_input, cwd if isinstance(cwd, str) else '')
+    if lead is None:
         return 0
 
     session = payload.get('session_id')
@@ -162,7 +424,7 @@ def _pre_tool_use() -> int:
             {
                 'hookSpecificOutput': {
                     'hookEventName': 'PreToolUse',
-                    'additionalContext': _ascii(HINT),
+                    'additionalContext': _ascii(lead + '\n' + HINT_BODY),
                 }
             }
         )
