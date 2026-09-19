@@ -79,7 +79,7 @@ def fetch_pypi_version(package: str, pinned_min: str) -> dict:
     """
     url = f'https://pypi.org/pypi/{package}/json'
     try:
-        req = urllib.request.Request(url, headers={'Accept': 'application/json'})  # noqa: S310 - fixed https host
+        req = urllib.request.Request(url, headers={'Accept': 'application/json'})
         with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 - fixed https host
             data = json.loads(resp.read().decode())
         version = data['info']['version']
