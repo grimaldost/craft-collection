@@ -5,6 +5,9 @@ with each release. History before 0.3.2 lives in git (`git log -- plugins/humble
 0.1.0–0.3.1 covered the initial five-skill port, the `planned-execution` skill (0.3.0),
 and the honest-cross-tool-references + MIT-license pass (0.3.1).
 
+Tags start at 0.13.0; earlier versions were released before this plugin's releases were
+tagged.
+
 ## [0.15.0] - 2026-09-13
 
 `choosing-models` gets a trigger at the moment it governs. Minor bump: a new
@@ -585,7 +588,12 @@ and the tier data caught up with the lineup the machines are actually served.
   growth against a 32x bound, versus ~8.7x for the shipped rules).
   (CRAF-B26 / T50c)
 
-## [Unreleased]
+### Changed earlier, first released here
+
+This change reached `main` on 2026-07-26 under an `Unreleased` heading while the
+version stayed at 0.8.0, so no installed copy could receive it until this bump; it
+ships in 0.9.0. The heading sat below 0.9.0 until 2026-09, which read as work
+still pending.
 
 The `experiment-rigor` skill shipped on this branch as 0.9.0 and 0.10.0 and is
 extracted into its own plugin before either was released
@@ -593,8 +601,6 @@ extracted into its own plugin before either was released
 `plugins/experiment-discipline/CHANGELOG.md` as that plugin's 0.1.0 birth entry,
 and this plugin's version rolls back to **0.8.0**. What remains here is the one
 change humblepowers actually owns.
-
-### Changed
 
 - **The dispatch router row for `experiment-rigor` is now cross-plugin**:
   `humblepowers:experiment-rigor` -> `experiment-discipline:experiment-rigor` in
