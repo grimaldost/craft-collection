@@ -51,6 +51,13 @@ def test_load_precommit():
         assert load_precommit(_write_stack(Path(d))) == {'ruff-pre-commit': 'v0.15.7'}
 
 
+def test_real_stack_pins_current_ruff_precommit_rev():
+    # The repo's own stack.toml (not the arbitrary fixture above) must not drift
+    # behind the ruff-pre-commit rev the collection's own .pre-commit-config.yaml
+    # already uses.
+    assert load_precommit()['ruff-pre-commit'] == 'v0.16.8'
+
+
 def test_is_behind():
     assert is_behind('0.15', '0.18') is True
     assert is_behind('0.15', '0.15') is False
@@ -110,6 +117,7 @@ def test_total_fetch_failure_yields_errors_and_exit_2():
 if __name__ == '__main__':
     test_load_tools()
     test_load_precommit()
+    test_real_stack_pins_current_ruff_precommit_rev()
     test_is_behind()
     # fetch-failure unit test: emulate monkeypatch by swapping urlopen directly.
     _orig = urllib.request.urlopen

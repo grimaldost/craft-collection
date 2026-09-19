@@ -6,6 +6,21 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.5.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.5.1] - 2026-09-19
+
+The `python-engineering` recommended stack still pinned `ruff-pre-commit` to
+`v0.15.7`, the version the collection's own `.pre-commit-config.yaml` had
+already moved past to `v0.16.8` — a scaffolded project or a `check_versions`
+run against the current `stack.toml` both quoted a rev the collection no
+longer runs itself. Patch bump, no other behavior change.
+
+### Changed
+
+- **`python-engineering/stack.toml` and `scaffold.py`** — `ruff-pre-commit`
+  moved from `v0.15.7` to `v0.16.8`, matching this repo's own pin. Guarded by
+  two new regression tests (`test_scaffold.py`,
+  `test_check_versions.py`) so the two copies cannot drift silently again.
+
 ## [0.5.0] - 2026-08-11
 
 `data-engineering-discipline` vNext: a re-tiering with three new rejecting
