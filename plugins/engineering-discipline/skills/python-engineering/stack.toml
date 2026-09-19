@@ -109,4 +109,4 @@ category = "tooling"
 
 [precommit]
 "pre-commit-hooks" = "v5.0.0"
-"ruff-pre-commit" = "v0.15.7"
+"ruff-pre-commit" = "v0.16.8"
