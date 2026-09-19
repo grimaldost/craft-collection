@@ -43,51 +43,48 @@ jobs:
           persist-credentials: false
           ref: main
           fetch-depth: 0 # full history, so the tags come with it
-      - name: every released plugin version is tagged
+      - name: every released version is tagged
+        # One Python step instead of a shell pipeline: nothing here can pass because
+        # an interpreter was missing or a pipe swallowed an exit status.
         run: |
-          # One "<plugin>--vX.Y.Z" per line, for every dated heading at or above
-          # that changelog's cut-off. [Unreleased] carries no date and the pattern
-          # skips it by construction. The cut-off is searched for in the preamble
-          # only (before the first "## " heading), so a release entry that quotes
-          # the sentence cannot move it. Versions compare as integer tuples:
-          # compared as strings, 0.10.0 sorts below 0.9.0.
-          #
-          # `tr -d` strips a carriage return. This runner is Linux and python3
-          # emits LF here, but the same lines are what a maintainer runs by hand
-          # on Windows, where print() translates to CRLF and every tag name would
-          # carry a trailing CR into the ref lookup and be reported missing.
-          expected=$(python3 - <<'PY' | tr -d '\r'
-          import pathlib, re
-          def key(v):
-              return tuple(int(part) for part in v.split('.'))
-          for changelog in sorted(pathlib.Path('plugins').glob('*/CHANGELOG.md')):
-              plugin = changelog.parent.name
-              text = changelog.read_text(encoding='utf-8')
-              preamble = re.split(r'^## ', text, maxsplit=1, flags=re.M)[0]
-              cut = re.search(r'Tags start at (\d+\.\d+\.\d+)', preamble)
-              for version in re.findall(r'^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}', text, re.M):
-                  if cut is None or key(version) >= key(cut.group(1)):
-                      print(f'{plugin}--v{version}')
+          python3 - <<'PY'
+          import pathlib, re, subprocess, sys
+
+          # Single-CHANGELOG repositories: one entry, tag prefix "v".
+          # craft-collection: one entry per plugins/<name>/CHANGELOG.md, prefix "<name>--v".
+          TARGETS = [
+              (path, f"{path.parent.name}--v")
+              for path in sorted(pathlib.Path("plugins").glob("*/CHANGELOG.md"))
+          ]
+
+          def released(path):
+              text = path.read_text(encoding="utf-8")
+              first = re.search(r"^## \[", text, re.M)
+              preamble = text[: first.start()] if first else text
+              cut = re.search(r"Tags start at (\d+)\.(\d+)\.(\d+)", preamble)
+              floor = tuple(map(int, cut.groups())) if cut else (0, 0, 0)
+              found = [tuple(map(int, v)) for v in re.findall(r"^## \[(\d+)\.(\d+)\.(\d+)\]", text, re.M)]
+              return found, [v for v in found if v >= floor]
+
+          def tagged(name):
+              probe = ["git", "rev-parse", "-q", "--verify", f"refs/tags/{name}"]
+              return subprocess.run(probe, capture_output=True).returncode == 0
+
+          missing, checked = [], 0
+          for path, prefix in TARGETS:
+              found, due = released(path)
+              if not found:
+                  # A CHANGELOG with no parseable version is a changed format, not a clean bill.
+                  print(f"::error::{path} has no '## [X.Y.Z]' heading this check can read.")
+                  sys.exit(1)
+              for version in due:
+                  name = prefix + ".".join(map(str, version))
+                  checked += 1
+                  if not tagged(name):
+                      missing.append(name)
+
+          if missing:
+              print("::error::Released versions with no tag: " + ", ".join(missing) + ". Tag the release PR's merge commit on main: claude plugin tag plugins/<plugin> --push")
+              sys.exit(1)
+          print(f"{checked} released version(s) checked, all tagged.")
           PY
-          )
-          if [ -z "$expected" ]; then
-            # An empty list would pass the loop below silently; a parser that
-            # stopped matching must fail, not report "every version is tagged".
-            echo "::error::No dated CHANGELOG version found under plugins/*/CHANGELOG.md; the heading grammar or the layout changed and this check no longer sees any release."
-            exit 1
-          fi
-          missing=""
-          for tag in $expected; do
-            git rev-parse -q --verify "refs/tags/$tag" > /dev/null || missing="$missing $tag"
-          done
-          # Every miss in one run rather than exiting on the first: a backlog
-          # revealed one tag per day is a backlog nobody sees the shape of.
-          if [ -n "$missing" ]; then
-            echo "::error::Plugin CHANGELOGs record released versions with no matching tag:$missing. The tag is what identifies a release, so an untagged version leaves 'what was released' unanswerable. Tag each release PR's merge commit on main: git tag -a <plugin>--vX.Y.Z -m '<plugin> X.Y.Z' <commit> && git push origin <plugin>--vX.Y.Z"
-            exit 1
-          fi
-          echo "every dated plugin version at or above its changelog's cut-off is tagged:"
-          # `^{}` dereferences the annotated tag to the commit it points at.
-          # Without it this prints the tag OBJECT's sha, which appears nowhere in
-          # `git log` and so cannot be checked against anything.
-          for tag in $expected; do echo "  $tag -> $(git rev-parse --short "$tag^{}")"; done
