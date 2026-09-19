@@ -6,6 +6,22 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.24.1] - 2026-09-19
+
+`build_feedback_index.py`'s coverage parser missed two Inputs shapes real triage docs
+use, so reports named only there kept resurfacing as Untriaged. Patch bump, no other
+behavior change.
+
+### Fixed
+
+- **`build_feedback_index.py` coverage parsing** — a `## Inputs (N reports)` heading
+  (a parenthetical count after the heading word) already matched the existing
+  `## Inputs` detection incidentally, but had no regression test pinning it; a
+  standalone `- **Inputs:** …` metadata bullet (alongside sibling `- **Date:**` /
+  `- **Purpose:**` bullets, with no `## Inputs` heading at all) did not, and its
+  reports stayed Untriaged. `_coverage_text` now also recognizes the labeled bullet
+  and its indented continuation lines as a coverage source.
+
 ## [0.24.0] - 2026-09-13
 
 The injection stops losing the one section it exists to carry, and a version

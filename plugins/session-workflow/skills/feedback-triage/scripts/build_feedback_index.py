@@ -205,14 +205,21 @@ def _is_report(p: Path) -> bool:
 
 _COVERAGE_HEADING = re.compile(r'^#{2,4}\s+(?:inputs\b|addendum\b)', re.IGNORECASE)
 _ANY_HEADING = re.compile(r'^#{1,6}\s')
+# The metadata-bullet shape some triage docs use instead of an "## Inputs" heading —
+# a flush-left "- **Inputs:** …" line right under the H1, alongside sibling
+# "- **Date:**" / "- **Purpose:**" bullets. Its value can wrap onto indented
+# continuation lines (no leading "- "), which end at the next flush-left bullet,
+# a blank line, or a heading.
+_INPUTS_BULLET = re.compile(r'^-\s+\*\*Inputs:\*\*\s*(.*)$', re.IGNORECASE)
 
 
 def _coverage_text(text: str) -> str:
-    """Body text of a triage doc's coverage-bearing sections — the `## Inputs` list
-    plus any dated `## Addendum …` sections. Whole-section (not list-items-only) on
-    purpose: a report is sometimes closed in Inputs *prose* rather than a list item
-    (e.g. "two earlier un-listed reports closed here for the input-list test"), and
-    that disposition must count. The cost is that a stem merely *named in passing* in
+    """Body text of a triage doc's coverage-bearing sections — the `## Inputs` list,
+    any dated `## Addendum …` sections, and a standalone `- **Inputs:** …` metadata
+    bullet (see `_INPUTS_BULLET`). Whole-section (not list-items-only) on purpose: a
+    report is sometimes closed in Inputs *prose* rather than a list item (e.g. "two
+    earlier un-listed reports closed here for the input-list test"), and that
+    disposition must count. The cost is that a stem merely *named in passing* in
     a coverage section ("unlike report-x") is also credited — the authoring
     convention is to name in a coverage section only reports the pass dispositions.
     Fence-aware, so a `#`-comment inside a fenced command block does not
@@ -223,16 +230,30 @@ def _coverage_text(text: str) -> str:
     re-opens capture, so it is not lost."""
     out: list[str] = []
     capturing = False
+    in_bullet = False
     in_fence = False
     for line in text.splitlines():
         if _FENCE.match(line):
             in_fence = not in_fence
+            in_bullet = False
             continue
         if in_fence:
             continue
         if _ANY_HEADING.match(line):
             capturing = bool(_COVERAGE_HEADING.match(line))
+            in_bullet = False
             continue
+        m = _INPUTS_BULLET.match(line)
+        if m:
+            out.append(m.group(1))
+            in_bullet = True
+            continue
+        if in_bullet:
+            if not line.strip() or _BULLET.match(line):
+                in_bullet = False
+            else:
+                out.append(line)
+                continue
         if capturing:
             out.append(line)
     return '\n'.join(out)
