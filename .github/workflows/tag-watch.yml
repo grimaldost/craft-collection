@@ -1,0 +1,93 @@
+name: tag-watch
+
+# The one release artifact no test can see. check_release_discipline.py holds a
+# plugin's plugin.json version to its newest CHANGELOG heading, so a half-done bump
+# fails the PR. Nothing held the tag, and the tag is what
+# `git show <plugin>--vX.Y.Z` and `git log <plugin>--v0.23.0..<plugin>--v0.24.0`
+# answer from: an untagged release leaves "what was released" unanswerable while
+# every gate stays green.
+#
+# EVERY plugin, and EVERY released version of each, not just the current one. A
+# release superseded before the next scheduled run would otherwise never be looked
+# at again, and here that is routine: one PR can release two plugins, and a plugin
+# can release twice in a day.
+#
+# The cut-off is read from each CHANGELOG, not kept here. Per-plugin tagging went
+# dormant for most of the collection's history (CONTRIBUTING, "Releasing"), so
+# each changelog's preamble says where its tags start ("Tags start at X.Y.Z") and
+# older dated versions are skipped. A changelog without that sentence has every
+# dated version checked, so a new plugin is watched from its first release.
+#
+# Scheduled rather than push-triggered, deliberately. The release PR merges first
+# and its merge commit is tagged immediately afterwards (CONTRIBUTING,
+# "Releasing"), so a push gate would fail every release by construction and leave
+# that commit permanently red even once tagged. An alarm that is wrong at first is
+# an alarm people learn to ignore. A scheduled run re-evaluates, so the alarm
+# clears by itself the next morning; workflow_dispatch clears it immediately.
+
+# Least privilege: the check reads the checkout and its tags.
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  tagged:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: main
+          fetch-depth: 0 # full history, so the tags come with it
+      - name: every released plugin version is tagged
+        run: |
+          # One "<plugin>--vX.Y.Z" per line, for every dated heading at or above
+          # that changelog's cut-off. [Unreleased] carries no date and the pattern
+          # skips it by construction. The cut-off is searched for in the preamble
+          # only (before the first "## " heading), so a release entry that quotes
+          # the sentence cannot move it. Versions compare as integer tuples:
+          # compared as strings, 0.10.0 sorts below 0.9.0.
+          #
+          # `tr -d` strips a carriage return. This runner is Linux and python3
+          # emits LF here, but the same lines are what a maintainer runs by hand
+          # on Windows, where print() translates to CRLF and every tag name would
+          # carry a trailing CR into the ref lookup and be reported missing.
+          expected=$(python3 - <<'PY' | tr -d '\r'
+          import pathlib, re
+          def key(v):
+              return tuple(int(part) for part in v.split('.'))
+          for changelog in sorted(pathlib.Path('plugins').glob('*/CHANGELOG.md')):
+              plugin = changelog.parent.name
+              text = changelog.read_text(encoding='utf-8')
+              preamble = re.split(r'^## ', text, maxsplit=1, flags=re.M)[0]
+              cut = re.search(r'Tags start at (\d+\.\d+\.\d+)', preamble)
+              for version in re.findall(r'^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}', text, re.M):
+                  if cut is None or key(version) >= key(cut.group(1)):
+                      print(f'{plugin}--v{version}')
+          PY
+          )
+          if [ -z "$expected" ]; then
+            # An empty list would pass the loop below silently; a parser that
+            # stopped matching must fail, not report "every version is tagged".
+            echo "::error::No dated CHANGELOG version found under plugins/*/CHANGELOG.md; the heading grammar or the layout changed and this check no longer sees any release."
+            exit 1
+          fi
+          missing=""
+          for tag in $expected; do
+            git rev-parse -q --verify "refs/tags/$tag" > /dev/null || missing="$missing $tag"
+          done
+          # Every miss in one run rather than exiting on the first: a backlog
+          # revealed one tag per day is a backlog nobody sees the shape of.
+          if [ -n "$missing" ]; then
+            echo "::error::Plugin CHANGELOGs record released versions with no matching tag:$missing. The tag is what identifies a release, so an untagged version leaves 'what was released' unanswerable. Tag each release PR's merge commit on main: git tag -a <plugin>--vX.Y.Z -m '<plugin> X.Y.Z' <commit> && git push origin <plugin>--vX.Y.Z"
+            exit 1
+          fi
+          echo "every dated plugin version at or above its changelog's cut-off is tagged:"
+          # `^{}` dereferences the annotated tag to the commit it points at.
+          # Without it this prints the tag OBJECT's sha, which appears nowhere in
+          # `git log` and so cannot be checked against anything.
+          for tag in $expected; do echo "  $tag -> $(git rev-parse --short "$tag^{}")"; done
