@@ -3,6 +3,9 @@
 All notable changes to this plugin are documented here. Bump the `version` in
 `.claude-plugin/plugin.json` with each release.
 
+Tags start at 0.23.0; earlier versions were released before this plugin's releases were
+tagged.
+
 ## [0.24.0] - 2026-09-13
 
 The injection stops losing the one section it exists to carry, and a version

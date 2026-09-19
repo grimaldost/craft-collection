@@ -1,0 +1,90 @@
+name: tag-watch
+
+# The one release artifact no test can see. check_release_discipline.py holds a
+# plugin's plugin.json version to its newest CHANGELOG heading, so a half-done bump
+# fails the PR. Nothing held the tag, and the tag is what
+# `git show <plugin>--vX.Y.Z` and `git log <plugin>--v0.23.0..<plugin>--v0.24.0`
+# answer from: an untagged release leaves "what was released" unanswerable while
+# every gate stays green.
+#
+# EVERY plugin, and EVERY released version of each, not just the current one. A
+# release superseded before the next scheduled run would otherwise never be looked
+# at again, and here that is routine: one PR can release two plugins, and a plugin
+# can release twice in a day.
+#
+# The cut-off is read from each CHANGELOG, not kept here. Per-plugin tagging went
+# dormant for most of the collection's history (CONTRIBUTING, "Releasing"), so
+# each changelog's preamble says where its tags start ("Tags start at X.Y.Z") and
+# older dated versions are skipped. A changelog without that sentence has every
+# dated version checked, so a new plugin is watched from its first release.
+#
+# Scheduled rather than push-triggered, deliberately. The release PR merges first
+# and its merge commit is tagged immediately afterwards (CONTRIBUTING,
+# "Releasing"), so a push gate would fail every release by construction and leave
+# that commit permanently red even once tagged. An alarm that is wrong at first is
+# an alarm people learn to ignore. A scheduled run re-evaluates, so the alarm
+# clears by itself the next morning; workflow_dispatch clears it immediately.
+
+# Least privilege: the check reads the checkout and its tags.
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  tagged:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: main
+          fetch-depth: 0 # full history, so the tags come with it
+      - name: every released version is tagged
+        # One Python step instead of a shell pipeline: nothing here can pass because
+        # an interpreter was missing or a pipe swallowed an exit status.
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, subprocess, sys
+
+          # Single-CHANGELOG repositories: one entry, tag prefix "v".
+          # craft-collection: one entry per plugins/<name>/CHANGELOG.md, prefix "<name>--v".
+          TARGETS = [
+              (path, f"{path.parent.name}--v")
+              for path in sorted(pathlib.Path("plugins").glob("*/CHANGELOG.md"))
+          ]
+
+          def released(path):
+              text = path.read_text(encoding="utf-8")
+              first = re.search(r"^## \[", text, re.M)
+              preamble = text[: first.start()] if first else text
+              cut = re.search(r"Tags start at (\d+)\.(\d+)\.(\d+)", preamble)
+              floor = tuple(map(int, cut.groups())) if cut else (0, 0, 0)
+              found = [tuple(map(int, v)) for v in re.findall(r"^## \[(\d+)\.(\d+)\.(\d+)\]", text, re.M)]
+              return found, [v for v in found if v >= floor]
+
+          def tagged(name):
+              probe = ["git", "rev-parse", "-q", "--verify", f"refs/tags/{name}"]
+              return subprocess.run(probe, capture_output=True).returncode == 0
+
+          missing, checked = [], 0
+          for path, prefix in TARGETS:
+              found, due = released(path)
+              if not found:
+                  # A CHANGELOG with no parseable version is a changed format, not a clean bill.
+                  print(f"::error::{path} has no '## [X.Y.Z]' heading this check can read.")
+                  sys.exit(1)
+              for version in due:
+                  name = prefix + ".".join(map(str, version))
+                  checked += 1
+                  if not tagged(name):
+                      missing.append(name)
+
+          if missing:
+              print("::error::Released versions with no tag: " + ", ".join(missing) + ". Tag the release PR's merge commit on main: claude plugin tag plugins/<plugin> --push")
+              sys.exit(1)
+          print(f"{checked} released version(s) checked, all tagged.")
+          PY

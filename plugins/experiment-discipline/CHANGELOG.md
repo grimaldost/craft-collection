@@ -3,6 +3,9 @@
 Notable changes to this plugin. Bump the `version` in `.claude-plugin/plugin.json`
 with each release.
 
+Tags start at 0.3.0; earlier versions were released before this plugin's releases were
+tagged.
+
 ## [0.3.3] - 2026-09-05
 
 ### Changed
