@@ -6,6 +6,10 @@ Contract under test:
   is the measured failure: 43 subagents at inherited frontier tiers, and a
   139-agent programme routed by nothing);
 - SILENT on a spawn that names a model - that decision was already taken;
+- on `Workflow`, which has no top-level `model`, the script is read (inline
+  `script`, or the file at `scriptPath`) and the hint fires only when some
+  `agent()` call names no model; a script it cannot read or resolve keeps the
+  hint, because unsure must not become silent;
 - at most one hint per session per cooldown window, so a fan-out is reminded
   once at the script rather than once per agent;
 - never emits a permissionDecision: an advisory hook must not change whether a
@@ -35,6 +39,7 @@ def run_hook(
     session: str = 's1',
     gate: str | None = None,
     raw: str | None = None,
+    cwd: str | None = None,
 ):
     env = dict(os.environ)
     env.pop('HUMBLEPOWERS_SPAWN_ROUTING_HINT', None)
@@ -50,6 +55,7 @@ def run_hook(
                 'session_id': session,
                 'tool_name': tool_name,
                 'tool_input': tool_input if tool_input is not None else {'subagent_type': 'x'},
+                **({'cwd': cwd} if cwd is not None else {}),
             }
         )
     )
@@ -162,6 +168,144 @@ def test_the_payload_is_ascii_for_a_codepage_limited_console():
         proc.stdout.encode('ascii')
 
 
+# --- Workflow: the routing lives inside the script, per agent() call --------
+#
+# The Workflow tool has no top-level `model` field, so the Agent-shaped
+# predicate fired on every workflow launch, routed or not (2026-09-17 report:
+# eight agent() calls, each with model and effort, drew the "names no model"
+# hint). A signal that fires on every script trains the reader to ignore it.
+
+ROUTED_SCRIPT = """export const meta = {
+  name: 'batch',
+  description: 'summarize then verify',
+  phases: [{ title: 'Summarize' }, { title: 'Verify', model: 'opus' }],
+}
+const SCHEMA = { type: 'object', properties: { model: { type: 'string' } } }
+phase('Summarize')
+const notes = await parallel(ITEMS.map(i => () =>
+  agent(`Summarize ${i}. Do not call agent( yourself.`, { model: 'sonnet', effort: 'low' })))
+const verdicts = await pipeline(notes, n =>
+  agent('Try to refute: ' + n, {
+    label: 'verify',
+    schema: SCHEMA,
+    'model': 'sonnet',
+    effort: 'medium',
+  }))
+return verdicts
+"""
+
+UNROUTED_ONE = ROUTED_SCRIPT.replace(
+    'return verdicts',
+    "// a comment that says model: 'haiku' is not an option\n"
+    "const critic = await agent('What is missing?', { label: 'critic', schema: SCHEMA })\n"
+    'return verdicts',
+)
+
+
+def test_a_workflow_whose_every_agent_call_names_a_model_is_left_alone():
+    # Includes the traps a substring count falls into: a prompt that mentions
+    # `agent(`, a meta phase entry carrying `model` (display only), a schema
+    # with a property named `model`, and a quoted `'model'` key.
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': ROUTED_SCRIPT})
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout.strip() == '', proc.stdout
+
+
+def test_a_workflow_with_one_agent_call_that_names_no_model_fires():
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': UNROUTED_ONE})
+        assert proc.returncode == 0, proc.stderr
+        ctx = _ctx(proc)
+        assert 'choosing-models' in ctx
+        assert '1 of 3 agent() calls' in ctx, ctx
+
+
+def test_an_agent_spawn_without_a_model_still_fires():
+    # The Agent-tool behaviour is unchanged: no `model` field is the signal.
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Agent', tool_input={'subagent_type': 'x'})
+        assert proc.returncode == 0, proc.stderr
+        assert 'This spawn names no model' in _ctx(proc)
+
+
+def test_a_workflow_script_is_read_from_script_path_relative_to_cwd():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / 'wf').mkdir()
+        (root / 'wf' / 'routed.js').write_text(ROUTED_SCRIPT, encoding='utf-8')
+        (root / 'wf' / 'unrouted.js').write_text(UNROUTED_ONE, encoding='utf-8')
+        routed = run_hook(
+            root / 'state-a',
+            tool_name='Workflow',
+            tool_input={'scriptPath': 'wf/routed.js'},
+            cwd=str(root),
+        )
+        assert routed.stdout.strip() == '', routed.stdout
+        absolute = run_hook(
+            root / 'state-b',
+            tool_name='Workflow',
+            tool_input={'scriptPath': str(root / 'wf' / 'unrouted.js')},
+        )
+        assert '1 of 3 agent() calls' in _ctx(absolute)
+
+
+def test_a_workflow_it_cannot_read_fails_toward_the_hint():
+    # Unsure is not silent: a missing file, a saved workflow launched by name,
+    # and a script that runs another workflow all keep the reminder.
+    nested = ROUTED_SCRIPT.replace('return verdicts', "return workflow('other-batch')")
+    cases = (
+        {'scriptPath': 'no/such/file.js'},
+        {'name': 'saved-batch'},
+        {'script': nested},
+        {'script': 'const x = 1\n'},
+        {'script': "agent('unterminated, { model: 'sonnet' })"},
+    )
+    for i, tool_input in enumerate(cases):
+        with tempfile.TemporaryDirectory() as d:
+            proc = run_hook(Path(d), tool_name='Workflow', tool_input=tool_input)
+            assert proc.returncode == 0, (tool_input, proc.stderr)
+            assert 'choosing-models' in _ctx(proc), (i, tool_input)
+
+
+def test_a_regex_literal_holding_a_quote_does_not_break_the_parse():
+    # Real workflow scripts validate args with regex literals such as
+    # /[`\n\r]/ - a quote or backtick inside one must not open a string.
+    script = ROUTED_SCRIPT.replace(
+        'phase(',
+        "if (/[`'\\n]/.test(args.x) || /\\//.test(args.y)) log('odd')\n"
+        'const half = total / 2 / 1\n'
+        'phase(',
+        1,
+    )
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': script})
+        assert proc.stdout.strip() == '', proc.stdout
+
+
+def test_shared_options_resolve_through_a_const_and_a_spread():
+    script = (
+        "const CHEAP = { model: 'haiku', effort: 'low' }\n"
+        "const a = await agent('one', CHEAP)\n"
+        "const b = await agent('two', { ...CHEAP, label: 'two' })\n"
+        "const c = await agent('three', { model })\n"
+    )
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': script})
+        assert proc.stdout.strip() == '', proc.stdout
+    unresolved = 'async function run(p, opts) { return agent(p, opts) }\n'
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': unresolved})
+        assert '1 of 1 agent() calls' in _ctx(proc)
+
+
+def test_a_model_set_to_undefined_is_not_a_routing_decision():
+    script = "await agent('x', { model: undefined, effort: 'low' })\n"
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': script})
+        assert '1 of 1 agent() calls' in _ctx(proc)
+
+
 if __name__ == '__main__':
     test_it_fires_at_the_spawn_with_no_env_set()
     test_the_opt_out_silences_it()
@@ -173,4 +317,12 @@ if __name__ == '__main__':
     test_a_tool_that_is_not_a_spawn_surface_is_silent()
     test_every_failure_path_exits_zero_and_says_nothing()
     test_the_payload_is_ascii_for_a_codepage_limited_console()
+    test_a_workflow_whose_every_agent_call_names_a_model_is_left_alone()
+    test_a_workflow_with_one_agent_call_that_names_no_model_fires()
+    test_an_agent_spawn_without_a_model_still_fires()
+    test_a_workflow_script_is_read_from_script_path_relative_to_cwd()
+    test_a_workflow_it_cannot_read_fails_toward_the_hint()
+    test_a_regex_literal_holding_a_quote_does_not_break_the_parse()
+    test_shared_options_resolve_through_a_const_and_a_spread()
+    test_a_model_set_to_undefined_is_not_a_routing_decision()
     print('ok: all inject_spawn_routing tests passed')
