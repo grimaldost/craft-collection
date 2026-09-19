@@ -801,6 +801,62 @@ def test_head_fit_measures_the_head_not_the_whole_file():
         assert 'headroom' in proc.stdout.lower(), 'the 30K tail must not count against the head'
 
 
+def test_head_fit_names_the_cursor_of_a_head_that_fits():
+    # `fit_head` returns early on a head within budget, with nothing reserved,
+    # and the report used to read that empty reservation as "this HEAD names no
+    # cursor" - a false statement about the anchor on the common, in-budget case
+    # (2026-09-17 report: an author went reading the source to check a heading
+    # that was fine).
+    with tempfile.TemporaryDirectory() as d:
+        proc = _head_fit(str(make_anchor(Path(d))))
+        assert proc.returncode == 0, proc.stderr
+        assert 'names no cursor' not in proc.stdout, proc.stdout
+        cursor_line = next(ln for ln in proc.stdout.splitlines() if ln.startswith('cursor'))
+        assert 'Cursor' in cursor_line, cursor_line
+        assert 'fits' in cursor_line, 'say why nothing was reserved: ' + cursor_line
+
+
+def test_head_fit_does_not_claim_a_fit_for_a_lone_cursor_over_budget():
+    # A HEAD that is one cursor section and nothing else has no other section to
+    # drop, so `fit_head` cuts it without reserving anything. The report must name
+    # the cursor without saying the head fits.
+    with tempfile.TemporaryDirectory() as d:
+        anchor = Path(d) / 'run.md'
+        anchor.write_text('# Cursor\nnext: step 7\n' + 'x' * 9_000 + '\n', encoding='utf-8')
+        proc = _head_fit(str(anchor))
+        assert proc.returncode == 0, proc.stderr
+        cursor_line = next(ln for ln in proc.stdout.splitlines() if ln.startswith('cursor'))
+        assert 'Cursor' in cursor_line, cursor_line
+        assert 'fits' not in cursor_line, cursor_line
+        assert 'OVER' in proc.stdout
+
+
+def test_head_fit_says_no_cursor_only_when_the_head_has_none():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = make_anchor(Path(d), body='# Mission\ntest mission\n# Plan\nsteps\n')
+        proc = _head_fit(str(anchor))
+        assert proc.returncode == 0, proc.stderr
+        assert 'names no cursor' in proc.stdout, proc.stdout
+
+
+def test_head_fit_reports_the_unit_the_budget_is_enforced_in():
+    # The budget is enforced as len() over a str - characters - and the report
+    # labelled the same figure "bytes". On a non-ASCII anchor the two differ, and
+    # near the budget the difference decides whether the author trims.
+    with tempfile.TemporaryDirectory() as d:
+        anchor = make_anchor(
+            Path(d),
+            body='# Missao\n' + 'revisao da configuracao ' * 3 + 'ção' * 40 + '\n'
+            '# Cursor\nnext: step 7\n',
+        )
+        head = anchor.read_text(encoding='utf-8')  # marker-less: the head is the file
+        assert len(head) != len(head.encode('utf-8')), 'fixture must tell the units apart'
+        proc = _head_fit(str(anchor))
+        assert proc.returncode == 0, proc.stderr
+        assert f'head: {len(head)} chars / budget 8000 chars' in proc.stdout, proc.stdout
+        assert 'bytes' not in proc.stdout
+
+
 def test_head_fit_refuses_a_path_that_is_not_there_rather_than_printing_a_clean_bill():
     with tempfile.TemporaryDirectory() as d:
         proc = _head_fit(str(Path(d) / 'nope.md'))
@@ -986,6 +1042,10 @@ if __name__ == '__main__':
     test_head_fit_reports_the_number_the_author_was_counting_by_hand()
     test_head_fit_on_an_anchor_that_fits_says_so_and_drops_nothing()
     test_head_fit_measures_the_head_not_the_whole_file()
+    test_head_fit_names_the_cursor_of_a_head_that_fits()
+    test_head_fit_does_not_claim_a_fit_for_a_lone_cursor_over_budget()
+    test_head_fit_says_no_cursor_only_when_the_head_has_none()
+    test_head_fit_reports_the_unit_the_budget_is_enforced_in()
     test_head_fit_refuses_a_path_that_is_not_there_rather_than_printing_a_clean_bill()
     test_everything_after_the_first_overrun_is_dropped()
     test_headings_inside_fenced_code_are_not_section_boundaries()

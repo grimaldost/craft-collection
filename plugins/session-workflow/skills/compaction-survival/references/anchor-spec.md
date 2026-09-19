@@ -90,8 +90,9 @@ Measure a draft before it ships:
 python <plugin>/skills/compaction-survival/scripts/anchor_inject.py --head-fit <anchor>
 ```
 
-It prints head bytes against the budget, the cursor section it would reserve,
-and the sections that would drop at the current size. That number is not
+It prints the head's size in characters (the unit the hook spends) against the
+budget, the cursor section it would reserve, and the sections that would drop
+at the current size. That number is not
 countable by hand reliably — three hand-written byte counters in one session
 still let a head go out 118 bytes over.
 
