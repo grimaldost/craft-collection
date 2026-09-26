@@ -246,7 +246,7 @@ edit — the `description` change carries a holdout reseal obligation.
   tool / API response payload a client depends on; the activation test adds the
   fields/types/closed-vocabularies of a payload. Non-negotiable #3 extends parity
   to "the emitted contract loads and validates in the real consumer (or a
-  producer-owned encoding of it)." (`datacontext-reconciliation-ed §Misses/#1`,
+  producer-owned encoding of it)." (`dc-reconciliation-ed §Misses/#1`,
   `dc-v4-cycle#1`.) **Holdout reseal:** the `description` edit changed the trigger
   surface; three fresh cases were sealed into
   `evals/trigger/holdout/data-engineering-discipline.json` (two positive

@@ -4,7 +4,7 @@
 - **Date:** 2026-07-25
 - **Reviewer:** fresh non-author subagent (opus), round 3
 - **Spec-hash:** `dbae4e61262fa1f75531de35bba2fc725086fbdb32a4f225fa701c9d1de76dc2`
-- **Reviewed against:** worktree `C:/Users/grima/Documents/craft-collection-rigor`, branch
+- **Reviewed against:** worktree `<workspace>/craft-collection-rigor`, branch
   `feat/experiment-rigor-skill` @ `113cc06` (clean apart from the untracked wave documents);
   `docs/adr/0008-experiment-discipline-plugin.md` read; both prior pre-mortems read as the
   verdict record; keel kit 0.13.0

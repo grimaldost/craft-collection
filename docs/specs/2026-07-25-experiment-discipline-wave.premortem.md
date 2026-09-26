@@ -4,7 +4,7 @@
 - **Date:** 2026-07-25
 - **Reviewer:** fresh non-author subagent (opus), round 1
 - **Spec-hash:** `75b50c4bf9849ee9afe5ec9f35777e6df22d5c99c7ddbfac61119b1e01bd3f50`
-- **Reviewed against:** worktree `C:/Users/grima/Documents/craft-collection-rigor`, branch `feat/experiment-rigor-skill` @ `113cc06`; ADR-0008 read; keel kit 0.13.0
+- **Reviewed against:** worktree `<workspace>/craft-collection-rigor`, branch `feat/experiment-rigor-skill` @ `113cc06`; ADR-0008 read; keel kit 0.13.0
 
 Assume this series shipped and then failed. The failure I judge most likely is not
 the re-home — that part is well grounded. It is that §4/§5 spend $27–54 and 168
