@@ -235,6 +235,10 @@ _AGENT_CALL = re.compile(r'(?<![\w$.])agent\s*\(')
 _NESTED_WORKFLOW = re.compile(r'(?<![\w$.])workflow\s*\(')
 _FUNCTION_NAME = re.compile(r'function\s*\*?\s*$')
 _IDENT = re.compile(r'[A-Za-z_$][\w$]*')
+# The head of a call to a plain identifier: `route(`, `R(`. A member path
+# (`routes.of(`) is left out on purpose - its body is not a definition in the script.
+_CALL_HEAD = re.compile(r'([A-Za-z_$][\w$]*)\s*\(')
+_RETURN_OBJECT = re.compile(r'(?<![\w$.])return\s*\(?\s*\{')
 _KEY = re.compile(r'\s*(?:([\'"])([^\'"]*)\1|([A-Za-z_$][\w$]*))\s*(:?)')
 _NO_VALUE = frozenset({'undefined', 'null', "''", '""', '``'})
 
@@ -271,6 +275,47 @@ def _const_object(name: str, mask: str) -> tuple[int, int] | None:
     return m.end() - 1, close + 1
 
 
+def _function_object(name: str, mask: str) -> tuple[int, int] | None:
+    """The span of the object literal the function NAME returns, when the script
+    defines it as `const NAME = (...) => ({...})`, as an arrow with a block body, or
+    as `function NAME(...) {...}` - the first object a `return` hands back. None when
+    NAME is not defined in the script or returns nothing the hook can read."""
+    arrow = re.search(
+        rf'(?<![\w$.])(?:const|let|var)\s+{re.escape(name)}\s*=\s*(?:async\s*)?'
+        r'(?:\([^()]*\)|[A-Za-z_$][\w$]*)\s*=>\s*',
+        mask,
+    )
+    if arrow:
+        rest = mask[arrow.end() :]
+        body = rest.lstrip()
+        at = arrow.end() + len(rest) - len(body)
+        if body.startswith('('):
+            inner = mask[at + 1 :].lstrip()
+            if inner.startswith('{'):
+                start = at + 1 + len(mask[at + 1 :]) - len(inner)
+                _, close = _split_top(mask, start)
+                return start, close + 1
+            return None
+        if body.startswith('{'):
+            _, close = _split_top(mask, at)
+            return _returned_object((at, close + 1), mask)
+        return None
+    fn = re.search(rf'(?<![\w$.])function\s+{re.escape(name)}\s*\([^()]*\)\s*\{{', mask)
+    if fn:
+        _, close = _split_top(mask, fn.end() - 1)
+        return _returned_object((fn.end() - 1, close + 1), mask)
+    return None
+
+
+def _returned_object(block: tuple[int, int], mask: str) -> tuple[int, int] | None:
+    """The first object literal a `return` inside `block` hands back."""
+    m = _RETURN_OBJECT.search(mask, block[0], block[1])
+    if not m:
+        return None
+    _, close = _split_top(mask, m.end() - 1)
+    return m.end() - 1, close + 1
+
+
 def _names_model(span: tuple[int, int], src: str, mask: str, depth: int = 0) -> bool:
     """Whether the expression at `span` is an options object with a top-level
     `model` key - directly, as shorthand, or through a spread or a const. Only
@@ -285,20 +330,42 @@ def _names_model(span: tuple[int, int], src: str, mask: str, depth: int = 0) -> 
     if not (text.startswith('{') and text.endswith('}')):
         return False
     props, _ = _split_top(mask, a + mask[a:b].index('{'))
+    # A later key wins in an object literal, so the answer is the LAST word on
+    # `model`: `{ ...routed, model: undefined }` names none.
+    routed = False
     for pa, pb in props:
         if mask[pa:pb].strip().startswith('...'):
             inner = pa + mask[pa:pb].index('...') + 3
-            if _names_model((inner, pb), src, mask, depth + 1):
-                return True
+            # A spread of a CALL - `{ ...route(id) }` - is the shape a scored batch
+            # emits. It counts only when the callee is defined in this script and is
+            # seen to return an object that names a model; a helper the hook cannot
+            # read, or one that sets no model, keeps the hint (T93b).
+            if _spread_call_routes((inner, pb), src, mask, depth) or _names_model(
+                (inner, pb), src, mask, depth + 1
+            ):
+                routed = True
             continue
         m = _KEY.match(src, pa, pb)
         if not m or (m.group(2) or m.group(3)) != 'model':
             continue
-        if not m.group(4):
-            return True  # shorthand `{ model }`
-        if src[m.end() : pb].strip() not in _NO_VALUE:
-            return True
-    return False
+        # shorthand `{ model }` routes; `model: <value>` routes unless the value is empty
+        routed = not m.group(4) or src[m.end() : pb].strip() not in _NO_VALUE
+    return routed
+
+
+def _spread_call_routes(span: tuple[int, int], src: str, mask: str, depth: int) -> bool:
+    """Whether the spread operand at `span` is ONE call to a function defined in the
+    script whose returned object names a model."""
+    a, b = span
+    lead = len(mask[a:b]) - len(mask[a:b].lstrip())
+    head = _CALL_HEAD.match(mask, a + lead, b)
+    if not head:
+        return False
+    _, close = _split_top(mask, head.end() - 1)
+    if mask[close + 1 : b].strip():
+        return False  # not a single call: `f(x) ? {} : g(x)`, `f(x).y`, ...
+    body = _function_object(head.group(1), mask)
+    return body is not None and _names_model(body, src, mask, depth + 1)
 
 
 def workflow_routing(script: str) -> tuple[int, int] | None:

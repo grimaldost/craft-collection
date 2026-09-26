@@ -299,11 +299,64 @@ def test_shared_options_resolve_through_a_const_and_a_spread():
         assert '1 of 1 agent() calls' in _ctx(proc)
 
 
+def test_options_built_by_a_route_helper_count_as_routed():
+    # The shape this skill's own emission guidance produces: score first, resolve the
+    # (model, effort) pair once, then spread it into each call. The hook cannot evaluate
+    # the call, but a spread of one is a decision taken in the script, not an inherited
+    # default - reporting it as "inherits this session tier" was false (T93b).
+    routed = (
+        'const R = id => ({ model: routes[id].model, effort: routes[id].effort })\n'
+        "await agent('one', { label: 'one', ...R('one') })\n"
+        "await agent('two', { ...R('two'), phase: 'Work' })\n"
+    )
+    mixed = routed + "await agent('three', { label: 'three' })\n"
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': routed})
+        assert proc.stdout.strip() == '', proc.stdout
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': mixed})
+        assert '1 of 3 agent() calls' in _ctx(proc), _ctx(proc)
+
+
+def test_a_spread_helper_counts_only_when_it_is_seen_to_return_a_model():
+    # The boundary of the rule above: the helper must be DEFINED in the script and
+    # RETURN an object with a model. A factory that sets no model, a helper the hook
+    # cannot see, and an expression that is not a single call all keep the hint -
+    # unsure must not become silent.
+    routed_fn = (
+        "function base(t) { const x = t; return { model: 'sonnet', label: x } }\n"
+        "await agent('a', { ...base('a') })\n"
+    )
+    cases_that_hint = {
+        'factory without a model': (
+            "const opts = t => ({ label: t, phase: 'Work' })\nawait agent('a', { ...opts('a') })\n"
+        ),
+        'helper not defined here': "await agent('a', { ...routes.of('a') })\n",
+        'not a single call': "await agent('a', { ...skip(t) ? {} : R(t) })\n",
+    }
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': routed_fn})
+        assert proc.stdout.strip() == '', proc.stdout
+    for name, script in cases_that_hint.items():
+        with tempfile.TemporaryDirectory() as d:
+            proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': script})
+            assert '1 of 1 agent() calls' in _ctx(proc), (name, _ctx(proc))
+
+
 def test_a_model_set_to_undefined_is_not_a_routing_decision():
     script = "await agent('x', { model: undefined, effort: 'low' })\n"
     with tempfile.TemporaryDirectory() as d:
         proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': script})
         assert '1 of 1 agent() calls' in _ctx(proc)
+    # A later key wins in an object literal, so an empty `model` AFTER a spread that
+    # routed undoes it - for a const spread and a helper spread alike.
+    for shape in (
+        "const B = { model: 'haiku' }\nawait agent('x', { ...B, model: undefined })\n",
+        "const R = id => ({ model: 'opus' })\nawait agent('x', { ...R('x'), model: null })\n",
+    ):
+        with tempfile.TemporaryDirectory() as d:
+            proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': shape})
+            assert '1 of 1 agent() calls' in _ctx(proc), shape
 
 
 if __name__ == '__main__':
@@ -324,5 +377,7 @@ if __name__ == '__main__':
     test_a_workflow_it_cannot_read_fails_toward_the_hint()
     test_a_regex_literal_holding_a_quote_does_not_break_the_parse()
     test_shared_options_resolve_through_a_const_and_a_spread()
+    test_options_built_by_a_route_helper_count_as_routed()
+    test_a_spread_helper_counts_only_when_it_is_seen_to_return_a_model()
     test_a_model_set_to_undefined_is_not_a_routing_decision()
     print('ok: all inject_spawn_routing tests passed')

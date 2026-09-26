@@ -8,6 +8,39 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.16.1] - 2026-09-26
+
+### Changed
+
+- **choosing-models: the strong tier is Opus 5.5 (`claude-opus-5-5`).** A lineup-only
+  refresh: the successor in the same line, at a lower price ($4/$20 against $5/$25), so the
+  tier's cost only falls and no threshold moves. The harness aliases were measured by asking
+  a spawned agent for its model id: `opus` already resolved to Opus 5.5, so strong-tier spawns
+  had been running it while the table still named Opus 5 — the table is what a series-file or
+  direct-API author reads. `models.toml` also records that the platform reference still marks
+  Opus 5.5 as launching, that it defaults to `medium` effort (one level below Opus 5),
+  cannot disable thinking, and rejects forced `tool_choice`;
+  that `haiku` resolves to the dated `claude-haiku-4-5-20251001`; and that family-keyed price
+  fallbacks now meet a family with two live prices. `last_reviewed` 2026-09-26, `review_by`
+  2026-12-26. `references/emission-and-effort.md` says where an omitted `effort` now lands:
+  the model's default (`medium` on the strong tier) for a series file or direct API request,
+  the session's effort for a workflow `agent()`.
+
+### Fixed
+
+- **choosing-models: the spawn hint no longer reports routed workflow agents as unrouted**
+  (T93b). An `agent()` call whose options spread the result of a call — `{ ...route(id) }`,
+  the shape a scored batch emits — counted as naming no model, and the hint said those agents
+  "inherit this session tier", which was false. A spread of a call now counts as routed when
+  the callee is defined in the same script (an arrow or a `function`) and the object it
+  returns names a model; a helper the hook cannot see, a factory that sets no model, or an
+  expression that is not a single call keeps the hint, as the file's rule "unsure must not
+  become silent" requires. Also: a later empty `model` (`{ ...routed, model: undefined }`)
+  now undoes an earlier routed spread, since the last key wins in an object literal.
+  Measured: over 272 real workflow scripts, 270 read the same as before and the 2 that
+  changed are the motivating shape; of 31 adversarial cases, the only changes are that one
+  (fixed) and the `model: undefined` override (now hinted).
+
 ## [0.16.0] - 2026-09-19
 
 `test-driven-development` sanctions one recovery path the Red step previously
