@@ -7,7 +7,7 @@
 - **Reviewed against:** the live working tree at 2026-07-24; keel kit 0.13.0; craft in-repo
   gates (`scripts/*.py`, `.pre-commit-config.yaml`); the round-1 verdict record
   (`…-experiment-rigor-skill.premortem.md`, FM-1..FM-10 + folded panel E1..E7); the fathom
-  repo at `C:/Users/grima/Documents/fathom` (real `ledger/*.jsonl`); ADR-0007.
+  repo at `<workspace>/fathom` (real `ledger/*.jsonl`); ADR-0007.
 
 This is the re-gate pass. Per the round-≥2 posture: FIRST a resolution audit of every prior
 finding against current text, THEN a hunt for fold-introduced and fold-missed defects under

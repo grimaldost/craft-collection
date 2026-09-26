@@ -8,7 +8,7 @@
   gates (`scripts/*.py`, `.pre-commit-config.yaml`); the round-1 verdict record
   (`…-experiment-rigor-skill.premortem.md`, FM-1..FM-10 + folded panel E1..E7) and the
   round-2 verdict record (`…-experiment-rigor-skill.premortem-r2.md`, R2-1..R2-4); the fathom
-  repo at `C:/Users/grima/Documents/fathom` (real `ledger/*.jsonl`); ADR-0007.
+  repo at `<workspace>/fathom` (real `ledger/*.jsonl`); ADR-0007.
 
 Second re-gate pass over the second fold (the fold that added the `ER-PREREG` gate,
 `outcomes[].role` + `added_after_freeze` + `analysis_plan.amendments[]`, and

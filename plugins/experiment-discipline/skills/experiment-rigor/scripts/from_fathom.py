@@ -6,7 +6,7 @@ This is the authoritative ledger reader. validate.py's ER-XCHECK gate delegates
 its cost/n read to summarize_ledger here rather than carrying a second copy of the
 row-shape logic (the section-3 de-duplication of section 2's inline TODO reader).
 
-Real fathom ledger shape (verified against C:/Users/grima/Documents/fathom):
+Real fathom ledger shape (verified against a fathom checkout):
   - Each line is one JSON object; the row kind is the `kind` field, not `type`
     (the nested usage.iterations[].type == 'message' is unrelated bookkeeping).
   - `kind: run`   rows carry `cost_usd_est` (the per-spawn USD estimate; there is

@@ -6,7 +6,7 @@
 - **Spec-hash:** `2a030789eda58b4f4f125950621b40fe450ac159c73012b65aac142f6bd93d84`
 - **Reviewed against:** the live working tree at 2026-07-24; keel kit 0.13.0; craft in-repo
   gates (`scripts/*.py`, `.pre-commit-config.yaml`, `.github/workflows/validate.yml`); the
-  fathom repo at `C:/Users/grima/Documents/fathom`; the two founding research records
+  fathom repo at `<workspace>/fathom`; the two founding research records
   (present in the working tree, gitignored/untracked).
 
 Assume this series shipped and then failed. Failure modes below, most likely first, as a
@@ -125,7 +125,7 @@ findings:
       separate fathom-repo change with its own acceptance), or mark it explicitly out-of-series with
       no gate here and correct the path to fathom's module layout.
     disconfirming_test: >
-      `ls C:/Users/grima/Documents/fathom/src/fathom/report/` — not a directory; `report.py` is a file.
+      `ls <workspace>/fathom/src/fathom/report/` — not a directory; `report.py` is a file.
     target_section: §5 / Output artifacts / PR manifest
 
   - id: FM-5
