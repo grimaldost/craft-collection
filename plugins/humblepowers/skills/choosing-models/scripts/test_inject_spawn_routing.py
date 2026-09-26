@@ -299,6 +299,25 @@ def test_shared_options_resolve_through_a_const_and_a_spread():
         assert '1 of 1 agent() calls' in _ctx(proc)
 
 
+def test_options_built_by_a_route_helper_count_as_routed():
+    # The shape this skill's own emission guidance produces: score first, resolve the
+    # (model, effort) pair once, then spread it into each call. The hook cannot evaluate
+    # the call, but a spread of one is a decision taken in the script, not an inherited
+    # default - reporting it as "inherits this session tier" was false (T93b).
+    routed = (
+        'const R = id => ({ model: routes[id].model, effort: routes[id].effort })\n'
+        "await agent('one', { label: 'one', ...R('one') })\n"
+        "await agent('two', { ...R('two'), phase: 'Work' })\n"
+    )
+    mixed = routed + "await agent('three', { label: 'three' })\n"
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': routed})
+        assert proc.stdout.strip() == '', proc.stdout
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': mixed})
+        assert '1 of 3 agent() calls' in _ctx(proc), _ctx(proc)
+
+
 def test_a_model_set_to_undefined_is_not_a_routing_decision():
     script = "await agent('x', { model: undefined, effort: 'low' })\n"
     with tempfile.TemporaryDirectory() as d:
@@ -324,5 +343,6 @@ if __name__ == '__main__':
     test_a_workflow_it_cannot_read_fails_toward_the_hint()
     test_a_regex_literal_holding_a_quote_does_not_break_the_parse()
     test_shared_options_resolve_through_a_const_and_a_spread()
+    test_options_built_by_a_route_helper_count_as_routed()
     test_a_model_set_to_undefined_is_not_a_routing_decision()
     print('ok: all inject_spawn_routing tests passed')

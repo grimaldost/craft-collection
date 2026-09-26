@@ -18,7 +18,10 @@ The lower and upper rows both apply from mid up — the weak tier has no effort
 knob at all.
 
 A surface with no effort knob (the Agent tool today) inherits the session's
-setting. Say so rather than pretending a value was set.
+setting. Say so rather than pretending a value was set. An omitted `effort` is not
+`high` everywhere: the strong tier's model (Opus 5.5) defaults to `medium`, one level
+below its predecessor, so an `agent()` call that leaves effort out now runs lower than
+this table's default - emit the level.
 
 ## Emission surfaces
 
@@ -35,7 +38,9 @@ Tier names are not shared across surfaces — emit each surface's own words:
 A workflow `agent()` with no `model` inherits the session model, possibly the
 frontier one; no engine-level cap exists, so under a tier cap every call carries
 an explicit `model`. The PreToolUse spawn hint fires on exactly that shape — a
-spawn with no `model` — and says nothing once one is passed.
+spawn with no `model` — and says nothing once one is passed: directly, through a
+const, or through a spread of a call that builds the options (`{ ...route(id) }`,
+the shape a scored batch emits).
 
 While an engine is series-global (no per-task keys): score every task anyway, set
 the series tier to the modal tier, and consider splitting at a tier boundary when

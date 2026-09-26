@@ -235,6 +235,9 @@ _AGENT_CALL = re.compile(r'(?<![\w$.])agent\s*\(')
 _NESTED_WORKFLOW = re.compile(r'(?<![\w$.])workflow\s*\(')
 _FUNCTION_NAME = re.compile(r'function\s*\*?\s*$')
 _IDENT = re.compile(r'[A-Za-z_$][\w$]*')
+# A call, possibly on a member path: `route(id)`, `R('x')`, `routes.of(t.id)`. Read
+# on the MASKED text, so a string argument is already blanked and cannot hold a `)`.
+_SPREAD_CALL = re.compile(r'[A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*\s*\(.*\)', re.S)
 _KEY = re.compile(r'\s*(?:([\'"])([^\'"]*)\1|([A-Za-z_$][\w$]*))\s*(:?)')
 _NO_VALUE = frozenset({'undefined', 'null', "''", '""', '``'})
 
@@ -288,6 +291,12 @@ def _names_model(span: tuple[int, int], src: str, mask: str, depth: int = 0) -> 
     for pa, pb in props:
         if mask[pa:pb].strip().startswith('...'):
             inner = pa + mask[pa:pb].index('...') + 3
+            # A spread of a CALL - `{ ...route(id) }` - is options built by the
+            # script: the shape the skill's own emission guidance produces once a
+            # batch is scored. The hook cannot evaluate the call, but a computed
+            # options object is a decision taken here, not an inherited default.
+            if _SPREAD_CALL.fullmatch(mask[inner:pb].strip()):
+                return True
             if _names_model((inner, pb), src, mask, depth + 1):
                 return True
             continue
