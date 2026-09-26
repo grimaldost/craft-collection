@@ -785,8 +785,8 @@ hook and two skills gained capability.
   *stops* injection — in-content status only reorders and offers the rename, so
   T5b's bright line holds. compaction-survival SKILL states close-at-cycle-end and
   the wind-down sweep; the failure-mode row for "closed in prose, never renamed"
-  now names the mitigation. (`v19-sw#1`, `datacontext-anchor-accumulation#1/#2/#3`,
-  `datacontext-reconciliation-sw#1`, `dc-campaign#3`.) **Scope of T13c, stated
+  now names the mitigation. (`v19-sw#1`, `dc-anchor-accumulation#1/#2/#3`,
+  `dc-reconciliation-sw#1`, `dc-campaign#3`.) **Scope of T13c, stated
   honestly:** de-ranking resolves the *terminal-shadowing* case — a stale
   closed-but-unrenamed track shadowing a live one, which is what the accumulation
   reports evidenced. A genuinely-*active* wrong-track anchor (`context-handoff#2`)
@@ -805,7 +805,7 @@ hook and two skills gained capability.
   doctrine now keeps a compact minimal contract (anchor path, tail marker, cursor,
   `.closed.md` rename) in `references/cold-start.md` for mirroring into the CLAUDE.md
   protocol snippet, where a menu-less session still has it.
-  (`data-context-deep-review-sw#1`, `mantis-docs §Friction`.)
+  (`dc-deep-review-sw#1`, `mantis-docs §Friction`.)
 - **feedback-triage closure invariant (T14a/T14b).** Step 7 asserts **input
   coverage** before emit — every `<stem>#<n>` in the Inputs appears under a
   disposition, so a finding leaves only with one, never by omission; step 2
@@ -838,7 +838,7 @@ hook and two skills gained capability.
   filenames). The structural cause it guards — filename misclassification — is
   already fixed by the shipped H1-authoritative rule + the T6a version stamp;
   adding the note would re-prose an already-closed cause.
-- **review-panel standing-authorization firing branch** (`data-context-deep-review-sw#2`)
+- **review-panel standing-authorization firing branch** (`dc-deep-review-sw#2`)
   was found already shipped (SKILL.md durable-pre-authorization line) during
   triage grounding — confirmed, not re-built.
 
@@ -861,12 +861,12 @@ gained capability.
   exists on disk. Marker-less anchors keep the whole-file behavior; the 8K
   truncation stays as the final bound. Displaces: the blind whole-file slice
   as the only behavior (5-report truncation lineage:
-  `w4-compaction-anchor#1 → multiwave#1 → restarts#1 → datacontext-v1 §Friction
+  `w4-compaction-anchor#1 → multiwave#1 → restarts#1 → dc-v1 §Friction
   → v18-postcycle#1`).
 - **Multi-track warning in the hook (T5a).** With more than one open anchor in
   a cwd, the injection warns and names the others, so a resumed session on a
   concurrent track doesn't silently follow the wrong cursor; telemetry gains
-  `open_anchors`. (`datacontext-v1-session-workflow#1`.)
+  `open_anchors`. (`dc-v1-session-workflow#1`.)
 - **Close is stub-then-rename (T1c/T5b).** SKILL.md protocol, `/anchor close`,
   and cold-start.md now state: on close, rewrite the anchor to a minimal
   landed stub, then rename to `*.closed.md` — the rename is the only close
@@ -905,7 +905,7 @@ gained capability.
   (T6b)** — an existing index may predate recent reports or an older detection
   rule; rebuild-always displaces the build-only-if-missing branch and the
   false-positive-prone count heuristic (`trs-etl-refactor-session-workflow#2`,
-  `datacontext-v1-session-workflow#2`).
+  `dc-v1-session-workflow#2`).
 - **tool-feedback granularity wording (T4a):** one report per tool per
   distinct concern/surface (a library vs its consumer plugin) — displaces the
   ambiguous "one report per tool" line (`v16-cycle-disciplines#2`,
