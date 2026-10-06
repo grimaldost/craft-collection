@@ -3,10 +3,8 @@
 **Status:** measurement designed and pre-registered; **nothing changed in the skill**,
 and nothing should be until the evidence exists. $0 spent.
 
-Measurement lives in fathom: bank `routing-decision-v1`, arms
-`scenarios/routing-decision/`, analysis `src/fathom/routing.py`, design of record
-`docs/specs/2026-08-12-routing-mechanism-eval-design.md` on branch
-`eval/routing-mechanisms`.
+Measurement lives in fathom's private data repository: its task bank, arms,
+analysis code and design of record are kept there, not in this repository.
 
 ## The question this repo has to answer
 
@@ -46,7 +44,7 @@ Authored for the trial, and authored to win if it can — measuring the shipped 
 against a strawman would prove nothing. It keeps the rubric's one genuinely learned
 insight (that coverage of the fix site, not breadth of the change, is what raises a
 task's tier) and drops the arithmetic that carries most of the token cost. Canonical
-text: `scenarios/routing-decision/assets/shortcuts.md` in fathom.
+text: the shortcuts asset in the fathom data repository.
 
 Shape: a ten-row lookup from task shape to tier; a three-line floor that only ever
 raises (the brief does not name every site that must change -> not below `mid`; nothing

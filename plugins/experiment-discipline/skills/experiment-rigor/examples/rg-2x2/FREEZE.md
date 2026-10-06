@@ -77,8 +77,8 @@ prior -> posterior update; regenerates `report.md`; and re-validates.
 
 Expected tail: `finalized ... (1 warning(s), 0 failures, no drift)`. The one warning is
 `ER-XCHECK` — `source: hand` at the measurement tier is the honest state (the original
-RG-2x2 was hand-orchestrated in fathom PR #15; no ledger travels with it). A WARN does
-not fail the gate.
+RG-2x2 was hand-orchestrated in PR #15 of the fathom data repository (private);
+no ledger travels with it). A WARN does not fail the gate.
 
 Then commit the finalized pair with all hooks running:
 

@@ -45,9 +45,9 @@ overrides of that file are refreshed the same way, in their own location.
      availability changed. Action: edit the `[[models]]` rows.
    - **guidance-affecting** — a tier assignment or threshold should move, or a
      cost caveat changed. Action: propose the edit *plus* the calibration it
-     needs — threshold moves ride observed-run evidence from a registered
-     eval harness when one is installed (e.g. fathom's recalibration
-     playbook), never a release note alone.
+     needs — threshold moves ride observed-run evidence from an
+     eval harness (e.g. a recalibration playbook kept with the eval data),
+     never a release note alone.
    - **needs-human** — a judgment call (a new tier, a pricing regime change).
      Flag it; do not decide.
 

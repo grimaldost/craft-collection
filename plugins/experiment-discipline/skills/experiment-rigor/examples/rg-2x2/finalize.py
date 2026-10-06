@@ -18,9 +18,9 @@ IDEMPOTENT (it overwrites, never appends -- re-running with the same SHA is a no
 so `validate.py` reaches exit 0 and `render.py --check` shows no drift.
 
 The two decisions this fixture documents:
-  - source: hand. The original was hand-orchestrated in fathom PR #15 before this
-    discipline existed; reconstructed here as the chain root. ER-XCHECK is a
-    measurement-tier WARN by design.
+  - source: hand. The original was hand-orchestrated in PR #15 of the fathom data
+    repository (private) before this discipline existed; reconstructed here as the
+    chain root. ER-XCHECK is a measurement-tier WARN by design.
   - amendment.commit == the freeze commit. The +4/12 wave-2 confirmation bar for the
     exploratory footprint was fixed after the wave-1 post-hoc signal and before wave-2.
     In this reconstruction the whole pre-registration is frozen at one commit, so the
