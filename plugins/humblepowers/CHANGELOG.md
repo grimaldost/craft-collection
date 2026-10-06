@@ -8,6 +8,15 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.16.2] - 2026-10-06
+
+### Changed
+
+- **refresh-models: the calibration bullet no longer names a document an installed copy
+  cannot reach.** The guidance-affecting bullet cited fathom's recalibration playbook as its
+  example, and that playbook now lives in the maintainer's private data repository. The
+  example is dropped; the rule it illustrated is unchanged.
+
 ## [0.16.1] - 2026-09-26
 
 ### Changed

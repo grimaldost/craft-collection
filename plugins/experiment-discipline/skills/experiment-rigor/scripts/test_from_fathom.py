@@ -4,11 +4,11 @@ Runnable with pytest or `python test_from_fathom.py` (run_tests.py runs the latt
 and requires an `ok:` sentinel on success).
 
 Provenance: the load-bearing fixture fixtures/ledger/model-tier-excerpt.jsonl is a
-VERBATIM 12-line excerpt (6 run + 6 trial rows) copied unmodified from the real fathom
-ledger ledger/model-tier-v1.jsonl (its haiku scenario rows -- hence the name, not the
-founding RG-2x2 case). Nothing is scrubbed -- the rows carry no secrets, only
-cost/usage/verifier bookkeeping. Its derived footprint is fixed and asserted below, so
-a reader drift is caught.
+VERBATIM 12-line excerpt (6 run + 6 trial rows) copied unmodified from a real fathom
+ledger kept in the maintainer's private data repository since 2026-10-06 (its haiku
+scenario rows -- hence the name, not the founding RG-2x2 case). Nothing is scrubbed --
+the rows carry no secrets, only cost/usage/verifier bookkeeping. Its derived footprint
+is fixed and asserted below, so a reader drift is caught.
 """
 
 from __future__ import annotations
