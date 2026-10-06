@@ -12,11 +12,10 @@ tagged.
 
 ### Changed
 
-- **refresh-models: the calibration example no longer names a document an installed copy
-  cannot reach.** The guidance-affecting bullet cited fathom's recalibration playbook, which
-  now lives in the maintainer's private data repository. It reads "a recalibration playbook
-  kept with the eval data". The word count is unchanged: the example's new words displace
-  "registered" and "when one is installed".
+- **refresh-models: the calibration bullet no longer names a document an installed copy
+  cannot reach.** The guidance-affecting bullet cited fathom's recalibration playbook as its
+  example, and that playbook now lives in the maintainer's private data repository. The
+  example is dropped; the rule it illustrated is unchanged.
 
 ## [0.16.1] - 2026-09-26
 
