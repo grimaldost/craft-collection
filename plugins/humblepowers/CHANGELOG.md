@@ -8,6 +8,21 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.17.1] - 2026-10-07
+
+Patch bump: one pointer line in the `planned-execution` reviewer prompts (T43a).
+
+### Changed
+
+- **planned-execution/subagent-prompts.md points reviewers at the per-PR review
+  contract** (2026-08-11 triage: T43a). The contract itself (the reviewer runs the
+  gate's own invocation, an adversarial mutation and an independent recompute, and
+  reproduces a defect and prices it before reporting it; APPROVE requires that
+  execution evidence) lives once in the craft-collection repository's
+  `CONTRIBUTING.md`, under "Reviewing a pull request". The pointer is three lines in
+  the prompts file, not a `SKILL.md` body, so no word budget moves. The reviewer
+  templates themselves are unchanged.
+
 ## [0.17.0] - 2026-10-07
 
 Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and a required decision-log read, and the mirror walk gains a `sweep_roots` registry field (T21a, T21c, T101a).

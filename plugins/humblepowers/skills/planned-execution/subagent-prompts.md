@@ -34,6 +34,10 @@ DONE | DONE_WITH_CONCERNS: <the concerns> | NEEDS_CONTEXT: <what is missing>
 | BLOCKED: <what is blocking and what you tried>
 ```
 
+What a reviewer must run and show before APPROVE is written down once, in the
+craft-collection repository's `CONTRIBUTING.md` under "Reviewing a pull request";
+the reviewer prompts below do not restate it.
+
 ## Spec-compliance reviewer
 
 ```text

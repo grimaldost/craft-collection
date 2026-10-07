@@ -258,6 +258,30 @@ where a frozen record cannot name its own commit sha before that commit exists.
   retargets the stacked PR to `main` and its diff narrows to its own commits — no
   rebase dance needed under merge-commit merges.
 
+## Reviewing a pull request
+
+A review is evidence, not a reading of the diff. Before a reviewer (human or
+subagent) says APPROVE, the review has run each of these and shown the command
+and its output:
+
+- **The gate's own invocation.** Run the check the way it ships: the same
+  command line, interpreter, working directory and environment that CI or the
+  hook uses, not only the command it wraps. A gate that passes by hand and fails,
+  or passes hollow, as invoked is a defect.
+- **An adversarial mutation.** Break the change on purpose (invert a condition,
+  rename a key, drop a field, feed a hostile input) and watch a test or gate go
+  red. A suite that stays green under the mutation does not cover that branch.
+- **An independent recompute.** Re-derive any number the change states (a count,
+  a total, an expected value, a headroom figure) with a command the author did
+  not use, and compare.
+- **A reproduction before a report.** A defect is reported with the command that
+  shows it and, when it has one, its cost (rows wrong, seconds added, words over
+  budget), not as an impression.
+
+APPROVE requires that execution evidence. A review that only read the change
+reports what it did not run and returns its findings without approving.
+(2026-08-11 triage: T43a.)
+
 ## Releasing
 
 Claude Code only pulls a plugin update when its version changes. For a
