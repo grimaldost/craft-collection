@@ -43,6 +43,22 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
   value, citing the 2026-09-26 measure (110 of 127 spawns inherited `xhigh` or `max`, 46 of
   them sonnet), and sends mappers, verifiers and triage batches through `agent()`, which
   carries effort. Reference prose only; no body words change.
+- **choosing-models: `models.toml` records the first measured point against the oracle
+  discount, and that strong-tier verifiers act as second finders** (2026-10-06 delta triage:
+  T69b, T105a). `[meta].oracle_discount` gains the 2026-09-03 reading, re-derived from the
+  bank's ledger rows: on bank multiagent-composition-v2 (n = 16 per arm), weak-tier
+  implementers under a per-PR independent gate were 16/16 held-out-clean, Wilson 95%
+  [0.81, 1.00], against 2/16, [0.03, 0.36], for mid-tier implementers on their own suite
+  (14/16 for mid with the gate). It also records that the effect vanished on bank v1, whose
+  prompts spelled the rule out, and names the test that decides it: the tier x oracle
+  crossing on iteration 2's harder bank. A new `[meta]` key, `verifier_observations`,
+  records that strong-tier verifiers and challengers handed the finder's evidence found
+  defects the finders missed (2 in one audit, which also refuted or downgraded 4 mid-tier
+  overstatements) and separated a confounded cause, citing the reports by stem with their
+  counts. Both are evidence, not calibration: no threshold, tier or rubric point moves, and
+  this change touches neither `[thresholds]` nor any `[[models]]` block. The new
+  `scripts/test_meta_evidence.py` pins both records and recomputes the two Wilson intervals
+  from their counts; watched red against the previous file, green on the new one.
 - **skill-authoring: the shipping-gate reference says when to stop tuning and how to read a
   resealed holdout** (2026-10-06 delta triage: T18c, T20d). Zero movement at an A/B design
   able to detect it points at the dataset or selection context, so tuning the description
