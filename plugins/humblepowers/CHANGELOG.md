@@ -28,6 +28,13 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
   "Cut features not needed yet; go back when something stops making sense." The two new
   clauses add 17 and 15 words, so the body stays at 560 words against its 560 baseline,
   with no budget bump.
+- **skill-authoring: the shipping-gate reference says when to stop tuning and how to read a
+  resealed holdout** (2026-10-06 delta triage: T18c, T20d). Zero movement at an A/B design
+  able to detect it points at the dataset or selection context, so tuning the description
+  stops and the layer escalates; it sits beside the existing worked example of a design that
+  could not detect movement. A reseal A/B's two reads taken after the fix comply with "never
+  consulted while tuning", and a read that feeds a further edit turns the holdout into dev
+  data. The content landed in `references/shipping-gate.md` with no body words.
 
 ### Fixed
 

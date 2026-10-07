@@ -34,6 +34,22 @@ left the same record, and $9.97 bought a result that answers nothing.
 
 If the design cannot reach the bar, raise repeats or do not register it.
 
+The counterpart: zero movement at a design that *could* have detected movement
+says the lever is not the description. The dataset or the selection context is
+what holds the query where it is, so stop tuning the description and escalate to
+that layer. The paragraph above is a design unable to detect movement; this one
+is a design able to, and the two get different next steps (fix the design, or
+leave the description alone).
+
+## Reading a resealed holdout
+
+The body's bar is that the holdout is "never consulted while tuning". An A/B
+that reseals the holdout after a fix takes two reads of it, the resealed set
+before the fix and again after, and both comply: neither informed the tuning,
+because the fix was already written. A read that feeds a further description
+edit breaks the bar and turns the holdout into dev data; reseal again before
+trusting it.
+
 ## The register question is measured, not aesthetic
 
 The craft-collection record: calibrated descriptions reach 0.95–1.00 trigger
