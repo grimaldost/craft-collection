@@ -90,6 +90,7 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
 | plan / decision | `references/personas-plan.md` | premortem · dependencies · cost · stakeholder |
 | research / a claim | `references/personas-research.md` | refuter · methodology · sources · bias |
 | a release (assembled diff + changelog + docs) | `references/personas-release.md` | consumer-upgrade · docs-coherence · changelog · interactions |
+| a skill / plugin / prompt pack | `references/personas-skill.md` | trigger-surface · token-budget · cold-install · eval-method · maintenance-cost |
 
 The default quartet works for anything; the packs sharpen it. Mix and match.
 

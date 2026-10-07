@@ -8,8 +8,8 @@ tagged.
 
 ## [0.25.0] - 2026-10-07
 
-Five feedback rows from the 2026-10-06 craft-collection triage that restructure the
-review-panel skill body and references. Minor bump: adds new reference files and
+Eleven feedback rows from the 2026-10-06 craft-collection triage that restructure the
+review-panel skill body, references and persona packs. Minor bump: adds new reference files and
 routing rules that enable per-lens capacity dispatch.
 
 ### Added
@@ -24,6 +24,19 @@ routing rules that enable per-lens capacity dispatch.
 - **Deduplication rule: barrier dedupes by (file, line ±5) or (file, first four title
   words) before verify** (2026-10-06 craft-collection triage: T74b). The barrier
   prevents pipelines from losing real findings to verifier errors.
+- **`references/personas-skill.md`: a persona pack for reviewing a skill, plugin or
+  prompt pack** (2026-10-06 craft-collection triage: T12b). Five lenses:
+  trigger-surface auditor, token-budget minimalist, cold-install end user,
+  eval-methodology expert and maintenance-cost skeptic. The SKILL.md persona table
+  gains one row naming the file (24 words of headroom left under the 1187-word
+  body budget, measured by `word_budget.py --report`).
+- **`references/personas-design.md`: Coherence critic and Implementer with the
+  repository open** (2026-10-06 craft-collection triage: T86k). The critic reads the
+  artifact alone and hunts contradictions, table-versus-prose mismatches and
+  "measured" claims with no evidence row. The implementer walks each proposed change
+  against the shipped code and prefers a measurement on the target machine over
+  inference from the repository. The pack header already allows use with or in place
+  of the default quartet, so the SKILL.md table cell is unchanged.
 
 ### Changed
 
