@@ -45,7 +45,7 @@ your final message is the deliverable.
 
 - One subagent per lens, sent **concurrently** — one message, multiple agent calls.
 - Use the same neutral brief for all; vary only the `## Your lens` block.
-- Opus for high-stakes panels.
+- Route each lens (model, effort) before firing.
 - Keep them blind: never feed one reviewer's output to another.
 
 ## Synthesizing

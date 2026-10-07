@@ -6,6 +6,38 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.25.0] - 2026-10-07
+
+Five feedback rows from the 2026-10-06 craft-collection triage that restructure the
+review-panel skill body and references. Minor bump: adds new reference files and
+routing rules that enable per-lens capacity dispatch.
+
+### Added
+
+- **`references/running-a-panel.md` consolidates mechanism and harness rules**
+  (2026-10-06 craft-collection triage: T126b). The reference documents Workflow-tool
+  routing for per-lens reasoning-effort control, finding deduplication rules, harness
+  stages vs operator steps, artifact snapshot policy, and capacity-dispatch routing.
+- **Selection rule: findings sorted by severity, round-robin across lenses, then
+  capped** (2026-10-06 craft-collection triage: T74a). Dropped finding ids and their
+  source lens are logged.
+- **Deduplication rule: barrier dedupes by (file, line ±5) or (file, first four title
+  words) before verify** (2026-10-06 craft-collection triage: T74b). The barrier
+  prevents pipelines from losing real findings to verifier errors.
+
+### Changed
+
+- **Step 5 fire-and-route prose: snapshot the artifact to an immutable path, point
+  all lenses at it** (2026-10-06 craft-collection triage: T86i). The author keeps
+  editing the working copy; reviewers read the snapshot taken at fire time.
+- **Routing moved to installed capacity-dispatch policy** (2026-10-06
+  craft-collection triage: T86l). Before firing, route each lens through
+  humblepowers' choosing-models or equivalent, and pass model and effort explicitly
+  per lens. Removed the passive "A capacity-dispatch policy, when installed, sets
+  reviewer tier by stakes" clause; the action is now active and required when the
+  policy is present. Cost remains a guard-rail, and the offer to drop a ladder level
+  stands.
+
 ## [0.24.4] - 2026-10-06
 
 One owner-approved row from the 2026-09-26 craft-collection triage: a correction
