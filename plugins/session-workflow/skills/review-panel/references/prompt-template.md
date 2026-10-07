@@ -82,4 +82,3 @@ Return a status per finding before attacking afresh:
 
 Stop when a round's verdicts meet the bar declared before firing and no blocker
 survives refutation. Declare the last round before firing it.
-```

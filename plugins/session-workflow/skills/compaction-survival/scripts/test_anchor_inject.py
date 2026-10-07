@@ -1034,6 +1034,17 @@ def test_parked_reason_is_empty_when_the_field_is_absent_or_blank():
     assert ai.parked_reason(PARKED_BODY) == ''
 
 
+def test_parked_reason_treats_a_false_looking_value_as_not_parked():
+    import anchor_inject as ai
+
+    for value in ('false', 'False', 'FALSE', 'no', 'No', 'none', 'None', '0', '"false"', 'false  '):
+        text = f'---\nformat: anchor/v1\nparked: {value}\n---\n{PARKED_BODY}'
+        assert ai.parked_reason(text) == '', f'parked: {value} resumes the track'
+    # a real wait that merely starts with such a word stays parked
+    text = '---\nformat: anchor/v1\nparked: no reply from the vendor yet\n---\n' + PARKED_BODY
+    assert ai.parked_reason(text) == 'no reply from the vendor yet'
+
+
 def test_parked_reason_ignores_a_parked_line_in_the_tail_or_the_body():
     import anchor_inject as ai
 
@@ -1929,6 +1940,42 @@ def test_post_write_lists_fold_candidates_oldest_cursor_bullet_first():
         assert 'continuation of the oldest' not in ctx
 
 
+def _anchor_with_cursor(base: Path, cursor: str, name: str = 'run.md') -> Path:
+    anchor = base / '.claude' / 'anchors' / name
+    anchor.parent.mkdir(parents=True, exist_ok=True)
+    with open(anchor, 'w', encoding='utf-8', newline='') as fh:
+        fh.write('# Mission\n' + 'x' * 7_500 + '\n# Cursor\n' + cursor)
+    return anchor
+
+
+def test_post_write_never_offers_the_next_action_of_a_done_in_progress_next_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_cursor(
+            Path(d),
+            '- Done: ported the loader\n'
+            '- In progress: wiring the gate\n'
+            '- Next: run the gate on branch X, then push\n',
+        )
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert 'Next: run the gate' not in ctx, 'the next action must never be offered for folding'
+        assert 'Done: ported' not in ctx, (
+            'only Step N bullets are offered; position is not evidence'
+        )
+        assert 'Fold candidates: none in the Cursor' in ctx
+
+
+def test_post_write_orders_step_bullets_by_number_not_by_position():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_cursor(
+            Path(d),
+            '- Step 2: middle entry\n- Step 4: newest entry\n- Step 1: oldest entry\n- Next: go\n',
+        )
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert ctx.index('Step 1: oldest entry') < ctx.index('Step 2: middle entry')
+        assert 'Step 4: newest entry' not in ctx
+        assert 'Next: go' not in ctx
+
+
 def test_post_write_a_cursor_with_one_entry_offers_nothing_to_fold():
     with tempfile.TemporaryDirectory() as d:
         anchor = Path(d) / '.claude' / 'anchors' / 'run.md'
@@ -2099,6 +2146,7 @@ if __name__ == '__main__':
     test_sweeps_survive_a_cp1252_stdout()
     test_parked_reason_reads_the_frontmatter_field()
     test_parked_reason_is_empty_when_the_field_is_absent_or_blank()
+    test_parked_reason_treats_a_false_looking_value_as_not_parked()
     test_parked_reason_ignores_a_parked_line_in_the_tail_or_the_body()
     test_a_parked_anchor_lists_under_the_parked_heading_and_not_as_dormant()
     test_a_fresh_parked_anchor_is_still_listed_as_parked()
@@ -2144,6 +2192,8 @@ if __name__ == '__main__':
     test_post_write_is_silent_for_a_head_well_inside_the_budget()
     test_post_write_measures_the_head_not_the_whole_file()
     test_post_write_lists_fold_candidates_oldest_cursor_bullet_first()
+    test_post_write_never_offers_the_next_action_of_a_done_in_progress_next_cursor()
+    test_post_write_orders_step_bullets_by_number_not_by_position()
     test_post_write_a_cursor_with_one_entry_offers_nothing_to_fold()
     test_post_write_matches_windows_separators()
     test_post_write_ignores_closed_and_non_anchor_paths()

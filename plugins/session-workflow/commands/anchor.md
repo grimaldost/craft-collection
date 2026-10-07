@@ -67,7 +67,9 @@ motivated this).
    - **Mission** — the goal and its hard constraints, plus any user instruction
      about mechanism (not outcome) quoted verbatim with a stable id.
    - **Cursor** — done / in progress / the single next action. This is the
-     load-bearing section; make it current, not aspirational.
+     load-bearing section; make it current, not aspirational. Number the
+     entries `- Step N: ...`, newest first: the fold-candidate warning offers
+     only numbered entries.
    - **Resume steps** — how a cold reader re-orients: read this file, verify
      the real state, continue from the cursor. Keep them idempotent, in
      absolute paths.

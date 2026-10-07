@@ -17,7 +17,8 @@ snapshots. `parked: <what it waits on>` is optional and opt-in: it marks a track
 deliberately waiting, such as on a review or an outside answer, rather than dormant. A
 parked anchor ranks below every live one, is injected as a short block naming the wait
 instead of its HEAD, and is listed by `--list-dormant` under a `parked:` heading, so the
-arm-time sweep does not offer to close it. Remove the line to resume the track. Only
+arm-time sweep does not offer to close it. Remove the line to resume the track; a value of
+`false`, `no`, `none` or `0` also counts as not parked. Only
 the frontmatter counts: a `parked:` line in the body or the TAIL is prose.
 
 ## HEAD

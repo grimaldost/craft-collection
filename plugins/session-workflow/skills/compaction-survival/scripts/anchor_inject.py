@@ -119,6 +119,9 @@ _FORMAT_LINE = re.compile(r'^\s*format\s*:\s*anchor/', re.I)
 # `parked: <what it waits on>`: the opt-in frontmatter field that marks a track as
 # deliberately waiting rather than dormant. Read from the HEAD frontmatter only.
 _PARKED_LINE = re.compile(r'^\s*parked\s*:\s*(.*?)\s*$', re.I)
+# Values that say "not parked": writing one is the obvious way to resume a track, so
+# it must not be read as the name of a wait.
+_NOT_PARKED = frozenset({'false', 'no', 'none', '0'})
 # `step: N`, the snapshot counter in the frontmatter; and a cursor entry that opens
 # with `Step N` (optionally bolded), the newest-first convention `--step` writes.
 _STEP_FIELD = re.compile(r'^\s*step\s*:\s*(\d*)', re.I)
@@ -248,7 +251,8 @@ def parked_reason(text: str) -> str:
     for line in _frontmatter_lines(head):
         m = _PARKED_LINE.match(line)
         if m:
-            return m.group(1).strip('"\'')
+            value = m.group(1).strip('"\'').strip()
+            return '' if value.lower() in _NOT_PARKED else value
     return ''
 
 
@@ -869,15 +873,21 @@ def _is_open_anchor_path(raw: object) -> Path | None:
 
 
 def fold_candidates(head: str) -> list[str]:
-    """The cursor's top-level bullets that could move below the tail marker, oldest
-    first. Cursor entries are newest-first (`--step` prepends), so the oldest is last
-    in document order; the newest is never offered, it is the line a resuming
-    session needs. Each is clipped to MAX_CANDIDATE_CHARS, and at most
-    MAX_FOLD_CANDIDATES are returned."""
+    """The cursor's `Step N` bullets that could move below the tail marker, oldest
+    first by N. Only bullets that open with `Step N` are offered: the position of a
+    bullet says nothing about its age (a Done / In progress / Next cursor ends with
+    the next action), so a cursor without numbered entries offers nothing. The
+    highest N is never offered, it is the line a resuming session needs. Each is
+    clipped to MAX_CANDIDATE_CHARS, and at most MAX_FOLD_CANDIDATES are returned."""
     for name, block in split_sections(head):
         if _is_cursor_section(name):
-            bullets = [ln.rstrip() for ln in block.splitlines()[1:] if _TOP_BULLET.match(ln)]
-            older = bullets[1:][::-1][:MAX_FOLD_CANDIDATES]
+            numbered = []
+            for ln in block.splitlines()[1:]:
+                m = _CURSOR_STEP.match(ln) if _TOP_BULLET.match(ln) else None
+                if m:
+                    numbered.append((int(m.group(1)), ln.rstrip()))
+            numbered.sort(key=lambda pair: pair[0])
+            older = [b for _, b in numbered[:-1][:MAX_FOLD_CANDIDATES]]
             return [
                 b if len(b) <= MAX_CANDIDATE_CHARS else b[:MAX_CANDIDATE_CHARS] + '...'
                 for b in older

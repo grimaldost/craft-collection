@@ -18,8 +18,9 @@ routing rules), not only fixes.
 
 - **`references/running-a-panel.md` consolidates mechanism and harness rules**
   (2026-10-06 craft-collection triage: T126b). The reference documents Workflow-tool
-  routing for per-lens reasoning-effort control, finding deduplication rules, harness
-  stages vs operator steps, artifact snapshot policy, and capacity-dispatch routing.
+  routing for per-lens reasoning-effort control, the barrier and its deduplication rule,
+  and the harness stage that persists raw output. Snapshot and capacity-dispatch routing
+  stay in the SKILL.md body only.
 - **Selection rule: findings sorted by severity, round-robin across lenses, then
   capped** (2026-10-06 craft-collection triage: T74a). Dropped finding ids and their
   source lens are logged.
@@ -54,7 +55,8 @@ routing rules), not only fixes.
   newest open file it could win selection over a live track at session start. A new pure helper
   `parked_reason(text)` reads the field from the HEAD frontmatter only, with the same
   frontmatter scan `is_anchor_shaped` uses; a `parked:` line in the body or the TAIL
-  never parks a file. Three places honour it: `--list-dormant` lists parked anchors after
+  never parks a file; a value of `false`, `no`, `none` or `0` (any case) reads as not
+  parked. Three places honour it: `--list-dormant` lists parked anchors after
   the dormant ones under a `parked:` heading line, with age, the wait and the cursor, at
   any age; `select_anchor` ranks a parked anchor below every live one and above a
   content-terminal one; and when a parked anchor is the primary the hook injects one
@@ -103,9 +105,11 @@ routing rules), not only fixes.
   characters (90% of the budget), and above that prints a `PostToolUse` `additionalContext`
   block: the `--head-fit` lines (`head: N chars / budget 8000 chars`, `OVER by X` or
   `headroom Y`, the sections that would drop; `head_fit_report` now delegates to a new
-  `head_fit_lines(text)` so the wording is shared) and the Cursor's older bullets, oldest
-  first, as entries to fold below `<!-- anchor:tail -->` (the newest is never offered; at
-  most five, each clipped to 100 characters). It shares the SessionStart gate: **on by
+  `head_fit_lines(text)` so the wording is shared) and the Cursor's older `Step N` bullets,
+  ordered by N ascending, as entries to fold below `<!-- anchor:tail -->` (the highest N is
+  never offered, and a bullet that does not open with `Step N` never is, since a Done / In
+  progress / Next cursor ends with the next action; at most five, each clipped to 100
+  characters). It shares the SessionStart gate: **on by
   default**, `SESSION_WORKFLOW_ANCHOR_HOOKS=0` opts out of both. Every path, including a
   forced internal exception, exits 0. The `hooks.json` description and the README Hooks
   list name the new hook. Measured on Windows 11 with a non-anchor payload, the median of 10
