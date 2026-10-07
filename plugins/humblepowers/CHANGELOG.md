@@ -8,14 +8,6 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
-## [0.17.2] - 2026-10-07
-
-Patch bump: clarify that orchestrator must add APPROVE contract to reviewer prompts.
-
-### Changed
-
-- **planned-execution/subagent-prompts.md** clarifies the orchestrator responsibility: must add the APPROVE evidence bar to each reviewer prompt (by pasting or as a rule) since the installed plugin does not ship `CONTRIBUTING.md`.
-
 ## [0.17.1] - 2026-10-07
 
 Patch bump: one pointer line in the `planned-execution` reviewer prompts (T43a).
@@ -27,9 +19,10 @@ Patch bump: one pointer line in the `planned-execution` reviewer prompts (T43a).
   gate's own invocation, an adversarial mutation and an independent recompute, and
   reproduces a defect and prices it before reporting it; APPROVE requires that
   execution evidence) lives once in the craft-collection repository's
-  `CONTRIBUTING.md`, under "Reviewing a pull request". The pointer is three lines in
-  the prompts file, not a `SKILL.md` body, so no word budget moves. The reviewer
-  templates themselves are unchanged.
+  `CONTRIBUTING.md`, under "Reviewing a pull request". The pointer carries the
+  evidence bar directly since the installed plugin does not ship `CONTRIBUTING.md`;
+  it is placed above the reviewer templates (applying to both) and is not a `SKILL.md`
+  body, so no word budget moves. The reviewer templates themselves are unchanged.
 
 ## [0.17.0] - 2026-10-07
 

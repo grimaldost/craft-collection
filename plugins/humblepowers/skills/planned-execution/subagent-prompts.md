@@ -34,7 +34,26 @@ DONE | DONE_WITH_CONCERNS: <the concerns> | NEEDS_CONTEXT: <what is missing>
 | BLOCKED: <what is blocking and what you tried>
 ```
 
-The orchestrator must add the APPROVE evidence bar (four items) to each reviewer prompt below, for example by pasting it or by stating the bar as a rule in the review loop, since the installed plugin does not ship `CONTRIBUTING.md`.
+## APPROVE evidence bar (added to each reviewer prompt)
+
+Since the installed plugin does not ship `CONTRIBUTING.md`, the orchestrator must
+add this bar to each reviewer prompt below (by pasting it or by stating it as a
+rule in the review loop):
+
+- **The gate's own invocation.** Run the check the way it ships: the same command
+  line, interpreter, working directory and environment that CI or the hook uses.
+- **An adversarial mutation.** Break the change on purpose and watch a test or gate
+  go red. A suite that stays green under the mutation does not cover that branch.
+- **An independent recompute.** Re-derive any number the change states (a count, a
+  total, an expected value, a headroom figure) with a command the author did not use.
+- **A reproduction before a report.** A defect is reported with the command that
+  shows it and, when it has one, its cost, not as an impression.
+
+APPROVE requires that execution evidence. A review that only read the change
+reports what it did not run and returns its findings without approving.
+
+The fuller text lives in the craft-collection repository's `CONTRIBUTING.md`,
+under "Reviewing a pull request".
 
 ## Spec-compliance reviewer
 
