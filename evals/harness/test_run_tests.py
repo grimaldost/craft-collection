@@ -9,6 +9,7 @@ safety net (test_anchor_inject shipped that way for three releases).
 
 from __future__ import annotations
 
+import locale
 import os
 import shutil
 import subprocess
@@ -63,6 +64,34 @@ def test_raising_module_still_fails():
     assert 'FAIL' in proc.stdout  # a sentinel never outweighs a non-zero exit
 
 
+def test_an_undecodable_byte_in_module_output_does_not_crash_the_runner():
+    """The runner decodes each module's output with the codec a piped Python child
+    writes in. One byte that codec cannot decode used to raise inside the runner and
+    lose the rest of the report; it now arrives as a backslash escape, which also
+    keeps the echo of a failing module writable to a cp1252 console. 0x81 is
+    undefined in cp1252 and invalid alone in UTF-8, so this reproduces on a Windows
+    console and on a UTF-8 CI runner alike."""
+    codec = locale.getpreferredencoding(False)
+    try:
+        b'\x81'.decode(codec)
+        reproduces = False
+    except UnicodeDecodeError:
+        reproduces = True
+    emit = "import sys\nsys.stdout.buffer.write(b'\\x81\\n')\nsys.stdout.buffer.flush()\n"
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _fixture(root, 'test_bytes_pass.py', emit + "print('ok: survived')\n")
+        _fixture(root, 'test_bytes_fail.py', emit + "raise AssertionError('boom')\n")
+        proc = _run_suite(root)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert '1/2 passed' in proc.stdout, proc.stdout + proc.stderr
+    lines = proc.stdout.splitlines()
+    assert any(ln.startswith('PASS ') and 'test_bytes_pass.py' in ln for ln in lines), lines
+    assert any(ln.startswith('FAIL ') and 'test_bytes_fail.py' in ln for ln in lines), lines
+    if reproduces:
+        assert '\\x81' in proc.stdout, proc.stdout
+
+
 def _git(cwd: Path, *args: str) -> None:
     env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
     env['GIT_CONFIG_GLOBAL'] = os.devnull
@@ -105,5 +134,6 @@ if __name__ == '__main__':
     test_silent_exit0_module_fails_the_suite()
     test_ok_and_skip_sentinels_pass()
     test_raising_module_still_fails()
+    test_an_undecodable_byte_in_module_output_does_not_crash_the_runner()
     test_a_test_that_dirties_the_repo_fails_the_suite()
     print('ok: run_tests gate checks passed')

@@ -282,6 +282,109 @@ def test_an_unknown_base_ref_is_exit_2_not_a_pass():
     assert 'cannot read the diff' in proc.stdout
 
 
+def test_an_uncommitted_plugin_change_is_exit_2_commit_first():
+    """merge-base..HEAD cannot see a working-tree edit; the gate must say so
+    instead of reporting 'no plugin files touched'."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _seed_repo(root)
+        (root / 'plugins' / 'x' / 'skills' / 's' / 'SKILL.md').write_text(
+            'edited, not committed\n', encoding='utf-8'
+        )
+        proc = run_cli(root)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert 'commit first' in proc.stdout
+
+
+def test_an_untracked_plugin_file_is_exit_2_commit_first():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _seed_repo(root)
+        (root / 'plugins' / 'x' / 'skills' / 's' / 'NEW.md').write_text('new\n', encoding='utf-8')
+        proc = run_cli(root)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert 'commit first' in proc.stdout
+
+
+def test_a_dirty_tree_outside_plugins_is_not_refused():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _seed_repo(root)
+        (root / 'scratch.txt').write_text('not under plugins\n', encoding='utf-8')
+        proc = run_cli(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert 'no plugin files touched' in proc.stdout
+
+
+def test_buried_unreleased_flags_only_a_non_first_heading():
+    leading = '# t\n\n## [Unreleased]\n\n- wip\n\n' + NEW_HEADING.format(v='1.2.3') + '\n'
+    buried = '# t\n\n' + NEW_HEADING.format(v='1.2.3') + '\n\n## [Unreleased]\n\n- wip\n'
+    assert not crd.buried_unreleased(leading)
+    assert crd.buried_unreleased(buried)
+    assert not crd.buried_unreleased('# t\n\n' + NEW_HEADING.format(v='1.2.3') + '\n')
+    assert not crd.buried_unreleased('')
+    assert not crd.buried_unreleased(None)
+    # a lone [Unreleased] is first, so it is not buried
+    assert not crd.buried_unreleased('# t\n\n## [Unreleased]\n\n- wip\n')
+    # a deeper heading level is not the section heading
+    assert not crd.buried_unreleased(
+        '# t\n\n' + NEW_HEADING.format(v='1.2.3') + '\n\n### [Unreleased]\n'
+    )
+
+
+def _buried_changelog(version: str) -> str:
+    return (
+        '# Changelog\n\n'
+        + NEW_HEADING.format(v=version)
+        + '\n\n- fix\n\n## [Unreleased]\n\n- hidden\n\n'
+        + NEW_HEADING.format(v='0.1.0')
+        + '\n\n- seed\n'
+    )
+
+
+def test_a_buried_unreleased_heading_exits_1():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _seed_repo(root)
+        plugin = root / 'plugins' / 'x'
+        (plugin / 'skills' / 's' / 'SKILL.md').write_text('changed body\n', encoding='utf-8')
+        (plugin / '.claude-plugin' / 'plugin.json').write_text(
+            json.dumps({'name': 'x', 'version': '0.2.0'}), encoding='utf-8'
+        )
+        (plugin / 'CHANGELOG.md').write_text(_buried_changelog('0.2.0'), encoding='utf-8')
+        _commit(root, 'fix(x): behavior change with a buried Unreleased')
+        proc = run_cli(root)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert '[Unreleased]' in proc.stdout
+
+
+def test_a_changelog_only_change_with_a_buried_unreleased_exits_1():
+    """CHANGELOG-only changes are exempt from touched_plugins, and they are
+    where a buried section gets written."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _seed_repo(root)
+        plugin = root / 'plugins' / 'x'
+        (plugin / 'CHANGELOG.md').write_text(_buried_changelog('0.1.0'), encoding='utf-8')
+        _commit(root, 'docs(x): changelog only, Unreleased below the release')
+        proc = run_cli(root)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert '[Unreleased]' in proc.stdout
+
+
+def test_a_release_note_none_trailer_does_not_waive_a_buried_unreleased():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _seed_repo(root)
+        plugin = root / 'plugins' / 'x'
+        (plugin / 'skills' / 's' / 'SKILL.md').write_text('comment edit\n', encoding='utf-8')
+        (plugin / 'CHANGELOG.md').write_text(_buried_changelog('0.1.0'), encoding='utf-8')
+        _commit(root, 'docs(x): typo\n\nRelease-note: none (comment-only, nothing ships)')
+        proc = run_cli(root)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert '[Unreleased]' in proc.stdout
+
+
 if __name__ == '__main__':
     for _name, _fn in sorted(globals().items()):
         if _name.startswith('test_') and callable(_fn):

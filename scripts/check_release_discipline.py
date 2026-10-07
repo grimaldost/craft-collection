@@ -16,6 +16,12 @@ must satisfy BOTH:
   * that version is the changelog's top `## [X.Y.Z] - YYYY-MM-DD` heading
     (a leading `## [Unreleased]` section is skipped, not satisfying).
 
+A `## [Unreleased]` heading BELOW the first heading is a finding on its own,
+for every plugin the diff touches and for every plugin whose own CHANGELOG.md
+changed: the release check never reads below the top heading, so entries
+filed there are invisible to it. No trailer waives this -- it is a format
+defect, not a release decision.
+
 OR the range must carry, in some commit, the git trailer
 
     Release-note: none (<reason>)
@@ -29,8 +35,10 @@ declaration waives the whole PR and is reviewed as prose, not parsed further.
 Usage: python scripts/check_release_discipline.py [--base REF] [--repo DIR]
 
 `--base` defaults to origin/main; CI passes the PR's base branch. Exit 0 clean,
-1 on findings, 2 when git cannot answer (unknown ref, not a repository) --
-a gate that cannot see the diff must say so rather than pass.
+1 on findings, 2 when git cannot answer (unknown ref, not a repository) or
+when `plugins/` has uncommitted or untracked paths (the diff is merge-base..HEAD,
+so a working-tree edit is invisible to it) -- a gate that cannot see the diff
+must say so rather than pass.
 """
 
 from __future__ import annotations
@@ -88,6 +96,32 @@ def top_heading_version(changelog: str | None) -> str | None:
         match = HEADING.match(line)
         return match.group('version') if match else None
     return None
+
+
+def changelog_plugins(changed: list[str]) -> list[str]:
+    """Plugin names whose own `CHANGELOG.md` is among `changed` paths. Pure."""
+    out: set[str] = set()
+    for path in changed:
+        parts = path.split('/')
+        if len(parts) == 3 and parts[0] == 'plugins' and parts[2] == CHANGELOG:
+            out.add(parts[1])
+    return sorted(out)
+
+
+def buried_unreleased(changelog: str | None) -> bool:
+    """Whether a `## [Unreleased]` heading appears after the first `## `
+    heading. A leading one is legitimate; a buried one hides entries from
+    `top_heading_version`, which stops at the first release heading. Pure."""
+    if changelog is None:
+        return False
+    seen_heading = False
+    for line in changelog.splitlines():
+        if not line.startswith('## '):
+            continue
+        if line.strip() == '## [Unreleased]' and seen_heading:
+            return True
+        seen_heading = True
+    return False
 
 
 def _version_tuple(version: str) -> tuple[int, ...] | None:
@@ -193,7 +227,45 @@ def main(argv: list[str] | None = None) -> int:
         print(f'release discipline: cannot read the diff: {err}')
         return 2
 
-    plugins = touched_plugins([line.strip() for line in changed if line.strip()])
+    # The diff above is merge-base..HEAD, so a working-tree edit is invisible
+    # to it and would read as a pass. Refuse rather than judge a stale diff.
+    try:
+        dirty = _git(
+            repo,
+            'status',
+            '--porcelain',
+            '-z',
+            '--no-renames',
+            '--untracked-files=all',
+            '--',
+            'plugins',
+        )
+    except (RuntimeError, OSError, subprocess.SubprocessError) as err:
+        print(f'release discipline: cannot read the working tree: {err}')
+        return 2
+    if dirty:
+        count = len([entry for entry in dirty.split('\0') if entry])
+        print(
+            f'release discipline: {count} uncommitted path(s) under plugins/ -- '
+            'no diff to judge; commit first'
+        )
+        return 2
+
+    changed = [line.strip() for line in changed if line.strip()]
+    plugins = touched_plugins(changed)
+
+    buried = [
+        f'plugins/{name}/{CHANGELOG}: [Unreleased] is not the first heading -- its entries '
+        'are invisible to the release check; fold them into a release or move the '
+        'section to the top'
+        for name in sorted({*plugins, *changelog_plugins(changed)})
+        if buried_unreleased(_show(repo, 'HEAD', f'plugins/{name}/{CHANGELOG}'))
+    ]
+    if buried:
+        for finding in buried:
+            print(f'RELEASE: {finding}')
+        return 1
+
     if not plugins:
         print('release discipline: no plugin files touched')
         return 0

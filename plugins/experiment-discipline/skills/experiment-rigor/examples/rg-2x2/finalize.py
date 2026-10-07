@@ -169,6 +169,8 @@ def _git_head(cwd: Path) -> str:
         ['git', '-C', str(cwd), 'rev-parse', 'HEAD'],  # noqa: S607 - git from PATH
         capture_output=True,
         text=True,
+        encoding='utf-8',  # git emits UTF-8; the locale codec would misread it
+        errors='replace',
         env=_git_env(),
     )
     if proc.returncode != 0:

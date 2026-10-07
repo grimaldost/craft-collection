@@ -764,6 +764,24 @@ def test_er_prereg_design_drift():
         assert 'ER-PREREG' in fail_codes(report)
 
 
+def test_er_prereg_analysis_plan_preregistration_drift():
+    # T143a: ER-PREREG freezes the analysis_plan.preregistration sub-key like the rest of analysis_plan.
+    # This test pins existing behaviour: a freeze already covers it, so it passes on first run.
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _git_init(d)
+        rec = _measurement_record()
+        rec['analysis_plan']['preregistration'] = {'question_hypothesis': 'my hypothesis text'}
+        path = write_record(d, rec)
+        sha = _git_commit(d, '2026-01-01T00:00:00')
+        # working tree drifts the preregistration sub-key after the freeze.
+        rec['plan_frozen_at']['commit'] = sha
+        rec['analysis_plan']['preregistration']['question_hypothesis'] = 'edited hypothesis'
+        write_record(d, rec)
+        report = check(rec, path)
+        assert 'ER-PREREG' in fail_codes(report)
+
+
 def test_er_prereg_confirmatory_verdict_on_exploratory_role():
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)

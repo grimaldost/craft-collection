@@ -9,7 +9,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 
-from word_budget import body_word_count, check_budgets, main, report_rows  # noqa: E402
+from word_budget import (  # noqa: E402
+    body_word_count,
+    check_budgets,
+    main,
+    report_rows,
+    section_counts,
+    section_rows,
+)
 
 
 def test_body_word_count_excludes_frontmatter():
@@ -87,6 +94,63 @@ def test_cli_report_mode_exits_zero_and_does_not_gate():
     assert main(['--report']) == 0
 
 
+# Frontmatter, a preamble, two '##' sections, a '###' subsection, a fenced block with a
+# '#' line, and a heading with an em dash (written as an escape: this file stays ASCII).
+SECTIONED = (
+    '---\nname: x\ndescription: d\n---\n'
+    'preamble words here\n'
+    '\n## Alpha\none two three\n'
+    '\n### Alpha child\nfour five\n'
+    '\n## Beta — dash\n'
+    '```\n# not a heading\nsix seven eight nine ten\n```\n'
+    'eleven twelve\n'
+)
+
+
+def test_section_counts_orders_longest_first_and_sums_to_the_body():
+    sections = section_counts(SECTIONED)
+    assert [heading for _, heading, _ in sections] == [
+        '## Beta — dash',
+        '## Alpha',
+        '### Alpha child',
+        '(before first heading)',
+    ]
+    by_heading = {heading: words for _, heading, words in sections}
+    # Flat sections: Alpha counts '##', 'Alpha' and its own three words, not its child.
+    assert by_heading['## Alpha'] == 5
+    assert by_heading['### Alpha child'] == 5
+    # Sections partition the body lines, so the words add up to the gate's own count.
+    assert sum(words for _, _, words in sections) == body_word_count(SECTIONED)
+
+
+def test_section_counts_breaks_ties_by_line_number():
+    sections = section_counts('## A\nx\n## B\nx\n')
+    assert [heading for _, heading, _ in sections] == ['## A', '## B']
+
+
+def test_a_fenced_hash_line_is_not_a_section():
+    headings = [heading for _, heading, _ in section_counts(SECTIONED)]
+    assert not any('not a heading' in heading for heading in headings)
+    tilde = '## T\n~~~\n# inside\n~~~\nafter\n'
+    assert [heading for _, heading, _ in section_counts(tilde)] == ['## T']
+
+
+def test_section_report_is_ascii_for_a_non_ascii_heading():
+    lines = section_rows('skills/x/SKILL.md', SECTIONED, 100)
+    assert len(lines) > 2
+    for line in lines:
+        line.encode('ascii')
+    assert any('\\u2014' in line for line in lines)
+
+
+def test_cli_report_with_a_skill_name_lists_its_sections():
+    assert main(['--report', 'experiment-rigor']) == 0
+
+
+def test_cli_report_with_an_unknown_skill_exits_2():
+    assert main(['--report', 'no-such-skill-anywhere']) == 2
+
+
 if __name__ == '__main__':
     test_body_word_count_excludes_frontmatter()
     test_body_word_count_no_frontmatter_counts_all()
@@ -99,4 +163,10 @@ if __name__ == '__main__':
     test_report_names_an_unbaselined_body_first_rather_than_omitting_it()
     test_report_is_ascii_because_it_prints_to_a_cp1252_console()
     test_cli_report_mode_exits_zero_and_does_not_gate()
+    test_section_counts_orders_longest_first_and_sums_to_the_body()
+    test_section_counts_breaks_ties_by_line_number()
+    test_a_fenced_hash_line_is_not_a_section()
+    test_section_report_is_ascii_for_a_non_ascii_heading()
+    test_cli_report_with_a_skill_name_lists_its_sections()
+    test_cli_report_with_an_unknown_skill_exits_2()
     print('ok: all word_budget tests passed')

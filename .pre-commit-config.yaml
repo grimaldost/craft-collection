@@ -90,6 +90,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: subprocess-encoding-lint
+        name: subprocess text mode names its encoding (ratchet against baseline)
+        entry: uv run --no-project -- python scripts/subprocess_encoding_lint.py
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: experiment-rigor-validate
         name: experiment-rigor record validator (travelling records)
         entry: uv run --no-project --with pyyaml -- python plugins/experiment-discipline/skills/experiment-rigor/scripts/validate.py

@@ -111,7 +111,7 @@ Scope is read from the `arms` block, not from a new field. An outcome carrying `
 
 ## Pre-registration content (Q4, measurement tier)
 
-The frozen pre-registration maps the eight AsPredicted content questions to record fields; `decision_rule` is a structured object (`metric`, `comparison`, `threshold`, `direction`), not prose:
+The eight AsPredicted content questions listed below are the content a measurement-tier pre-registration answers. The record has no typed field per question: write the answers under `analysis_plan.preregistration`, which ER-PREREG's freeze covers like the rest of analysis_plan (amendments excepted). `decision_rule` is a structured object (`metric`, `comparison`, `threshold`, `direction`), not prose:
 
 - `prior_data_collected`
 - `question_hypothesis`

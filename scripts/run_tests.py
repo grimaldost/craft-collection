@@ -20,6 +20,7 @@ can legitimately exceed CI's.
 
 from __future__ import annotations
 
+import locale
 import os
 import subprocess
 import sys
@@ -46,6 +47,8 @@ def working_tree_state(root: Path) -> str | None:
             ['git', '-C', str(root), 'status', '--porcelain'],  # noqa: S607 - PATH git
             capture_output=True,
             text=True,
+            encoding='utf-8',  # git emits UTF-8; the locale codec would misread it
+            errors='replace',
             timeout=60,
             env=env,
         )
@@ -71,8 +74,19 @@ def main(argv: list[str] | None = None) -> int:
     for t in tests:
         rel = t.relative_to(root)
         # Each test imports its siblings by module name, so run it from its own dir.
+        # Decode with the codec a piped Python child writes in (cp1252 on Windows),
+        # which is the decode the runner always had. Not UTF-8, and no
+        # PYTHONIOENCODING for the child: several suites reproduce a cp1252 console
+        # on purpose, and a forced UTF-8 child would hide the bugs they exist to
+        # catch. backslashreplace turns a byte the codec cannot decode into ASCII,
+        # so it neither crashes the decode nor the echo of a failing module below.
         proc = subprocess.run(  # noqa: S603 - test paths come from rglob, not user input
-            [sys.executable, t.name], cwd=t.parent, capture_output=True, text=True
+            [sys.executable, t.name],
+            cwd=t.parent,
+            capture_output=True,
+            text=True,
+            encoding=locale.getpreferredencoding(False),
+            errors='backslashreplace',
         )
         has_sentinel = any(line.startswith(('ok:', 'skip:')) for line in proc.stdout.splitlines())
         ok = proc.returncode == 0 and has_sentinel

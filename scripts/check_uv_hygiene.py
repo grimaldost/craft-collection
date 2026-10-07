@@ -53,6 +53,8 @@ def _tracked_venvs(root: Path) -> list[str]:
             ['git', '-C', str(root), 'ls-files', '--', *names],  # noqa: S607 - PATH git
             capture_output=True,
             text=True,
+            encoding='utf-8',  # git emits UTF-8; the locale codec would misread it
+            errors='replace',
             timeout=10,
             env=_git_env(),
         )
