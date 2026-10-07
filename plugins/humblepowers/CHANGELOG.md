@@ -38,6 +38,15 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
 
 ### Fixed
 
+- **choosing-models: the scoring rubric's adjustment range is stated correctly, and the
+  clamp is stated** (T117a). The heading read "-15 to +10", but the table's three negatives
+  and three positives give -15 to +15. A sentence under the tier table now says an additive
+  total above 100 is read as 100 and one below 0 as 0, which changes no tier; the maximum is
+  125 and the minimum 0, so only the upper clamp can bind. The new
+  `scripts/test_scoring_rubric.py` recomputes each axis heading's range from its table and
+  checks the clamp sentence and its two totals. Watched red against the previous file (the
+  adjustment heading and the missing clamp), green on the fixed one. No body words change.
+
 ## [0.16.2] - 2026-10-06
 
 ### Changed

@@ -19,6 +19,11 @@ evidence.
 | 26-55  | mid    | Multi-step, moderate reasoning, coordination  |
 | 56-100 | strong | Deep reasoning, novel design, expert domain   |
 
+An additive total above 100 is read as 100 and one below 0 as 0, which
+changes no tier. The maximum is 125 (base 30, then 25 + 25 + 15 + 10 + 5 and
+15 of adjustments) and the minimum is 0 (base 15 less 15 of adjustments), so
+only the upper clamp can bind in practice.
+
 > **Thresholds and model assignments live in [`../models.toml`](../models.toml)**
 > -- data, calibratable, refreshed by `/refresh-models`. This file defines
 > *how to score*; `models.toml` defines *what runs*.
@@ -146,7 +151,7 @@ boilerplate -- length does not imply cognitive complexity.
 | Long (150-400 lines)               | +3      |
 | Very long (400+ lines)             | +5      |
 
-### Adjustment factors (-15 to +10)
+### Adjustment factors (-15 to +15)
 
 | Signal                              | Points  |
 |-------------------------------------|---------|
