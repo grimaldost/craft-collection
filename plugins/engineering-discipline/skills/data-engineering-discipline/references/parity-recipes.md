@@ -975,6 +975,40 @@ evidence about the surface as it is now.
 
 ---
 
+## Recipe 19 — Capture a producer's output as a fixture
+
+A fixture or check target that stands in for a producer is a measurement, not
+a value chosen beside the parser (Principle 9). The method, once:
+
+1. **Stand up a scratch instance of the producer** at the version the code
+   will meet: a throwaway container, a temporary database, a local copy of
+   the service. Never the live one, and never a stub you wrote.
+2. **Provoke each output shape**, including the ones where a field is empty
+   or absent: a row with every optional field unset, a record with a null,
+   a permission string with unset bits, a log line for each level, an error
+   envelope as well as a success. For an address, ask the producer what it
+   binds (the listening interface, the view or name it answers on) and
+   probe from where the consumer will stand, not from the producer's host.
+3. **Record verbatim into the fixtures**, byte for byte: no pretty-printing,
+   no trimmed whitespace, no hand-edited values. Put the capture date, the
+   producer's version and the command that produced each file beside it, so
+   a later reader can tell a stale fixture from a current one and recapture.
+4. **Delete the scratch instance.** The fixtures are now the only artefact;
+   a scratch left running becomes a second source of truth that drifts.
+
+```bash
+docker run -d --name scratch-producer producer:1.4.2
+docker exec scratch-producer producer list > fixtures/list_all_fields.txt
+docker exec scratch-producer producer list --empty > fixtures/list_empty_fields.txt
+echo "captured 2026-10-06, producer 1.4.2" > fixtures/CAPTURED.txt
+docker rm -f scratch-producer
+```
+
+Recapture when the producer's version changes; a fixture older than the
+version it stands for is a guess again.
+
+---
+
 ## Choosing the right strictness
 
 | Scenario | Recommended recipes |
@@ -993,6 +1027,7 @@ evidence about the surface as it is now.
 | A contract column written by more than one producer | 16 (census, then join before values) |
 | Null-vs-zero drift, algorithm noise, a residual column read as `> 0` | 17 |
 | Repairing or re-running a frozen judge after a red | 18 |
+| A fixture standing in for a producer's output or address | 19 |
 
 ---
 

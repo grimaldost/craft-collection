@@ -421,8 +421,20 @@ work done.
 **LLM gotcha.** LLM-generated test suites have very high test counts
 and very low real-world coverage. The LLM both wrote the code and
 generated fixtures that satisfy it. Mechanical defense: pair every
-unit test suite with a real-data integration test that uses fixtures
-the LLM *did not generate* — sampled directly from production.
+unit test suite with a real-data integration test whose fixtures the
+LLM *did not generate*.
+
+A fixture or check target that stands in for a producer is a
+measurement taken from the producer, including the shapes where a
+field is empty. This covers its output (a CLI table, a log line, an
+API envelope) and its address (the interface it binds, the view it
+answers on). It is not a value chosen beside the parser, and not one
+read off the producer's name. A fixture invented for a permission
+string hid the case where an unset bit renders as a space, so the
+parser split the wrong columns on real output. A health check aimed
+at a name's LAN address reported the service down, because it binds
+only one interface and the name resolved to another. How to capture:
+parity-recipes Recipe 19.
 
 ---
 

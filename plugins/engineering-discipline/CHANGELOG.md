@@ -52,6 +52,18 @@ and an exit-code rule; the format hook narrows which files receive turn-level fo
   the header comment from "Run before declaring" to "Run before declaring or relaxing";
   adds a new subsection with fixture-diff example (Python). (2026-10-06 delta triage:
   T142a.)
+- **Principle 9 and new Recipe 19 "Capture a producer's output as a fixture"**: a
+  fixture or check target that stands in for a producer, whether its output (a CLI
+  table, a log line, an API envelope) or its address (the interface it binds, the view
+  it answers on), is a measurement taken from the producer, including the shapes where
+  a field is empty; it is not a value chosen beside the parser or read from the
+  producer's name. Principle 9 gains one short example of each half. Recipe 19 gives
+  the method: a scratch instance of the producer, each output shape provoked, verbatim
+  capture with the date and producer version, the scratch deleted. The strictness
+  table gains a row. Displaces: the how-to half of Principle 9's mechanical-defense
+  sentence ("sampled directly from production") moves into Recipe 19, and Principle 9
+  now points there, so the method is stated once. Reference prose only; SKILL.md body
+  unchanged. (2026-10-06 delta triage: T72a, T89a, T72b.)
 
 ## [0.5.1] - 2026-09-19
 
