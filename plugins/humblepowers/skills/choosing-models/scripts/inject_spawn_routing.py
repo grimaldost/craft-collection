@@ -82,11 +82,13 @@ AGENT_LEAD = (
     "(model, effort) pair is being set for someone else's run by default "
     'rather than by decision.'
 )
+# Conditional on purpose: the count covers calls whose model this hook cannot SEE
+# (a lookup table, a ternary), which is wider than calls that pass none (T93c).
 WORKFLOW_COUNT_LEAD = (
     '{unrouted} of {total} agent() calls in this workflow script name no model '
-    'this hook can see, so those agents inherit this session tier: a (model, '
-    "effort) pair is being set for someone else's run by default rather than by "
-    'decision.'
+    'this hook can see; any of them that passes no model inherits this session '
+    "tier, so a (model, effort) pair may be set for someone else's run by "
+    'default rather than by decision.'
 )
 WORKFLOW_UNKNOWN_LEAD = (
     'This workflow script could not be read here, or it runs another workflow, '

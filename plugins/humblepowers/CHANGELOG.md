@@ -85,6 +85,15 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
   `scripts/test_scoring_rubric.py` recomputes each axis heading's range from its table and
   checks the clamp sentence and its two totals. Watched red against the previous file (the
   adjustment heading and the missing clamp), green on the fixed one. No body words change.
+- **choosing-models: the workflow spawn hint no longer says that agents it cannot read
+  inherit the session tier** (T93c). The hint counts `agent()` calls whose model the hook
+  cannot see, and that includes calls routed at run time through a lookup table
+  (`{ ...R(id) }` where `R` indexes a table) or a ternary (`{ ...(fast ? A : B) }`). The
+  lead said "so those agents inherit this session tier", which was false for them; it now
+  states the inheritance as a condition: any of them that passes no model inherits it. Only
+  the message changed. Counting, firing, the cooldown, the Agent-tool lead and the
+  fail-open paths are as they were. A new test pins the count on both shapes and rejects
+  the old claim; watched red against the previous wording, green on the new one.
 
 ## [0.16.2] - 2026-10-06
 

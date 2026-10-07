@@ -359,6 +359,36 @@ def test_a_model_set_to_undefined_is_not_a_routing_decision():
             assert '1 of 1 agent() calls' in _ctx(proc), shape
 
 
+def test_the_workflow_lead_does_not_assert_inheritance_for_calls_it_cannot_read():
+    # The count covers calls whose model the hook cannot SEE, which is wider than
+    # calls that pass none: a lookup-table helper or a ternary spread routes at run
+    # time. Saying "those agents inherit" was false for them, so the lead states the
+    # inheritance as a condition while the count itself stays as it was (T93c).
+    fixtures = {
+        'lookup table': (
+            "const TABLE = { a: { model: 'haiku' } }\n"
+            'const R = k => TABLE[k]\n'
+            "await agent('a', { ...R('a') })\n"
+        ),
+        'ternary spread': (
+            "const A = { model: 'haiku', effort: 'low' }\n"
+            "const B = { model: 'sonnet', effort: 'medium' }\n"
+            "await agent('a', { ...(fast ? A : B) })\n"
+        ),
+    }
+    for name, script in fixtures.items():
+        with tempfile.TemporaryDirectory() as d:
+            proc = run_hook(Path(d), tool_name='Workflow', tool_input={'script': script})
+            assert proc.returncode == 0, (name, proc.stderr)
+            ctx = _ctx(proc)
+            assert '1 of 1 agent() calls' in ctx, (name, ctx)
+            assert 'so those agents inherit' not in ctx, (name, ctx)
+            assert 'any of them that passes no model inherits this session tier' in ctx, (
+                name,
+                ctx,
+            )
+
+
 if __name__ == '__main__':
     test_it_fires_at_the_spawn_with_no_env_set()
     test_the_opt_out_silences_it()
@@ -380,4 +410,5 @@ if __name__ == '__main__':
     test_options_built_by_a_route_helper_count_as_routed()
     test_a_spread_helper_counts_only_when_it_is_seen_to_return_a_model()
     test_a_model_set_to_undefined_is_not_a_routing_decision()
+    test_the_workflow_lead_does_not_assert_inheritance_for_calls_it_cannot_read()
     print('ok: all inject_spawn_routing tests passed')
