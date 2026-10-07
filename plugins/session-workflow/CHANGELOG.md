@@ -37,6 +37,24 @@ routing rules that enable per-lens capacity dispatch.
   reviewer tier by stakes" clause; the action is now active and required when the
   policy is present. Cost remains a guard-rail, and the offer to drop a ladder level
   stands.
+- **Prompt template: option premises as refutable claims, 'Claim refuted' in output,
+  and fact-check before synthesis** (2026-10-06 craft-collection triage: T126a). When
+  the brief lists options, state each option's premise as a claim reviewers may
+  refute. The output schema gains a Claim refuted field. Synthesis re-checks each
+  lens's load-bearing factual claims against the artifact before the matrix.
+- **Prompt template adds 'Verification' field to output schema** (2026-10-06
+  craft-collection triage: T75a). Each finding records how it was verified:
+  executed, read-source, or recalled. Step 7 adds the rule: a technology-behaviour
+  claim adopted from any reviewer needs an executed check or a source read; agreement
+  among recalled claims is not evidence.
+- **Prompt template: severity is a sort key, not a label** (2026-10-06
+  craft-collection triage: T74d). Rank findings against each other, because inflated
+  severities sort nothing.
+- **Prompt template adds re-review mode with prior findings and stop rule** (2026-10-06
+  craft-collection triage: T86j). When re-reviewing a revised artifact, each lens
+  receives its prior findings inline and returns a per-finding status (addressed,
+  partly, not addressed, or regressed) before attacking afresh. Stop when a round's
+  verdicts meet the declared bar and no blocker survives refutation.
 
 ## [0.24.4] - 2026-10-06
 

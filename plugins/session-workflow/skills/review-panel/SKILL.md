@@ -53,6 +53,8 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    mechanically is a guard-rail below.
 4. **Demand structured, comparable output** — a fixed per-reviewer schema (verdict +
    scores + reasons) so results sit side by side. See `references/prompt-template.md`.
+   Re-reviewing a revised artifact: re-review mode and stop rule in
+   `references/prompt-template.md`.
 5. **Fire them — mechanism by ladder level.** Levels 1–2: one fresh reviewer per
    lens, concurrently (Claude Code: one message, multiple Agent calls). Level 3,
    or per-lens effort control: drive the lenses through the Workflow tool;
@@ -74,7 +76,9 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
 7. **Synthesize — don't average.** Produce a comparison matrix, where they **agree**
    (consensus = high confidence), where they **disagree** (the tension worth
    examining), and — most important for an anchored author — **where the panel
-   diverges from the current direction, and what you may be missing.**
+   diverges from the current direction, and what you may be missing.** A
+   technology-behaviour claim adopted from any reviewer needs an executed check or
+   a source read, and agreement among recalled claims is not evidence.
 
 ## Persona packs — load the one that fits
 
