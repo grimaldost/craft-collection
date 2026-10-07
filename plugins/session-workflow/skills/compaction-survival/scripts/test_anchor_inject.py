@@ -1004,7 +1004,7 @@ def test_sweeps_survive_a_cp1252_stdout():
 
 # -- parked anchors: `parked: <what it waits on>` in the frontmatter -------------
 
-PARKED_AGE_H = 466
+PARKED_AGE_H = 500
 WAITS_ON = 'vendor sign-off on the schema change'
 PARKED_BODY = '# Schema rollout\n# Cursor\nPhase 2 blocked until the vendor answers\n'
 
