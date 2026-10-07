@@ -181,6 +181,9 @@ def main(argv: list[str] | None = None) -> int:
     # Windows consoles default to cp1252; agent/query text can carry unicode.
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if any(a in ('-h', '--help') for a in (sys.argv[1:] if argv is None else argv)):
+        print(__doc__.strip())  # usage first: the config below is read from beside the repo
+        return 0
     cfg = json.loads((REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
     triggers_path = REPORT_DIR / 'triggers.json'
     grading_path = REPORT_DIR / 'grading.json'

@@ -37,6 +37,9 @@ def findings(message: str) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] in (['-h'], ['--help']):
+        print(__doc__.strip())
+        return 0
     if len(argv) != 1:
         print('usage: check_commit_msg.py <message-file>')
         return 2

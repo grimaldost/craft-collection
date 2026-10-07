@@ -331,6 +331,9 @@ def write_report(skill: str, blob: dict) -> Path:
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')  # task text is unicode
+    if any(a in ('-h', '--help') for a in (sys.argv[1:] if argv is None else argv)):
+        print(__doc__.strip())  # usage first: the config below is read from beside the repo
+        return 0
     cfg = json.loads((REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
     ap = argparse.ArgumentParser(description='Skill grading eval (axes 2 & 4)')
     ap.add_argument('skill', choices=sorted(cfg['plugin_of_skill']))
