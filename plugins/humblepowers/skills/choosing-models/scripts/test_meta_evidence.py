@@ -68,10 +68,10 @@ def test_verifier_observations_cite_reports_with_counts():
     assert isinstance(obs, str) and obs, 'meta.verifier_observations missing'
     assert '\n' not in obs
     for stem in (
-        '2026-10-06-homelab-health-audit-choosing-models-humblepowers#1',
-        '2026-10-06-homelab-audit-followups-choosing-models-humblepowers#1',
-        '2026-10-06-fathom-split-cleanup-choosing-models-humblepowers',
-        '2026-09-26-homelab-deadman-probe-choosing-models',
+        '2026-10-06 health-audit#1',
+        '2026-10-06 audit-followups#1',
+        '2026-10-06 fathom-split-cleanup',
+        '2026-09-26 dead-man-probe',
         '2026-09-20 routing-outcome',
     ):
         assert stem in obs, stem
