@@ -16,6 +16,19 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
 
 ### Changed
 
+- **brainstorming: step 1 reads the area's decision log, and step 3 has a branch for
+  autonomous sessions** (2026-10-06 delta triage: T21a, T21c). Step 1 now names the area's
+  ADRs and recorded invariants as part of exploring context, and says a conflict with an
+  Accepted invariant is raised, never softened. Step 3 says what to do with no user
+  mid-task: fold the questions into the proposal awaiting approval (options,
+  recommendation, open questions). The branch is stated once and leaves the gate as it
+  was: implementation still starts after the user approves, and the recorded proposal is
+  what they approve. Paid for by removing `## Working principles` (44 words), whose items
+  restated steps 3 to 5 except two; those two now close step 5 as one 12-word sentence,
+  "Cut features not needed yet; go back when something stops making sense." The two new
+  clauses add 17 and 15 words, so the body stays at 560 words against its 560 baseline,
+  with no budget bump.
+
 ### Fixed
 
 ## [0.16.2] - 2026-10-06
