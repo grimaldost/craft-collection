@@ -9,8 +9,8 @@ tagged.
 ## [0.6.0] - 2026-10-07
 
 Hook scope change and a new parity_check flag. The compaction-summary bullet replaces
-the over-broad re-read-at-each-phase framing; the parity check gains a new output mode
-and an exit-code rule; the format hook narrows which files receive turn-level formatting.
+the over-broad re-read-at-each-phase framing; the parity check gains a new refusal reason
+and an `--allow-empty` flag; the format hook narrows which files receive turn-level formatting.
 
 ### Fixed
 
@@ -45,7 +45,13 @@ and an exit-code rule; the format hook narrows which files receive turn-level fo
   single-file payload and `harness_adapters.format_decision` apply the same scope, so
   other harnesses keep identical semantics. Displaces: the unconditional format of
   every edited file, reworded in place in the README PostToolBatch bullet and the
-  `hooks.json` description; no SKILL.md body words. (2026-10-06 delta triage: T141b.)
+  `hooks.json` description; no `data-engineering-discipline` body words. Only a
+  `[tool.ruff]` table header
+  counts as a declaration in `pyproject.toml`: ruff's other valid spellings (`[tool]`
+  with a `ruff` dotted or inline key, a quoted `[tool."ruff"]`) are not detected, so
+  such a project is not formatted; pinned by a test. The `python-engineering`
+  SKILL.md enforcement sentence now says the hook formats each edit in ruff projects
+  (displaces "as it happens"; word-neutral, 2314/2314). (2026-10-06 delta triage: T141b.)
 - **scenarios.md Step 4.3 "Identify all consumers"**: replaces "Enumerate every
   notebook, dashboard, downstream pipeline, export, or report" with a census rule
   and method (a consumer list you read is a claim; one you enumerated is evidence).
@@ -68,14 +74,17 @@ and an exit-code rule; the format hook narrows which files receive turn-level fo
   stale-surface rule lands as reference prose with no body words. (2026-10-06 delta
   triage: T141a, T72d.)
 - **`data-engineering-discipline` SKILL.md source-of-truth bullet**: the "For a long
-  session" prose at Axiom 2 is replaced with guidance for fact-checking under pressure
-  — a fact from a compaction summary, an anchor, or an adversarial reviewer must be
-  re-measured before coding, not assumed. (2026-10-06 delta triage: T75b.)
+  session" prose at non-negotiable 2 (source of truth) is replaced with guidance for
+  fact-checking under pressure: a fact from a compaction summary, an anchor, or an
+  adversarial reviewer must be re-measured before coding, not assumed. Displaces: "For
+  a long session: re-read the primary sources at each phase. Don't trust the session
+  summary." (word-neutral, 2312/2312). (2026-10-06 delta triage: T75b.)
 - **Recipe 9 "Constraint pre-flight against production data" in `parity-recipes.md`**:
   the recipe is rewritten to measure the premise at the grain of the change before
   design is committed. Before relaxing a constraint, count nulls for all mandatory
   columns, not only the columns the first failing quarantine reason names. Before
-  trusting a switch is inert, run the fixture with and without it and diff. Displaces:
+  trusting a switch is inert, run the fixture with and without it and diff what it
+  wrote, refusing a pass when either run failed or both wrote nothing. Displaces:
   the header comment from "Run before declaring" to "Run before declaring or relaxing";
   adds a new subsection with fixture-diff example (Python). (2026-10-06 delta triage:
   T142a.)

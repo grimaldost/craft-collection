@@ -344,8 +344,9 @@ exports, reports) become what the census finds, not how it is done.
 **Why.** Bug-for-bug parity is measured against what consumers
 actually consume.
 
-**How.** Same as schema-evolution Step 2.3 — lineage walk + grep +
-SME query.
+**How.** The census above is the method. Reconcile it with schema-evolution
+Step 2.3 (lineage walk + grep + SME query); a consumer found only by the
+read list, or only by the census, is a discrepancy to resolve, not to drop.
 
 **Watch for.** A census that finds no live consumer is a result to
 report, not a step to skip. Name each consumer that will fail quietly
@@ -863,5 +864,5 @@ a fake engine) proves only the stand-in.
 
 **A count step asserts how many units it counted.** An empty result where
 an independent enumeration is non-empty is a refusal, never a zero. See
-`parity_check.py` Recipe 13 for the mechanized form and Recipe 12 for
-coverage.
+`parity-recipes.md` Recipe 13 (and `parity_check.py`'s empty-population
+refusal) for the mechanized form, and Recipe 12 for coverage.

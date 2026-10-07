@@ -311,6 +311,23 @@ def test_pyproject_ruff_lookalikes_do_not_declare_ruff():
             assert ruff_format.declares_ruff(a, stop_at=d) is False, text
 
 
+def test_pyproject_ruff_spellings_other_than_the_table_header_are_not_detected():
+    # Documented limit (CHANGELOG 0.6.0): only a `[tool.ruff]` table header counts.
+    # Valid TOML that ruff itself reads, spelled another way, is not detected, so
+    # the file is left unformatted. This fails safe and is pinned so a change to
+    # the detector is a deliberate one.
+    undetected = (
+        '[tool]\nruff.line-length = 100\n',
+        '[tool]\nruff = { line-length = 100 }\n',
+        '[tool."ruff"]\nline-length = 100\n',
+    )
+    for text in undetected:
+        with tempfile.TemporaryDirectory() as d:
+            _write(os.path.join(d, 'pyproject.toml'), text)
+            a = _write(os.path.join(d, 'a.py'))
+            assert ruff_format.declares_ruff(a, stop_at=d) is False, text
+
+
 def test_subpackage_pyproject_without_ruff_inherits_root_ruff_toml():
     # Mirrors ruff's own discovery: a pyproject.toml with no ruff table does not
     # stop the walk, so a monorepo subpackage under a root ruff.toml still formats.
@@ -461,6 +478,7 @@ if __name__ == '__main__':
     test_dot_ruff_toml_project_is_formatted()
     test_pyproject_tool_ruff_table_is_formatted()
     test_pyproject_ruff_lookalikes_do_not_declare_ruff()
+    test_pyproject_ruff_spellings_other_than_the_table_header_are_not_detected()
     test_subpackage_pyproject_without_ruff_inherits_root_ruff_toml()
     test_walk_stops_at_git_boundary()
     test_walk_stops_at_stop_at()

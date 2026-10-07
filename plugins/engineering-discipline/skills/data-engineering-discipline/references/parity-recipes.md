@@ -441,54 +441,61 @@ SELECT
     SUM(CASE WHEN status IS NULL THEN 1 ELSE 0 END) AS null_count_status
 FROM production_table
 WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
--- If any null_count > 0, you cannot declare (or relax to) nullable: false on that column.
+-- Declaring: if a column's null_count > 0, you cannot declare nullable: false on it.
+-- Relaxing: the set to relax (or clean at the source) is every column with
+-- null_count > 0 in this one result, not only the column the first failing
+-- quarantine reason named.
 ```
 
 ### Before trusting a switch is inert
 
-Run the fixture with and without the switch; a true no-op produces identical output.
+Run the fixture with and without the switch; a true no-op produces identical
+output. Identical output only counts when both runs succeeded and produced
+something: two crashes, or two empty runs, are identical too. Diff what the
+switch can affect (the written files or tables), not only stdout.
 
 ```python
 # fixture_test.py
-import subprocess
-import tempfile
 import difflib
+import subprocess
+import sys
+from pathlib import Path
 
 
-def compare_fixture_outputs(fixture_path):
-    """Run fixture with and without a switch; diff the outputs."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Run with the switch present (or enabled)
-        result_with = subprocess.run(
-            ['python', fixture_path, '--switch'], capture_output=True, text=True
+def run(fixture_path, out_dir, *flags):
+    result = subprocess.run(
+        [sys.executable, fixture_path, '--out', str(out_dir), *flags],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f'run failed: {result.stderr}'
+    written = {p.name: p.read_text() for p in sorted(Path(out_dir).glob('*'))}
+    assert written, 'empty output proves nothing'
+    return written
+
+
+def compare_fixture_outputs(fixture_path, work_dir):
+    """Run fixture with and without a switch; diff what it wrote."""
+    with_switch = run(fixture_path, Path(work_dir) / 'with', '--switch')
+    without_switch = run(fixture_path, Path(work_dir) / 'without')
+    assert with_switch.keys() == without_switch.keys(), 'different files written'
+    diff = [
+        line
+        for name in with_switch
+        for line in difflib.unified_diff(
+            with_switch[name].splitlines(),
+            without_switch[name].splitlines(),
+            fromfile=f'with_switch/{name}',
+            tofile=f'without_switch/{name}',
+            lineterm='',
         )
-
-        # Run without the switch
-        result_without = subprocess.run(['python', fixture_path], capture_output=True, text=True)
-
-        # Diff the outputs
-        diff = list(
-            difflib.unified_diff(
-                result_with.stdout.splitlines(),
-                result_without.stdout.splitlines(),
-                fromfile='with_switch',
-                tofile='without_switch',
-                lineterm='',
-            )
-        )
-
-        if diff:
-            print('Switch is NOT inert; outputs differ:')
-            for line in diff:
-                print(line)
-            return False
-        else:
-            print('Switch is inert; outputs match.')
-            return True
-
-
-if __name__ == '__main__':
-    assert compare_fixture_outputs('integration_test.py')
+    ]
+    if diff:
+        print('Switch is NOT inert; outputs differ:')
+        print('\n'.join(diff))
+        return False
+    print('Switch is inert; outputs match.')
+    return True
 ```
 
 ### Before declaring `ge: 0`
@@ -949,12 +956,13 @@ def test_conserved_self_test():
     assert_passes(conserved, SRC, KEPT, WITHHELD, 'id')  # intended effect
     assert_fails(conserved, SRC, KEPT, WITHHELD_MINUS_ONE, 'id')  # planted loss
     assert_fails(conserved, SRC, KEPT_PLUS_DUP, WITHHELD, 'id')  # planted duplicate
-    assert_fails(row_count_equal, SRC, KEPT_MINUS_ONE, EMPTY, 'id')  # v1 bank, kept
+    assert_fails(conserved, SRC, KEPT_MINUS_ONE, EMPTY, 'id')  # v1 bank, now held against v2
 ```
 
 It is at least as strict: a row lost or duplicated still fails, and the
-withheld rows are now accounted for rather than invisible. The v1 bank stays,
-and the planted loss is the case the loosening repair would have missed.
+withheld rows are now accounted for rather than invisible. The v1 plant (one
+row dropped, nothing withheld) is run against v2 and still fails, and the
+planted loss is the case the loosening repair would have missed.
 
 **Example: a repair through a declared label map.** A judge compares a label
 column and goes red because the producer renamed a category. The loosening
@@ -982,13 +990,16 @@ a value chosen beside the parser (Principle 9). The method, once:
 
 1. **Stand up a scratch instance of the producer** at the version the code
    will meet: a throwaway container, a temporary database, a local copy of
-   the service. Never the live one, and never a stub you wrote.
+   the service. Provoke output shapes only on the scratch instance, never the
+   live one, and never against a stub you wrote.
 2. **Provoke each output shape**, including the ones where a field is empty
    or absent: a row with every optional field unset, a record with a null,
    a permission string with unset bits, a log line for each level, an error
-   envelope as well as a success. For an address, ask the producer what it
-   binds (the listening interface, the view or name it answers on) and
-   probe from where the consumer will stand, not from the producer's host.
+   envelope as well as a success. An address is a property of the deployed
+   instance, and a scratch instance's bind configuration can differ: read
+   the live deployment's binding read-only (the listening interface, the
+   view or name it answers on) and probe from where the consumer will
+   stand, not from the producer's host.
 3. **Record verbatim into the fixtures**, byte for byte: no pretty-printing,
    no trimmed whitespace, no hand-edited values. Put the capture date, the
    producer's version and the command that produced each file beside it, so
