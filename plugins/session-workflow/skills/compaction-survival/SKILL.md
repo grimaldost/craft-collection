@@ -72,12 +72,12 @@ injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
 
 1. **Create the anchor at the start of the run**, before the first irreversible
    step, so there is something to resume from immediately. Arming is also the
-   sweep moment — read `anchor_inject.py --list-dormant <anchors dir>` and close
-   or adopt any track it names. It reaches what `close --stale` cannot: a track
-   abandoned mid-cursor never marks itself done.
-2. **Update the cursor after each step or phase**, before moving on. State that
-   lives only in the context window is one compaction away from gone; write it
-   down while it is still true.
+   sweep moment — read `anchor_inject.py --list-dormant <anchors dir>` and close,
+   adopt or park any track it names. A subagent anchors in its own work folder, never in
+   `<cwd>/.claude/anchors/`; see failure-modes.
+2. **Update the cursor whenever durable state moves** — a commit, push, deploy step,
+   background launch, or write outside the repo. State only in the context window is
+   one compaction from gone.
 3. **Re-read the anchor at the start of each turn** — especially when a summary
    has appeared or the context feels thinner than the work already done — the
    signs of a compaction. Re-read before acting, not after. A
@@ -147,7 +147,7 @@ injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
 
 ## Common failure modes
 
-The seven recurring ones and what each costs: [`references/failure-modes.md`](references/failure-modes.md).
+The recurring ones and what each costs: [`references/failure-modes.md`](references/failure-modes.md).
 
 ## Boundaries
 

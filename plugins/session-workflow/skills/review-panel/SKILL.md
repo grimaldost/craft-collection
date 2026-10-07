@@ -53,34 +53,32 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    mechanically is a guard-rail below.
 4. **Demand structured, comparable output** — a fixed per-reviewer schema (verdict +
    scores + reasons) so results sit side by side. See `references/prompt-template.md`.
+   Re-reviewing a revised artifact: re-review mode and stop rule in
+   `references/prompt-template.md`.
 5. **Fire them — mechanism by ladder level.** Levels 1–2: one fresh reviewer per
-   lens, concurrently (Claude Code: one message, multiple Agent calls; Opus for
-   high stakes).
-   Level 3, or any panel that needs per-lens reasoning-effort control: drive the
-   lenses through the Workflow tool — `agent(prompt, {effort, schema})` per lens
-   — which buys what the Agent tool does not expose: reasoning-effort control and
-   schema-forced, mechanically comparable output. If the Workflow tool is not
-   available in the session, fall back to the Levels 1–2 mechanism (concurrent
-   Agent calls), accepting the loss of per-lens effort control. **Show the plan first** — lenses, agent count, rough cost —
+   lens, concurrently (Claude Code: one message, multiple Agent calls). Level 3,
+   or per-lens effort control: drive the lenses through the Workflow tool;
+   mechanism and fallback in `references/running-a-panel.md`. **Show the plan first** — lenses, agent count, rough cost —
    and get a go-ahead; never fire silently. A **durable pre-authorization**
    counts as the go-ahead: show the plan, cite the grant, and fire — an
-   autonomous session that insists on a fresh ask deadlocks the panel.
+   autonomous session that insists on a fresh ask deadlocks the panel. Snapshot
+   the artifact to an immutable path at fire time and point every lens and refuter
+   at the snapshot, so the author can keep editing the working copy. Before
+   firing, route each lens through the installed capacity-dispatch policy
+   (e.g. humblepowers' choosing-models) and pass model and effort explicitly per
+   lens. Effort is only settable on the Workflow path.
 6. **Persist raw output before synthesis.** Write each reviewer's structured
    output to disk as it lands, at a destination named in the plan (the reviewed
    tool's own feedback intake is often right). A max-effort panel returns more
    than in-band messages carry — a truncated notification, or a dead
-   orchestrator, loses the corpus; the output file is often the only copy. When a
-   verify stage follows the lenses, collect the findings in a barrier before it —
-   a pipeline that drops a finding on a verifier's error loses a real finding to a
-   coarse failure, not to a refutation.
-   **When the panel is a script, this is a stage in the harness, not a step for
-   its operator** — write inside the stage that produces the output. Read as an
-   operator's step it gets implemented as nothing: one panel script persisted no
-   verdicts, and a dead synthesis would have taken a seven-agent corpus with it.
+   orchestrator, loses the corpus; the output file is often the only copy. Barrier
+   and harness-stage rules: `references/running-a-panel.md`.
 7. **Synthesize — don't average.** Produce a comparison matrix, where they **agree**
    (consensus = high confidence), where they **disagree** (the tension worth
    examining), and — most important for an anchored author — **where the panel
-   diverges from the current direction, and what you may be missing.**
+   diverges from the current direction, and what you may be missing.** A
+   technology-behaviour claim adopted from any reviewer needs an executed check or
+   a source read, and agreement among recalled claims is not evidence.
 
 ## Persona packs — load the one that fits
 
@@ -92,6 +90,7 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
 | plan / decision | `references/personas-plan.md` | premortem · dependencies · cost · stakeholder |
 | research / a claim | `references/personas-research.md` | refuter · methodology · sources · bias |
 | a release (assembled diff + changelog + docs) | `references/personas-release.md` | consumer-upgrade · docs-coherence · changelog · interactions |
+| a skill / plugin / prompt pack | `references/personas-skill.md` | trigger-surface · token-budget · cold-install · eval-method · maintenance-cost |
 
 The default quartet works for anything; the packs sharpen it. Mix and match.
 
@@ -101,8 +100,9 @@ The default quartet works for anything; the packs sharpen it. Mix and match.
   spawn them; without one, run each lens sequentially in a clean context or
   session — or paste the neutral artifact brief into N separate fresh chats
   yourself. Independence survives the fallback; concurrency is what you lose.
-- **Cost is real.** A capacity-dispatch policy, when installed (e.g. humblepowers'
-  choosing-models), sets reviewer tier by stakes; otherwise offer to drop a ladder level.
+- **Cost is real.** Route each lens through an installed capacity-dispatch policy
+  (e.g. humblepowers' choosing-models) and pass model and effort explicitly per
+  lens; otherwise offer to drop a ladder level.
 - **Reviewing a repo whose plugin is also installed?** State which copy the panel
   reads (working tree vs installed cache) — the two diverge in either direction
   mid-release.

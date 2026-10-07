@@ -6,6 +6,308 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.25.0] - 2026-10-07
+
+Twenty-eight feedback rows from the 2026-10-06 craft-collection triage, across the
+review-panel skill, the compaction-survival anchor hooks and CLI, the `/anchor` command and the
+tool-feedback scripts. Minor bump: an installed copy gains capability (a PostToolUse hook, a
+second SessionStart hook, the `--post-write` and `--step` CLI arms, new reference files and
+routing rules), not only fixes.
+
+### Added
+
+- **`references/running-a-panel.md` consolidates mechanism and harness rules**
+  (2026-10-06 craft-collection triage: T126b). The reference documents Workflow-tool
+  routing for per-lens reasoning-effort control, the barrier and its deduplication rule,
+  and the harness stage that persists raw output. Snapshot and capacity-dispatch routing
+  stay in the SKILL.md body only.
+- **Selection rule: findings sorted by severity, round-robin across lenses, then
+  capped** (2026-10-06 craft-collection triage: T74a). Dropped finding ids and their
+  source lens are logged.
+- **Deduplication rule: barrier dedupes by (file, line ±5) or (file, first four title
+  words) before verify** (2026-10-06 craft-collection triage: T74b). The barrier
+  prevents pipelines from losing real findings to verifier errors.
+- **`references/personas-skill.md`: a persona pack for reviewing a skill, plugin or
+  prompt pack** (2026-10-06 craft-collection triage: T12b). Five lenses:
+  trigger-surface auditor, token-budget minimalist, cold-install end user,
+  eval-methodology expert and maintenance-cost skeptic. The SKILL.md persona table
+  gains one row naming the file (24 words of headroom left under the 1187-word
+  body budget, measured by `word_budget.py --report`).
+- **`references/personas-design.md`: Coherence critic and Implementer with the
+  repository open** (2026-10-06 craft-collection triage: T86k). The critic reads the
+  artifact alone and hunts contradictions, table-versus-prose mismatches and
+  "measured" claims with no evidence row. The implementer walks each proposed change
+  against the shipped code and prefers a measurement on the target machine over
+  inference from the repository. The pack header already allows use with or in place
+  of the default quartet, so the SKILL.md table cell is unchanged.
+- **compaction-survival failure-modes: two new rows** (2026-10-06 craft-collection
+  triage: T120b, T121b). "Run moves or replaces its own project directory": the hook
+  looks in a directory that no longer holds the anchor, and a move that carries the
+  anchor along leaves two open copies; the row gives a four-step survivable sequence
+  and notes that on Windows the session's start directory cannot be renamed while
+  the session runs. "Subagent arms in the parent's anchors dir": a compaction of the
+  parent injects the subagent's cursor as the parent's own; the remedy is that the
+  subagent names its anchor path in its report back and the parent re-reads it by
+  hand. The table goes from 13 to 15 data rows (counted with grep).
+- **`anchor_inject.py`: a `parked: <waits on>` frontmatter field for a track that is
+  waiting on purpose** (2026-10-06 craft-collection triage: T125a). A track parked on an
+  outside answer appeared in the arm-time `--list-dormant` sweep as abandoned, and as the
+  newest open file it could win selection over a live track at session start. A new pure helper
+  `parked_reason(text)` reads the field from the HEAD frontmatter only, with the same
+  frontmatter scan `is_anchor_shaped` uses; a `parked:` line in the body or the TAIL
+  never parks a file; a value of `false`, `no`, `none` or `0` (any case) reads as not
+  parked. Three places honour it: `--list-dormant` lists parked anchors after
+  the dormant ones under a `parked:` heading line, with age, the wait and the cursor, at
+  any age; `select_anchor` ranks a parked anchor below every live one and above a
+  content-terminal one; and when a parked anchor is the primary the hook injects one
+  short block (path, `parked: <waits on>`, how to un-park, how to close) in place of the
+  HEAD or the stale pointer, with telemetry tier `parked`. Beside a live anchor, the
+  live one is injected and the existing concurrent-tracks warning names the parked one
+  with its wait. With no `parked:` field, output is unchanged: a golden test captured
+  from the previous code pins `build_context`, `build_pointer` and `list_dormant`
+  byte for byte. The suite goes from 61 to 70 test functions (counted with grep), each
+  new one seen failing first.
+- **`anchor-spec.md`: a short Frontmatter section** (2026-10-06 craft-collection triage:
+  T125a). Names `format`, `task`, `step` and the new `parked`. The compaction-survival
+  SKILL.md step 1 reads "close, adopt or park" instead of "close or adopt" (one word;
+  1262 of 1265 body words, measured by `word_budget.py --report`).
+- **`anchor_inject.py --step <anchor> "<text>"`: bump `step:` and add the cursor entry
+  in one edit** (2026-10-06 craft-collection triage: T78b). The step boundary was two
+  hand edits, the frontmatter counter and a new cursor bullet, and nothing kept the two
+  in step. The arm sets `step:` to one past the larger of itself and the
+  cursor's newest `Step N` (a missing field becomes 1, inserted after `format:`), puts
+  `- Step N: <text>` first in the HEAD's cursor section, writes through a temp file in
+  the same directory and `os.replace`, and keeps the file's line endings and every other
+  byte. It prints one confirmation line plus the `head:` line from `--head-fit`. Exit 2,
+  with the path named in the stderr message and the file untouched, for a missing file,
+  empty or multi-line text, no frontmatter or no cursor section. It does not fold older
+  entries. Tests cover a Windows path and a U+2192 arrow round-tripping byte-exactly, a
+  cp1252 stdout, CRLF files, a byte-order mark, a missing field, a `Cursor` heading in the TAIL being
+  ignored and a cursor with no bullets; the suite goes from 70 to 84 test functions
+  (counted with grep), each new one seen failing first. `commands/anchor.md` and the
+  Cursor section of `anchor-spec.md` name the arm.
+- **`--head-fit` warns when `step:` is behind the cursor** (2026-10-06 craft-collection
+  triage: T78c). `step:` feeds `/anchor`'s telemetry and confirmation line, so the field
+  is mechanized rather than dropped. A new pure `newest_step(head)` reads the highest
+  `Step N` among the cursor section's bullets; when it exceeds the frontmatter `step:`,
+  the report adds `step: frontmatter says 3, cursor's newest is Step 5 - run --step or
+  correct the field`. Nothing is printed when they agree, when the field is ahead, or
+  when either side is absent. The SessionStart injection is unchanged.
+- **PostToolUse hook: a write to an open anchor warns when its HEAD is over the budget or
+  within 10% of it** (2026-10-06 craft-collection triage: T122a). The 8000-character
+  injection budget was enforced only at the next injection, so an anchor could grow past it
+  over a run and the cut (a dropped section, in the worst case a held-back cursor) showed
+  up after the fact. A new `PostToolUse` entry in `hooks.json` (matcher
+  `Write|Edit|MultiEdit`, timeout 10) runs `anchor_inject.py --post-write`. The arm reads the
+  payload's `tool_input.file_path`, normalises backslashes, and exits at once unless the path
+  is `*/.claude/anchors/*.md` and not `*.closed.md`. It measures the HEAD (above the tail
+  marker) with the existing `split_head` and `fit_head`, stays silent below 7,200
+  characters (90% of the budget), and above that prints a `PostToolUse` `additionalContext`
+  block: the `--head-fit` lines (`head: N chars / budget 8000 chars`, `OVER by X` or
+  `headroom Y`, the sections that would drop; `head_fit_report` now delegates to a new
+  `head_fit_lines(text)` so the wording is shared) and the Cursor's older `Step N` bullets,
+  ordered by N ascending, as entries to fold below `<!-- anchor:tail -->` (the highest N is
+  never offered, and a bullet that does not open with `Step N` never is, since a Done / In
+  progress / Next cursor ends with the next action; at most five, each clipped to 100
+  characters). It shares the SessionStart gate: **on by
+  default**, `SESSION_WORKFLOW_ANCHOR_HOOKS=0` opts out of both. Every path, including a
+  forced internal exception, exits 0. The `hooks.json` description and the README Hooks
+  list name the new hook. Measured on Windows 11 with a non-anchor payload, the median of 10
+  runs of the hook command (`uv run --no-project -- python anchor_inject.py --post-write`)
+  was 297 ms. Fourteen new tests feed the arm a synthetic payload through a subprocess: a
+  head of 11,397 characters reports `OVER by 3397`, 7,743 warns and reports `headroom 257`,
+  5,143 and a short HEAD over a 20,000-character TAIL are silent, 7,199 is silent and 7,200
+  warns; closed, non-anchor and non-`.md` paths, malformed or empty stdin, a missing file and
+  the opt-out all exit 0 with empty stdout; the module's suite goes from 102 to 116 test
+  functions (counted with grep), each new one seen failing first.
+- **The same hook makes `.claude/anchors/` ignore itself at write time** (2026-10-06
+  craft-collection triage: T123a). The SessionStart half only runs when a session starts,
+  so an anchor armed and written mid-session sat untracked in the repository until the next
+  start. `--post-write` calls `ensure_gitignore` on the directory of any open anchor it was
+  asked about, before the size check, so the file appears on the first write, including
+  when the HEAD is small and the arm prints nothing. It stays create-only: a test pins an
+  existing `.gitignore` byte-identical across a run, and no file is created for a missing
+  anchor, a closed anchor or a path outside `.claude/anchors/`.
+- **SessionStart hook on resume and compact: names a skill body in context that is older
+  than the installed plugin** (2026-10-06 craft-collection triage: T70f). A skill body stays
+  in the session's context after its plugin is updated, and a resumed or compacted session
+  kept working from a copy a release or more old with nothing to say so. A second
+  `SessionStart` entry in `hooks.json` (matcher `resume|compact`, timeout 10) runs
+  `feedback_nudge.py --stale-bodies`, a new fail-open arm beside the Stop nudge. It streams
+  the transcript and parses only the lines that carry `Base directory for this skill:`,
+  taking a body from the two record shapes that serve one: the meta user record written at
+  load and the `invoked_skills` attachment that serves bodies again (214 and 98 records in
+  the 281 local transcripts read on 2026-10-07). The marker has to start the text, so the 2
+  tool results there that only quoted it count for nothing. The last load per plugin and
+  skill wins. A body served from `<root>/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>`
+  (either separator) is compared by numeric version with every version
+  `<root>/plugins/installed_plugins.json` lists for exactly `<plugin>@<marketplace>`; when it
+  is older than all of them, the hook adds one line per plugin naming the installed version,
+  each stale skill with its version, and the fix: invoke the skill again, and if it still
+  loads the old version, restart and resume from the anchor. The registry is the one beside
+  the cache the body came from, not a fixed `~/.claude` path, so a relocated config
+  directory pairs each cache with its own registry. Silent for a current or newer body, a
+  version that does not parse, a body served from outside a cache (a `--plugin-dir`
+  checkout, which also replaces an earlier cached load of the same skill), a plugin the
+  registry does not list under that marketplace, a missing registry or transcript, malformed
+  stdin, and the opt-out. **On by default**; `SESSION_WORKFLOW_STALE_BODY_CHECK=0` opts out.
+  `plugin_version.py`'s helpers are imported inside the arm, so an import failure cannot
+  reach the Stop nudge: a test runs a copy of the script with no `plugin_version.py` beside
+  it and the nudge still fires. The transcript reader is deliberately local, as
+  `anchor_inject.py`'s `start_cwd` is: the two session-workflow readers look for different
+  records from different skill directories, and the third reader the triage named (T102a)
+  is in humblepowers. Run over those 281 transcripts against the current registry, 48 hold
+  cached skill bodies and 40 of them would warn, because their plugins have been updated
+  since; resuming one of them is the case this check exists for. Measured on Windows 11
+  with Python 3.14: a 51,020,768-byte synthetic transcript with four sparse loads took 14 ms
+  in process and 148 ms as the hook command (medians of 10), against 165 ms for an empty
+  transcript, so process start dominates; the largest local transcript, 96.1 MB, took 149 ms
+  in process (median of 5). The
+  module's suite goes from 22 to 34 test functions (counted with grep). Six were written
+  first and five of them failed for the expected reason (the sixth, same-version silence,
+  passed vacuously before the arm existed); each silent and failure path was then shown
+  to fail its test under a mutation of the guard it covers (13 mutations).
+
+### Changed
+
+- **anchor_inject: a startup injection states the anchor's authority conditionally**
+  (2026-10-06 craft-collection triage: T121a). The full-tier header told every session to
+  re-read the anchor, continue from its cursor and treat it as the source of truth, which
+  was over-certain for source=startup: a fresh process in the same directory can be a
+  subprocess of another tool rather than the interrupted run, and it was handed the run's
+  cursor as an order. On startup the header now reads "If this session is that run
+  restarting, re-read it and continue from its cursor. If you were started for a different
+  task (for example as a subprocess of another tool), ignore it and do not act on its
+  cursor." `build_context` takes a `source` parameter that `main()` already computed;
+  compact, resume, clear and a missing source keep the old header byte for byte (pinned by a
+  golden-string test), and the 6h startup gate and the pointer tier are unchanged. Three new
+  tests; the module's suite passes.
+- **anchor_inject: on compact, resume and clear, the hook looks for the anchor where the
+  session started before where it runs now** (2026-10-06 craft-collection triage: T120a).
+  The hook read anchors only under the payload `cwd`, which is where the session is when the
+  event fires, not where the run armed its anchor, so a session that had changed directory
+  came back from a compaction with no anchor. Of 280 local transcripts that carry a cwd, 77
+  record more than one working directory and 34 end in a different one from where they
+  started. A new `start_cwd(transcript_path)` streams the transcript (utf-8 with replacement,
+  one line at a time) and returns the `cwd` of the first record that has one; the records
+  before it are metadata with no cwd (queue operations, titles), and in those 280 transcripts
+  the first cwd sat on line 3 to 16. `resolve_anchors` searches `<start>/.claude/anchors`
+  and the payload cwd; when only one holds an open anchor it is used. When both do, their
+  primaries are compared with the rank `select_anchor` uses (not anchor-shaped, then
+  content-terminal, then parked, then older than 24 hours) and the start directory wins
+  every tie, so a stale, landed, parked or non-anchor file there cannot hide a live anchor
+  in the current directory; the other directory's anchors are named in the warning line
+  either way. When the two directories differ, the full, pointer and parked headers name
+  both. Telemetry goes to the anchors directory used and records `anchor_dir` (`start` or
+  `cwd`). startup, a missing or unreadable transcript and a transcript with no cwd keep the
+  payload-cwd lookup unchanged, and the golden-string tests still pass. `start_cwd` took
+  about 0.1 ms (median of 20) on synthetic transcripts of 5,000, 50,000 and 500,000 lines
+  (4.8 MB to 475 MB) with the cwd on line 2. The reader stays local to this script: the
+  stale-skill-body check (T70f) runs standalone from another skill directory and gets its
+  own, and the third reader the triage named (T102a) is in humblepowers, so no shared module
+  could serve all three. Seven new tests, five seen failing first; the two that pin the
+  fallbacks fail under a mutation that reads the transcript on startup or lets a missing
+  transcript raise. The suite goes from 87 to 94 test functions (counted with grep).
+- **Step 5 fire-and-route prose: snapshot the artifact to an immutable path, point
+  all lenses at it** (2026-10-06 craft-collection triage: T86i). The author keeps
+  editing the working copy; reviewers read the snapshot taken at fire time.
+- **Routing moved to installed capacity-dispatch policy** (2026-10-06
+  craft-collection triage: T86l). Before firing, route each lens through
+  humblepowers' choosing-models or equivalent, and pass model and effort explicitly
+  per lens. Removed the passive "A capacity-dispatch policy, when installed, sets
+  reviewer tier by stakes" clause; the action is now active and required when the
+  policy is present. Cost remains a guard-rail, and the offer to drop a ladder level
+  stands.
+- **Prompt template: option premises as refutable claims, 'Claim refuted' in output,
+  and fact-check before synthesis** (2026-10-06 craft-collection triage: T126a). When
+  the brief lists options, state each option's premise as a claim reviewers may
+  refute. The output schema gains a Claim refuted field. Synthesis re-checks each
+  lens's load-bearing factual claims against the artifact before the matrix.
+- **Prompt template adds 'Verification' field to output schema** (2026-10-06
+  craft-collection triage: T75a). Each finding records how it was verified:
+  executed, read-source, or recalled. Step 7 adds the rule: a technology-behaviour
+  claim adopted from any reviewer needs an executed check or a source read; agreement
+  among recalled claims is not evidence.
+- **Prompt template: severity is a sort key, not a label** (2026-10-06
+  craft-collection triage: T74d). Rank findings against each other, because inflated
+  severities sort nothing.
+- **Prompt template adds re-review mode with prior findings and stop rule** (2026-10-06
+  craft-collection triage: T86j). When re-reviewing a revised artifact, each lens
+  receives its prior findings inline and returns a per-finding status (addressed,
+  partly, not addressed, or regressed) before attacking afresh. Stop when a round's
+  verdicts meet the declared bar and no blocker survives refutation.
+- **compaction-survival reference lines: a standalone cursor, a fuller decisions
+  log, a fold rule and the `.gitignore` line** (2026-10-06 craft-collection triage:
+  T91a, T76c, T24b, T86g). `anchor-spec.md` says the cursor is the one block
+  guaranteed to survive a cut, so it names the next action, its inputs and where to
+  look without relying on dropped history, and the decisions log also records what
+  was rejected with the measurement that rejected it and what the run got wrong.
+  The minimal contract in `cold-start.md` gains two bullets: fold each closed phase
+  into the TAIL and measure with `anchor_inject.py --head-fit` (in hookless mode
+  nothing else bounds the HEAD), and `.claude/anchors/` carries a `.gitignore`
+  containing `*`, so a commit after an anchor update correctly reports nothing to
+  commit. The compaction-survival SKILL.md body is unchanged by this row (1265 words at that
+  point, at its budget).
+- **compaction-survival protocol steps 1 and 2 reworded, word-neutral** (2026-10-06
+  craft-collection triage: T121b, T78a). Step 1 drops the sentence about what
+  `close --stale` cannot reach (the "Track abandoned mid-cursor" row already holds
+  it) for a 13-word clause: a subagent anchors in its own work folder, never in
+  `<cwd>/.claude/anchors/`. Step 2 now reads "update the cursor whenever durable
+  state moves" (a commit, push, deploy step, background launch or write outside the
+  repo) instead of "after each step or phase", because a step boundary is not the
+  moment the state changes. `commands/anchor.md` takes the same wording in its
+  Boundary paragraph. The frontmatter description is untouched. Body words: 1265 to
+  1261 (`word_budget.py --report`).
+- **anchor_inject: the SessionStart hook makes `.claude/anchors/` ignore itself when it finds
+  open anchors** (2026-10-06 craft-collection triage: T123a). `/anchor` step 2 asked for a
+  `.gitignore` holding exactly `*` in the anchors directory, but only the manual snapshot
+  path ran it: a run armed through the protocol, with no `/anchor` call, left the anchors and
+  the hook's own `log.ndjson` showing as untracked in the user's repository. The step now
+  also lives in code the protocol path runs: `ensure_gitignore(anchors_dir)` creates the file
+  with the content `*` when it is missing, before the telemetry append, so the log written by
+  that same run is already ignored. It is create-only (opened in exclusive mode): an existing
+  `.gitignore` is never read, rewritten or appended to, and any OSError is swallowed so a
+  write failure cannot block the injection or the telemetry. Eight new tests, among them a
+  temp-git-repo test (`git check-ignore` exits 0 for the anchor and for `log.ndjson`, and
+  `git status --porcelain` lists nothing under `.claude`), byte-identity of an existing
+  file, a `.gitignore` that is a directory (exit 0, injection and telemetry still emitted)
+  and no file for an anchors directory with only closed anchors; the module's suite passes.
+  The helper is a module-level function so a write-time arm can call it too.
+
+### Fixed
+
+- **`/anchor` listed the snapshot sections in the wrong order, with two missing**
+  (2026-10-06 craft-collection triage: T34d). The command's snapshot step ran
+  Mission, Plan pointer, Cursor, Invariants, Last-known-good, Resume steps ("all
+  seven categories", a count that was also wrong) and asked for a 1-3 sentence
+  Mission, while the injection spends its budget top-down in the order
+  `anchor-spec.md` and the skill body give: Mission, Cursor, Resume steps,
+  Invariants, Parallel tracks, In-flight work, Last-known-good, Plan pointer. A
+  snapshot written to the old list put the plan pointer above the cursor and had
+  no place for peer-track or background-task state. The step now lists all eight
+  in the spec's order, states no count, and takes the spec's Mission rule (quote a
+  mechanism instruction verbatim with a stable id). The same stale order in the
+  by-hand recipe of `cold-start.md` is corrected too.
+  `skills/compaction-survival/scripts/test_anchor_section_order.py` parses the section order from the spec,
+  the skill body, the command and the cold-start recipe and fails if any differs
+  (seen failing on the old command and recipe, passing on the new text).
+- **compaction-survival SKILL.md stated a count of failure modes that was wrong**
+  (2026-10-06 craft-collection triage: T120b). The Common failure modes line said
+  "The seven recurring ones" while `references/failure-modes.md` held 13 data rows
+  (and 15 after this release). The line now states no count, so it cannot drift.
+- **`plugin_version.py --tree` could not resolve a single-plugin repository**
+  (2026-10-06 craft-collection triage: T127a). `tree_version` read only
+  `plugins/<name>/.claude-plugin/plugin.json`, so a repository holding one plugin at its
+  root (`.claude-plugin/plugin.json`) always failed, and the error told the author to point
+  `--tree` at the repository root, which was already where it pointed. `tree_version` now
+  tries the marketplace layout first and falls back to the root manifest, accepted only
+  when its `name` equals the plugin (a root manifest for another plugin returns None
+  rather than that plugin's version). The error names both paths it tried and keeps exit 1
+  and ASCII. `test_plugin_version.py` gains 4 test functions (16 to 20): the root
+  fallback, the name mismatch, marketplace precedence, and the two-path error text; the
+  fallback test failed on the old resolver, and the registered red-proof test passes
+  unchanged.
+
 ## [0.24.4] - 2026-10-06
 
 One owner-approved row from the 2026-09-26 craft-collection triage: a correction

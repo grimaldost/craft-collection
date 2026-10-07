@@ -41,7 +41,11 @@ SCRIPT = Path(__file__).resolve().parent / 'anchor_inject.py'
 
 
 def run_hook(
-    cwd: Path, env_on: bool = True, source: str = 'compact', extra_env: dict | None = None
+    cwd: Path,
+    env_on: bool = True,
+    source: str = 'compact',
+    extra_env: dict | None = None,
+    transcript=None,
 ):
     env = dict(os.environ)
     # Default ON: env_on leaves the variable unset, which is how a real install
@@ -51,14 +55,16 @@ def run_hook(
         env['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '0'
     if extra_env:
         env.update(extra_env)
-    payload = json.dumps(
-        {
-            'hook_event_name': 'SessionStart',
-            'source': source,
-            'session_id': 'test-session',
-            'cwd': str(cwd),
-        }
-    )
+    fields = {
+        'hook_event_name': 'SessionStart',
+        'source': source,
+        'session_id': 'test-session',
+        'cwd': str(cwd),
+    }
+    if transcript is not None:
+        # Any type on purpose: a non-string transcript_path is one of the cases.
+        fields['transcript_path'] = str(transcript) if isinstance(transcript, Path) else transcript
+    payload = json.dumps(fields)
     proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
         [sys.executable, str(SCRIPT)],
         input=payload,
@@ -75,11 +81,14 @@ def make_anchor(
     name: str = 'run.md',
     body: str = '# Mission\ntest mission\n# Cursor\nnext: step 7\n',
     age_s: int = 0,
+    extra_frontmatter: str = '',
 ):
     anchors = base / '.claude' / 'anchors'
     anchors.mkdir(parents=True, exist_ok=True)
     f = anchors / name
-    f.write_text('---\nformat: anchor/v0\nstep: 7\n---\n' + body, encoding='utf-8')
+    f.write_text(
+        '---\nformat: anchor/v0\nstep: 7\n' + extra_frontmatter + '---\n' + body, encoding='utf-8'
+    )
     if age_s:
         old = time.time() - age_s
         os.utime(f, (old, old))
@@ -993,6 +1002,1131 @@ def test_sweeps_survive_a_cp1252_stdout():
         assert 'passo' in proc.stdout.decode('utf-8'), 'the cursor must survive the seam intact'
 
 
+# -- parked anchors: `parked: <what it waits on>` in the frontmatter -------------
+
+PARKED_AGE_H = 500
+WAITS_ON = 'vendor sign-off on the schema change'
+PARKED_BODY = '# Schema rollout\n# Cursor\nPhase 2 blocked until the vendor answers\n'
+
+
+def make_parked(base: Path, name: str = 'schema-rollout.md', age_h: int = 0, waits=WAITS_ON):
+    return make_anchor(
+        base,
+        name=name,
+        body=PARKED_BODY,
+        age_s=age_h * 3600,
+        extra_frontmatter=f'parked: {waits}\n',
+    )
+
+
+def test_parked_reason_reads_the_frontmatter_field():
+    import anchor_inject as ai
+
+    text = f'---\nformat: anchor/v1\nparked: {WAITS_ON}\nstep: 3\n---\n{PARKED_BODY}'
+    assert ai.parked_reason(text) == WAITS_ON
+
+
+def test_parked_reason_is_empty_when_the_field_is_absent_or_blank():
+    import anchor_inject as ai
+
+    assert ai.parked_reason('---\nformat: anchor/v1\nstep: 3\n---\n' + PARKED_BODY) == ''
+    assert ai.parked_reason('---\nformat: anchor/v1\nparked:\n---\n' + PARKED_BODY) == ''
+    assert ai.parked_reason(PARKED_BODY) == ''
+
+
+def test_parked_reason_treats_a_false_looking_value_as_not_parked():
+    import anchor_inject as ai
+
+    for value in ('false', 'False', 'FALSE', 'no', 'No', 'none', 'None', '0', '"false"', 'false  '):
+        text = f'---\nformat: anchor/v1\nparked: {value}\n---\n{PARKED_BODY}'
+        assert ai.parked_reason(text) == '', f'parked: {value} resumes the track'
+    # a real wait that merely starts with such a word stays parked
+    text = '---\nformat: anchor/v1\nparked: no reply from the vendor yet\n---\n' + PARKED_BODY
+    assert ai.parked_reason(text) == 'no reply from the vendor yet'
+
+
+def test_parked_reason_ignores_a_parked_line_in_the_tail_or_the_body():
+    import anchor_inject as ai
+
+    fm = '---\nformat: anchor/v1\nstep: 3\n---\n'
+    in_body = fm + '# Cursor\nparked: a note about another track\n'
+    in_tail = fm + PARKED_BODY + '<!-- anchor:tail -->\nparked: folded decision text\n'
+    no_frontmatter = 'parked: not frontmatter at all\n' + PARKED_BODY
+    assert ai.parked_reason(in_body) == ''
+    assert ai.parked_reason(in_tail) == ''
+    assert ai.parked_reason(no_frontmatter) == ''
+
+
+def test_a_parked_anchor_lists_under_the_parked_heading_and_not_as_dormant():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_parked(tmp, age_h=PARKED_AGE_H)
+        make_anchor(
+            tmp,
+            name='abandoned.md',
+            body='# Remodel wave\n# Cursor\nPhase 1 IN PROGRESS\n',
+            age_s=96 * 3600,
+        )
+        anchors = tmp / '.claude' / 'anchors'
+        lines = ai.list_dormant(anchors)
+        dormant = [ln for ln in lines if ln.startswith('abandoned.md')]
+        assert len(dormant) == 1, lines
+        assert not any(ln.startswith('schema-rollout.md') for ln in lines), (
+            'a parked anchor must not read as dormant: the sweep would offer to close it'
+        )
+        assert 'parked:' in lines, lines
+        parked = lines[lines.index('parked:') + 1 :]
+        assert len(parked) == 1, lines
+        for part in ('schema-rollout.md', f'{PARKED_AGE_H}h', WAITS_ON, 'Phase 2 blocked'):
+            assert part in parked[0], (part, parked[0])
+        assert lines.index('parked:') > lines.index(dormant[0]), 'dormant lines come first'
+
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, str(SCRIPT), '--list-dormant', str(anchors)],
+            capture_output=True,
+            encoding='utf-8',
+            timeout=30,
+        )
+        assert proc.returncode == 0
+        assert 'parked:' in proc.stdout.splitlines()
+
+
+def test_a_fresh_parked_anchor_is_still_listed_as_parked():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_parked(tmp)
+        lines = ai.list_dormant(tmp / '.claude' / 'anchors')
+        assert lines[0] == 'parked:' and WAITS_ON in lines[1], lines
+
+
+def test_a_parked_anchor_that_is_the_only_open_one_injects_the_short_block():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        f = make_parked(tmp)
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert str(f) in ctx
+        assert f'parked: {WAITS_ON}' in ctx
+        assert 'remove the `parked:` line' in ctx, 'the block must say how to un-park'
+        assert f'mv {f.name} {f.stem}.closed.md' in ctx, 'and how to close instead'
+        assert 'Phase 2 blocked' not in ctx, 'the HEAD is withheld for a parked anchor'
+        assert 'format: anchor/' not in ctx
+        assert len(ctx) < 700, f'one short block, got {len(ctx)} chars'
+        log = (tmp / '.claude' / 'anchors' / 'log.ndjson').read_text(encoding='utf-8')
+        assert json.loads(log.splitlines()[-1])['tier'] == 'parked'
+
+
+def test_a_parked_anchor_beside_a_live_one_injects_the_live_one_and_names_the_parked():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='live.md', body='# Cursor\nlive cursor text\n', age_s=3600)
+        make_parked(tmp)  # newer than the live one, so recency alone would pick it
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'live cursor text' in ctx
+        assert 'Phase 2 blocked' not in ctx
+        assert 'schema-rollout.md' in ctx
+        assert f'parked: {WAITS_ON}' in ctx
+
+
+def test_select_anchor_ranks_parked_below_live_and_above_content_terminal():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        done = make_anchor(tmp, name='done.md', body='**Status:** CLOSED\nfinished\n')
+        parked = make_parked(tmp)
+        live = make_anchor(tmp, name='live.md', body='# Cursor\nlive\n', age_s=48 * 3600)
+        newest_first = sorted([done, parked, live], key=lambda p: -p.stat().st_mtime)
+        primary, _ = ai.select_anchor(newest_first)
+        assert primary == live
+        primary, _ = ai.select_anchor([a for a in newest_first if a != live])
+        assert primary == parked, 'parked outranks a content-terminal anchor'
+        primary, _ = ai.select_anchor([parked])
+        assert primary == parked, 'the only anchor is still selected'
+
+
+GOLDEN_CONTEXT_WITH_OTHERS = (
+    '<control-anchor>\n'
+    'A control anchor for this project exists at {DIR}/run.md (compaction-survival protocol). '
+    'Re-read it before acting: verify the real state (git log, files on disk), then continue '
+    'from its cursor. Treat it as the source of truth for run state over any summary above.\n'
+    'WARNING - 3 other open anchor(s) in this dir: old-track.md, done.md, design.md. '
+    "Concurrent tracks share this cwd; if this anchor is not your track's, read the right one "
+    'before acting. 1 of them read as "not an anchor" (no format: anchor/... line and no cursor '
+    'section): design.md. 1 read as closed in-content but were never renamed; close each: '
+    'mv done.md done.closed.md\n'
+    '---\n---\nformat: anchor/v0\nstep: 7\n---\n# Mission\nship the thing\n# Cursor\n'
+    'next: step 7\n# Notes\nsome notes\n'
+    '[anchor tail (decisions log / resolved history) on disk - read the file if needed]\n'
+    '</control-anchor>'
+)
+GOLDEN_CONTEXT_ALONE = (
+    '<control-anchor>\n'
+    'A control anchor for this project exists at {DIR}/run.md (compaction-survival protocol). '
+    'Re-read it before acting: verify the real state (git log, files on disk), then continue '
+    'from its cursor. Treat it as the source of truth for run state over any summary above.\n'
+    '---\n---\nformat: anchor/v0\nstep: 7\n---\n# Mission\nship the thing\n# Cursor\n'
+    'next: step 7\n# Notes\nsome notes\n'
+    '[anchor tail (decisions log / resolved history) on disk - read the file if needed]\n'
+    '</control-anchor>'
+)
+GOLDEN_POINTER_WITH_OTHERS = (
+    '<control-anchor>\n'
+    'A control anchor exists at {DIR}/old-track.md but is STALE: last updated ~100h ago, '
+    'so its body is withheld to spare context.\n'
+    'Title: Remodel wave\n'
+    'If you are continuing that track, read the file now - it is the source of truth for its '
+    'run state. If the track is finished, close it: mv old-track.md old-track.closed.md\n'
+    'Cursor it still asserts: Phase 1 IN PROGRESS\n'
+    'WARNING - 2 other open anchor(s) in this dir: run.md, done.md. Concurrent tracks share '
+    "this cwd; if this anchor is not your track's, read the right one before acting. "
+    '1 read as closed in-content but were never renamed; close each: '
+    'mv done.md done.closed.md\n'
+    '</control-anchor>'
+)
+GOLDEN_POINTER_ALONE = (
+    '<control-anchor>\n'
+    'A control anchor exists at {DIR}/old-track.md but is STALE: last updated ~100h ago, '
+    'so its body is withheld to spare context.\n'
+    'Title: Remodel wave\n'
+    'If you are continuing that track, read the file now - it is the source of truth for its '
+    'run state. If the track is finished, close it: mv old-track.md old-track.closed.md\n'
+    'Cursor it still asserts: Phase 1 IN PROGRESS\n'
+    '</control-anchor>'
+)
+GOLDEN_DORMANT = ['old-track.md  96h  Remodel wave  | cursor: Phase 1 IN PROGRESS']
+
+
+def test_without_a_parked_field_every_output_is_byte_identical_to_the_golden():
+    """Goldens captured from the code as it was before the parked field existed."""
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        run = make_anchor(
+            tmp,
+            name='run.md',
+            body=(
+                '# Mission\nship the thing\n# Cursor\nnext: step 7\n# Notes\nsome notes\n'
+                '<!-- anchor:tail -->\nlog line\n'
+            ),
+        )
+        old = make_anchor(
+            tmp,
+            name='old-track.md',
+            body='# Remodel wave\n# Cursor\nPhase 1 IN PROGRESS\n',
+            age_s=96 * 3600,
+        )
+        done = make_anchor(
+            tmp, name='done.md', body='**Status:** CLOSED\nfinished\n', age_s=96 * 3600
+        )
+        anchors = run.parent
+        design = anchors / 'design.md'
+        design.write_text('just a design doc\n', encoding='utf-8')
+
+        def scrub(s: str) -> str:
+            return s.replace(str(anchors) + os.sep, '{DIR}/')
+
+        assert scrub(ai.build_context(run, [old, done, design])) == GOLDEN_CONTEXT_WITH_OTHERS
+        assert scrub(ai.build_context(run)) == GOLDEN_CONTEXT_ALONE
+        assert scrub(ai.build_pointer(old, 100 * 3600, [run, done])) == GOLDEN_POINTER_WITH_OTHERS
+        assert scrub(ai.build_pointer(old, 100 * 3600)) == GOLDEN_POINTER_ALONE
+        assert ai.list_dormant(anchors) == GOLDEN_DORMANT
+
+
+STARTUP_SENTENCES = (
+    'If this session is that run restarting, re-read it and continue from its cursor. '
+    'If you were started for a different task (for example as a subprocess of another '
+    'tool), ignore it and do not act on its cursor.'
+)
+
+
+def _fixture_context(source: str) -> str:
+    """build_context(run, source=...) for the golden fixture anchor, directory scrubbed."""
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        run = make_anchor(
+            Path(d),
+            name='run.md',
+            body=(
+                '# Mission\nship the thing\n# Cursor\nnext: step 7\n# Notes\nsome notes\n'
+                '<!-- anchor:tail -->\nlog line\n'
+            ),
+        )
+        return ai.build_context(run, source=source).replace(str(run.parent) + os.sep, '{DIR}/')
+
+
+def test_compact_resume_clear_and_unknown_sources_keep_the_golden_header():
+    """Only source=startup changes the header. The other sources, and a missing
+    source, give the string captured before the startup branch existed."""
+    for source in ('compact', 'resume', 'clear', ''):
+        assert _fixture_context(source) == GOLDEN_CONTEXT_ALONE, source
+
+
+def test_startup_header_is_conditional_and_drops_the_source_of_truth_claim():
+    out = _fixture_context('startup')
+    assert STARTUP_SENTENCES in out
+    assert STARTUP_SENTENCES.isascii()
+    assert 'Treat it as the source of truth' not in out
+    assert 'Re-read it before acting' not in out
+    assert out.startswith(
+        '<control-anchor>\nA control anchor for this project exists at {DIR}/run.md '
+        '(compaction-survival protocol). '
+    )
+    # Only the header sentence changed: everything after the rule is the golden's.
+    assert out.split('\n---\n', 1)[1] == GOLDEN_CONTEXT_ALONE.split('\n---\n', 1)[1]
+
+
+def test_startup_hook_run_with_a_recent_anchor_gets_the_conditional_header():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, age_s=600)
+        proc = run_hook(tmp, source='startup')
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert STARTUP_SENTENCES in ctx
+        assert 'Treat it as the source of truth' not in ctx
+        assert 'test mission' in ctx and 'next: step 7' in ctx
+    for source in ('compact', 'resume', 'clear'):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            make_anchor(tmp, age_s=600)
+            ctx = json.loads(run_hook(tmp, source=source).stdout)['hookSpecificOutput'][
+                'additionalContext'
+            ]
+            assert 'Treat it as the source of truth' in ctx, source
+            assert 'ignore it and do not act on its cursor' not in ctx, source
+
+
+# -- --step: bump `step:` and prepend the cursor entry in one edit ---------------
+
+STEP_ANCHOR = (
+    '---\n'
+    'format: anchor/v1\n'
+    'task: demo\n'
+    'step: 4\n'
+    '---\n'
+    '# Mission\n'
+    'ship it\n'
+    '\n'
+    '## Cursor\n'
+    '\n'
+    '- Step 4: older entry\n'
+    '- Step 3: oldest entry\n'
+    '\n'
+    '## Invariants\n'
+    'keep step: 4 out of this prose\n'
+    '<!-- anchor:tail -->\n'
+    '## Decisions log\n'
+    '- Step 2: tail text\n'
+)
+
+
+def _write_anchor(base: Path, text: str, name: str = 'run.md') -> Path:
+    f = base / name
+    with open(f, 'w', encoding='utf-8', newline='') as fh:
+        fh.write(text)
+    return f
+
+
+def _step_cli(*args, encoding: str = 'utf-8'):
+    env = dict(os.environ)
+    env['PYTHONIOENCODING'] = encoding
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(SCRIPT), '--step', *args],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        env=env,
+        timeout=30,
+    )
+
+
+def test_step_bumps_the_frontmatter_and_puts_the_new_entry_first_in_the_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), STEP_ANCHOR)
+        proc = _step_cli(str(f), 'pushed the branch')
+        out = proc.stdout.decode('utf-8')
+        assert proc.returncode == 0, proc.stderr
+        want = STEP_ANCHOR.replace('step: 4\n---', 'step: 5\n---').replace(
+            '## Cursor\n\n', '## Cursor\n\n- Step 5: pushed the branch\n'
+        )
+        assert f.read_bytes() == want.encode('utf-8')
+        assert 'step: 4 -> 5' in out
+        assert 'head:' in out and 'budget' in out
+        assert out.isascii()
+
+
+def test_step_text_with_a_windows_path_and_an_arrow_round_trips_byte_exactly():
+    # Backslashes and a non-ASCII arrow are the two ways a text-handling shortcut
+    # (a regex replacement template, a locale-default write) corrupts an entry.
+    text = 'moved C:\\Users\\x\\repo \u2192 D:\\work\\repo\\new'
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), STEP_ANCHOR)
+        proc = _step_cli(str(f), text)
+        assert proc.returncode == 0, proc.stderr
+        raw = f.read_bytes()
+        assert ('- Step 5: ' + text + '\n').encode('utf-8') in raw
+        assert raw.decode('utf-8').count('\u2192') == 1
+
+
+def test_step_survives_a_cp1252_stdout():
+    # The confirmation names the anchor; an arrow in the file name would raise
+    # under a cp1252 console unless the arm forces UTF-8 before it prints.
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), STEP_ANCHOR, name='fase \u2192 dois.md')
+        proc = _step_cli(str(f), 'proximo \u2192 passo', encoding='cp1252')
+        assert proc.returncode == 0, f'--step died on a cp1252 stdout: {proc.stderr[-300:]}'
+        assert 'proximo \u2192 passo' in f.read_text(encoding='utf-8')
+
+
+def test_step_adds_a_missing_field_as_step_1_after_the_format_line():
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace('step: 4\n', '').replace(
+            '- Step 4: older entry\n- Step 3: oldest entry\n', 'nothing yet\n'
+        )
+        f = _write_anchor(Path(d), text)
+        proc = _step_cli(str(f), 'first entry')
+        assert proc.returncode == 0, proc.stderr
+        got = f.read_text(encoding='utf-8')
+        assert got.startswith('---\nformat: anchor/v1\nstep: 1\ntask: demo\n---\n')
+        assert '## Cursor\n\n- Step 1: first entry\nnothing yet\n' in got
+
+
+def test_step_keeps_the_line_endings_of_the_file():
+    with tempfile.TemporaryDirectory() as d:
+        crlf = STEP_ANCHOR.replace('\n', '\r\n')
+        f = _write_anchor(Path(d), crlf)
+        proc = _step_cli(str(f), 'on a windows editor')
+        assert proc.returncode == 0, proc.stderr
+        raw = f.read_bytes()
+        assert b'\r\n- Step 5: on a windows editor\r\n' in raw
+        assert raw.count(b'\n') == raw.count(b'\r\n'), 'a bare LF crept into a CRLF file'
+        assert b'step: 5\r\n' in raw
+
+
+def test_step_edits_only_the_head_frontmatter_and_cursor():
+    # `step: 4` in the prose and a Cursor-like heading in the TAIL are not targets.
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace(
+            '## Decisions log\n', '## Decisions log\nstep: 9\n## Cursor\n- Step 2: tail cursor\n'
+        )
+        f = _write_anchor(Path(d), text)
+        assert _step_cli(str(f), 'only the head').returncode == 0
+        got = f.read_text(encoding='utf-8')
+        assert 'keep step: 4 out of this prose' in got
+        assert got.count('step: 9\n') == 1
+        assert got.count('- Step 5: only the head') == 1
+        assert got.index('- Step 5: only the head') < got.index('<!-- anchor:tail -->')
+
+
+def test_step_after_a_lagging_field_numbers_past_the_cursor():
+    # The field says 3 but the cursor already shows Step 5: the next entry is 6,
+    # and the field is repaired in the same edit.
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace('step: 4\n', 'step: 3\n').replace(
+            '- Step 4: older entry', '- Step 5: older entry'
+        )
+        f = _write_anchor(Path(d), text)
+        assert _step_cli(str(f), 'catch up').returncode == 0
+        got = f.read_text(encoding='utf-8')
+        assert '\nstep: 6\n' in got
+        assert '- Step 6: catch up\n- Step 5: older entry' in got
+
+
+def test_step_on_an_anchor_without_a_cursor_exits_2_and_leaves_the_file_untouched():
+    with tempfile.TemporaryDirectory() as d:
+        text = '---\nformat: anchor/v1\nstep: 4\n---\n# Mission\nship it\n'
+        f = _write_anchor(Path(d), text)
+        before = f.read_bytes()
+        proc = _step_cli(str(f), 'nowhere to put it')
+        assert proc.returncode == 2
+        assert str(f) in proc.stderr.decode('utf-8')
+        assert f.read_bytes() == before
+        assert [p.name for p in f.parent.iterdir()] == ['run.md'], 'a temp file was left behind'
+
+
+def test_step_usage_errors_exit_2_and_say_which_path():
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), STEP_ANCHOR)
+        before = f.read_bytes()
+        missing = Path(d) / 'nope.md'
+        cases = [
+            (str(missing), 'text'),  # no such file
+            (str(f), '   '),  # empty text
+            (str(f), 'two\nlines'),  # an entry is one bullet
+            (str(f),),  # no text at all
+            (),  # nothing at all
+        ]
+        for args in cases:
+            proc = _step_cli(*args)
+            assert proc.returncode == 2, f'{args!r}: exit {proc.returncode}'
+            err = proc.stderr.decode('utf-8')
+            assert err.startswith('error: --step'), err
+        assert str(missing) in _step_cli(str(missing), 'text').stderr.decode('utf-8')
+        assert f.read_bytes() == before
+
+
+def test_step_into_a_cursor_with_no_bullets_still_lands_under_the_heading():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        spaced = '---\nformat: anchor/v1\nstep: 2\n---\n## Cursor\n\nprose, no bullets\n'
+        f = _write_anchor(base, spaced)
+        assert _step_cli(str(f), 'first bullet').returncode == 0
+        assert f.read_text(encoding='utf-8').endswith(
+            '## Cursor\n\n- Step 3: first bullet\nprose, no bullets\n'
+        )
+        bare = '---\nformat: anchor/v1\nstep: 2\n---\n## Cursor'
+        g = _write_anchor(base, bare, name='eof.md')
+        assert _step_cli(str(g), 'at eof').returncode == 0
+        assert g.read_text(encoding='utf-8').endswith('## Cursor\n- Step 3: at eof\n')
+
+
+def test_step_keeps_a_byte_order_mark():
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), '﻿' + STEP_ANCHOR)
+        assert _step_cli(str(f), 'edited under a bom').returncode == 0
+        raw = f.read_bytes()
+        assert raw.startswith(b'\xef\xbb\xbf---\n')
+        assert b'- Step 5: edited under a bom\n' in raw
+
+
+def test_newest_step_reads_the_cursor_bullets_only():
+    import anchor_inject as ai
+
+    head = '## Cursor\n- Step 5: a\n- Step 4: b\nStep 99 in prose\n## Other\n- Step 70: not here\n'
+    assert ai.newest_step(head) == 5
+    assert ai.newest_step('## Cursor\n- done: all\n') is None
+    assert ai.newest_step('# Mission\n- Step 3: x\n') is None
+    assert ai.newest_step('## Cursor\n- **Step 12**: bold label\n') == 12
+
+
+LAG_LINE = "step: frontmatter says 3, cursor's newest is Step 5 - run --step or correct the field"
+
+
+def test_head_fit_flags_a_step_field_behind_the_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace('step: 4\n', 'step: 3\n').replace('Step 4:', 'Step 5:')
+        f = _write_anchor(Path(d), text)
+        proc = _head_fit(str(f))
+        assert proc.returncode == 0
+        assert LAG_LINE in proc.stdout.splitlines()
+
+
+def test_head_fit_is_quiet_when_step_agrees_or_either_side_is_absent():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        cases = {
+            'agree': STEP_ANCHOR,
+            'ahead': STEP_ANCHOR.replace('step: 4\n', 'step: 9\n'),
+            'nofield': STEP_ANCHOR.replace('step: 4\n', ''),
+            'nobullets': STEP_ANCHOR.replace(
+                '- Step 4: older entry\n- Step 3: oldest entry\n', 'idle\n'
+            ),
+        }
+        for name, text in cases.items():
+            proc = _head_fit(str(_write_anchor(base, text, name + '.md')))
+            assert proc.returncode == 0
+            assert 'step: frontmatter' not in proc.stdout, name
+
+
+# -- the directory the session started in, read from its transcript --------------
+
+START_BODY = '# Mission\nstart-dir mission\n# Cursor\nnext: from the start dir\n'
+NOW_BODY = '# Mission\nmoved-to mission\n# Cursor\nnext: from the moved-to dir\n'
+
+
+def _two_dirs(d: str) -> tuple[Path, Path, Path]:
+    """Directory A where the session started, directory B where it runs now, and
+    a transcript shaped like a real one: a metadata record with no cwd first, then
+    the first message record carrying A, then a later record carrying B."""
+    base = Path(d)
+    start, now = base / 'start-dir', base / 'moved-to'
+    start.mkdir()
+    now.mkdir()
+    transcript = base / 'session.jsonl'
+    records = [
+        {'type': 'queue-operation', 'operation': 'enqueue'},
+        {'type': 'user', 'cwd': str(start), 'message': {'role': 'user', 'content': 'go'}},
+        {'type': 'assistant', 'cwd': str(now), 'message': {'role': 'assistant'}},
+    ]
+    transcript.write_text(''.join(json.dumps(r) + '\n' for r in records), encoding='utf-8')
+    return start, now, transcript
+
+
+def _context(proc) -> str:
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+
+
+def _header(ctx: str) -> list[str]:
+    """The lines above the anchor body (the whole block for the pointer tier)."""
+    return ctx.split('\n---\n', 1)[0].splitlines()
+
+
+def test_a_moved_session_injects_the_start_directory_anchor_and_names_both_directories():
+    # The anchor was armed in A; by the compaction the session runs in B, which
+    # holds none. Looking only under B resumed the run with no state at all.
+    for source in ('compact', 'resume', 'clear'):
+        with tempfile.TemporaryDirectory() as d:
+            start, now, transcript = _two_dirs(d)
+            make_anchor(start, body=START_BODY)
+            ctx = _context(run_hook(now, source=source, transcript=transcript))
+            assert 'start-dir mission' in ctx, source
+            assert any(str(start) in line and str(now) in line for line in _header(ctx)), ctx
+            log = start / '.claude' / 'anchors' / 'log.ndjson'
+            assert log.is_file(), 'telemetry goes to the anchors dir that was used'
+            assert not (now / '.claude').exists()
+            assert json.loads(log.read_text(encoding='utf-8'))['anchor_dir'] == 'start'
+
+
+def test_a_moved_session_with_no_start_anchor_injects_the_current_one_and_names_both():
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(now, body=NOW_BODY)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'moved-to mission' in ctx
+        assert any(str(start) in line and str(now) in line for line in _header(ctx)), ctx
+        log = now / '.claude' / 'anchors' / 'log.ndjson'
+        assert json.loads(log.read_text(encoding='utf-8'))['anchor_dir'] == 'cwd'
+
+
+def test_anchors_in_both_directories_inject_the_start_one_and_warn_about_the_other():
+    # The current directory's anchor is the newer file, and still loses: the
+    # session's own track is the one armed where it started.
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(start, body=START_BODY, age_s=600)
+        make_anchor(now, name='other-track.md', body=NOW_BODY)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'start-dir mission' in ctx
+        assert 'moved-to mission' not in ctx
+        warn = [line for line in _header(ctx) if line.startswith('WARNING')]
+        assert len(warn) == 1, ctx
+        assert 'other-track.md' in warn[0] and str(now) in warn[0], warn[0]
+
+
+def _write_notes(base: Path) -> Path:
+    anchors = base / '.claude' / 'anchors'
+    anchors.mkdir(parents=True, exist_ok=True)
+    return _write_anchor(anchors, '# Design notes\nstart-dir mission\n', 'notes.md')
+
+
+def test_a_start_anchor_that_is_not_a_live_track_loses_to_a_fresh_live_current_one():
+    # The start directory holds a file that must not shadow the live track: one
+    # stale, one that says it landed, one parked, one that is not an anchor at
+    # all. The current directory holds a fresh live anchor, and its HEAD (not
+    # just its name in a warning) is what the session gets back.
+    landed = '# Mission\nstart-dir mission\nStatus: landed\n# Cursor\nnext: nothing\n'
+    cases = {
+        'stale': lambda start: make_anchor(start, body=START_BODY, age_s=48 * 3600),
+        'landed': lambda start: make_anchor(start, body=landed),
+        'landed and stale': lambda start: make_anchor(start, body=landed, age_s=48 * 3600),
+        'parked': lambda start: make_parked(start),
+        'not an anchor': lambda start: _write_notes(start),
+    }
+    for label, arm_start in cases.items():
+        with tempfile.TemporaryDirectory() as d:
+            start, now, transcript = _two_dirs(d)
+            arm_start(start)
+            make_anchor(now, name='live.md', body=NOW_BODY.replace('next:', 'step: 4\nnext:'))
+            ctx = _context(run_hook(now, transcript=transcript))
+            assert 'moved-to mission' in ctx and 'step: 4' in ctx, (label, ctx)
+            assert 'start-dir mission' not in ctx and 'STALE' not in ctx, (label, ctx)
+            assert 'PARKED' not in ctx, (label, ctx)
+            warn = [line for line in _header(ctx) if line.startswith('WARNING')]
+            assert len(warn) == 1 and str(start) in warn[0], (label, ctx)
+            log = now / '.claude' / 'anchors' / 'log.ndjson'
+            assert json.loads(log.read_text(encoding='utf-8'))['anchor_dir'] == 'cwd', label
+
+
+def test_a_stale_start_anchor_still_wins_a_tie_with_a_stale_current_one():
+    # Equal rank keeps the start directory: preference only breaks ties.
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(start, body=START_BODY, age_s=48 * 3600)
+        make_anchor(now, name='other-track.md', body=NOW_BODY, age_s=30 * 3600)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'STALE' in ctx and str(start) in ctx and 'moved-to mission' not in ctx
+
+
+def test_both_directories_reach_the_pointer_and_parked_tiers_too():
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(start, body=START_BODY, age_s=48 * 3600)
+        # The current anchor is aged too, so both are stale and the start one wins the tie.
+        make_anchor(now, name='other-track.md', body=NOW_BODY, age_s=30 * 3600)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'STALE' in ctx and str(start) in ctx
+        lines = ctx.splitlines()
+        assert any(str(start) in line and str(now) in line for line in lines), ctx
+        assert any(line.startswith('WARNING') and 'other-track.md' in line for line in lines)
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_parked(start)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'PARKED' in ctx
+        assert any(str(start) in line and str(now) in line for line in ctx.splitlines()), ctx
+
+
+def test_an_unreadable_transcript_keeps_the_payload_cwd_lookup():
+    with tempfile.TemporaryDirectory() as d:
+        start, now, _ = _two_dirs(d)
+        base = Path(d)
+        no_cwd = base / 'no-cwd.jsonl'
+        no_cwd.write_text('{"type": "queue-operation"}\n{broken\n', encoding='utf-8')
+        unreadable = [None, base / 'missing.jsonl', base, no_cwd, '', 42, ['a', 'list']]
+        make_anchor(start, body=START_BODY)
+        for t in unreadable:
+            proc = run_hook(now, transcript=t)
+            assert proc.returncode == 0 and proc.stdout.strip() == '', (t, proc.stdout)
+        make_anchor(now, body=NOW_BODY)
+        today = _context(run_hook(now))
+        assert 'moved-to mission' in today
+        for t in unreadable:
+            assert _context(run_hook(now, transcript=t)) == today, t
+
+
+def test_startup_reads_only_the_payload_cwd():
+    # A fresh process is not a continuation: the transcript is not read at all.
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(start, body=START_BODY)
+        proc = run_hook(now, source='startup', transcript=transcript)
+        assert proc.returncode == 0 and proc.stdout.strip() == ''
+        make_anchor(now, body=NOW_BODY)
+        ctx = _context(run_hook(now, source='startup', transcript=transcript))
+        assert ctx == _context(run_hook(now, source='startup'))
+        assert 'moved-to mission' in ctx and str(start) not in ctx
+
+
+def test_start_cwd_returns_the_first_cwd_and_skips_garbage():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        first, later = str(base / 'first'), str(base / 'later')
+        lines = [
+            '{not json at all',
+            '[1, 2]',
+            '"a bare string"',
+            json.dumps({'type': 'queue-operation'}),
+            json.dumps({'cwd': ''}),
+            json.dumps({'cwd': 7}),
+            json.dumps({'type': 'user', 'cwd': first}),
+            json.dumps({'type': 'user', 'cwd': later}),
+        ]
+        t = base / 't.jsonl'
+        t.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        assert ai.start_cwd(str(t)) == Path(first)
+        # Invalid UTF-8 on an earlier line is replaced, not raised.
+        b = base / 'bytes.jsonl'
+        b.write_bytes(b'\xff\xfe{"x": 1}\n' + json.dumps({'cwd': first}).encode() + b'\n')
+        assert ai.start_cwd(str(b)) == Path(first)
+        for bad in (None, '', 42, str(base / 'missing.jsonl'), str(base), Path(t)):
+            assert ai.start_cwd(bad) is None, bad
+
+
+def _git_env() -> dict:
+    # Same scrub as evals/harness/test_git_env_isolation.py: an ambient GIT_DIR
+    # (set by git itself inside a hook) would make `git -C <tmp>` answer about the
+    # outer repository.
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    env['GIT_CONFIG_GLOBAL'] = os.devnull
+    env['GIT_CONFIG_SYSTEM'] = os.devnull
+    return env
+
+
+def _git(cwd: Path, *args: str):
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ['git', '-C', str(cwd), *args],  # noqa: S607 - git resolved from PATH
+        capture_output=True,
+        encoding='utf-8',
+        timeout=30,
+        env=_git_env(),
+    )
+
+
+def _have_git() -> bool:
+    import shutil
+
+    return shutil.which('git') is not None
+
+
+def _hook_env_scrubbed(cwd: Path):
+    """run_hook with the same git scrub, so the hook itself never sees an ambient repo."""
+    return run_hook(cwd, extra_env=_git_env())
+
+
+def test_ensure_gitignore_writes_a_lone_star_when_missing():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        anchors = Path(d)
+        ai.ensure_gitignore(anchors)
+        assert (anchors / '.gitignore').read_bytes() == b'*'
+
+
+def test_ensure_gitignore_never_touches_an_existing_file():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        anchors = Path(d)
+        gi = anchors / '.gitignore'
+        original = b'# kept\r\n*.tmp\r\n!keep.md\r\n'
+        gi.write_bytes(original)
+        old = time.time() - 3600
+        os.utime(gi, (old, old))
+        mtime = gi.stat().st_mtime_ns
+        ai.ensure_gitignore(anchors)
+        assert gi.read_bytes() == original
+        assert gi.stat().st_mtime_ns == mtime
+
+
+def test_ensure_gitignore_swallows_every_oserror():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        # .gitignore is a directory: exists, never opened as a file, no raise.
+        blocked = base / 'blocked'
+        (blocked / '.gitignore').mkdir(parents=True)
+        ai.ensure_gitignore(blocked)
+        assert (blocked / '.gitignore').is_dir()
+        # The anchors dir itself is absent: the write fails, no raise, nothing created.
+        ai.ensure_gitignore(base / 'absent')
+        assert not (base / 'absent').exists()
+
+
+def test_hook_with_open_anchors_makes_the_anchors_dir_self_ignoring():
+    if not _have_git():
+        print('skip: git not on PATH; the check-ignore test did not run')
+        return
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        assert _git(tmp, 'init', '-q').returncode == 0
+        anchor = make_anchor(tmp)
+        assert not (anchor.parent / '.gitignore').exists()
+        proc = _hook_env_scrubbed(tmp)
+        assert proc.returncode == 0
+        assert '<control-anchor>' in proc.stdout
+        assert (anchor.parent / '.gitignore').read_bytes() == b'*'
+        rel = '.claude/anchors/' + anchor.name
+        assert _git(tmp, 'check-ignore', '-q', rel).returncode == 0
+        # The telemetry the hook wrote is ignored too: the file was there first.
+        assert (anchor.parent / 'log.ndjson').is_file()
+        assert _git(tmp, 'check-ignore', '-q', '.claude/anchors/log.ndjson').returncode == 0
+        status = _git(tmp, 'status', '--porcelain', '--untracked-files=all')
+        assert status.returncode == 0
+        assert '.claude' not in status.stdout, status.stdout
+
+
+def test_hook_leaves_an_existing_gitignore_byte_identical():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp)
+        gi = anchor.parent / '.gitignore'
+        original = b'*.tmp\n'
+        gi.write_bytes(original)
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        assert '<control-anchor>' in proc.stdout
+        assert gi.read_bytes() == original
+
+
+def test_hook_still_injects_and_logs_when_the_gitignore_write_fails():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp)
+        (anchor.parent / '.gitignore').mkdir()
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        assert '<control-anchor>' in proc.stdout
+        assert (anchor.parent / '.gitignore').is_dir()
+        assert (anchor.parent / 'log.ndjson').read_text(encoding='utf-8').strip()
+
+
+def test_hook_with_no_open_anchor_creates_no_gitignore():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp, name='done.closed.md')
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+        assert not (anchor.parent / '.gitignore').exists()
+
+
+def test_hook_ensures_the_ignore_file_even_when_a_stale_startup_injects_nothing():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp, age_s=7 * 3600)
+        proc = run_hook(tmp, source='startup')
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+        assert (anchor.parent / '.gitignore').read_bytes() == b'*'
+
+
+# --- PostToolUse arm: --post-write warns when an anchor write leaves the HEAD over
+# budget or within 10% of it, and makes the anchors directory self-ignoring. ---
+
+_CURSOR_BULLETS = (
+    '- Step 3: newest entry\n- Step 2: middle entry\n- Step 1: oldest entry\n'
+    '  continuation of the oldest\n'
+)
+
+
+def _head_of_size(n: int) -> str:
+    """An anchor HEAD of exactly n characters (no trailing newline), with a Mission, a
+    padded Standing directives section and a Cursor of three newest-first bullets."""
+    head_start = '---\nformat: anchor/v1\nstep: 3\n---\n# Mission\nm\n# Standing directives\n'
+    cursor = '# Cursor\n' + _CURSOR_BULLETS.rstrip('\n')
+    pad = n - len(head_start) - len(cursor) - 1
+    assert pad > 0
+    head = head_start + 'x' * pad + '\n' + cursor
+    assert len(head) == n
+    return head
+
+
+def _anchor_with_head(base: Path, n: int, name: str = 'run.md', tail: str = 'old\n' * 5000) -> Path:
+    anchors = base / '.claude' / 'anchors'
+    anchors.mkdir(parents=True, exist_ok=True)
+    f = anchors / name
+    with open(f, 'w', encoding='utf-8', newline='') as fh:
+        fh.write(_head_of_size(n) + '\n<!-- anchor:tail -->\n' + tail)
+    return f
+
+
+def _post_write(payload, env_off: bool = False, raw: str | None = None):
+    env = dict(os.environ)
+    env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
+    if env_off:
+        env['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '0'
+    env['PYTHONIOENCODING'] = 'utf-8'
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(SCRIPT), '--post-write'],
+        input=raw if raw is not None else json.dumps(payload),
+        capture_output=True,
+        encoding='utf-8',
+        env=env,
+        timeout=30,
+    )
+
+
+def _write_payload(path, tool: str = 'Write') -> dict:
+    return {
+        'hook_event_name': 'PostToolUse',
+        'tool_name': tool,
+        'tool_input': {'file_path': str(path)},
+        'session_id': 'test-session',
+    }
+
+
+def _post_write_context(proc) -> str:
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)['hookSpecificOutput']
+    assert out['hookEventName'] == 'PostToolUse'
+    return out['additionalContext']
+
+
+def test_post_write_reports_how_far_over_budget_an_anchor_head_is():
+    with tempfile.TemporaryDirectory() as d:
+        proc = _post_write(_write_payload(_anchor_with_head(Path(d), 11_397)))
+        ctx = _post_write_context(proc)
+        assert 'head: 11397 chars / budget 8000 chars' in ctx
+        assert 'OVER by 3397' in ctx
+        assert 'Standing directives' in ctx, 'the section that would drop is named'
+
+
+def test_post_write_warns_inside_the_ten_percent_band_and_reports_headroom():
+    with tempfile.TemporaryDirectory() as d:
+        proc = _post_write(_write_payload(_anchor_with_head(Path(d), 7_743), tool='Edit'))
+        ctx = _post_write_context(proc)
+        assert 'headroom 257' in ctx
+        assert 'OVER' not in ctx
+
+
+def test_post_write_band_edge_is_ninety_percent_of_the_budget():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        assert _post_write(_write_payload(_anchor_with_head(base, 7_199))).stdout == ''
+        assert 'headroom 800' in _post_write_context(
+            _post_write(_write_payload(_anchor_with_head(base, 7_200, name='edge.md')))
+        )
+
+
+def test_post_write_is_silent_for_a_head_well_inside_the_budget():
+    with tempfile.TemporaryDirectory() as d:
+        proc = _post_write(_write_payload(_anchor_with_head(Path(d), 5_143)))
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+
+
+def test_post_write_measures_the_head_not_the_whole_file():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 2_000, tail='history line\n' * 3000)
+        assert anchor.stat().st_size > 20_000
+        proc = _post_write(_write_payload(anchor))
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+
+
+def test_post_write_lists_fold_candidates_oldest_cursor_bullet_first():
+    with tempfile.TemporaryDirectory() as d:
+        ctx = _post_write_context(_post_write(_write_payload(_anchor_with_head(Path(d), 11_397))))
+        assert 'anchor:tail' in ctx
+        oldest, middle = ctx.index('Step 1: oldest entry'), ctx.index('Step 2: middle entry')
+        assert oldest < middle
+        assert 'Step 3: newest entry' not in ctx, 'the newest entry is never offered for folding'
+        assert 'continuation of the oldest' not in ctx
+
+
+def _anchor_with_cursor(base: Path, cursor: str, name: str = 'run.md') -> Path:
+    anchor = base / '.claude' / 'anchors' / name
+    anchor.parent.mkdir(parents=True, exist_ok=True)
+    with open(anchor, 'w', encoding='utf-8', newline='') as fh:
+        fh.write('# Mission\n' + 'x' * 7_500 + '\n# Cursor\n' + cursor)
+    return anchor
+
+
+def test_post_write_never_offers_the_next_action_of_a_done_in_progress_next_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_cursor(
+            Path(d),
+            '- Done: ported the loader\n'
+            '- In progress: wiring the gate\n'
+            '- Next: run the gate on branch X, then push\n',
+        )
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert 'Next: run the gate' not in ctx, 'the next action must never be offered for folding'
+        assert 'Done: ported' not in ctx, (
+            'only Step N bullets are offered; position is not evidence'
+        )
+        assert 'Fold candidates: none in the Cursor' in ctx
+
+
+def test_post_write_orders_step_bullets_by_number_not_by_position():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_cursor(
+            Path(d),
+            '- Step 2: middle entry\n- Step 4: newest entry\n- Step 1: oldest entry\n- Next: go\n',
+        )
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert ctx.index('Step 1: oldest entry') < ctx.index('Step 2: middle entry')
+        assert 'Step 4: newest entry' not in ctx
+        assert 'Next: go' not in ctx
+
+
+def test_post_write_a_cursor_with_one_entry_offers_nothing_to_fold():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = Path(d) / '.claude' / 'anchors' / 'run.md'
+        anchor.parent.mkdir(parents=True)
+        with open(anchor, 'w', encoding='utf-8', newline='') as fh:
+            fh.write('# Mission\n' + 'x' * 7_500 + '\n# Cursor\n- Step 1: only entry\n')
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert 'Step 1: only entry' not in ctx
+        assert 'headroom' in ctx
+
+
+def test_post_write_matches_windows_separators():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 8_100)
+        payload = _write_payload(str(anchor).replace('/', '\\'), tool='MultiEdit')
+        # Backslashes are normalised to the host's separator, so the same file is found
+        # whichever separator the payload carried.
+        assert 'OVER by 100' in _post_write_context(_post_write(payload))
+
+
+def test_post_write_ignores_closed_and_non_anchor_paths():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        closed = _anchor_with_head(base, 11_397, name='run.closed.md')
+        elsewhere = base / 'notes.md'
+        elsewhere.write_text(_head_of_size(11_397), encoding='utf-8')
+        not_md = _anchor_with_head(base, 11_397, name='log.txt')
+        for target in (closed, elsewhere, not_md):
+            proc = _post_write(_write_payload(target))
+            assert proc.returncode == 0
+            assert proc.stdout == '', target
+        assert not (base / '.claude' / 'anchors' / '.gitignore').exists()
+
+
+def test_post_write_exits_zero_and_silent_on_every_unusable_input():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        missing = base / '.claude' / 'anchors' / 'gone.md'
+        cases = [
+            _post_write(None, raw='{not json'),
+            _post_write(None, raw=''),
+            _post_write(None, raw='[]'),
+            _post_write({'tool_input': 'x'}),
+            _post_write({'tool_input': {'file_path': 42}}),
+            _post_write({'tool_input': {}}),
+            _post_write(_write_payload(missing)),
+        ]
+        for proc in cases:
+            assert proc.returncode == 0, proc.stderr
+            assert proc.stdout == ''
+        assert not (base / '.claude').exists()
+
+
+def test_post_write_honours_the_shared_opt_out():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 11_397)
+        proc = _post_write(_write_payload(anchor), env_off=True)
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+        assert not (anchor.parent / '.gitignore').exists(), 'the opt-out also skips the ignore file'
+
+
+def test_post_write_exits_zero_when_the_measurement_itself_raises():
+    import io
+
+    import anchor_inject as ai
+
+    def boom(_head):
+        raise RuntimeError('forced')
+
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 11_397)
+        saved = (ai.fit_head, sys.stdin, sys.stdout)
+        ai.fit_head = boom
+        sys.stdin, sys.stdout = io.StringIO(json.dumps(_write_payload(anchor))), io.StringIO()
+        try:
+            code = ai.post_write_entry()
+            printed = sys.stdout.getvalue()
+        finally:
+            ai.fit_head, sys.stdin, sys.stdout = saved
+        assert code == 0
+        assert printed == ''
+
+
+def test_post_write_creates_the_gitignore_when_missing_and_never_rewrites_one():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 2_000)
+        ignore = anchor.parent / '.gitignore'
+        assert not ignore.exists()
+        assert _post_write(_write_payload(anchor)).returncode == 0
+        assert ignore.read_bytes() == b'*'
+        ignore.write_bytes(b'custom\r\n*.tmp')
+        assert _post_write(_write_payload(anchor)).returncode == 0
+        assert ignore.read_bytes() == b'custom\r\n*.tmp'
+
+
+def test_post_write_templates_are_ascii_even_for_a_non_ascii_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 11_397)
+        text = anchor.read_text(encoding='utf-8').replace('oldest entry', 'oldest → entry')
+        anchor.write_text(text, encoding='utf-8')
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert '→' in ctx, 'anchor content passes through unchanged'
+        assert [c for c in ctx.replace('→', '') if ord(c) > 127] == []
+
+
 if __name__ == '__main__':
     test_injects_with_no_env_set()
     test_opt_out_silences_it()
@@ -1055,4 +2189,64 @@ if __name__ == '__main__':
     test_list_dormant_names_untouched_active_anchors()
     test_list_dormant_skips_fresh_and_content_terminal_anchors()
     test_sweeps_survive_a_cp1252_stdout()
+    test_parked_reason_reads_the_frontmatter_field()
+    test_parked_reason_is_empty_when_the_field_is_absent_or_blank()
+    test_parked_reason_treats_a_false_looking_value_as_not_parked()
+    test_parked_reason_ignores_a_parked_line_in_the_tail_or_the_body()
+    test_a_parked_anchor_lists_under_the_parked_heading_and_not_as_dormant()
+    test_a_fresh_parked_anchor_is_still_listed_as_parked()
+    test_a_parked_anchor_that_is_the_only_open_one_injects_the_short_block()
+    test_a_parked_anchor_beside_a_live_one_injects_the_live_one_and_names_the_parked()
+    test_select_anchor_ranks_parked_below_live_and_above_content_terminal()
+    test_without_a_parked_field_every_output_is_byte_identical_to_the_golden()
+    test_compact_resume_clear_and_unknown_sources_keep_the_golden_header()
+    test_startup_header_is_conditional_and_drops_the_source_of_truth_claim()
+    test_startup_hook_run_with_a_recent_anchor_gets_the_conditional_header()
+    test_step_bumps_the_frontmatter_and_puts_the_new_entry_first_in_the_cursor()
+    test_step_text_with_a_windows_path_and_an_arrow_round_trips_byte_exactly()
+    test_step_survives_a_cp1252_stdout()
+    test_step_adds_a_missing_field_as_step_1_after_the_format_line()
+    test_step_keeps_the_line_endings_of_the_file()
+    test_step_edits_only_the_head_frontmatter_and_cursor()
+    test_step_after_a_lagging_field_numbers_past_the_cursor()
+    test_step_on_an_anchor_without_a_cursor_exits_2_and_leaves_the_file_untouched()
+    test_step_usage_errors_exit_2_and_say_which_path()
+    test_step_into_a_cursor_with_no_bullets_still_lands_under_the_heading()
+    test_step_keeps_a_byte_order_mark()
+    test_newest_step_reads_the_cursor_bullets_only()
+    test_head_fit_flags_a_step_field_behind_the_cursor()
+    test_head_fit_is_quiet_when_step_agrees_or_either_side_is_absent()
+    test_a_moved_session_injects_the_start_directory_anchor_and_names_both_directories()
+    test_a_moved_session_with_no_start_anchor_injects_the_current_one_and_names_both()
+    test_anchors_in_both_directories_inject_the_start_one_and_warn_about_the_other()
+    test_a_start_anchor_that_is_not_a_live_track_loses_to_a_fresh_live_current_one()
+    test_a_stale_start_anchor_still_wins_a_tie_with_a_stale_current_one()
+    test_both_directories_reach_the_pointer_and_parked_tiers_too()
+    test_an_unreadable_transcript_keeps_the_payload_cwd_lookup()
+    test_startup_reads_only_the_payload_cwd()
+    test_start_cwd_returns_the_first_cwd_and_skips_garbage()
+    test_ensure_gitignore_writes_a_lone_star_when_missing()
+    test_ensure_gitignore_never_touches_an_existing_file()
+    test_ensure_gitignore_swallows_every_oserror()
+    test_hook_with_open_anchors_makes_the_anchors_dir_self_ignoring()
+    test_hook_leaves_an_existing_gitignore_byte_identical()
+    test_hook_still_injects_and_logs_when_the_gitignore_write_fails()
+    test_hook_with_no_open_anchor_creates_no_gitignore()
+    test_hook_ensures_the_ignore_file_even_when_a_stale_startup_injects_nothing()
+    test_post_write_reports_how_far_over_budget_an_anchor_head_is()
+    test_post_write_warns_inside_the_ten_percent_band_and_reports_headroom()
+    test_post_write_band_edge_is_ninety_percent_of_the_budget()
+    test_post_write_is_silent_for_a_head_well_inside_the_budget()
+    test_post_write_measures_the_head_not_the_whole_file()
+    test_post_write_lists_fold_candidates_oldest_cursor_bullet_first()
+    test_post_write_never_offers_the_next_action_of_a_done_in_progress_next_cursor()
+    test_post_write_orders_step_bullets_by_number_not_by_position()
+    test_post_write_a_cursor_with_one_entry_offers_nothing_to_fold()
+    test_post_write_matches_windows_separators()
+    test_post_write_ignores_closed_and_non_anchor_paths()
+    test_post_write_exits_zero_and_silent_on_every_unusable_input()
+    test_post_write_honours_the_shared_opt_out()
+    test_post_write_exits_zero_when_the_measurement_itself_raises()
+    test_post_write_creates_the_gitignore_when_missing_and_never_rewrites_one()
+    test_post_write_templates_are_ascii_even_for_a_non_ascii_cursor()
     print('ok: all anchor_inject tests passed')

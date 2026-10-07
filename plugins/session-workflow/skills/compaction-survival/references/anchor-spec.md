@@ -9,6 +9,18 @@ The HEAD is bounded and rewritten in place. The TAIL, below the literal
 `<!-- anchor:tail -->` marker line, is append-only and stays on disk: the
 re-injection hook emits the HEAD only.
 
+## Frontmatter
+
+A short block of `key: value` lines above the HEAD sections. `format: anchor/v1` marks
+the file as an anchor, `task:` names the work in one line, and `step:` counts the
+snapshots. `parked: <what it waits on>` is optional and opt-in: it marks a track that is
+deliberately waiting, such as on a review or an outside answer, rather than dormant. A
+parked anchor ranks below every live one, is injected as a short block naming the wait
+instead of its HEAD, and is listed by `--list-dormant` under a `parked:` heading, so the
+arm-time sweep does not offer to close it. Remove the line to resume the track; a value of
+`false`, `no`, `none` or `0` also counts as not parked. Only
+the frontmatter counts: a `parked:` line in the body or the TAIL is prose.
+
 ## HEAD
 
 ### Mission
@@ -30,9 +42,19 @@ unanswered question or approval is armed here for verbatim re-ask after the
 reset. This is the part that earns the anchor, and the part the injection
 reserves.
 
+The cursor is the one block guaranteed to survive a cut, so write it to stand
+alone: name the next action, its inputs and where to look, with no dependence on
+history the cut drops.
+
 It holds the **newest two steps**. Older ones fold into the TAIL at each phase
 boundary — the done-list is what actually accumulates, and a cursor that grows
 without bound spends the budget its own survival depends on.
+
+Entries are bullets, newest first, each opening with `Step N`. At a step boundary,
+`anchor_inject.py --step <anchor> "<text>"` sets the frontmatter `step:` to N+1 and puts
+`- Step N+1: <text>` at the top of this section in one atomic edit (it does not fold the
+older entries). `--head-fit` prints a line when `step:` is behind the cursor's newest
+`Step N`, so a field that nothing bumps does not stay wrong unnoticed.
 
 ### Resume steps
 
@@ -74,7 +96,9 @@ than a second copy of the plan.
 
 ## TAIL
 
-- **Decisions log** — why the non-obvious calls were made.
+- **Decisions log** — why the non-obvious calls were made, what was rejected with
+  the measurement that rejected it, and what the run got wrong and how it was
+  settled.
 - **Folded history** — closed phases' one-line outcomes, resolved incidents.
 
 ## What the injection does with all this

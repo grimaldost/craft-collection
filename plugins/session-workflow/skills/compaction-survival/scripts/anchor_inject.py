@@ -23,6 +23,20 @@ Lifecycle gates (T22a hardening):
   the anchor was updated within STARTUP_RECENT_S; an ordinary new session in
   a cwd with an old anchor stays untaxed. compact/resume/clear — explicit
   continuation or reset signals — always evaluate.
+- compact/resume/clear look under both the directory the session started in
+  (the first `cwd` record of `transcript_path`) and the payload cwd, use the
+  better-ranked anchor (the start directory wins a tie), and name both when
+  they differ: a run that changed directory armed its
+  anchor in the first. startup, and an unreadable transcript, use the payload
+  cwd alone.
+
+When it finds open anchors it also creates `<anchors>/.gitignore` containing `*` if
+that file is missing (never touching one that exists), so anchors and this hook's
+own log stay out of the repository's status.
+
+`--post-write` is the PostToolUse(Write|Edit|MultiEdit) arm of the same script: after a
+write to an open anchor it warns when the HEAD is over the budget or within 10% of it,
+and creates the same `.gitignore`. It shares the opt-out below and exits 0 on every path.
 
 Ships ON. `SESSION_WORKFLOW_ANCHOR_HOOKS=0` is the documented opt-out. It shipped
 inert behind an unset variable until 2026-08, which meant the mechanism carrying
@@ -103,6 +117,18 @@ _TERMINAL_STATUS = re.compile(
 # The frontmatter line `/anchor` writes on every snapshot; one of the two signals
 # that a `*.md` in anchors/ is an anchor rather than a document parked there.
 _FORMAT_LINE = re.compile(r'^\s*format\s*:\s*anchor/', re.I)
+# `parked: <what it waits on>`: the opt-in frontmatter field that marks a track as
+# deliberately waiting rather than dormant. Read from the HEAD frontmatter only.
+_PARKED_LINE = re.compile(r'^\s*parked\s*:\s*(.*?)\s*$', re.I)
+# Values that say "not parked": writing one is the obvious way to resume a track, so
+# it must not be read as the name of a wait.
+_NOT_PARKED = frozenset({'false', 'no', 'none', '0'})
+# `step: N`, the snapshot counter in the frontmatter; and a cursor entry that opens
+# with `Step N` (optionally bolded), the newest-first convention `--step` writes.
+_STEP_FIELD = re.compile(r'^\s*step\s*:\s*(\d*)', re.I)
+_CURSOR_STEP = re.compile(r'^\s*[-*]\s+\**step\s+(\d+)', re.I)
+_BULLET = re.compile(r'^\s*[-*]\s')
+_BOM = '﻿'  # ascii-ok: a byte-order mark in file content, never printed
 
 
 def is_content_terminal(text: str) -> bool:
@@ -127,6 +153,75 @@ def find_open_anchors(anchors_dir: Path) -> list[Path]:
     return sorted(candidates, key=_mtime, reverse=True)
 
 
+def start_cwd(transcript_path: object) -> Path | None:
+    """The directory the session started in: the `cwd` of the first transcript
+    record that carries one. None for a missing, unreadable or cwd-less
+    transcript, and for anything but a string path.
+
+    Streams line by line and returns at the first match, so the cost does not
+    grow with the transcript. The first records of a real transcript are
+    metadata (queue operations, titles) with no cwd, and a line that is not
+    JSON is skipped rather than ending the search."""
+    if not isinstance(transcript_path, str) or not transcript_path:
+        return None
+    try:
+        with open(transcript_path, encoding='utf-8', errors='replace') as fh:
+            for line in fh:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                cwd = record.get('cwd') if isinstance(record, dict) else None
+                if isinstance(cwd, str) and cwd:
+                    return Path(cwd)
+    except Exception:
+        return None
+    return None
+
+
+class CwdMove(NamedTuple):
+    """The session's working directory is not the one it started in. `start` and
+    `cwd` are both named in the injected header; `elsewhere` holds the open
+    anchors of the directory the injection did not come from (empty unless both
+    directories held anchors); `chose_start` says which directory that is."""
+
+    start: Path
+    cwd: Path
+    elsewhere: list[Path]
+    chose_start: bool = True
+
+
+# Sources that continue an existing session, whose transcript names where it
+# started. A startup is a fresh process and keeps the payload-cwd lookup alone.
+CONTINUING_SOURCES = ('compact', 'resume', 'clear')
+
+
+def resolve_anchors(
+    cwd: Path, source: str, transcript_path: object
+) -> tuple[Path, list[Path], CwdMove | None]:
+    """(anchors dir used, its open anchors, the move or None). On a continuing
+    source whose transcript names a start directory other than `cwd`, both
+    directories are searched. When only one holds an open anchor it is used; when
+    both do, their primaries are compared by `anchor_rank` and the start
+    directory wins unless the current one is strictly better, so a stale, landed,
+    parked or non-anchor file there cannot hide a live track here. Every other
+    case is the payload-cwd lookup alone."""
+    here = cwd / '.claude' / 'anchors'
+    open_here = find_open_anchors(here)
+    start = start_cwd(transcript_path) if source in CONTINUING_SOURCES else None
+    if start is None or start == cwd:
+        return here, open_here, None
+    there = start / '.claude' / 'anchors'
+    open_there = find_open_anchors(there)
+    if not open_there:
+        return here, open_here, CwdMove(start, cwd, [])
+    if open_here and anchor_rank(select_anchor(open_here)[0]) < anchor_rank(
+        select_anchor(open_there)[0]
+    ):
+        return here, open_here, CwdMove(start, cwd, open_there, chose_start=False)
+    return there, open_there, CwdMove(start, cwd, open_here)
+
+
 def is_anchor_shaped(text: str) -> bool:
     """True when a file in `anchors/` actually looks like one: the
     `format: anchor/...` frontmatter `/anchor` writes, or a cursor section.
@@ -137,14 +232,50 @@ def is_anchor_shaped(text: str) -> bool:
     anchors in the wild carry no `format:` line, and a predicate that silenced
     them would silence exactly the long-running tracks this protocol is for."""
     head, _ = split_head(text)
-    lines = head.splitlines()
-    if lines and lines[0].strip() == '---':
-        for line in lines[1:]:
-            if line.strip() == '---':
-                break
-            if _FORMAT_LINE.match(line):
-                return True
+    if any(_FORMAT_LINE.match(line) for line in _frontmatter_lines(head)):
+        return True
     return any(_is_cursor_section(name) for name, _ in split_sections(head))
+
+
+def _frontmatter_lines(head: str) -> list[str]:
+    """The lines between the opening `---` and the next `---` of a HEAD; empty
+    when the HEAD does not open with a frontmatter block."""
+    lines = head.splitlines()
+    if not lines or lines[0].strip() != '---':
+        return []
+    out = []
+    for line in lines[1:]:
+        if line.strip() == '---':
+            break
+        out.append(line)
+    return out
+
+
+def parked_reason(text: str) -> str:
+    """What a parked anchor waits on: the value of `parked:` in the HEAD
+    frontmatter, '' when the field is absent or blank. A `parked:` line in the
+    body or the TAIL is prose (a decision, a note about another track) and never
+    parks the file."""
+    head, _ = split_head(text)
+    for line in _frontmatter_lines(head):
+        m = _PARKED_LINE.match(line)
+        if m:
+            value = m.group(1).strip('"\'').strip()
+            return '' if value.lower() in _NOT_PARKED else value
+    return ''
+
+
+def anchor_rank(a: Path) -> tuple[bool, bool, bool, bool]:
+    """Sort key for choosing among anchors, lowest first: not anchor-shaped, then
+    content-terminal, then parked, then older than STALE_AFTER_S. Staleness comes
+    last, so it only separates anchors that are otherwise equally live."""
+    text = _read(a)
+    return (
+        not is_anchor_shaped(text),
+        is_content_terminal(text),
+        bool(parked_reason(text)),
+        time.time() - _mtime(a) > STALE_AFTER_S,
+    )
 
 
 def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
@@ -153,13 +284,9 @@ def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
     and a content-terminal-but-unrenamed anchor, are de-ranked and become primary
     only when nothing better remains (the recovery path never drops to zero bytes).
     `open_anchors` is newest-first; the sort is stable, so recency still decides
-    within a rank, and `others` keeps that order minus the primary."""
-
-    def rank(a: Path) -> tuple[bool, bool]:
-        text = _read(a)
-        return (not is_anchor_shaped(text), is_content_terminal(text))
-
-    primary = sorted(open_anchors, key=rank)[0]
+    within a rank, and `others` keeps that order minus the primary. A parked anchor
+    ranks below every live track and above a content-terminal one."""
+    primary = sorted(open_anchors, key=anchor_rank)[0]
     return primary, [a for a in open_anchors if a != primary]
 
 
@@ -316,7 +443,106 @@ def anchor_cursor(text: str) -> str:
     return ''
 
 
-def head_fit_report(anchor: Path) -> list[str]:
+def newest_step(head: str) -> int | None:
+    """The highest `Step N` among the cursor section's bullets, None when the
+    cursor carries none. Bullets only: `Step 3` in prose, or in another section,
+    is not a cursor entry. Pure, so the report and the writer share one reading."""
+    best = None
+    for name, block in split_sections(head):
+        if not _is_cursor_section(name):
+            continue
+        for line in block.splitlines()[1:]:
+            m = _CURSOR_STEP.match(line)
+            if m:
+                n = int(m.group(1))
+                best = n if best is None else max(best, n)
+    return best
+
+
+def frontmatter_step(head: str) -> int | None:
+    """The numeric value of `step:` in the HEAD frontmatter, None when the field
+    is absent or not a number."""
+    for line in _frontmatter_lines(head):
+        m = _STEP_FIELD.match(line)
+        if m:
+            return int(m.group(1)) if m.group(1) else None
+    return None
+
+
+def bump_step(text: str, entry: str) -> tuple[str, int | None, int]:
+    """Return (new text, old step, new step): frontmatter `step:` set to one past
+    the larger of itself and the cursor's newest `Step N`, and `- Step <new>: entry`
+    inserted as the first bullet of the HEAD's cursor section. Line endings and
+    every other byte are kept: the text is edited as a list of lines that still
+    carry their terminators. Raises ValueError, naming what is missing, before
+    anything is changed."""
+    bom = _BOM if text.startswith(_BOM) else ''
+    body = text[len(bom) :]
+    lines = body.splitlines(keepends=True)
+    eol = '\r\n' if '\r\n' in body else '\n'
+    end = len(lines)
+    for i, line in enumerate(lines):
+        if line.strip() == TAIL_MARKER:
+            if ''.join(lines[:i]).strip():
+                end = i
+            break  # a marker over an empty HEAD is malformed: whole file, as split_head does
+    if not lines or lines[0].strip() != '---':
+        raise ValueError('no frontmatter block')
+    close = next((j for j in range(1, end) if lines[j].strip() == '---'), None)
+    if close is None:
+        raise ValueError('no frontmatter block')
+
+    heading = None
+    in_fence = False
+    stop = end
+    for j in range(close + 1, end):
+        raw = lines[j].rstrip('\r\n')
+        if raw.lstrip().startswith('```'):
+            in_fence = not in_fence
+        match = None if in_fence else HEADING_RE.match(raw)
+        if match and heading is None and _is_cursor_section(match.group(1)):
+            heading = j
+        elif match and heading is not None:
+            stop = j
+            break
+    if heading is None:
+        raise ValueError('no Cursor section in the HEAD')
+
+    old = frontmatter_step(''.join(lines[:end]))
+    newest = newest_step(''.join(lines[:end]))
+    new = max(old or 0, newest or 0) + 1
+
+    at = next((j for j in range(heading + 1, stop) if _BULLET.match(lines[j])), None)
+    if at is None:
+        at = heading + 1
+        while at < stop and not lines[at].strip():
+            at += 1
+    if not lines[heading].endswith('\n'):
+        lines[heading] += eol
+    lines.insert(at, f'- Step {new}: {entry}{eol}')
+
+    field = next((j for j in range(1, close) if _STEP_FIELD.match(lines[j])), None)
+    if field is not None:
+        lines[field] = f'step: {new}' + lines[field][len(lines[field].rstrip('\r\n')) :]
+    else:
+        fmt = next((j for j in range(1, close) if _FORMAT_LINE.match(lines[j])), None)
+        lines.insert(close if fmt is None else fmt + 1, f'step: {new}{eol}')
+    return bom + ''.join(lines), old, new
+
+
+def step_report_line(head: str) -> str:
+    """The head-fit line for a `step:` field that lags the cursor, '' otherwise
+    (in step, ahead, or either side absent)."""
+    field, newest = frontmatter_step(head), newest_step(head)
+    if field is None or newest is None or newest <= field:
+        return ''
+    return (
+        f"step: frontmatter says {field}, cursor's newest is Step {newest}"
+        ' - run --step or correct the field'
+    )
+
+
+def head_fit_lines(text: str) -> list[str]:
     """What the injection would do to this anchor at its current size: head
     characters, the budget, the cursor section reserved, and the sections that
     would drop.
@@ -334,7 +560,7 @@ def head_fit_report(anchor: Path) -> list[str]:
     within budget returns early with nothing reserved, and reading that empty
     reservation as "no cursor" told an author a false thing about the anchor on
     the common case."""
-    head, has_tail = split_head(_read(anchor))
+    head, has_tail = split_head(text)
     fit = fit_head(head)
     over = len(head) - MAX_CONTEXT_CHARS
     verdict = f'OVER by {over}' if over > 0 else f'headroom {-over}'
@@ -353,7 +579,15 @@ def head_fit_report(anchor: Path) -> list[str]:
     lines.append(f'would drop: {", ".join(fit.dropped) if fit.dropped else "(nothing)"}')
     if fit.byte_cut:
         lines.append('and would still be cut mid-section: one section alone overruns the budget')
+    lag = step_report_line(head)
+    if lag:
+        lines.append(lag)
     return lines
+
+
+def head_fit_report(anchor: Path) -> list[str]:
+    """`head_fit_lines` for an anchor file on disk."""
+    return head_fit_lines(_read(anchor))
 
 
 def list_dormant(anchors_dir: Path, min_age_s: float = DORMANT_AFTER_S) -> list[str]:
@@ -361,21 +595,31 @@ def list_dormant(anchors_dir: Path, min_age_s: float = DORMANT_AFTER_S) -> list[
     the cursor each still asserts. `list_stale` cannot reach these — it keys on
     content that reads as done, and an anchor abandoned mid-cursor never says so.
     Read at the moment a new anchor is armed, which is the one moment a human is
-    reliably present to answer close-or-adopt."""
+    reliably present to answer close-or-adopt. Anchors carrying a `parked:` field
+    are listed after the dormant ones, under a `parked:` heading line."""
     now = time.time()
     out = []
+    parked = []
     for f in find_open_anchors(anchors_dir):
         age_s = now - _mtime(f)
-        if age_s < min_age_s:
-            continue
         text = _read(f)
+        waits = parked_reason(text)
+        if age_s < min_age_s and not waits:
+            continue
         if is_content_terminal(text):
             continue  # list_stale owns the closed-but-unrenamed ones
         line = f'{f.name}  {int(age_s // 3600)}h  {anchor_title(text)}'
+        if waits:
+            # Deliberately waiting, so not dormant: listed apart, at any age, with
+            # what it waits on, and never offered for close-or-adopt.
+            line += f'  | parked: {waits}'
         cursor = anchor_cursor(text)
         if cursor:
             line += f'  | cursor: {cursor}'
-        out.append(line)
+        (parked if waits else out).append(line)
+    if parked:
+        out.append('parked:')
+        out.extend('  ' + line for line in parked)
     return out
 
 
@@ -399,6 +643,16 @@ def _other_open_warning(other_open: list[Path] | None) -> str:
             f' {len(strays)} of them read as "not an anchor" (no format: anchor/... line and '
             f'no cursor section): {names}' + (f' (+{more} more)' if more > 0 else '') + '.'
         )
+    waiting = [(f, parked_reason(_read(f))) for f in other_open]
+    waiting = [(f, why) for f, why in waiting if why]
+    if waiting:
+        listed = '; '.join(f'{f.name} (parked: {why})' for f, why in waiting[:MAX_NAMED_OPEN])
+        more = len(waiting) - MAX_NAMED_OPEN
+        warn += (
+            f' {len(waiting)} of them are parked, not live: {listed}'
+            + (f' (+{more} more)' if more > 0 else '')
+            + '.'
+        )
     terminal = [f for f in other_open if is_content_terminal(_read(f))]
     if terminal:
         cmds = '; '.join(f'mv {f.name} {f.stem}.closed.md' for f in terminal[:MAX_NAMED_OPEN])
@@ -408,6 +662,41 @@ def _other_open_warning(other_open: list[Path] | None) -> str:
             f'close each: {cmds}' + (f' (+{more} more)' if more > 0 else '')
         )
     return warn
+
+
+def _moved_line(moved: CwdMove) -> str:
+    """The header line naming both directories of a session that moved."""
+    return (
+        f'This session started in {moved.start} and now runs in {moved.cwd}; anchors '
+        'are looked up in both; the better-ranked anchor is used, and the start '
+        'directory wins a tie.'
+    )
+
+
+def _warning(other_open: list[Path] | None, moved: CwdMove | None = None) -> str:
+    """The one warning line: concurrent tracks in this directory, then the open
+    anchors of whichever directory lost (the current one when the start
+    directory won, the start one when the current directory won)."""
+    warn = _other_open_warning(other_open)
+    if moved is None or not moved.elsewhere:
+        return warn
+    names = ', '.join(f.name for f in moved.elsewhere[:MAX_NAMED_OPEN])
+    if len(moved.elsewhere) > MAX_NAMED_OPEN:
+        names += f' and {len(moved.elsewhere) - MAX_NAMED_OPEN} more'
+    if moved.chose_start:
+        also = (
+            f'WARNING - {len(moved.elsewhere)} open anchor(s) also in the current directory '
+            f"{moved.elsewhere[0].parent}: {names}. The start directory's anchor was chosen; "
+            'if your track is one of those, read it before acting.'
+        )
+    else:
+        also = (
+            f'WARNING - {len(moved.elsewhere)} open anchor(s) also in the start directory '
+            f"{moved.elsewhere[0].parent}: {names}. The current directory's anchor was chosen "
+            "because the start directory's was not a live track (stale, parked, finished or "
+            'not an anchor); if your track is one of those, read it before acting.'
+        )
+    return f'{warn} {also}' if warn else also
 
 
 def anchor_title(text: str) -> str:
@@ -434,8 +723,18 @@ def anchor_title(text: str) -> str:
     return '(untitled)'
 
 
-def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
+def build_context(
+    anchor: Path,
+    other_open: list[Path] | None = None,
+    source: str = '',
+    moved: CwdMove | None = None,
+) -> str:
     """FULL tier: the anchor HEAD (bounded), plus the concurrent-tracks warning.
+    source=startup gets a conditional header: a fresh process may be the run
+    restarting or an unrelated start (a subprocess of another tool) in the same
+    directory, so the anchor's authority is stated as conditional. Every other
+    source keeps the unconditional header. `moved` adds the line naming both
+    directories and the current directory's anchors to the warning.
     Race-safe read: an anchor renamed/deleted after selection (a concurrent
     session closing it) degrades to a path-only context — never a raise that
     would skip both the injection AND the failure telemetry."""
@@ -444,13 +743,25 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
     fit = fit_head(text)
     text = fit.text
 
+    if source == 'startup':
+        rule = (
+            'If this session is that run restarting, re-read it and continue from '
+            'its cursor. If you were started for a different task (for example as a '
+            'subprocess of another tool), ignore it and do not act on its cursor.'
+        )
+    else:
+        rule = (
+            'Re-read it before acting: verify the real state (git log, files on '
+            'disk), then continue from its cursor. Treat it as the source of truth '
+            'for run state over any summary above.'
+        )
     header = [
         '<control-anchor>',
-        f'A control anchor for this project exists at {anchor} '
-        '(compaction-survival protocol). Re-read it before acting: verify the '
-        'real state (git log, files on disk), then continue from its cursor. '
-        'Treat it as the source of truth for run state over any summary above.',
+        f'A control anchor for this project exists at {anchor} (compaction-survival protocol). '
+        + rule,
     ]
+    if moved is not None:
+        header.append(_moved_line(moved))
     if not is_anchor_shaped(raw):
         # It was the best candidate in the directory, so it is injected - but say
         # that it does not read as an anchor, rather than letting a design document
@@ -460,7 +771,7 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
             'line and no cursor section); it was injected because nothing better '
             'was open in that directory.'
         )
-    warn = _other_open_warning(other_open)
+    warn = _warning(other_open, moved)
     if warn:
         header.append(warn)
     body = [text]
@@ -484,7 +795,38 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
     return '\n'.join(header) + '\n---\n' + '\n'.join(body) + '\n</control-anchor>'
 
 
-def build_pointer(anchor: Path, stale_s: float, other_open: list[Path] | None = None) -> str:
+def build_parked(
+    anchor: Path,
+    waits_on: str,
+    other_open: list[Path] | None = None,
+    moved: CwdMove | None = None,
+) -> str:
+    """PARKED tier: the one short block a parked anchor gets in place of the full
+    or pointer tier: path, what it waits on, and the two ways out. Its body stays
+    on disk - a track that is waiting is not the run being resumed."""
+    lines = [
+        '<control-anchor>',
+        f'A control anchor exists at {anchor} but is PARKED: it waits on {waits_on}.',
+        f'parked: {waits_on}',
+        'Its body is withheld; this is not a live track. To resume it, remove the '
+        '`parked:` line from its frontmatter and re-read the file. To close it: '
+        f'mv {anchor.name} {anchor.stem}.closed.md',
+    ]
+    if moved is not None:
+        lines.insert(2, _moved_line(moved))
+    warn = _warning(other_open, moved)
+    if warn:
+        lines.append(warn)
+    lines.append('</control-anchor>')
+    return '\n'.join(lines)
+
+
+def build_pointer(
+    anchor: Path,
+    stale_s: float,
+    other_open: list[Path] | None = None,
+    moved: CwdMove | None = None,
+) -> str:
     """POINTER tier for a stale anchor: identity + age + confirm-to-expand +
     the close command — a short pointer, never the 8K body, and never silence.
     (The title is capped; the shared concurrent-tracks warning can extend the
@@ -505,11 +847,27 @@ def build_pointer(anchor: Path, stale_s: float, other_open: list[Path] | None = 
     cursor = anchor_cursor(_read(anchor))
     if cursor:
         lines.append(f'Cursor it still asserts: {cursor}')
-    warn = _other_open_warning(other_open)
+    if moved is not None:
+        lines.insert(2, _moved_line(moved))
+    warn = _warning(other_open, moved)
     if warn:
         lines.append(warn)
     lines.append('</control-anchor>')
     return '\n'.join(lines)
+
+
+def ensure_gitignore(anchors_dir: Path) -> None:
+    """Make the anchors directory ignore itself: a `.gitignore` holding exactly `*`
+    (the content `/anchor` step 2 specifies), so anchors and the hook's own
+    `log.ndjson` never show up as untracked in the user's repository. Create-only:
+    an existing `.gitignore` (a file, or anything else at that path) is never
+    opened, rewritten or appended to. Best-effort like the telemetry: a failure
+    must not block the injection."""
+    try:
+        with (anchors_dir / '.gitignore').open('x', encoding='utf-8', newline='') as fh:
+            fh.write('*')
+    except OSError:
+        pass  # exists already (the common case), unwritable, or the dir is gone
 
 
 def append_telemetry(anchors_dir: Path, record: dict) -> None:
@@ -521,6 +879,116 @@ def append_telemetry(anchors_dir: Path, record: dict) -> None:
         pass  # telemetry is best-effort, never load-bearing
 
 
+# PostToolUse: the anchor is written many times a session, and the HEAD budget is only
+# enforced at injection, long after the write that broke it. Warn from the write.
+POST_WRITE_WARN_FRACTION = 0.9  # warn from 90% of the budget up (the last 10% is the margin)
+MAX_FOLD_CANDIDATES = 5
+MAX_CANDIDATE_CHARS = 100
+_TOP_BULLET = re.compile(r'^[-*]\s')
+
+
+def _is_open_anchor_path(raw: object) -> Path | None:
+    """The anchor path a write touched, or None when it is not an open anchor:
+    `*/.claude/anchors/*.md` and not `*.closed.md`. Backslashes are normalised first,
+    because a Windows tool payload carries them whatever the host is."""
+    if not isinstance(raw, str) or not raw:
+        return None
+    path = raw.replace('\\', '/')
+    if '/.claude/anchors/' not in path or not path.endswith('.md') or path.endswith('.closed.md'):
+        return None
+    return Path(path)
+
+
+def fold_candidates(head: str) -> list[str]:
+    """The cursor's `Step N` bullets that could move below the tail marker, oldest
+    first by N. Only bullets that open with `Step N` are offered: the position of a
+    bullet says nothing about its age (a Done / In progress / Next cursor ends with
+    the next action), so a cursor without numbered entries offers nothing. The
+    highest N is never offered, it is the line a resuming session needs. Each is
+    clipped to MAX_CANDIDATE_CHARS, and at most MAX_FOLD_CANDIDATES are returned."""
+    for name, block in split_sections(head):
+        if _is_cursor_section(name):
+            numbered = []
+            for ln in block.splitlines()[1:]:
+                m = _CURSOR_STEP.match(ln) if _TOP_BULLET.match(ln) else None
+                if m:
+                    numbered.append((int(m.group(1)), ln.rstrip()))
+            numbered.sort(key=lambda pair: pair[0])
+            older = [b for _, b in numbered[:-1][:MAX_FOLD_CANDIDATES]]
+            return [
+                b if len(b) <= MAX_CANDIDATE_CHARS else b[:MAX_CANDIDATE_CHARS] + '...'
+                for b in older
+            ]
+    return []
+
+
+def build_post_write_warning(anchor: Path, text: str) -> str:
+    """The additionalContext for an anchor write whose HEAD is over budget or inside
+    the last 10% of it: the head-fit lines, then the entries to fold below the tail
+    marker."""
+    head, _ = split_head(text)
+    lines = [f'<anchor-size-warning file="{anchor.name}">']
+    lines.extend(head_fit_lines(text))
+    candidates = fold_candidates(head)
+    if candidates:
+        lines.append(f'Fold candidates, oldest first (move below {TAIL_MARKER}):')
+        lines.extend(candidates)
+    else:
+        lines.append(
+            f'Fold candidates: none in the Cursor; move resolved history below {TAIL_MARKER}.'
+        )
+    lines.append('</anchor-size-warning>')
+    return '\n'.join(lines)
+
+
+def post_write_main() -> int:
+    """PostToolUse(Write|Edit|MultiEdit) arm. Silent unless the write touched an open
+    anchor whose HEAD is at or past 90% of the budget; it also makes the anchors
+    directory self-ignoring (create-only), as the SessionStart hook does."""
+    if os.environ.get(ENV_GATE) == '0':
+        return 0
+    try:
+        payload = json.loads(sys.stdin.read() or '{}')
+    except json.JSONDecodeError:
+        return 0
+    tool_input = payload.get('tool_input') if isinstance(payload, dict) else None
+    anchor = _is_open_anchor_path(
+        tool_input.get('file_path') if isinstance(tool_input, dict) else None
+    )
+    if anchor is None:
+        return 0
+    try:
+        text = anchor.read_text(encoding='utf-8', errors='ignore')
+    except OSError:
+        return 0
+    ensure_gitignore(anchor.parent)
+    head, _ = split_head(text)
+    if len(head) < POST_WRITE_WARN_FRACTION * MAX_CONTEXT_CHARS:
+        return 0
+    print(
+        json.dumps(
+            {
+                'hookSpecificOutput': {
+                    'hookEventName': 'PostToolUse',
+                    'additionalContext': build_post_write_warning(anchor, text),
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def post_write_entry() -> int:
+    """Every path out of the PostToolUse arm is exit 0: a broken size warning must
+    never fail a Write."""
+    try:
+        _force_utf8_stdout()
+        return post_write_main()
+    except Exception:
+        return 0
+
+
 def _force_utf8_stdout() -> None:
     """Hook runners on Windows hand this script a cp1252 stdout; campaign anchors
     essentially always carry non-ASCII (arrows, accented prose), so any print of
@@ -528,6 +996,51 @@ def _force_utf8_stdout() -> None:
     platform default."""
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
+
+
+def step_main(argv: list[str]) -> int:
+    """`--step <anchor> "<text>"`: bump `step:` and prepend the cursor entry in one
+    atomic edit. Exit 2 for a usage error, with the file untouched and the path in
+    the message; the same contract as `--head-fit`. It does not fold older steps."""
+
+    def usage(why: str) -> int:
+        print(f'error: --step {why}', file=sys.stderr)
+        return 2
+
+    if len(argv) != 2:
+        return usage('needs two arguments: the path to one anchor file and the entry text')
+    path, entry = Path(argv[0]), argv[1].strip()
+    if not path.is_file():
+        return usage(f'needs the path to one anchor file (got: {path})')
+    if not entry:
+        return usage(f'needs non-empty entry text (anchor: {path})')
+    if '\n' in entry or '\r' in entry:
+        return usage(f'takes a one-line entry: it becomes one bullet (anchor: {path})')
+    try:
+        with open(path, encoding='utf-8', newline='') as fh:
+            text = fh.read()
+        new_text, old, new = bump_step(text, entry)
+    except (OSError, UnicodeDecodeError, ValueError) as e:
+        return usage(f'cannot edit {path}: {e}')
+    # Imported here, not at module top: the SessionStart hook never writes.
+    import shutil
+    import tempfile
+
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8', newline='') as fh:
+            fh.write(new_text)
+        shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return usage(f'cannot write {path}: {type(e).__name__}')
+    print(f'step: {"(none)" if old is None else old} -> {new}; cursor entry added to {path}')
+    print(head_fit_report(path)[0])
+    return 0
 
 
 def main() -> int:
@@ -542,24 +1055,32 @@ def main() -> int:
         return 0
 
     cwd = Path(payload.get('cwd') or os.getcwd())
-    anchors_dir = cwd / '.claude' / 'anchors'
-    open_anchors = find_open_anchors(anchors_dir)
+    source = payload.get('source')
+    source = source if isinstance(source, str) else ''
+    # A continuing session looks where it started before where it is now: a run
+    # that changed directory armed its anchor under the first, and the payload
+    # cwd is the second. Telemetry goes to whichever anchors dir was used.
+    anchors_dir, open_anchors, moved = resolve_anchors(cwd, source, payload.get('transcript_path'))
     if not open_anchors:
         return 0
+    # Before the telemetry append below, so the log this hook writes is already ignored.
+    ensure_gitignore(anchors_dir)
     anchor, other_open = select_anchor(open_anchors)
 
     stale_s = max(0.0, time.time() - _mtime(anchor))
-    source = payload.get('source')
-    source = source if isinstance(source, str) else ''
     # Crash-restart branch: a fresh process only gets the anchor when it was
     # updated recently enough to plausibly be the interrupted run. Explicit
     # continuation/reset signals (compact/resume/clear) always evaluate.
     if source == 'startup' and stale_s > STARTUP_RECENT_S:
         return 0
     pointer = stale_s > STALE_AFTER_S
-    context = (
-        build_pointer(anchor, stale_s, other_open) if pointer else build_context(anchor, other_open)
-    )
+    waits_on = parked_reason(_read(anchor))
+    if waits_on:
+        context = build_parked(anchor, waits_on, other_open, moved)
+    elif pointer:
+        context = build_pointer(anchor, stale_s, other_open, moved)
+    else:
+        context = build_context(anchor, other_open, source, moved)
 
     record = {
         'event': 'anchor-inject',
@@ -567,8 +1088,9 @@ def main() -> int:
         'session': payload.get('session_id', ''),
         'file': anchor.name,
         'stale': pointer,
-        'tier': 'pointer' if pointer else 'full',
+        'tier': 'parked' if waits_on else 'pointer' if pointer else 'full',
         'open_anchors': len(open_anchors),
+        'anchor_dir': 'cwd' if anchors_dir == cwd / '.claude' / 'anchors' else 'start',
         'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
     }
     try:
@@ -633,6 +1155,15 @@ if __name__ == '__main__':
         for line in head_fit_report(target):
             print(line)
         sys.exit(0)
+    # Authoring entry: `python anchor_inject.py --step <anchor> "<text>"` is the one
+    # edit a step boundary needs (frontmatter `step:` plus a new first cursor bullet),
+    # done together so the counter and the cursor cannot drift apart.
+    if len(sys.argv) > 1 and sys.argv[1] == '--step':
+        sys.exit(step_main(sys.argv[2:]))
+    # PostToolUse entry: `python anchor_inject.py --post-write` reads the hook payload on
+    # stdin and warns when the anchor just written has a HEAD over budget or within 10% of it.
+    if len(sys.argv) > 1 and sys.argv[1] == '--post-write':
+        sys.exit(post_write_entry())
     try:
         sys.exit(main())
     except Exception:

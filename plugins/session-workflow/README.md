@@ -104,7 +104,15 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   control anchor's HEAD (`.claude/anchors/*.md`; content above the
   `<!-- anchor:tail -->` marker, whole file when marker-less) so a run survives
   compaction and process restarts; warns and names the others when several
-  anchors are open in one directory. Lifecycle gates: an anchor untouched for
+  anchors are open in one directory. On `compact`, `resume` and `clear` it looks
+  in both the directory the session started in (the first `cwd` in its
+  transcript) and the current one, uses the better-ranked anchor (a live track
+  beats a stale, parked, finished or non-anchor file; the start directory wins a
+  tie), and names both when they differ. When it
+  finds open anchors it creates `.claude/anchors/.gitignore` (content `*`) if that
+  file is missing, so the anchors and the hook's log never show as untracked; an
+  existing `.gitignore` is never touched.
+  Lifecycle gates: an anchor untouched for
   >24h degrades to a one-paragraph pointer (path + title + age +
   confirm-to-expand + close command) instead of the full body; `startup`
   (fresh process — the crash-restart path) injects only when the anchor was
@@ -114,6 +122,30 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   Enabling it in a session whose plugin snapshot predates the hook (or in a
   harness without the plugin surface):
   `skills/compaction-survival/references/cold-start.md` has the manual recipe.
+- **SessionStart (resume/compact)** — stale skill-body check: a skill body stays
+  in context after the plugin that served it is updated, so a resumed or
+  compacted session can keep working from a release-old copy without knowing
+  it. The hook reads the transcript's skill loads (the `Base directory for this
+  skill:` line in front of each served body, the last load per skill winning)
+  and compares each body served from a plugin cache directory with the versions
+  `installed_plugins.json` beside that cache lists. For each plugin with an
+  older body it adds one line naming both versions and the fix: invoke the
+  skill again to load the current body, or restart and resume from the anchor.
+  Silent when every body is current, for a body served from outside a cache (a
+  `--plugin-dir` checkout), for a plugin the registry does not list, and when
+  the transcript or the registry cannot be read. **On by default**; opt out
+  with `SESSION_WORKFLOW_STALE_BODY_CHECK=0`.
+- **PostToolUse (Write/Edit/MultiEdit)** — anchor size warning: after a write to an
+  open anchor (`.claude/anchors/*.md`, not `*.closed.md`) whose HEAD is over the
+  8000-character injection budget or within 10% of it (7,200 characters and up), adds
+  the head-fit lines (characters, budget, `OVER by X` or `headroom Y`, the sections
+  that would drop) and the Cursor's oldest entries as candidates to fold below
+  `<!-- anchor:tail -->`, so the overrun is seen at the write rather than at the next
+  injection. It is silent for every other path and for a HEAD with room, and it
+  creates `.claude/anchors/.gitignore` (content `*`) when that file is missing, the
+  write-time half of the SessionStart behaviour above. It costs one Python start per
+  Write, Edit or MultiEdit, with the path filter first. **On by default**; opt out with
+  `SESSION_WORKFLOW_ANCHOR_HOOKS=0` (the same switch as the SessionStart hook).
 - **Stop** — feedback-debt nudge: once per session, when the transcript shows
   plugin tools were exercised, no tool-feedback invocation is on record, and
   the session has at least `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) real

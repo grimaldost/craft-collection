@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""Feedback-debt Stop nudge, founded on the session transcript.
+"""Feedback-debt Stop nudge and stale skill-body check, both read from the transcript.
 
     python feedback_nudge.py --stop-nudge     # Stop: at most one nudge per session
+    python feedback_nudge.py --stale-bodies   # SessionStart resume|compact
+
+`--stale-bodies` names each plugin whose last-served skill body came from an older
+cached version than the install registry lists; see `stale_body_lines`. It ships
+ON; `SESSION_WORKFLOW_STALE_BODY_CHECK=0` is its opt-out. The rest of this
+docstring is about the Stop nudge.
 
 It ships ON; `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` is the documented opt-out. What
 makes default-on safe is the binding check: the nudge stays silent unless a
@@ -36,6 +42,7 @@ import re
 import sys
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 NUDGE_GATE = 'SESSION_WORKFLOW_FEEDBACK_NUDGE'
 MIN_TURNS_ENV = 'SESSION_WORKFLOW_NUDGE_MIN_TURNS'
@@ -50,6 +57,9 @@ TOOL_PATTERN = re.compile(r'^Skill$|^mcp__plugin_.*')
 # they are not human turns and must not count toward the nudge gate.
 SYNTHETIC_PREFIXES = ('[SYSTEM NOTIFICATION', '<task-notification>')
 DEBT_CLEARING_MARK = 'tool-feedback'
+STALE_BODY_GATE = 'SESSION_WORKFLOW_STALE_BODY_CHECK'
+# The line the harness puts before every skill body it serves.
+SKILL_BASE_MARK = 'Base directory for this skill:'
 
 
 def _load_stdin_json() -> dict:
@@ -284,11 +294,164 @@ def _stop_nudge() -> int:
     return 0
 
 
+class SkillLoad(NamedTuple):
+    """One skill body the transcript records as served. `version` and `root`
+    are None for a body served from outside a plugin cache (a `--plugin-dir`
+    checkout), whose version this check cannot know."""
+
+    root: str | None
+    marketplace: str | None
+    plugin: str
+    version: str | None
+    skill: str
+
+
+# `<root>/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>`, with
+# either separator. The greedy root takes the LAST cache segment, so a home
+# directory that itself contains `plugins/cache` cannot shift the fields.
+_CACHE_BASE = re.compile(
+    r'^(?P<root>.*)[\\/]plugins[\\/]cache[\\/](?P<marketplace>[^\\/]+)[\\/]'
+    r'(?P<plugin>[^\\/]+)[\\/](?P<version>[^\\/]+)[\\/]skills[\\/](?P<skill>[^\\/]+)$'
+)
+_PLUGIN_BASE = re.compile(r'[\\/](?P<plugin>[^\\/]+)[\\/]skills[\\/](?P<skill>[^\\/]+)$')
+
+
+def parse_skill_base(base: str) -> SkillLoad | None:
+    """The skill a base directory names, or None when the path does not end in
+    `<dir>/skills/<name>` (a bundled skill). Outside a plugin cache (a
+    `--plugin-dir` checkout, a personal skill) the load has no version, so it
+    can replace an earlier cached load of the same skill but never warns."""
+    base = base.strip().rstrip('\\/')
+    cached = _CACHE_BASE.match(base)
+    if cached:
+        return SkillLoad(**cached.groupdict())
+    checkout = _PLUGIN_BASE.search(base)
+    if checkout:
+        return SkillLoad(None, None, checkout['plugin'], None, checkout['skill'])
+    return None
+
+
+def _served_bases(rec: dict) -> list[str]:
+    """Base directories of the skill bodies one transcript record serves.
+
+    Two record shapes serve a body: the meta user record written when a skill
+    loads, and the `invoked_skills` attachment that serves loaded bodies again.
+    The marker has to START the text: a tool result that merely quotes it (a
+    grep over transcripts) serves nothing, and 2 such records sat in the same
+    local transcripts as the 312 real ones."""
+    texts: list[object] = []
+    if rec.get('type') == 'user':
+        content = (rec.get('message') or {}).get('content')
+        if isinstance(content, str):
+            texts.append(content)
+        elif isinstance(content, list):
+            texts += [
+                b.get('text') for b in content if isinstance(b, dict) and b.get('type') == 'text'
+            ]
+    elif rec.get('type') == 'attachment':
+        skills = (rec.get('attachment') or {}).get('skills')
+        if isinstance(skills, list):
+            texts += [s.get('content') for s in skills if isinstance(s, dict)]
+    return [
+        t[len(SKILL_BASE_MARK) :].split('\n', 1)[0]
+        for t in texts
+        if isinstance(t, str) and t.startswith(SKILL_BASE_MARK)
+    ]
+
+
+def last_skill_loads(transcript_path: str) -> dict[tuple[str, str], SkillLoad]:
+    """{(plugin, skill): its LAST served body}. Streams the file and parses only
+    the lines that carry the marker, so the cost is one substring test per line
+    for everything else. Raises on an unreadable file; the arm's caller turns
+    that into silence."""
+    marker = SKILL_BASE_MARK.encode('utf-8')
+    loads: dict[tuple[str, str], SkillLoad] = {}
+    with open(transcript_path, 'rb') as fh:
+        for raw in fh:
+            if marker not in raw:
+                continue
+            try:
+                rec = json.loads(raw.decode('utf-8-sig', errors='replace'))
+            except ValueError:
+                continue
+            if not isinstance(rec, dict):
+                continue
+            for base in _served_bases(rec):
+                load = parse_skill_base(base)
+                if load is not None:
+                    loads[(load.plugin, load.skill)] = load
+    return loads
+
+
+def _installed(registry: dict, plugin: str, marketplace: str) -> list[str]:
+    """Every installed version of exactly `plugin@marketplace` (one per scope).
+    The marketplace is matched too: a same-named plugin from another
+    marketplace is a different plugin."""
+    records = (registry.get('plugins') or {}).get(f'{plugin}@{marketplace}')
+    records = records if isinstance(records, list) else [records]
+    return [str(r['version']) for r in records if isinstance(r, dict) and r.get('version')]
+
+
+def stale_body_lines(transcript_path: str) -> list[str]:
+    """One line per plugin whose last-served skill body is older than every
+    installed version of it, read from the install registry beside the cache the
+    body was served from. Silent (an empty list) for a body at an installed
+    version, one served from outside a cache, a plugin the registry does not
+    list, a version that does not parse, and a missing registry."""
+    # Imported here, not at module top: a failure in this arm must not reach the
+    # Stop nudge, which shares the module.
+    from plugin_version import _version_key, read_registry
+
+    registries: dict[str, dict | None] = {}
+    stale: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for (plugin, skill), load in last_skill_loads(transcript_path).items():
+        if load.version is None or load.root is None or load.marketplace is None:
+            continue
+        if load.root not in registries:
+            path = Path(load.root) / 'plugins' / 'installed_plugins.json'
+            registries[load.root] = read_registry(path)
+        registry = registries[load.root]
+        installed = _installed(registry, plugin, load.marketplace) if registry else []
+        keys = [_version_key(v) for v in installed]
+        loaded = _version_key(load.version)
+        if not keys or loaded[0] or any(k[0] for k in keys):
+            continue  # nothing installed to compare with, or a version that does not parse
+        if loaded < min(keys):
+            newest = max(installed, key=_version_key)
+            stale.setdefault((plugin, newest), []).append((skill, load.version))
+    return [
+        f'Stale skill body: {plugin} {newest} is installed, but this session holds skill '
+        'bodies loaded from an older copy: '
+        + ', '.join(f'{skill} ({version})' for skill, version in sorted(bodies))
+        + '. Invoke each skill again to load the current body; if it still loads the old '
+        'version, this process predates the update: restart and resume from the anchor.'
+        for (plugin, newest), bodies in sorted(stale.items())
+    ]
+
+
+def _stale_bodies() -> int:
+    if os.environ.get(STALE_BODY_GATE) == '0':
+        return 0
+    transcript = _load_stdin_json().get('transcript_path')
+    if not isinstance(transcript, str) or not transcript:
+        return 0
+    lines = stale_body_lines(transcript)
+    if lines:
+        context = '\n'.join(lines)
+        out = {
+            'hookSpecificOutput': {'hookEventName': 'SessionStart', 'additionalContext': context}
+        }
+        print(json.dumps(out))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     try:
         if '--stop-nudge' in argv:
             return _stop_nudge()
+        if '--stale-bodies' in argv:
+            return _stale_bodies()
         return 0
     except Exception:
         return 0
