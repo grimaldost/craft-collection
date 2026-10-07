@@ -588,8 +588,12 @@ def anchor_title(text: str) -> str:
     return '(untitled)'
 
 
-def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
+def build_context(anchor: Path, other_open: list[Path] | None = None, source: str = '') -> str:
     """FULL tier: the anchor HEAD (bounded), plus the concurrent-tracks warning.
+    source=startup gets a conditional header: a fresh process may be the run
+    restarting or an unrelated start (a subprocess of another tool) in the same
+    directory, so the anchor's authority is stated as conditional. Every other
+    source keeps the unconditional header.
     Race-safe read: an anchor renamed/deleted after selection (a concurrent
     session closing it) degrades to a path-only context — never a raise that
     would skip both the injection AND the failure telemetry."""
@@ -598,12 +602,22 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
     fit = fit_head(text)
     text = fit.text
 
+    if source == 'startup':
+        rule = (
+            'If this session is that run restarting, re-read it and continue from '
+            'its cursor. If you were started for a different task (for example as a '
+            'subprocess of another tool), ignore it and do not act on its cursor.'
+        )
+    else:
+        rule = (
+            'Re-read it before acting: verify the real state (git log, files on '
+            'disk), then continue from its cursor. Treat it as the source of truth '
+            'for run state over any summary above.'
+        )
     header = [
         '<control-anchor>',
-        f'A control anchor for this project exists at {anchor} '
-        '(compaction-survival protocol). Re-read it before acting: verify the '
-        'real state (git log, files on disk), then continue from its cursor. '
-        'Treat it as the source of truth for run state over any summary above.',
+        f'A control anchor for this project exists at {anchor} (compaction-survival protocol). '
+        + rule,
     ]
     if not is_anchor_shaped(raw):
         # It was the best candidate in the directory, so it is injected - but say
@@ -781,7 +795,7 @@ def main() -> int:
     elif pointer:
         context = build_pointer(anchor, stale_s, other_open)
     else:
-        context = build_context(anchor, other_open)
+        context = build_context(anchor, other_open, source)
 
     record = {
         'event': 'anchor-inject',

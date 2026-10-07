@@ -92,6 +92,18 @@ routing rules that enable per-lens capacity dispatch.
 
 ### Changed
 
+- **anchor_inject: a startup injection states the anchor's authority conditionally**
+  (2026-10-06 craft-collection triage: T121a). The full-tier header told every session to
+  re-read the anchor, continue from its cursor and treat it as the source of truth, which
+  was over-certain for source=startup: a fresh process in the same directory can be a
+  subprocess of another tool rather than the interrupted run, and it was handed the run's
+  cursor as an order. On startup the header now reads "If this session is that run
+  restarting, re-read it and continue from its cursor. If you were started for a different
+  task (for example as a subprocess of another tool), ignore it and do not act on its
+  cursor." `build_context` takes a `source` parameter that `main()` already computed;
+  compact, resume, clear and a missing source keep the old header byte for byte (pinned by a
+  golden-string test), and the 6h startup gate and the pointer tier are unchanged. Three new
+  tests; the module's suite passes.
 - **Step 5 fire-and-route prose: snapshot the artifact to an immutable path, point
   all lenses at it** (2026-10-06 craft-collection triage: T86i). The author keeps
   editing the working copy; reviewers read the snapshot taken at fire time.

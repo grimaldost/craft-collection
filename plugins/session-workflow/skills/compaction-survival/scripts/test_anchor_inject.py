@@ -1223,6 +1223,70 @@ def test_without_a_parked_field_every_output_is_byte_identical_to_the_golden():
         assert ai.list_dormant(anchors) == GOLDEN_DORMANT
 
 
+STARTUP_SENTENCES = (
+    'If this session is that run restarting, re-read it and continue from its cursor. '
+    'If you were started for a different task (for example as a subprocess of another '
+    'tool), ignore it and do not act on its cursor.'
+)
+
+
+def _fixture_context(source: str) -> str:
+    """build_context(run, source=...) for the golden fixture anchor, directory scrubbed."""
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        run = make_anchor(
+            Path(d),
+            name='run.md',
+            body=(
+                '# Mission\nship the thing\n# Cursor\nnext: step 7\n# Notes\nsome notes\n'
+                '<!-- anchor:tail -->\nlog line\n'
+            ),
+        )
+        return ai.build_context(run, source=source).replace(str(run.parent) + os.sep, '{DIR}/')
+
+
+def test_compact_resume_clear_and_unknown_sources_keep_the_golden_header():
+    """Only source=startup changes the header. The other sources, and a missing
+    source, give the string captured before the startup branch existed."""
+    for source in ('compact', 'resume', 'clear', ''):
+        assert _fixture_context(source) == GOLDEN_CONTEXT_ALONE, source
+
+
+def test_startup_header_is_conditional_and_drops_the_source_of_truth_claim():
+    out = _fixture_context('startup')
+    assert STARTUP_SENTENCES in out
+    assert STARTUP_SENTENCES.isascii()
+    assert 'Treat it as the source of truth' not in out
+    assert 'Re-read it before acting' not in out
+    assert out.startswith(
+        '<control-anchor>\nA control anchor for this project exists at {DIR}/run.md '
+        '(compaction-survival protocol). '
+    )
+    # Only the header sentence changed: everything after the rule is the golden's.
+    assert out.split('\n---\n', 1)[1] == GOLDEN_CONTEXT_ALONE.split('\n---\n', 1)[1]
+
+
+def test_startup_hook_run_with_a_recent_anchor_gets_the_conditional_header():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, age_s=600)
+        proc = run_hook(tmp, source='startup')
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert STARTUP_SENTENCES in ctx
+        assert 'Treat it as the source of truth' not in ctx
+        assert 'test mission' in ctx and 'next: step 7' in ctx
+    for source in ('compact', 'resume', 'clear'):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            make_anchor(tmp, age_s=600)
+            ctx = json.loads(run_hook(tmp, source=source).stdout)['hookSpecificOutput'][
+                'additionalContext'
+            ]
+            assert 'Treat it as the source of truth' in ctx, source
+            assert 'ignore it and do not act on its cursor' not in ctx, source
+
+
 # -- --step: bump `step:` and prepend the cursor entry in one edit ---------------
 
 STEP_ANCHOR = (
@@ -1525,6 +1589,9 @@ if __name__ == '__main__':
     test_a_parked_anchor_beside_a_live_one_injects_the_live_one_and_names_the_parked()
     test_select_anchor_ranks_parked_below_live_and_above_content_terminal()
     test_without_a_parked_field_every_output_is_byte_identical_to_the_golden()
+    test_compact_resume_clear_and_unknown_sources_keep_the_golden_header()
+    test_startup_header_is_conditional_and_drops_the_source_of_truth_claim()
+    test_startup_hook_run_with_a_recent_anchor_gets_the_conditional_header()
     test_step_bumps_the_frontmatter_and_puts_the_new_entry_first_in_the_cursor()
     test_step_text_with_a_windows_path_and_an_arrow_round_trips_byte_exactly()
     test_step_survives_a_cp1252_stdout()
