@@ -83,7 +83,11 @@
       "scripts/test_check_gate_claims.py::test_a_contradicting_doc_reddens_the_check"
     ],
     "scripts/check_release_discipline.py": [
-      "scripts/test_check_release_discipline.py::test_a_plugin_touching_no_bump_diff_exits_1"
+      "scripts/test_check_release_discipline.py::test_a_plugin_touching_no_bump_diff_exits_1",
+      "scripts/test_check_release_discipline.py::test_an_uncommitted_plugin_change_is_exit_2_commit_first",
+      "scripts/test_check_release_discipline.py::test_a_buried_unreleased_heading_exits_1",
+      "scripts/test_check_release_discipline.py::test_buried_unreleased_flags_only_a_non_first_heading",
+      "scripts/test_check_release_discipline.py::test_a_changelog_only_change_with_a_buried_unreleased_exits_1"
     ],
     "scripts/check_uv_hygiene.py": [
       "evals/harness/test_check_uv_hygiene.py::main"
