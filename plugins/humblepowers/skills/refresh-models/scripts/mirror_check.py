@@ -234,19 +234,22 @@ def walk_retired(
     """Findings for every retired pattern still present, and how many files were excluded.
 
     Each pattern searches its own ``roots`` and every ``sweep`` root. Each root is
-    walked once and each file read once, keyed by resolved path, so a file under
-    two overlapping roots is reported once per pattern and line.
+    walked once and each file read once, so a file under two overlapping roots is
+    reported once per pattern and line. The resolved path is only the key that
+    detects the overlap: a root is walked, matched against ``[[exclude]]`` globs
+    and reported under the spelling it was registered with, so a link or a mapped
+    drive does not change what an exclude written against it matches.
     """
     found: list[str] = []
     patterns: list[tuple[str, re.Pattern[str], str]] = []
-    wanted: dict[Path, set[int]] = {}
+    wanted: dict[Path, tuple[Path, set[int]]] = {}
 
     def add_root(root: object, indexes: set[int], kind: str) -> None:
         base = Path(str(root))
         if not base.exists():
             found.append(f'{base.as_posix()}: {kind} does not exist.')
             return
-        wanted.setdefault(base.resolve(), set()).update(indexes)
+        wanted.setdefault(base.resolve(), (base, set()))[1].update(indexes)
 
     for rule in retired:
         raw = str(rule.get('pattern', ''))
@@ -264,15 +267,15 @@ def walk_retired(
     for root in sweep:
         add_root(root, set(range(len(patterns))), 'sweep root')
 
-    files: dict[Path, set[int]] = {}
-    for base, indexes in wanted.items():
+    files: dict[Path, tuple[Path, set[int]]] = {}
+    for base, indexes in wanted.values():
         if indexes:
             for file in _text_files(base):
-                files.setdefault(file, set()).update(indexes)
+                files.setdefault(file.resolve(), (file, set()))[1].update(indexes)
 
     excluded = 0
     hits: list[tuple[int, Path, int]] = []
-    for file in sorted(files):
+    for file, wanted_indexes in sorted(files.values()):
         if is_excluded(file, excludes) is not None:
             excluded += 1
             continue
@@ -280,7 +283,7 @@ def walk_retired(
             text = file.read_text(encoding='utf-8', errors='replace')
         except OSError:
             continue
-        active = [(i, patterns[i][1].search) for i in sorted(files[file])]
+        active = [(i, patterns[i][1].search) for i in sorted(wanted_indexes)]
         for lineno, line in enumerate(text.splitlines(), start=1):
             for i, search in active:
                 if search(line):

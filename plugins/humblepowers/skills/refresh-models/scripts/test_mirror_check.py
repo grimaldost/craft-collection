@@ -387,6 +387,60 @@ reason = "byte-preserved eval fixture"
     assert '1 file(s) excluded by glob' in out, out
 
 
+def _link_dir(link: Path, target: Path) -> bool:
+    """Make ``link`` a directory link to ``target``: a symlink, or a junction on
+    Windows when symlinks are not permitted. False when neither can be made."""
+    try:
+        os.symlink(target, link, target_is_directory=True)
+        return True
+    except (OSError, NotImplementedError):
+        pass
+    if os.name == 'nt':
+        import subprocess
+
+        done = subprocess.run(  # noqa: S603 -- fixed argv, paths from a temp dir
+            ['cmd', '/c', 'mklink', '/J', str(link), str(target)],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+        return done.returncode == 0
+    return False
+
+
+def test_a_retired_root_reached_through_a_link_is_walked_under_its_registered_name():
+    """Finding on PR #158: resolving each root before the walk moved the files to
+    the link's target, so an absolute ``[[exclude]]`` glob written against the
+    registered path stopped matching (and the finding printed the target path)
+    even with ``sweep_roots = []``, the behaviour of main."""
+    s = Stack()
+    real = s.dir / 'real-store'
+    s.file('real-store/frozen/old.py', "TIER = 'claude-fable-5'\n")
+    link = s.dir / 'linked-store'
+    if not _link_dir(link, real):
+        print('skip: cannot create a directory link here')
+        return
+    site = s.file('repo/src/gov.py', "TIER = {'frontier': 'claude-fable-5-1'}\n")
+    s.bind(
+        'sweep_roots = []\n'
+        + _site(site)
+        + _retired(link)
+        + f"""
+[[exclude]]
+glob = "{link.as_posix()}/frozen/**"
+reason = "byte-preserved eval fixture"
+"""
+    )
+    rc, out = s.check()
+    assert rc == 0, out
+    assert '1 file(s) excluded by glob' in out, out
+
+    s.bind('sweep_roots = []\n' + _site(site) + _retired(link))
+    rc, out = s.check()
+    assert rc == 1, out
+    hits = _hits(out)
+    assert len(hits) == 1 and 'linked-store' in hits[0] and 'real-store' not in hits[0], out
+
+
 def test_a_sweep_root_that_does_not_exist_is_a_finding():
     """A sweep root that moved would silently narrow the walk."""
     s = Stack()
@@ -451,6 +505,7 @@ def main() -> int:
     test_a_site_outside_any_repository_adds_no_default_root()
     test_a_file_under_a_rule_root_and_a_sweep_root_is_reported_once()
     test_exclude_globs_apply_to_sweep_roots()
+    test_a_retired_root_reached_through_a_link_is_walked_under_its_registered_name()
     test_a_sweep_root_that_does_not_exist_is_a_finding()
     test_a_sweep_roots_string_cannot_answer_instead_of_walking_a_drive()
     test_a_relative_sweep_root_cannot_answer()

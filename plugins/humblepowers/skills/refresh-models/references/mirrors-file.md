@@ -114,8 +114,11 @@ against wherever the walk ran.
 
 A sweep root that does not exist is a finding. A file under two overlapping
 roots, such as a pattern root inside a sweep root, is read once and reported
-once. The closing line names the sweep roots with their count and source, so a
-narrow walk reads as narrow rather than as all-clean.
+once. Each root is walked, matched against `[[exclude]]` globs and reported under
+the spelling it was registered with, so a symlink, junction or mapped drive does
+not change what an exclude written against that path matches; the resolved path
+is used only to detect the overlap. The closing line names the sweep roots with
+their count and source, so a narrow walk reads as narrow rather than as all-clean.
 
 A repository-wide sweep reaches the historical record as well as live copies:
 CHANGELOGs, ADRs, dated reports, and test fixtures that pin an outgoing id on

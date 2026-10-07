@@ -38,7 +38,13 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
   that a relative entry resolved against the working directory. The walk now exits 2
   with `CANNOT ANSWER` unless `sweep_roots`, and each `[[retired]]` `roots`, is a list of
   absolute paths; three further tests pin it (the string case was watched red by hanging
-  until killed).
+  until killed). A blind re-review then found that resolving each root before the walk
+  changed behaviour even with `sweep_roots = []`: a `[[retired]]` root reached through a
+  symlink, junction or mapped drive was listed, matched against `[[exclude]]` globs and
+  reported under its target path, so an absolute exclude written against the registered
+  path stopped matching. Each root is now walked and reported under its registered
+  spelling, and the resolved path only keys the overlap check; a test with a link as the
+  `[[retired]]` root, `sweep_roots = []` and an absolute exclude was watched red first.
 
 ### Changed
 
