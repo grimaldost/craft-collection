@@ -1611,11 +1611,55 @@ def test_anchors_in_both_directories_inject_the_start_one_and_warn_about_the_oth
         assert 'other-track.md' in warn[0] and str(now) in warn[0], warn[0]
 
 
+def _write_notes(base: Path) -> Path:
+    anchors = base / '.claude' / 'anchors'
+    anchors.mkdir(parents=True, exist_ok=True)
+    return _write_anchor(anchors, '# Design notes\nstart-dir mission\n', 'notes.md')
+
+
+def test_a_start_anchor_that_is_not_a_live_track_loses_to_a_fresh_live_current_one():
+    # The start directory holds a file that must not shadow the live track: one
+    # stale, one that says it landed, one parked, one that is not an anchor at
+    # all. The current directory holds a fresh live anchor, and its HEAD (not
+    # just its name in a warning) is what the session gets back.
+    landed = '# Mission\nstart-dir mission\nStatus: landed\n# Cursor\nnext: nothing\n'
+    cases = {
+        'stale': lambda start: make_anchor(start, body=START_BODY, age_s=48 * 3600),
+        'landed': lambda start: make_anchor(start, body=landed),
+        'landed and stale': lambda start: make_anchor(start, body=landed, age_s=48 * 3600),
+        'parked': lambda start: make_parked(start),
+        'not an anchor': lambda start: _write_notes(start),
+    }
+    for label, arm_start in cases.items():
+        with tempfile.TemporaryDirectory() as d:
+            start, now, transcript = _two_dirs(d)
+            arm_start(start)
+            make_anchor(now, name='live.md', body=NOW_BODY.replace('next:', 'step: 4\nnext:'))
+            ctx = _context(run_hook(now, transcript=transcript))
+            assert 'moved-to mission' in ctx and 'step: 4' in ctx, (label, ctx)
+            assert 'start-dir mission' not in ctx and 'STALE' not in ctx, (label, ctx)
+            assert 'PARKED' not in ctx, (label, ctx)
+            warn = [line for line in _header(ctx) if line.startswith('WARNING')]
+            assert len(warn) == 1 and str(start) in warn[0], (label, ctx)
+            log = now / '.claude' / 'anchors' / 'log.ndjson'
+            assert json.loads(log.read_text(encoding='utf-8'))['anchor_dir'] == 'cwd', label
+
+
+def test_a_stale_start_anchor_still_wins_a_tie_with_a_stale_current_one():
+    # Equal rank keeps the start directory: preference only breaks ties.
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(start, body=START_BODY, age_s=48 * 3600)
+        make_anchor(now, name='other-track.md', body=NOW_BODY, age_s=30 * 3600)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'STALE' in ctx and str(start) in ctx and 'moved-to mission' not in ctx
+
+
 def test_both_directories_reach_the_pointer_and_parked_tiers_too():
     with tempfile.TemporaryDirectory() as d:
         start, now, transcript = _two_dirs(d)
         make_anchor(start, body=START_BODY, age_s=48 * 3600)
-        make_anchor(now, name='other-track.md', body=NOW_BODY)
+        make_anchor(now, name='other-track.md', body=NOW_BODY, age_s=30 * 3600)
         ctx = _context(run_hook(now, transcript=transcript))
         assert 'STALE' in ctx and str(start) in ctx
         lines = ctx.splitlines()
@@ -2174,6 +2218,8 @@ if __name__ == '__main__':
     test_a_moved_session_injects_the_start_directory_anchor_and_names_both_directories()
     test_a_moved_session_with_no_start_anchor_injects_the_current_one_and_names_both()
     test_anchors_in_both_directories_inject_the_start_one_and_warn_about_the_other()
+    test_a_start_anchor_that_is_not_a_live_track_loses_to_a_fresh_live_current_one()
+    test_a_stale_start_anchor_still_wins_a_tie_with_a_stale_current_one()
     test_both_directories_reach_the_pointer_and_parked_tiers_too()
     test_an_unreadable_transcript_keeps_the_payload_cwd_lookup()
     test_startup_reads_only_the_payload_cwd()

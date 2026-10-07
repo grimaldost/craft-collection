@@ -192,10 +192,13 @@ routing rules), not only fixes.
   one line at a time) and returns the `cwd` of the first record that has one; the records
   before it are metadata with no cwd (queue operations, titles), and in those 280 transcripts
   the first cwd sat on line 3 to 16. `resolve_anchors` searches `<start>/.claude/anchors`
-  first and the payload cwd second, and uses the first that holds an open anchor. When the
-  two directories differ, the full, pointer and parked headers name both; when both hold
-  anchors, the start directory's wins and the current directory's are named in the warning
-  line. Telemetry goes to the anchors directory used and records `anchor_dir` (`start` or
+  and the payload cwd; when only one holds an open anchor it is used. When both do, their
+  primaries are compared with the rank `select_anchor` uses (not anchor-shaped, then
+  content-terminal, then parked, then older than 24 hours) and the start directory wins
+  every tie, so a stale, landed, parked or non-anchor file there cannot hide a live anchor
+  in the current directory; the other directory's anchors are named in the warning line
+  either way. When the two directories differ, the full, pointer and parked headers name
+  both. Telemetry goes to the anchors directory used and records `anchor_dir` (`start` or
   `cwd`). startup, a missing or unreadable transcript and a transcript with no cwd keep the
   payload-cwd lookup unchanged, and the golden-string tests still pass. `start_cwd` took
   about 0.1 ms (median of 20) on synthetic transcripts of 5,000, 50,000 and 500,000 lines

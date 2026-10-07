@@ -181,12 +181,13 @@ def start_cwd(transcript_path: object) -> Path | None:
 class CwdMove(NamedTuple):
     """The session's working directory is not the one it started in. `start` and
     `cwd` are both named in the injected header; `elsewhere` holds the open
-    anchors of the directory the injection did not come from (empty unless the
-    start directory won while the current one held anchors too)."""
+    anchors of the directory the injection did not come from (empty unless both
+    directories held anchors); `chose_start` says which directory that is."""
 
     start: Path
     cwd: Path
     elsewhere: list[Path]
+    chose_start: bool = True
 
 
 # Sources that continue an existing session, whose transcript names where it
@@ -198,9 +199,12 @@ def resolve_anchors(
     cwd: Path, source: str, transcript_path: object
 ) -> tuple[Path, list[Path], CwdMove | None]:
     """(anchors dir used, its open anchors, the move or None). On a continuing
-    source whose transcript names a start directory other than `cwd`, that
-    directory is searched first and `cwd` second; the first with any open
-    anchor is used. Every other case is the payload-cwd lookup alone."""
+    source whose transcript names a start directory other than `cwd`, both
+    directories are searched. When only one holds an open anchor it is used; when
+    both do, their primaries are compared by `anchor_rank` and the start
+    directory wins unless the current one is strictly better, so a stale, landed,
+    parked or non-anchor file there cannot hide a live track here. Every other
+    case is the payload-cwd lookup alone."""
     here = cwd / '.claude' / 'anchors'
     open_here = find_open_anchors(here)
     start = start_cwd(transcript_path) if source in CONTINUING_SOURCES else None
@@ -208,9 +212,13 @@ def resolve_anchors(
         return here, open_here, None
     there = start / '.claude' / 'anchors'
     open_there = find_open_anchors(there)
-    if open_there:
-        return there, open_there, CwdMove(start, cwd, open_here)
-    return here, open_here, CwdMove(start, cwd, [])
+    if not open_there:
+        return here, open_here, CwdMove(start, cwd, [])
+    if open_here and anchor_rank(select_anchor(open_here)[0]) < anchor_rank(
+        select_anchor(open_there)[0]
+    ):
+        return here, open_here, CwdMove(start, cwd, open_there, chose_start=False)
+    return there, open_there, CwdMove(start, cwd, open_here)
 
 
 def is_anchor_shaped(text: str) -> bool:
@@ -256,6 +264,19 @@ def parked_reason(text: str) -> str:
     return ''
 
 
+def anchor_rank(a: Path) -> tuple[bool, bool, bool, bool]:
+    """Sort key for choosing among anchors, lowest first: not anchor-shaped, then
+    content-terminal, then parked, then older than STALE_AFTER_S. Staleness comes
+    last, so it only separates anchors that are otherwise equally live."""
+    text = _read(a)
+    return (
+        not is_anchor_shaped(text),
+        is_content_terminal(text),
+        bool(parked_reason(text)),
+        time.time() - _mtime(a) > STALE_AFTER_S,
+    )
+
+
 def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
     """Choose the anchor to inject plus the others to warn about. The primary is the
     newest genuinely-active anchor; a file that is not shaped like an anchor at all,
@@ -264,12 +285,7 @@ def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
     `open_anchors` is newest-first; the sort is stable, so recency still decides
     within a rank, and `others` keeps that order minus the primary. A parked anchor
     ranks below every live track and above a content-terminal one."""
-
-    def rank(a: Path) -> tuple[bool, bool, bool]:
-        text = _read(a)
-        return (not is_anchor_shaped(text), is_content_terminal(text), bool(parked_reason(text)))
-
-    primary = sorted(open_anchors, key=rank)[0]
+    primary = sorted(open_anchors, key=anchor_rank)[0]
     return primary, [a for a in open_anchors if a != primary]
 
 
@@ -651,7 +667,8 @@ def _moved_line(moved: CwdMove) -> str:
     """The header line naming both directories of a session that moved."""
     return (
         f'This session started in {moved.start} and now runs in {moved.cwd}; anchors '
-        'are looked up under the start directory first, then the current one.'
+        'are looked up in both; the start directory wins unless the current one holds a '
+        'live track and it does not.'
     )
 
 
@@ -664,11 +681,19 @@ def _warning(other_open: list[Path] | None, moved: CwdMove | None = None) -> str
     names = ', '.join(f.name for f in moved.elsewhere[:MAX_NAMED_OPEN])
     if len(moved.elsewhere) > MAX_NAMED_OPEN:
         names += f' and {len(moved.elsewhere) - MAX_NAMED_OPEN} more'
-    also = (
-        f'WARNING - {len(moved.elsewhere)} open anchor(s) also in the current directory '
-        f"{moved.elsewhere[0].parent}: {names}. The start directory's anchor was chosen; "
-        'if your track is one of those, read it before acting.'
-    )
+    if moved.chose_start:
+        also = (
+            f'WARNING - {len(moved.elsewhere)} open anchor(s) also in the current directory '
+            f"{moved.elsewhere[0].parent}: {names}. The start directory's anchor was chosen; "
+            'if your track is one of those, read it before acting.'
+        )
+    else:
+        also = (
+            f'WARNING - {len(moved.elsewhere)} open anchor(s) also in the start directory '
+            f"{moved.elsewhere[0].parent}: {names}. The current directory's anchor was chosen "
+            "because the start directory's was not a live track (stale, parked, finished or "
+            'not an anchor); if your track is one of those, read it before acting.'
+        )
     return f'{warn} {also}' if warn else also
 
 
