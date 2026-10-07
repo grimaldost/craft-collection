@@ -268,6 +268,58 @@ def test_cli_two_producer_mode_end_to_end():
         assert main([str(a)]) == 2
 
 
+def test_two_empty_tables_are_not_assessed():
+    rep = compare([], [], keys=['id'])
+    assert rep['ok'] is None
+    assert any('empty population' in r for r in rep['unassessed'])
+
+
+def test_two_empty_tables_not_assessed_even_without_null_mismatch():
+    rep = compare([], [], keys=['id'], null_mismatch=False)
+    assert rep['ok'] is None
+    assert any('empty population' in r for r in rep['unassessed'])
+
+
+def test_allow_empty_accepts_two_empty_tables():
+    rep = compare([], [], keys=['id'], allow_empty=True)
+    assert rep['ok'] is True
+    assert rep['unassessed'] == []
+
+
+def test_one_empty_side_still_fails_on_row_count():
+    rep = compare([{'id': '1'}], [], keys=['id'])
+    assert rep['ok'] is False
+    assert rep['row_count']['delta'] == -1
+
+
+def test_cli_two_header_only_csvs_exit_1_naming_the_empty_population():
+    import contextlib
+    import io
+
+    with tempfile.TemporaryDirectory() as d:
+        a = Path(d) / 'a.csv'
+        b = Path(d) / 'b.csv'
+        a.write_text('id,amt\n', encoding='utf-8')
+        b.write_text('id,amt\n', encoding='utf-8')
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = main([str(a), str(b), '--keys', 'id'])
+        out = buf.getvalue()
+        assert rc == 1
+        assert 'PARITY NOT ASSESSED' in out
+        assert 'empty population' in out
+        assert '--allow-empty' in out
+
+
+def test_cli_allow_empty_exits_0():
+    with tempfile.TemporaryDirectory() as d:
+        a = Path(d) / 'a.csv'
+        b = Path(d) / 'b.csv'
+        a.write_text('id,amt\n', encoding='utf-8')
+        b.write_text('id,amt\n', encoding='utf-8')
+        assert main([str(a), str(b), '--keys', 'id', '--allow-empty']) == 0
+
+
 if __name__ == '__main__':
     test_identical_tables_ok()
     test_row_count_mismatch_fails()
@@ -292,4 +344,10 @@ if __name__ == '__main__':
     test_two_producer_fails_a_join_key_that_fans_out()
     test_two_producer_empty_input_is_not_a_clean_join()
     test_cli_two_producer_mode_end_to_end()
+    test_two_empty_tables_are_not_assessed()
+    test_two_empty_tables_not_assessed_even_without_null_mismatch()
+    test_allow_empty_accepts_two_empty_tables()
+    test_one_empty_side_still_fails_on_row_count()
+    test_cli_two_header_only_csvs_exit_1_naming_the_empty_population()
+    test_cli_allow_empty_exits_0()
     print('ok: all parity_check tests passed')

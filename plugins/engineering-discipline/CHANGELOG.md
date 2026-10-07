@@ -12,6 +12,20 @@ Hook scope change and a new parity_check flag. The compaction-summary bullet rep
 the over-broad re-read-at-each-phase framing; the parity check gains a new output mode
 and an exit-code rule; the format hook narrows which files receive turn-level formatting.
 
+### Fixed
+
+- **`parity_check.py` no longer passes two empty tables**: header-only CSVs (or a filter
+  that empties both sides) printed `PARITY OK` and exited 0, although the docstring and
+  SKILL.md said an unassessable comparison is never a pass. `compare()` now returns
+  `ok=None` with the reason `empty population: two empty tables match and prove nothing`;
+  the CLI prints `PARITY NOT ASSESSED` and exits 1, and its hint names the opt-out that
+  matches each reason. New flag `--allow-empty` (keyword `allow_empty` on `compare()`)
+  accepts two empty inputs when an empty result is the expected outcome. One empty side
+  still fails on the row-count delta. Recipe 13 now names this refusal and says a
+  hand-written judge gates every relation-level check on a non-empty population first.
+  Displaces: nothing (a one-clause pointer in the recipe; no SKILL.md body words).
+  (2026-10-06 delta triage: T140a.)
+
 ### Changed
 
 - **Recipe 18 "Versioning a frozen judge" in `parity-recipes.md`, with a pointer from

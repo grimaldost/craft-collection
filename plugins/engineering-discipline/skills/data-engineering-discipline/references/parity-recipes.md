@@ -609,7 +609,9 @@ assert old_inputs == new_inputs, (
 
 A parity check that has only ever been seen green proves nothing: green can
 mean "the outputs match" or "the check never actually compared anything." A
-typo in a join key, a filter that drops both sides to empty, a tolerance set
+typo in a join key, a filter that drops both sides to empty (`parity_check.py`
+refuses it: exit 1, empty population; a hand-written judge gates every
+relation-level check on a non-empty population first), a tolerance set
 so wide nothing trips it, a fixture that exercises a fallback path instead of
 the unit under test — each yields a passing check that verifies nothing. The
 discipline that separates a real gate from a green light is the same one
