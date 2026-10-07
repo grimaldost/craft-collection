@@ -8,9 +8,11 @@ tagged.
 
 ## [0.25.0] - 2026-10-07
 
-Eleven feedback rows from the 2026-10-06 craft-collection triage that restructure the
-review-panel skill body, references and persona packs. Minor bump: adds new reference files and
-routing rules that enable per-lens capacity dispatch.
+Twenty-eight feedback rows from the 2026-10-06 craft-collection triage, across the
+review-panel skill, the compaction-survival anchor hooks and CLI, the `/anchor` command and the
+tool-feedback scripts. Minor bump: an installed copy gains capability (a PostToolUse hook, a
+second SessionStart hook, the `--post-write` and `--step` CLI arms, new reference files and
+routing rules), not only fixes.
 
 ### Added
 
