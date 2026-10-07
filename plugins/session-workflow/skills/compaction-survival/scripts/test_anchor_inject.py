@@ -1659,6 +1659,7 @@ def test_both_directories_reach_the_pointer_and_parked_tiers_too():
     with tempfile.TemporaryDirectory() as d:
         start, now, transcript = _two_dirs(d)
         make_anchor(start, body=START_BODY, age_s=48 * 3600)
+        # The current anchor is aged too, so both are stale and the start one wins the tie.
         make_anchor(now, name='other-track.md', body=NOW_BODY, age_s=30 * 3600)
         ctx = _context(run_hook(now, transcript=transcript))
         assert 'STALE' in ctx and str(start) in ctx

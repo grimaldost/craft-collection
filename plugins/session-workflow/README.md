@@ -105,8 +105,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   `<!-- anchor:tail -->` marker, whole file when marker-less) so a run survives
   compaction and process restarts; warns and names the others when several
   anchors are open in one directory. On `compact`, `resume` and `clear` it looks
-  first in the directory the session started in (the first `cwd` in its
-  transcript), then in the current one, and names both when they differ. When it
+  in both the directory the session started in (the first `cwd` in its
+  transcript) and the current one, uses the better-ranked anchor (a live track
+  beats a stale, parked, finished or non-anchor file; the start directory wins a
+  tie), and names both when they differ. When it
   finds open anchors it creates `.claude/anchors/.gitignore` (content `*`) if that
   file is missing, so the anchors and the hook's log never show as untracked; an
   existing `.gitignore` is never touched.

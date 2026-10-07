@@ -23,9 +23,10 @@ Lifecycle gates (T22a hardening):
   the anchor was updated within STARTUP_RECENT_S; an ordinary new session in
   a cwd with an old anchor stays untaxed. compact/resume/clear — explicit
   continuation or reset signals — always evaluate.
-- compact/resume/clear look first under the directory the session started in
-  (the first `cwd` record of `transcript_path`), then under the payload cwd,
-  and name both when they differ: a run that changed directory armed its
+- compact/resume/clear look under both the directory the session started in
+  (the first `cwd` record of `transcript_path`) and the payload cwd, use the
+  better-ranked anchor (the start directory wins a tie), and name both when
+  they differ: a run that changed directory armed its
   anchor in the first. startup, and an unreadable transcript, use the payload
   cwd alone.
 
@@ -667,14 +668,15 @@ def _moved_line(moved: CwdMove) -> str:
     """The header line naming both directories of a session that moved."""
     return (
         f'This session started in {moved.start} and now runs in {moved.cwd}; anchors '
-        'are looked up in both; the start directory wins unless the current one holds a '
-        'live track and it does not.'
+        'are looked up in both; the better-ranked anchor is used, and the start '
+        'directory wins a tie.'
     )
 
 
 def _warning(other_open: list[Path] | None, moved: CwdMove | None = None) -> str:
     """The one warning line: concurrent tracks in this directory, then the open
-    anchors the current directory also holds when the start directory won."""
+    anchors of whichever directory lost (the current one when the start
+    directory won, the start one when the current directory won)."""
     warn = _other_open_warning(other_open)
     if moved is None or not moved.elsewhere:
         return warn
