@@ -122,6 +122,45 @@ routing rules that enable per-lens capacity dispatch.
   when the HEAD is small and the arm prints nothing. It stays create-only: a test pins an
   existing `.gitignore` byte-identical across a run, and no file is created for a missing
   anchor, a closed anchor or a path outside `.claude/anchors/`.
+- **SessionStart hook on resume and compact: names a skill body in context that is older
+  than the installed plugin** (2026-10-06 craft-collection triage: T70f). A skill body stays
+  in the session's context after its plugin is updated, and a resumed or compacted session
+  kept working from a copy a release or more old with nothing to say so. A second
+  `SessionStart` entry in `hooks.json` (matcher `resume|compact`, timeout 10) runs
+  `feedback_nudge.py --stale-bodies`, a new fail-open arm beside the Stop nudge. It streams
+  the transcript and parses only the lines that carry `Base directory for this skill:`,
+  taking a body from the two record shapes that serve one: the meta user record written at
+  load and the `invoked_skills` attachment that serves bodies again (214 and 98 records in
+  the 281 local transcripts read on 2026-10-07). The marker has to start the text, so the 2
+  tool results there that only quoted it count for nothing. The last load per plugin and
+  skill wins. A body served from `<root>/plugins/cache/<marketplace>/<plugin>/<version>/skills/<skill>`
+  (either separator) is compared by numeric version with every version
+  `<root>/plugins/installed_plugins.json` lists for exactly `<plugin>@<marketplace>`; when it
+  is older than all of them, the hook adds one line per plugin naming the installed version,
+  each stale skill with its version, and the fix: invoke the skill again, and if it still
+  loads the old version, restart and resume from the anchor. The registry is the one beside
+  the cache the body came from, not a fixed `~/.claude` path, so a relocated config
+  directory pairs each cache with its own registry. Silent for a current or newer body, a
+  version that does not parse, a body served from outside a cache (a `--plugin-dir`
+  checkout, which also replaces an earlier cached load of the same skill), a plugin the
+  registry does not list under that marketplace, a missing registry or transcript, malformed
+  stdin, and the opt-out. **On by default**; `SESSION_WORKFLOW_STALE_BODY_CHECK=0` opts out.
+  `plugin_version.py`'s helpers are imported inside the arm, so an import failure cannot
+  reach the Stop nudge: a test runs a copy of the script with no `plugin_version.py` beside
+  it and the nudge still fires. The transcript reader is deliberately local, as
+  `anchor_inject.py`'s `start_cwd` is: the two session-workflow readers look for different
+  records from different skill directories, and the third reader the triage named (T102a)
+  is in humblepowers. Run over those 281 transcripts against the current registry, 48 hold
+  cached skill bodies and 40 of them would warn, because their plugins have been updated
+  since; resuming one of them is the case this check exists for. Measured on Windows 11
+  with Python 3.14: a 51,020,768-byte synthetic transcript with four sparse loads took 14 ms
+  in process and 148 ms as the hook command (medians of 10), against 165 ms for an empty
+  transcript, so process start dominates; the largest local transcript, 96.1 MB, took 149 ms
+  in process (median of 5). The
+  module's suite goes from 22 to 34 test functions (counted with grep). Six were written
+  first and five of them failed for the expected reason (the sixth, same-version silence,
+  passed vacuously before the arm existed); each silent and failure path was then shown
+  to fail its test under a mutation of the guard it covers (13 mutations).
 
 ### Changed
 

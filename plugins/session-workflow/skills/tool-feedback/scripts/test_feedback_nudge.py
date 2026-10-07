@@ -430,6 +430,357 @@ def test_a_registered_skill_beside_an_unregistered_one_still_nudges():
         assert 'mantis-wisdom' not in out, 'a non-target must not be named as a registered tool'
 
 
+# --- --stale-bodies: a skill body in context older than the installed plugin ---
+
+SKILL_MARK = 'Base directory for this skill:'
+
+
+def _cache_base(
+    root: Path, plugin: str, version: str, skill: str, marketplace: str = 'craft-collection'
+) -> str:
+    """Where the harness serves a cached plugin's skill from."""
+    return str(root / 'plugins' / 'cache' / marketplace / plugin / version / 'skills' / skill)
+
+
+def _skill_load(base: str) -> dict:
+    """A skill load as the harness records it: a meta user record whose one text
+    block starts with the base-directory line. Written with json.dumps, so a
+    Windows path lands in the file with escaped backslashes, as in a real
+    transcript (214 of 214 such records in the local transcripts read on
+    2026-10-07 had this shape)."""
+    return {
+        'type': 'user',
+        'isMeta': True,
+        'message': {
+            'role': 'user',
+            'content': [{'type': 'text', 'text': f'{SKILL_MARK} {base}\n\n# Skill\n\nBody.'}],
+        },
+    }
+
+
+def _reattached(*bases: str) -> dict:
+    """The record that serves invoked skills' bodies again (an `invoked_skills`
+    attachment; 98 records in the same local transcripts)."""
+    skills = [
+        {'name': f'skill-{i}', 'path': f'plugin:skill-{i}', 'content': f'{SKILL_MARK} {b}\n\n# S'}
+        for i, b in enumerate(bases)
+    ]
+    return {'type': 'attachment', 'attachment': {'type': 'invoked_skills', 'skills': skills}}
+
+
+def _write_records(path: Path, records: list[dict]) -> Path:
+    lines = [json.dumps({'type': 'user', 'message': {'content': 'a prompt'}})]
+    lines += [json.dumps(r) for r in records]
+    lines.append('{ not json')
+    path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    return path
+
+
+def _install_registry(
+    root: Path, versions: dict[str, str], marketplace: str = 'craft-collection'
+) -> Path:
+    """installed_plugins.json beside the cache, in the registry's version-2 shape."""
+    plugins = {
+        f'{name}@{marketplace}': [
+            {
+                'scope': 'user',
+                'installPath': str(root / 'plugins' / 'cache' / marketplace / name / v),
+                'version': v,
+            }
+        ]
+        for name, v in versions.items()
+    }
+    p = root / 'plugins' / 'installed_plugins.json'
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({'version': 2, 'plugins': plugins}), encoding='utf-8')
+    return p
+
+
+def _stale_run(transcript: object, **env: str | None) -> tuple[int, str]:
+    payload = {
+        'session_id': 'sid',
+        'hook_event_name': 'SessionStart',
+        'source': 'resume',
+        'transcript_path': str(transcript) if transcript is not None else None,
+    }
+    with _env(**{'SESSION_WORKFLOW_STALE_BODY_CHECK': None, **env}):  # default ON
+        return _run(['--stale-bodies'], payload)
+
+
+def _context(out: str) -> str:
+    block = json.loads(out)
+    assert block['hookSpecificOutput']['hookEventName'] == 'SessionStart', block
+    return block['hookSpecificOutput']['additionalContext']
+
+
+def test_stale_body_names_both_versions_and_the_fix():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        transcript = _write_records(
+            root / 't.jsonl',
+            [
+                _skill_load(_cache_base(root, 'session-workflow', '0.21.0', 'compaction-survival')),
+                _skill_load(_cache_base(root, 'session-workflow', '0.21.0', 'tool-feedback')),
+            ],
+        )
+        rc, out = _stale_run(transcript)
+    assert rc == 0, out
+    out.encode('ascii')  # raises -> non-ASCII on stdout (cp1252 hazard)
+    context = _context(out)
+    lines = context.splitlines()
+    assert len(lines) == 1, f'one line per plugin, got {lines}'
+    line = lines[0]
+    for want in ('session-workflow', '0.21.0', '0.24.4', 'compaction-survival', 'tool-feedback'):
+        assert want in line, (want, line)
+    assert 'again' in line and 'anchor' in line, f'the fix is not named: {line}'
+
+
+def test_stale_body_same_version_is_silent():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        transcript = _write_records(
+            root / 't.jsonl',
+            [_skill_load(_cache_base(root, 'session-workflow', '0.24.4', 'compaction-survival'))],
+        )
+        assert _stale_run(transcript) == (0, '')
+
+
+def test_stale_body_a_later_reload_clears_the_warning():
+    """Last load wins: invoking the skill again at the installed version is the
+    fix the warning names, so it must clear the warning."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        old = _cache_base(root, 'session-workflow', '0.21.0', 'compaction-survival')
+        new = _cache_base(root, 'session-workflow', '0.24.4', 'compaction-survival')
+        cleared = _write_records(root / 'a.jsonl', [_skill_load(old), _skill_load(new)])
+        assert _stale_run(cleared) == (0, ''), 'a reload at the installed version must clear'
+        back = _write_records(root / 'b.jsonl', [_skill_load(new), _skill_load(old)])
+        rc, out = _stale_run(back)
+        assert rc == 0 and '0.21.0' in _context(out), 'the LAST load decides'
+
+
+def test_stale_body_reattached_bodies_count_as_loads():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        old = _cache_base(root, 'session-workflow', '0.21.0', 'compaction-survival')
+        new = _cache_base(root, 'session-workflow', '0.24.4', 'compaction-survival')
+        stale = _write_records(root / 'a.jsonl', [_reattached(old)])
+        rc, out = _stale_run(stale)
+        assert rc == 0 and '0.21.0' in _context(out), 'a re-served body is in context too'
+        fresh = _write_records(root / 'b.jsonl', [_skill_load(old), _reattached(new)])
+        assert _stale_run(fresh) == (0, '')
+
+
+def test_stale_body_bom_and_crlf_tolerated():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        load = _skill_load(_cache_base(root, 'session-workflow', '0.21.0', 'compaction-survival'))
+        transcript = root / 't.jsonl'
+        transcript.write_bytes(b'\xef\xbb\xbf' + json.dumps(load).encode('utf-8') + b'\r\n')
+        rc, out = _stale_run(transcript)
+    assert rc == 0 and '0.21.0' in _context(out), 'a BOM on the first line hid the load'
+
+
+def test_parse_skill_base_accepts_both_separators():
+    win = 'C:\\Users\\someone\\.claude\\plugins\\cache\\mkt\\session-workflow\\0.21.0\\skills\\tf'
+    posix = '/home/someone/.claude/plugins/cache/mkt/session-workflow/0.21.0/skills/tf'
+    for base, root in ((win, 'C:\\Users\\someone\\.claude'), (posix, '/home/someone/.claude')):
+        load = fn.parse_skill_base(base)
+        assert load is not None, base
+        assert (load.marketplace, load.plugin, load.version, load.skill) == (
+            'mkt',
+            'session-workflow',
+            '0.21.0',
+            'tf',
+        ), load
+        assert load.root == root, load
+    checkout = fn.parse_skill_base('/work/craft-collection/plugins/session-workflow/skills/tf')
+    assert checkout is not None and checkout.version is None, 'a checkout has no cache version'
+    assert (checkout.plugin, checkout.skill) == ('session-workflow', 'tf')
+    personal = fn.parse_skill_base('/home/someone/.claude/skills/personal')
+    assert personal is not None and personal.version is None, 'no cache, no version'
+    assert fn.parse_skill_base('/opt/bundled-skill') is None
+
+
+def test_stale_body_silent_paths():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        old = _skill_load(_cache_base(root, 'session-workflow', '0.21.0', 'compaction-survival'))
+        stale = _write_records(root / 'stale.jsonl', [old])
+        # No registry yet: nothing to compare against.
+        assert _stale_run(stale) == (0, ''), 'missing registry'
+        _install_registry(root, {'session-workflow': '0.24.4', 'sha-pinned': 'abc1234'})
+        assert _stale_run(stale)[1], 'precondition: this transcript warns'
+        assert _stale_run(stale, SESSION_WORKFLOW_STALE_BODY_CHECK='0') == (0, ''), 'opt-out'
+        assert _stale_run(root / 'missing.jsonl') == (0, ''), 'missing transcript'
+        assert _stale_run(None) == (0, ''), 'no transcript path'
+        assert _stale_run(root) == (0, ''), 'transcript path is a directory'
+        with _env(SESSION_WORKFLOW_STALE_BODY_CHECK=None):
+            assert _run(['--stale-bodies'], b'\xff\xfe not json') == (0, ''), 'malformed stdin'
+            assert _run(['--stale-bodies'], [1, 2]) == (0, ''), 'stdin not an object'
+        cases = {
+            'plugin not in the registry': _cache_base(root, 'keel', '0.1.0', 'apply-method'),
+            'same name, other marketplace': _cache_base(
+                root, 'session-workflow', '0.21.0', 'tool-feedback', marketplace='a-fork'
+            ),
+            'newer than installed': _cache_base(root, 'session-workflow', '0.30.0', 'anchor'),
+            'unparseable version': _cache_base(root, 'session-workflow', 'abc1234', 'anchor'),
+            'unparseable installed version': _cache_base(root, 'sha-pinned', '0.1.0', 'anchor'),
+            '--plugin-dir checkout': str(
+                root / 'checkout' / 'plugins' / 'session-workflow' / 'skills' / 'anchor'
+            ),
+        }
+        for name, base in cases.items():
+            transcript = _write_records(root / 'case.jsonl', [_skill_load(base)])
+            assert _stale_run(transcript) == (0, ''), name
+        checkout = cases['--plugin-dir checkout'].replace('anchor', 'compaction-survival')
+        later = _write_records(root / 'later.jsonl', [old, _skill_load(checkout)])
+        assert _stale_run(later) == (0, ''), 'a later checkout load replaces the cached body'
+
+
+def test_stale_body_a_quoted_marker_is_not_a_load():
+    """A tool result that quotes the marker (a grep over old transcripts) serves
+    no body; neither does a human prompt that mentions it mid-text."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        base = _cache_base(root, 'session-workflow', '0.21.0', 'compaction-survival')
+        quoted = {
+            'type': 'user',
+            'message': {
+                'content': [
+                    {
+                        'type': 'tool_result',
+                        'tool_use_id': 'tu1',
+                        'content': [{'type': 'text', 'text': f'{SKILL_MARK} {base}\n'}],
+                    }
+                ]
+            },
+        }
+        mentioned = {'type': 'user', 'message': {'content': f'why did {SKILL_MARK} {base} load?'}}
+        transcript = _write_records(root / 't.jsonl', [quoted, mentioned])
+        assert _stale_run(transcript) == (0, '')
+
+
+def test_stale_body_exception_in_the_arm_exits_0():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        transcript = _write_records(
+            root / 't.jsonl',
+            [_skill_load(_cache_base(root, 'session-workflow', '0.21.0', 'compaction-survival'))],
+        )
+        saved = sys.modules.get('plugin_version')
+        sys.modules['plugin_version'] = None  # the next import raises ImportError
+        try:
+            assert _stale_run(transcript) == (0, ''), 'an import failure must exit 0, silent'
+        finally:
+            if saved is None:
+                sys.modules.pop('plugin_version', None)
+            else:
+                sys.modules['plugin_version'] = saved
+
+
+def _child_env(**extra: str) -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if not k.startswith(('GIT_', 'PYTHONPATH'))}
+    env.pop('SESSION_WORKFLOW_STALE_BODY_CHECK', None)
+    env.pop('SESSION_WORKFLOW_FEEDBACK_NUDGE', None)
+    env['GIT_CONFIG_GLOBAL'] = os.devnull
+    env['GIT_CONFIG_SYSTEM'] = os.devnull
+    env.update(extra)
+    return env
+
+
+def test_stale_body_import_failure_cannot_touch_the_stop_nudge():
+    """The arm's helper module is imported inside the arm. Run a copy of this
+    script with no plugin_version.py beside it: the Stop nudge still fires and
+    the stale-body arm stays silent, exit 0 both times."""
+    import shutil
+    import subprocess
+
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        alone = tdp / 'alone'
+        alone.mkdir()
+        script = alone / 'feedback_nudge.py'
+        shutil.copyfile(Path(fn.__file__), script)
+        transcript = tdp / 't.jsonl'
+        _write_transcript(transcript, ['one', 'two'], [_skill_call('humblepowers:choosing-tools')])
+        env = _child_env(
+            SESSION_WORKFLOW_NUDGE_STATE_DIR=td,
+            FEEDBACK_TARGETS_FILE=str(_targets(tdp)),
+            SESSION_WORKFLOW_NUDGE_MIN_TURNS='2',
+        )
+        payload = json.dumps({'session_id': 'sid', 'transcript_path': str(transcript)})
+        for arm, fires in (('--stop-nudge', True), ('--stale-bodies', False)):
+            done = subprocess.run(  # noqa: S603 - fixed argv, no shell
+                [sys.executable, str(script), arm],
+                input=payload,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=alone,
+                timeout=60,
+            )
+            assert done.returncode == 0, (arm, done.stderr)
+            assert bool(done.stdout.strip()) is fires, (arm, done.stdout, done.stderr)
+
+
+def test_stale_body_large_transcript_stays_fast():
+    """A long session's transcript runs to tens of MB and the hook has a 10 s
+    timeout. 50 MB of tool-result lines with four sparse skill loads must be
+    read well inside it; only the marker lines are parsed."""
+    import time
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        noise = json.dumps(
+            {
+                'type': 'user',
+                'message': {
+                    'content': [{'type': 'tool_result', 'tool_use_id': 'tu', 'content': 'x' * 5000}]
+                },
+            }
+        )
+        load = json.dumps(
+            _skill_load(_cache_base(root, 'session-workflow', '0.21.0', 'compaction-survival'))
+        )
+        transcript = root / 'big.jsonl'
+        with open(transcript, 'w', encoding='utf-8', newline='\n') as fh:
+            for i in range(10_000):
+                fh.write((load if i % 2500 == 1250 else noise) + '\n')
+        size = transcript.stat().st_size
+        assert size >= 50_000_000, size
+        start = time.perf_counter()
+        rc, out = _stale_run(transcript)
+        elapsed = time.perf_counter() - start
+    assert rc == 0 and '0.21.0' in _context(out), out
+    assert elapsed < 5.0, f'{size} bytes took {elapsed:.2f}s'
+
+
+def test_hooks_json_wires_the_stale_body_check():
+    hooks = Path(__file__).resolve().parents[3] / 'hooks' / 'hooks.json'
+    data = json.loads(hooks.read_text(encoding='utf-8'))
+    wired = [
+        (group.get('matcher'), hook)
+        for group in data['hooks']['SessionStart']
+        for hook in group['hooks']
+        if hook.get('args', [])[-1:] == ['--stale-bodies']
+    ]
+    assert len(wired) == 1, wired
+    matcher, hook = wired[0]
+    assert matcher == 'resume|compact', matcher
+    assert hook['args'][-2].endswith('/skills/tool-feedback/scripts/feedback_nudge.py'), hook
+    assert hook.get('timeout') == 10, hook
+    assert 'SESSION_WORKFLOW_STALE_BODY_CHECK=0' in data['description']
+
+
 def main() -> int:
     test_fires_once_with_no_env_set()
     test_silent_without_a_registered_targets_file()
@@ -453,6 +804,18 @@ def main() -> int:
     test_the_filter_fails_open_when_no_repo_resolves()
     test_a_session_of_only_unregistered_skills_owes_nothing()
     test_a_registered_skill_beside_an_unregistered_one_still_nudges()
+    test_stale_body_names_both_versions_and_the_fix()
+    test_stale_body_same_version_is_silent()
+    test_stale_body_a_later_reload_clears_the_warning()
+    test_stale_body_reattached_bodies_count_as_loads()
+    test_stale_body_bom_and_crlf_tolerated()
+    test_parse_skill_base_accepts_both_separators()
+    test_stale_body_silent_paths()
+    test_stale_body_a_quoted_marker_is_not_a_load()
+    test_stale_body_exception_in_the_arm_exits_0()
+    test_stale_body_import_failure_cannot_touch_the_stop_nudge()
+    test_stale_body_large_transcript_stays_fast()
+    test_hooks_json_wires_the_stale_body_check()
     print('ok: feedback_nudge')
     return 0
 

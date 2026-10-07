@@ -120,6 +120,19 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   Enabling it in a session whose plugin snapshot predates the hook (or in a
   harness without the plugin surface):
   `skills/compaction-survival/references/cold-start.md` has the manual recipe.
+- **SessionStart (resume/compact)** — stale skill-body check: a skill body stays
+  in context after the plugin that served it is updated, so a resumed or
+  compacted session can keep working from a release-old copy without knowing
+  it. The hook reads the transcript's skill loads (the `Base directory for this
+  skill:` line in front of each served body, the last load per skill winning)
+  and compares each body served from a plugin cache directory with the versions
+  `installed_plugins.json` beside that cache lists. For each plugin with an
+  older body it adds one line naming both versions and the fix: invoke the
+  skill again to load the current body, or restart and resume from the anchor.
+  Silent when every body is current, for a body served from outside a cache (a
+  `--plugin-dir` checkout), for a plugin the registry does not list, and when
+  the transcript or the registry cannot be read. **On by default**; opt out
+  with `SESSION_WORKFLOW_STALE_BODY_CHECK=0`.
 - **PostToolUse (Write/Edit/MultiEdit)** — anchor size warning: after a write to an
   open anchor (`.claude/anchors/*.md`, not `*.closed.md`) whose HEAD is over the
   8000-character injection budget or within 10% of it (7,200 characters and up), adds
