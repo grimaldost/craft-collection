@@ -15,7 +15,9 @@ assumptions cost the most rework.
 ## The flow
 
 1. **Explore project context first.** Files, docs, recent commits — before
-   asking the user anything they shouldn't have to repeat.
+   asking the user anything they shouldn't have to repeat. Read the area's
+   ADRs and invariants; a conflict with an Accepted invariant is
+   raised, never softened.
 2. **Check scope before refining.** A request that bundles several
    independent subsystems (chat, billing, storage, analytics) gets decomposed
    first: what are the pieces, how do they relate, what order. Then design
@@ -25,7 +27,9 @@ assumptions cost the most rework.
    default; for an expert user facing orthogonal decisions, batch a few into one
    turn via the host's question UI rather than forcing strict serialization.
    Multiple choice when it fits, open-ended when it doesn't. Aim at purpose,
-   constraints, and success criteria.
+   constraints, and success criteria. With no user mid-task, fold questions
+   and section confirmations into the proposal awaiting approval: options,
+   recommendation, open questions.
 4. **Propose two or three approaches** with trade-offs. Lead with the
    recommendation and the reasoning, not a neutral menu.
 5. **Present the design in sections,** each scaled to its complexity — a few
@@ -33,6 +37,7 @@ assumptions cost the most rework.
    each section before the next. Cover architecture, components, data flow,
    error handling, and testing — and, for work an agent or capped spawn will
    execute, whether the turn/time/cost budget suffices for the expected work.
+   Cut unneeded features; go back when it stops making sense.
 6. **Record the agreed design** where the project keeps specs (user
    preference wins; a dated file under the repo's design-docs convention is a
    sensible default). Then self-review it with fresh eyes: placeholders or
@@ -58,13 +63,6 @@ Explore the current structure before proposing changes, and follow its
 patterns. Where existing code has problems that genuinely affect the work —
 a tangled module the feature must touch — targeted improvement belongs in the
 design. Unrelated refactoring doesn't.
-
-## Working principles
-
-One focused question per turn (batch orthogonal decisions for an expert user) ·
-cut features that aren't needed yet, ruthlessly ·
-alternatives before settling · validate incrementally rather than presenting
-a finished monolith · go back when something stops making sense.
 
 ## Boundaries
 

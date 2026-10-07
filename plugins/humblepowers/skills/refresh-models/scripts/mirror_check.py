@@ -18,7 +18,12 @@ Two independent arms, because they catch different failures:
   rather than the lineup.
 * Across the registered roots -- the catch-all grep for ``[[retired]]``
   patterns. This is the arm that finds a mirror nobody wrote down, which is how
-  a second price table went unregistered until an audit tripped over it.
+  a second price table went unregistered until an audit tripped over it. Each
+  pattern searches its own ``roots`` plus the registry's sweep roots: the
+  top-level ``sweep_roots`` list, or by default the repository root of every
+  registered site, because a pattern's own roots are only where someone thought
+  to look. The closing line names the sweep roots, so a narrow walk reads as
+  narrow.
 
 Exit 0 clean (an absent registry included -- that is the correct state for a
 fresh environment, and it is REPORTED, never silent), 1 on findings, 2 when the
@@ -37,7 +42,8 @@ import argparse
 import os
 import re
 import sys
-from pathlib import Path
+from collections.abc import Iterator, Sequence
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import tomllib
@@ -141,12 +147,110 @@ def check_site(site: dict[str, Any], reviewed: str | None) -> list[str]:
     return found
 
 
+def repository_root(path: Path) -> Path | None:
+    """The nearest of ``path`` and its ancestors holding ``.git`` (a directory in
+    a clone, a file in a worktree), or None when it sits in no repository."""
+    for candidate in (path, *path.parents):
+        if (candidate / '.git').exists():
+            return candidate
+    return None
+
+
+def _is_absolute(value: object) -> bool:
+    """A string naming an absolute path on either platform, so a registry written on
+    Windows or POSIX is judged the same wherever the walk runs."""
+    return isinstance(value, str) and (
+        PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
+    )
+
+
+def validate_roots(registry: dict[str, Any]) -> str | None:
+    """Why the registry's root lists cannot be walked, or None when they can.
+
+    A bare string is iterated one character at a time ('/', 'C:'), which names a
+    whole drive, and a relative entry resolves against wherever the walk ran, so
+    both are refused rather than widened or narrowed without a message.
+    """
+    candidates: list[tuple[str, object]] = []
+    if 'sweep_roots' in registry:
+        candidates.append(('sweep_roots', registry['sweep_roots']))
+    for rule in registry.get('retired', []):
+        if 'roots' in rule:
+            candidates.append(('[[retired]] roots', rule['roots']))
+    for name, value in candidates:
+        if not isinstance(value, list) or not all(_is_absolute(item) for item in value):
+            return f'{name} must be a list of absolute paths, got {value!r}.'
+    return None
+
+
+def sweep_roots(registry: dict[str, Any]) -> tuple[list[Path], str]:
+    """The roots every ``[[retired]]`` pattern is swept across, and where they came from.
+
+    A present ``sweep_roots`` key is used exactly, so ``[]`` opts out. Absent, the
+    default is the repository root of every registered site whose path exists (a
+    missing path is already a site finding); a site in no repository adds nothing.
+    """
+    if 'sweep_roots' in registry:
+        return [Path(str(root)) for root in registry['sweep_roots']], 'from sweep_roots'
+    roots: list[Path] = []
+    for site in registry.get('site', []):
+        raw = site.get('path')
+        if not raw or not Path(str(raw)).exists():
+            continue
+        root = repository_root(Path(str(raw)).resolve())
+        if root is not None and root not in roots:
+            roots.append(root)
+    return roots, "default: each site's repository root"
+
+
+def describe_sweep(roots: Sequence[Path], source: str) -> str:
+    """The summary's clause naming the sweep roots."""
+    if not roots:
+        return (
+            f'Swept 0 root(s) for every pattern ({source}): only each '
+            "[[retired]] entry's own roots were searched."
+        )
+    listed = ', '.join(root.as_posix() for root in roots)
+    return f'Swept {len(roots)} root(s) for every pattern ({source}): {listed}.'
+
+
+def _text_files(base: Path) -> Iterator[Path]:
+    """Text files under ``base``. ``_SKIP_DIRS`` are pruned before descending:
+    a per-pattern ``rglob`` listed .git and node_modules in full first, which
+    made a repository-wide sweep of one real registry take 89 s, against 3.6 s
+    for this walk."""
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames[:] = [name for name in dirnames if name not in _SKIP_DIRS]
+        for name in filenames:
+            if os.path.splitext(name)[1].lower() in _TEXT_SUFFIXES:
+                yield Path(dirpath, name)
+
+
 def walk_retired(
-    retired: list[dict[str, Any]], excludes: list[dict[str, Any]]
+    retired: list[dict[str, Any]],
+    excludes: list[dict[str, Any]],
+    sweep: Sequence[Path] = (),
 ) -> tuple[list[str], int]:
-    """Findings for every retired pattern still present, and how many files were excluded."""
+    """Findings for every retired pattern still present, and how many files were excluded.
+
+    Each pattern searches its own ``roots`` and every ``sweep`` root. Each root is
+    walked once and each file read once, so a file under two overlapping roots is
+    reported once per pattern and line. The resolved path is only the key that
+    detects the overlap: a root is walked, matched against ``[[exclude]]`` globs
+    and reported under the spelling it was registered with, so a link or a mapped
+    drive does not change what an exclude written against it matches.
+    """
     found: list[str] = []
-    excluded = 0
+    patterns: list[tuple[str, re.Pattern[str], str]] = []
+    wanted: dict[Path, tuple[Path, set[int]]] = {}
+
+    def add_root(root: object, indexes: set[int], kind: str) -> None:
+        base = Path(str(root))
+        if not base.exists():
+            found.append(f'{base.as_posix()}: {kind} does not exist.')
+            return
+        wanted.setdefault(base.resolve(), (base, set()))[1].update(indexes)
+
     for rule in retired:
         raw = str(rule.get('pattern', ''))
         if not raw:
@@ -157,29 +261,36 @@ def walk_retired(
         except re.error as exc:
             found.append(f'[[retired]] pattern {raw!r} does not compile: {exc}')
             continue
-        reason = str(rule.get('reason', 'no reason given'))
+        patterns.append((raw, pattern, str(rule.get('reason', 'no reason given'))))
         for root in rule.get('roots', []):
-            base = Path(str(root))
-            if not base.exists():
-                found.append(f'{base.as_posix()}: [[retired]] root does not exist.')
-                continue
-            for file in sorted(base.rglob('*')):
-                if not file.is_file() or file.suffix.lower() not in _TEXT_SUFFIXES:
-                    continue
-                if any(part in _SKIP_DIRS for part in file.parts):
-                    continue
-                if is_excluded(file, excludes) is not None:
-                    excluded += 1
-                    continue
-                try:
-                    text = file.read_text(encoding='utf-8', errors='replace')
-                except OSError:
-                    continue
-                for lineno, line in enumerate(text.splitlines(), start=1):
-                    if pattern.search(line):
-                        found.append(
-                            f'{file.as_posix()}:{lineno}: retired {raw!r} is still here -- {reason}'
-                        )
+            add_root(root, {len(patterns) - 1}, '[[retired]] root')
+    for root in sweep:
+        add_root(root, set(range(len(patterns))), 'sweep root')
+
+    files: dict[Path, tuple[Path, set[int]]] = {}
+    for base, indexes in wanted.values():
+        if indexes:
+            for file in _text_files(base):
+                files.setdefault(file.resolve(), (file, set()))[1].update(indexes)
+
+    excluded = 0
+    hits: list[tuple[int, Path, int]] = []
+    for file, wanted_indexes in sorted(files.values()):
+        if is_excluded(file, excludes) is not None:
+            excluded += 1
+            continue
+        try:
+            text = file.read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            continue
+        active = [(i, patterns[i][1].search) for i in sorted(wanted_indexes)]
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            for i, search in active:
+                if search(line):
+                    hits.append((i, file, lineno))
+    for i, file, lineno in sorted(hits):
+        raw, _, reason = patterns[i]
+        found.append(f'{file.as_posix()}:{lineno}: retired {raw!r} is still here -- {reason}')
     return found, excluded
 
 
@@ -211,10 +322,17 @@ def main(argv: list[str] | None = None) -> int:
     retired = registry.get('retired', [])
     excludes = registry.get('exclude', [])
 
+    problem = validate_roots(registry)
+    if problem:
+        print(f'mirror walk CANNOT ANSWER: {bindings}: {problem}')
+        return 2
+
+    roots, source = sweep_roots(registry)
+
     findings: list[str] = []
     for site in sites:
         findings.extend(check_site(site, reviewed))
-    retired_findings, excluded = walk_retired(retired, excludes)
+    retired_findings, excluded = walk_retired(retired, excludes, roots)
     findings.extend(retired_findings)
 
     for line in findings:
@@ -222,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f'mirror walk: {len(sites)} site(s) walked, {len(retired)} retired pattern(s) searched, '
         f'{excluded} file(s) excluded by glob, {len(findings)} finding(s). '
-        f'Canonical last_reviewed: {reviewed or "unreadable"}.'
+        f'Canonical last_reviewed: {reviewed or "unreadable"}. {describe_sweep(roots, source)}'
     )
     return 1 if findings else 0
 

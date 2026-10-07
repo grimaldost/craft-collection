@@ -8,6 +8,126 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.17.0] - 2026-10-07
+
+Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and a required decision-log read, and the mirror walk gains a `sweep_roots` registry field (T21a, T21c, T101a).
+
+### Added
+
+- **refresh-models: the mirror walk sweeps every repository that holds a site, and its
+  closing line names the roots it swept** (2026-10-06 delta triage: T101a). A new
+  top-level `sweep_roots` list in the mirrors file adds roots that every `[[retired]]`
+  pattern searches besides its own `roots`. When the key is absent, the default is the
+  repository root of every registered site (the nearest directory above it holding
+  `.git`). `sweep_roots = []` opts out, and a sweep root that does not exist is a finding.
+  A file under two overlapping roots is read and reported once, and the
+  excluded-by-glob count now counts each file once instead of once per pattern and root.
+  The walk lists each root once with `os.walk`, pruning `.git`, `node_modules` and the
+  other skipped directories before descending. The per-pattern `rglob` listed them in
+  full first: on one real registry, a naive repository-wide sweep took 89 s, and this
+  walk takes 3.6 s (the previous narrow walk took under 1 s).
+  **Consumer impact:** on that registry (10 sites, 4 retired patterns, 3 excludes, 4
+  default repository roots) the walk goes from 0 findings to 24, all in historical
+  records: CHANGELOGs, an ADR, a backlog, dated reports and test fixtures. A registry
+  like it needs `[[exclude]]` globs for those, or an explicit `sweep_roots`, after this
+  release. `references/mirrors-file.md` documents the field, its default and that
+  trade-off. Seven new tests in `scripts/test_mirror_check.py`. Six were watched red
+  against the previous script, and the seventh pins that a site in no repository adds
+  no root. Review of the change found that a `sweep_roots` written as a bare string was
+  iterated one character at a time, naming `/` and `C:` and sweeping a whole drive, and
+  that a relative entry resolved against the working directory. The walk now exits 2
+  with `CANNOT ANSWER` unless `sweep_roots`, and each `[[retired]]` `roots`, is a list of
+  absolute paths; three further tests pin it (the string case was watched red by hanging
+  until killed). A blind re-review then found that resolving each root before the walk
+  changed behaviour even with `sweep_roots = []`: a `[[retired]]` root reached through a
+  symlink, junction or mapped drive was listed, matched against `[[exclude]]` globs and
+  reported under its target path, so an absolute exclude written against the registered
+  path stopped matching. Each root is now walked and reported under its registered
+  spelling, and the resolved path only keys the overlap check; a test with a link as the
+  `[[retired]]` root, `sweep_roots = []` and an absolute exclude was watched red first.
+
+### Changed
+
+- **brainstorming: step 1 reads the area's decision log, and step 3 has a branch for
+  autonomous sessions** (2026-10-06 delta triage: T21a, T21c). Step 1 now names the area's
+  ADRs and invariants as part of exploring context, and says a conflict with an
+  Accepted invariant is raised, never softened. Step 3 says what to do with no user
+  mid-task: fold the questions and the section confirmations of step 5 into the proposal
+  awaiting approval (options, recommendation, open questions), so step 5's "confirm each
+  section" does not stall an autonomous run. The branch is stated once and leaves the gate
+  as it was: implementation still starts after the user approves, and the recorded
+  proposal is what they approve. Paid for by removing `## Working principles` (44 words), whose items
+  restated steps 3 to 5 except two; those two now close step 5 as one 10-word sentence,
+  "Cut unneeded features; go back when it stops making sense." The new clauses and that
+  sentence fit in the freed words, so the body stays at 560 words against its 560
+  baseline, with no budget bump.
+- **choosing-models: agreement work keeps the `high` effort default, and the evidence for it
+  is recorded** (T96a). The effort reference now says the "mechanical, tightly scoped" row
+  does not cover work whose correctness is agreement between two independent statements of
+  one rule (two readers of one domain rule, a pin and its vocabulary, a docstring promise and
+  its binding, a mirror and its source): that work keeps `high` at any tier and any diff
+  size. `models.toml` gains one `[meta]` key, `effort_observations`, holding the six-task
+  table behind it (2-3 fix rounds at `medium` on both tiers where the obligation applied,
+  1 at `high`) and a later directional note; no threshold or rubric point moves. The key is
+  above the first `[[models]]` block, so `emit_lineup.py` and `lineup_check.py` do not read it.
+- **choosing-models: an Agent-tool spawn's effort is counted as inherited, and effort-sensitive
+  batches go through workflow `agent()`** (T106a). The no-knob paragraph of the effort
+  reference now says an effort read from an Agent-tool spawn is the session's, not a chosen
+  value, citing the 2026-09-26 measure (110 of 127 spawns inherited `xhigh` or `max`, 46 of
+  them sonnet), and sends mappers, verifiers and triage batches through `agent()`, which
+  carries effort. Reference prose only; no body words change.
+- **choosing-models: `models.toml` records the first measured point against the oracle
+  discount, and that strong-tier verifiers act as second finders** (2026-10-06 delta triage:
+  T69b, T105a). `[meta].oracle_discount` gains the 2026-09-03 reading, re-derived from the
+  bank's ledger rows: on bank multiagent-composition-v2 (n = 16 per arm), weak-tier
+  implementers under a per-PR independent gate were 16/16 held-out-clean, Wilson 95%
+  [0.81, 1.00], against 2/16, [0.03, 0.36], for mid-tier implementers on their own suite
+  (14/16 for mid with the gate). It also records that the effect vanished on bank v1, whose
+  prompts spelled the rule out, and names the test that decides it: the tier x oracle
+  crossing on iteration 2's harder bank. A new `[meta]` key, `verifier_observations`,
+  records that strong-tier verifiers and challengers handed the finder's evidence found
+  defects the finders missed (2 in one audit, which also refuted or downgraded 4 mid-tier
+  overstatements) and separated a confounded cause, citing the reports by stem with their
+  counts. Both are evidence, not calibration: no threshold, tier or rubric point moves, and
+  this change touches neither `[thresholds]` nor any `[[models]]` block. The new
+  `scripts/test_meta_evidence.py` pins both records and recomputes the two Wilson intervals
+  from their counts; watched red against the previous file, green on the new one.
+- **skill-authoring: the shipping-gate reference says when to stop tuning and how to read a
+  resealed holdout** (2026-10-06 delta triage: T18c, T20d). Zero movement at an A/B design
+  able to detect it points at the dataset or selection context, so tuning the description
+  stops and the layer escalates; it sits beside the existing worked example of a design that
+  could not detect movement. A reseal A/B's two reads taken after the fix comply with "never
+  consulted while tuning", and a read that feeds a further edit turns the holdout into dev
+  data. The content landed in `references/shipping-gate.md` with no body words.
+
+### Fixed
+
+- **choosing-models: the weak tier's effort flag is accepted and ignored, not rejected**
+  (T81a). `models.toml` said Haiku 4.5 errors if an effort parameter is set; measured on
+  2026-09-13, `claude -p --model claude-haiku-4-5 --effort low` exits 0 and so do two
+  governed spawns at `effort=low`. The note now says so, scoped to those surfaces (direct API
+  behaviour is unmeasured), and the effort reference says the weak tier has no effort
+  dimension instead of "no effort knob at all". The new
+  `scripts/test_effort_guidance.py` pins the three corrections and the `[meta]` key; watched
+  red against the previous files, green on the fixed ones.
+- **choosing-models: the scoring rubric's adjustment range is stated correctly, and the
+  clamp is stated** (T117a). The heading read "-15 to +10", but the table's three negatives
+  and three positives give -15 to +15. A sentence under the tier table now says an additive
+  total above 100 is read as 100 and one below 0 as 0, which changes no tier; the maximum is
+  125 and the minimum 0, so only the upper clamp can bind. The new
+  `scripts/test_scoring_rubric.py` recomputes each axis heading's range from its table and
+  checks the clamp sentence and its two totals. Watched red against the previous file (the
+  adjustment heading and the missing clamp), green on the fixed one. No body words change.
+- **choosing-models: the workflow spawn hint no longer says that agents it cannot read
+  inherit the session tier** (T93c). The hint counts `agent()` calls whose model the hook
+  cannot see, and that includes calls routed at run time through a lookup table
+  (`{ ...R(id) }` where `R` indexes a table) or a ternary (`{ ...(fast ? A : B) }`). The
+  lead said "so those agents inherit this session tier", which was false for them; it now
+  states the inheritance as a condition: any of them that passes no model inherits it. Only
+  the message changed. Counting, firing, the cooldown, the Agent-tool lead and the
+  fail-open paths are as they were. A new test pins the count on both shapes and rejects
+  the old claim; watched red against the previous wording, green on the new one.
+
 ## [0.16.2] - 2026-10-06
 
 ### Changed

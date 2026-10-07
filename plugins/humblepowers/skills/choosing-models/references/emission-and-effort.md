@@ -14,15 +14,26 @@ Defaults, not calibrated thresholds: **`high`** unless a row below applies.
 | hard agentic or coding work | `xhigh` |
 | correctness dominates cost | `max` |
 
-The lower and upper rows both apply from mid up — the weak tier has no effort
-knob at all.
+The lower and upper rows both apply from mid up. The weak tier has no effort
+dimension: the flag is accepted and ignored (measured 2026-09-13 on the CLI and on
+governed spawns), so a weak-tier spawn at any effort runs the same.
+
+The "mechanical, tightly scoped" row does not cover work whose correctness is agreement
+between two independent statements of one rule: two readers of one domain rule, a pin
+and its vocabulary, a docstring promise and its binding, a mirror and its source. That
+work keeps the `high` default at any tier and any diff size. Six tasks in two lots of
+one programme took 2-3 fix rounds at `medium` on both tiers where the obligation
+applied, and 1 at `high` (the table is in `models.toml`, `[meta].effort_observations`).
 
 A surface with no effort knob (the Agent tool today) inherits the session's
-setting. Say so rather than pretending a value was set. Where a request goes to the
-platform directly (a series file, direct API tooling), an omitted `effort` takes the
-MODEL's default, and the strong tier's model (Opus 5.5) defaults to `medium`, one level
-below its predecessor and below this table's default - emit the level. A workflow
-`agent()` that omits it inherits the session's effort instead.
+setting. Say so rather than pretending a value was set, and count any effort read from
+such a spawn as inherited, not chosen: in one 2026-09-26 measure, 110 of 127 Agent
+spawns inherited `xhigh` or `max`, 46 of them sonnet. An effort-sensitive batch (mappers,
+verifiers, triage) goes through workflow `agent()`, which carries effort. Where a
+request goes to the platform directly (a series file, direct API tooling), an omitted
+`effort` takes the MODEL's default, and the strong tier's model (Opus 5.5) defaults to
+`medium`, one level below its predecessor and below this table's default - emit the
+level. A workflow `agent()` that omits it inherits the session's effort instead.
 
 ## Emission surfaces
 
