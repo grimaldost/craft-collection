@@ -104,6 +104,29 @@ routing rules that enable per-lens capacity dispatch.
   compact, resume, clear and a missing source keep the old header byte for byte (pinned by a
   golden-string test), and the 6h startup gate and the pointer tier are unchanged. Three new
   tests; the module's suite passes.
+- **anchor_inject: on compact, resume and clear, the hook looks for the anchor where the
+  session started before where it runs now** (2026-10-06 craft-collection triage: T120a).
+  The hook read anchors only under the payload `cwd`, which is where the session is when the
+  event fires, not where the run armed its anchor, so a session that had changed directory
+  came back from a compaction with no anchor. Of 280 local transcripts that carry a cwd, 77
+  record more than one working directory and 34 end in a different one from where they
+  started. A new `start_cwd(transcript_path)` streams the transcript (utf-8 with replacement,
+  one line at a time) and returns the `cwd` of the first record that has one; the records
+  before it are metadata with no cwd (queue operations, titles), and in those 280 transcripts
+  the first cwd sat on line 3 to 16. `resolve_anchors` searches `<start>/.claude/anchors`
+  first and the payload cwd second, and uses the first that holds an open anchor. When the
+  two directories differ, the full, pointer and parked headers name both; when both hold
+  anchors, the start directory's wins and the current directory's are named in the warning
+  line. Telemetry goes to the anchors directory used and records `anchor_dir` (`start` or
+  `cwd`). startup, a missing or unreadable transcript and a transcript with no cwd keep the
+  payload-cwd lookup unchanged, and the golden-string tests still pass. `start_cwd` took
+  about 0.1 ms (median of 20) on synthetic transcripts of 5,000, 50,000 and 500,000 lines
+  (4.8 MB to 475 MB) with the cwd on line 2. The reader stays local to this script: the
+  stale-skill-body check (T70f) runs standalone from another skill directory and gets its
+  own, and the third reader the triage named (T102a) is in humblepowers, so no shared module
+  could serve all three. Seven new tests, five seen failing first; the two that pin the
+  fallbacks fail under a mutation that reads the transcript on startup or lets a missing
+  transcript raise. The suite goes from 87 to 94 test functions (counted with grep).
 - **Step 5 fire-and-route prose: snapshot the artifact to an immutable path, point
   all lenses at it** (2026-10-06 craft-collection triage: T86i). The author keeps
   editing the working copy; reviewers read the snapshot taken at fire time.

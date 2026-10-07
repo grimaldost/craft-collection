@@ -23,6 +23,11 @@ Lifecycle gates (T22a hardening):
   the anchor was updated within STARTUP_RECENT_S; an ordinary new session in
   a cwd with an old anchor stays untaxed. compact/resume/clear — explicit
   continuation or reset signals — always evaluate.
+- compact/resume/clear look first under the directory the session started in
+  (the first `cwd` record of `transcript_path`), then under the payload cwd,
+  and name both when they differ: a run that changed directory armed its
+  anchor in the first. startup, and an unreadable transcript, use the payload
+  cwd alone.
 
 Ships ON. `SESSION_WORKFLOW_ANCHOR_HOOKS=0` is the documented opt-out. It shipped
 inert behind an unset variable until 2026-08, which meant the mechanism carrying
@@ -134,6 +139,67 @@ def find_open_anchors(anchors_dir: Path) -> list[Path]:
         return []
     candidates = [f for f in anchors_dir.glob('*.md') if not f.name.endswith('.closed.md')]
     return sorted(candidates, key=_mtime, reverse=True)
+
+
+def start_cwd(transcript_path: object) -> Path | None:
+    """The directory the session started in: the `cwd` of the first transcript
+    record that carries one. None for a missing, unreadable or cwd-less
+    transcript, and for anything but a string path.
+
+    Streams line by line and returns at the first match, so the cost does not
+    grow with the transcript. The first records of a real transcript are
+    metadata (queue operations, titles) with no cwd, and a line that is not
+    JSON is skipped rather than ending the search."""
+    if not isinstance(transcript_path, str) or not transcript_path:
+        return None
+    try:
+        with open(transcript_path, encoding='utf-8', errors='replace') as fh:
+            for line in fh:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                cwd = record.get('cwd') if isinstance(record, dict) else None
+                if isinstance(cwd, str) and cwd:
+                    return Path(cwd)
+    except Exception:
+        return None
+    return None
+
+
+class CwdMove(NamedTuple):
+    """The session's working directory is not the one it started in. `start` and
+    `cwd` are both named in the injected header; `elsewhere` holds the open
+    anchors of the directory the injection did not come from (empty unless the
+    start directory won while the current one held anchors too)."""
+
+    start: Path
+    cwd: Path
+    elsewhere: list[Path]
+
+
+# Sources that continue an existing session, whose transcript names where it
+# started. A startup is a fresh process and keeps the payload-cwd lookup alone.
+CONTINUING_SOURCES = ('compact', 'resume', 'clear')
+
+
+def resolve_anchors(
+    cwd: Path, source: str, transcript_path: object
+) -> tuple[Path, list[Path], CwdMove | None]:
+    """(anchors dir used, its open anchors, the move or None). On a continuing
+    source whose transcript names a start directory other than `cwd`, that
+    directory is searched first and `cwd` second; the first with any open
+    anchor is used. Every other case is the payload-cwd lookup alone."""
+    here = cwd / '.claude' / 'anchors'
+    open_here = find_open_anchors(here)
+    start = start_cwd(transcript_path) if source in CONTINUING_SOURCES else None
+    if start is None or start == cwd:
+        return here, open_here, None
+    there = start / '.claude' / 'anchors'
+    open_there = find_open_anchors(there)
+    if open_there:
+        return there, open_there, CwdMove(start, cwd, open_here)
+    return here, open_here, CwdMove(start, cwd, [])
 
 
 def is_anchor_shaped(text: str) -> bool:
@@ -564,6 +630,31 @@ def _other_open_warning(other_open: list[Path] | None) -> str:
     return warn
 
 
+def _moved_line(moved: CwdMove) -> str:
+    """The header line naming both directories of a session that moved."""
+    return (
+        f'This session started in {moved.start} and now runs in {moved.cwd}; anchors '
+        'are looked up under the start directory first, then the current one.'
+    )
+
+
+def _warning(other_open: list[Path] | None, moved: CwdMove | None = None) -> str:
+    """The one warning line: concurrent tracks in this directory, then the open
+    anchors the current directory also holds when the start directory won."""
+    warn = _other_open_warning(other_open)
+    if moved is None or not moved.elsewhere:
+        return warn
+    names = ', '.join(f.name for f in moved.elsewhere[:MAX_NAMED_OPEN])
+    if len(moved.elsewhere) > MAX_NAMED_OPEN:
+        names += f' and {len(moved.elsewhere) - MAX_NAMED_OPEN} more'
+    also = (
+        f'WARNING - {len(moved.elsewhere)} open anchor(s) also in the current directory '
+        f"{moved.elsewhere[0].parent}: {names}. The start directory's anchor was chosen; "
+        'if your track is one of those, read it before acting.'
+    )
+    return f'{warn} {also}' if warn else also
+
+
 def anchor_title(text: str) -> str:
     """First markdown heading (or first non-empty line) of the HEAD, minus any
     leading frontmatter block — the one-line identity the pointer tier shows."""
@@ -588,12 +679,18 @@ def anchor_title(text: str) -> str:
     return '(untitled)'
 
 
-def build_context(anchor: Path, other_open: list[Path] | None = None, source: str = '') -> str:
+def build_context(
+    anchor: Path,
+    other_open: list[Path] | None = None,
+    source: str = '',
+    moved: CwdMove | None = None,
+) -> str:
     """FULL tier: the anchor HEAD (bounded), plus the concurrent-tracks warning.
     source=startup gets a conditional header: a fresh process may be the run
     restarting or an unrelated start (a subprocess of another tool) in the same
     directory, so the anchor's authority is stated as conditional. Every other
-    source keeps the unconditional header.
+    source keeps the unconditional header. `moved` adds the line naming both
+    directories and the current directory's anchors to the warning.
     Race-safe read: an anchor renamed/deleted after selection (a concurrent
     session closing it) degrades to a path-only context — never a raise that
     would skip both the injection AND the failure telemetry."""
@@ -619,6 +716,8 @@ def build_context(anchor: Path, other_open: list[Path] | None = None, source: st
         f'A control anchor for this project exists at {anchor} (compaction-survival protocol). '
         + rule,
     ]
+    if moved is not None:
+        header.append(_moved_line(moved))
     if not is_anchor_shaped(raw):
         # It was the best candidate in the directory, so it is injected - but say
         # that it does not read as an anchor, rather than letting a design document
@@ -628,7 +727,7 @@ def build_context(anchor: Path, other_open: list[Path] | None = None, source: st
             'line and no cursor section); it was injected because nothing better '
             'was open in that directory.'
         )
-    warn = _other_open_warning(other_open)
+    warn = _warning(other_open, moved)
     if warn:
         header.append(warn)
     body = [text]
@@ -652,7 +751,12 @@ def build_context(anchor: Path, other_open: list[Path] | None = None, source: st
     return '\n'.join(header) + '\n---\n' + '\n'.join(body) + '\n</control-anchor>'
 
 
-def build_parked(anchor: Path, waits_on: str, other_open: list[Path] | None = None) -> str:
+def build_parked(
+    anchor: Path,
+    waits_on: str,
+    other_open: list[Path] | None = None,
+    moved: CwdMove | None = None,
+) -> str:
     """PARKED tier: the one short block a parked anchor gets in place of the full
     or pointer tier: path, what it waits on, and the two ways out. Its body stays
     on disk - a track that is waiting is not the run being resumed."""
@@ -664,14 +768,21 @@ def build_parked(anchor: Path, waits_on: str, other_open: list[Path] | None = No
         '`parked:` line from its frontmatter and re-read the file. To close it: '
         f'mv {anchor.name} {anchor.stem}.closed.md',
     ]
-    warn = _other_open_warning(other_open)
+    if moved is not None:
+        lines.insert(2, _moved_line(moved))
+    warn = _warning(other_open, moved)
     if warn:
         lines.append(warn)
     lines.append('</control-anchor>')
     return '\n'.join(lines)
 
 
-def build_pointer(anchor: Path, stale_s: float, other_open: list[Path] | None = None) -> str:
+def build_pointer(
+    anchor: Path,
+    stale_s: float,
+    other_open: list[Path] | None = None,
+    moved: CwdMove | None = None,
+) -> str:
     """POINTER tier for a stale anchor: identity + age + confirm-to-expand +
     the close command — a short pointer, never the 8K body, and never silence.
     (The title is capped; the shared concurrent-tracks warning can extend the
@@ -692,7 +803,9 @@ def build_pointer(anchor: Path, stale_s: float, other_open: list[Path] | None = 
     cursor = anchor_cursor(_read(anchor))
     if cursor:
         lines.append(f'Cursor it still asserts: {cursor}')
-    warn = _other_open_warning(other_open)
+    if moved is not None:
+        lines.insert(2, _moved_line(moved))
+    warn = _warning(other_open, moved)
     if warn:
         lines.append(warn)
     lines.append('</control-anchor>')
@@ -774,15 +887,17 @@ def main() -> int:
         return 0
 
     cwd = Path(payload.get('cwd') or os.getcwd())
-    anchors_dir = cwd / '.claude' / 'anchors'
-    open_anchors = find_open_anchors(anchors_dir)
+    source = payload.get('source')
+    source = source if isinstance(source, str) else ''
+    # A continuing session looks where it started before where it is now: a run
+    # that changed directory armed its anchor under the first, and the payload
+    # cwd is the second. Telemetry goes to whichever anchors dir was used.
+    anchors_dir, open_anchors, moved = resolve_anchors(cwd, source, payload.get('transcript_path'))
     if not open_anchors:
         return 0
     anchor, other_open = select_anchor(open_anchors)
 
     stale_s = max(0.0, time.time() - _mtime(anchor))
-    source = payload.get('source')
-    source = source if isinstance(source, str) else ''
     # Crash-restart branch: a fresh process only gets the anchor when it was
     # updated recently enough to plausibly be the interrupted run. Explicit
     # continuation/reset signals (compact/resume/clear) always evaluate.
@@ -791,11 +906,11 @@ def main() -> int:
     pointer = stale_s > STALE_AFTER_S
     waits_on = parked_reason(_read(anchor))
     if waits_on:
-        context = build_parked(anchor, waits_on, other_open)
+        context = build_parked(anchor, waits_on, other_open, moved)
     elif pointer:
-        context = build_pointer(anchor, stale_s, other_open)
+        context = build_pointer(anchor, stale_s, other_open, moved)
     else:
-        context = build_context(anchor, other_open, source)
+        context = build_context(anchor, other_open, source, moved)
 
     record = {
         'event': 'anchor-inject',
@@ -805,6 +920,7 @@ def main() -> int:
         'stale': pointer,
         'tier': 'parked' if waits_on else 'pointer' if pointer else 'full',
         'open_anchors': len(open_anchors),
+        'anchor_dir': 'cwd' if anchors_dir == cwd / '.claude' / 'anchors' else 'start',
         'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
     }
     try:

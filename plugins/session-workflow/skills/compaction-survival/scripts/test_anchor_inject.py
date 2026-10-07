@@ -41,7 +41,11 @@ SCRIPT = Path(__file__).resolve().parent / 'anchor_inject.py'
 
 
 def run_hook(
-    cwd: Path, env_on: bool = True, source: str = 'compact', extra_env: dict | None = None
+    cwd: Path,
+    env_on: bool = True,
+    source: str = 'compact',
+    extra_env: dict | None = None,
+    transcript=None,
 ):
     env = dict(os.environ)
     # Default ON: env_on leaves the variable unset, which is how a real install
@@ -51,14 +55,16 @@ def run_hook(
         env['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '0'
     if extra_env:
         env.update(extra_env)
-    payload = json.dumps(
-        {
-            'hook_event_name': 'SessionStart',
-            'source': source,
-            'session_id': 'test-session',
-            'cwd': str(cwd),
-        }
-    )
+    fields = {
+        'hook_event_name': 'SessionStart',
+        'source': source,
+        'session_id': 'test-session',
+        'cwd': str(cwd),
+    }
+    if transcript is not None:
+        # Any type on purpose: a non-string transcript_path is one of the cases.
+        fields['transcript_path'] = str(transcript) if isinstance(transcript, Path) else transcript
+    payload = json.dumps(fields)
     proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
         [sys.executable, str(SCRIPT)],
         input=payload,
@@ -1518,6 +1524,158 @@ def test_head_fit_is_quiet_when_step_agrees_or_either_side_is_absent():
             assert 'step: frontmatter' not in proc.stdout, name
 
 
+# -- the directory the session started in, read from its transcript --------------
+
+START_BODY = '# Mission\nstart-dir mission\n# Cursor\nnext: from the start dir\n'
+NOW_BODY = '# Mission\nmoved-to mission\n# Cursor\nnext: from the moved-to dir\n'
+
+
+def _two_dirs(d: str) -> tuple[Path, Path, Path]:
+    """Directory A where the session started, directory B where it runs now, and
+    a transcript shaped like a real one: a metadata record with no cwd first, then
+    the first message record carrying A, then a later record carrying B."""
+    base = Path(d)
+    start, now = base / 'start-dir', base / 'moved-to'
+    start.mkdir()
+    now.mkdir()
+    transcript = base / 'session.jsonl'
+    records = [
+        {'type': 'queue-operation', 'operation': 'enqueue'},
+        {'type': 'user', 'cwd': str(start), 'message': {'role': 'user', 'content': 'go'}},
+        {'type': 'assistant', 'cwd': str(now), 'message': {'role': 'assistant'}},
+    ]
+    transcript.write_text(''.join(json.dumps(r) + '\n' for r in records), encoding='utf-8')
+    return start, now, transcript
+
+
+def _context(proc) -> str:
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+
+
+def _header(ctx: str) -> list[str]:
+    """The lines above the anchor body (the whole block for the pointer tier)."""
+    return ctx.split('\n---\n', 1)[0].splitlines()
+
+
+def test_a_moved_session_injects_the_start_directory_anchor_and_names_both_directories():
+    # The anchor was armed in A; by the compaction the session runs in B, which
+    # holds none. Looking only under B resumed the run with no state at all.
+    for source in ('compact', 'resume', 'clear'):
+        with tempfile.TemporaryDirectory() as d:
+            start, now, transcript = _two_dirs(d)
+            make_anchor(start, body=START_BODY)
+            ctx = _context(run_hook(now, source=source, transcript=transcript))
+            assert 'start-dir mission' in ctx, source
+            assert any(str(start) in line and str(now) in line for line in _header(ctx)), ctx
+            log = start / '.claude' / 'anchors' / 'log.ndjson'
+            assert log.is_file(), 'telemetry goes to the anchors dir that was used'
+            assert not (now / '.claude').exists()
+            assert json.loads(log.read_text(encoding='utf-8'))['anchor_dir'] == 'start'
+
+
+def test_a_moved_session_with_no_start_anchor_injects_the_current_one_and_names_both():
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(now, body=NOW_BODY)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'moved-to mission' in ctx
+        assert any(str(start) in line and str(now) in line for line in _header(ctx)), ctx
+        log = now / '.claude' / 'anchors' / 'log.ndjson'
+        assert json.loads(log.read_text(encoding='utf-8'))['anchor_dir'] == 'cwd'
+
+
+def test_anchors_in_both_directories_inject_the_start_one_and_warn_about_the_other():
+    # The current directory's anchor is the newer file, and still loses: the
+    # session's own track is the one armed where it started.
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(start, body=START_BODY, age_s=600)
+        make_anchor(now, name='other-track.md', body=NOW_BODY)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'start-dir mission' in ctx
+        assert 'moved-to mission' not in ctx
+        warn = [line for line in _header(ctx) if line.startswith('WARNING')]
+        assert len(warn) == 1, ctx
+        assert 'other-track.md' in warn[0] and str(now) in warn[0], warn[0]
+
+
+def test_both_directories_reach_the_pointer_and_parked_tiers_too():
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(start, body=START_BODY, age_s=48 * 3600)
+        make_anchor(now, name='other-track.md', body=NOW_BODY)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'STALE' in ctx and str(start) in ctx
+        lines = ctx.splitlines()
+        assert any(str(start) in line and str(now) in line for line in lines), ctx
+        assert any(line.startswith('WARNING') and 'other-track.md' in line for line in lines)
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_parked(start)
+        ctx = _context(run_hook(now, transcript=transcript))
+        assert 'PARKED' in ctx
+        assert any(str(start) in line and str(now) in line for line in ctx.splitlines()), ctx
+
+
+def test_an_unreadable_transcript_keeps_the_payload_cwd_lookup():
+    with tempfile.TemporaryDirectory() as d:
+        start, now, _ = _two_dirs(d)
+        base = Path(d)
+        no_cwd = base / 'no-cwd.jsonl'
+        no_cwd.write_text('{"type": "queue-operation"}\n{broken\n', encoding='utf-8')
+        unreadable = [None, base / 'missing.jsonl', base, no_cwd, '', 42, ['a', 'list']]
+        make_anchor(start, body=START_BODY)
+        for t in unreadable:
+            proc = run_hook(now, transcript=t)
+            assert proc.returncode == 0 and proc.stdout.strip() == '', (t, proc.stdout)
+        make_anchor(now, body=NOW_BODY)
+        today = _context(run_hook(now))
+        assert 'moved-to mission' in today
+        for t in unreadable:
+            assert _context(run_hook(now, transcript=t)) == today, t
+
+
+def test_startup_reads_only_the_payload_cwd():
+    # A fresh process is not a continuation: the transcript is not read at all.
+    with tempfile.TemporaryDirectory() as d:
+        start, now, transcript = _two_dirs(d)
+        make_anchor(start, body=START_BODY)
+        proc = run_hook(now, source='startup', transcript=transcript)
+        assert proc.returncode == 0 and proc.stdout.strip() == ''
+        make_anchor(now, body=NOW_BODY)
+        ctx = _context(run_hook(now, source='startup', transcript=transcript))
+        assert ctx == _context(run_hook(now, source='startup'))
+        assert 'moved-to mission' in ctx and str(start) not in ctx
+
+
+def test_start_cwd_returns_the_first_cwd_and_skips_garbage():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        first, later = str(base / 'first'), str(base / 'later')
+        lines = [
+            '{not json at all',
+            '[1, 2]',
+            '"a bare string"',
+            json.dumps({'type': 'queue-operation'}),
+            json.dumps({'cwd': ''}),
+            json.dumps({'cwd': 7}),
+            json.dumps({'type': 'user', 'cwd': first}),
+            json.dumps({'type': 'user', 'cwd': later}),
+        ]
+        t = base / 't.jsonl'
+        t.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        assert ai.start_cwd(str(t)) == Path(first)
+        # Invalid UTF-8 on an earlier line is replaced, not raised.
+        b = base / 'bytes.jsonl'
+        b.write_bytes(b'\xff\xfe{"x": 1}\n' + json.dumps({'cwd': first}).encode() + b'\n')
+        assert ai.start_cwd(str(b)) == Path(first)
+        for bad in (None, '', 42, str(base / 'missing.jsonl'), str(base), Path(t)):
+            assert ai.start_cwd(bad) is None, bad
+
+
 if __name__ == '__main__':
     test_injects_with_no_env_set()
     test_opt_out_silences_it()
@@ -1606,4 +1764,11 @@ if __name__ == '__main__':
     test_newest_step_reads_the_cursor_bullets_only()
     test_head_fit_flags_a_step_field_behind_the_cursor()
     test_head_fit_is_quiet_when_step_agrees_or_either_side_is_absent()
+    test_a_moved_session_injects_the_start_directory_anchor_and_names_both_directories()
+    test_a_moved_session_with_no_start_anchor_injects_the_current_one_and_names_both()
+    test_anchors_in_both_directories_inject_the_start_one_and_warn_about_the_other()
+    test_both_directories_reach_the_pointer_and_parked_tiers_too()
+    test_an_unreadable_transcript_keeps_the_payload_cwd_lookup()
+    test_startup_reads_only_the_payload_cwd()
+    test_start_cwd_returns_the_first_cwd_and_skips_garbage()
     print('ok: all anchor_inject tests passed')

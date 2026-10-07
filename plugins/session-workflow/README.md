@@ -104,7 +104,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   control anchor's HEAD (`.claude/anchors/*.md`; content above the
   `<!-- anchor:tail -->` marker, whole file when marker-less) so a run survives
   compaction and process restarts; warns and names the others when several
-  anchors are open in one directory. Lifecycle gates: an anchor untouched for
+  anchors are open in one directory. On `compact`, `resume` and `clear` it looks
+  first in the directory the session started in (the first `cwd` in its
+  transcript), then in the current one, and names both when they differ.
+  Lifecycle gates: an anchor untouched for
   >24h degrades to a one-paragraph pointer (path + title + age +
   confirm-to-expand + close command) instead of the full body; `startup`
   (fresh process — the crash-restart path) injects only when the anchor was
