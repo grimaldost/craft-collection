@@ -6,6 +6,101 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.5.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.6.0] - 2026-10-07
+
+Hook scope change and a new parity_check flag. The compaction-summary bullet replaces
+the over-broad re-read-at-each-phase framing; the parity check gains a new refusal reason
+and an `--allow-empty` flag; the format hook narrows which files receive turn-level formatting.
+
+### Fixed
+
+- **`parity_check.py` no longer passes two empty tables**: header-only CSVs (or a filter
+  that empties both sides) printed `PARITY OK` and exited 0, although the docstring and
+  SKILL.md said an unassessable comparison is never a pass. `compare()` now returns
+  `ok=None` with the reason `empty population: two empty tables match and prove nothing`;
+  the CLI prints `PARITY NOT ASSESSED` and exits 1, and its hint names the opt-out that
+  matches each reason. New flag `--allow-empty` (keyword `allow_empty` on `compare()`)
+  accepts two empty inputs when an empty result is the expected outcome. One empty side
+  still fails on the row-count delta. Recipe 13 now names this refusal and says a
+  hand-written judge gates every relation-level check on a non-empty population first.
+  Displaces: nothing (a one-clause pointer in the recipe; no SKILL.md body words).
+  (2026-10-06 delta triage: T140a.)
+
+### Changed
+
+- **The end-of-turn format hook formats only files in a project that declares ruff.**
+  Before, `hooks/ruff_format.py` ran `uvx ruff format` on every `.py` file a Write or
+  Edit touched, wherever it lived: it rewrote whole files in a repository not formatted
+  with ruff, and broke the recorded sha of a frozen file on its first edit. Now a file
+  is formatted only when a `ruff.toml`, a `.ruff.toml`, or a `pyproject.toml` with a
+  `[tool.ruff]` or `[tool.ruff.*]` table sits in its directory or an ancestor, up to
+  and including the repository root (the directory holding `.git`). A `pyproject.toml`
+  without a ruff table does not end the walk, so a monorepo subpackage under a root
+  `ruff.toml` still formats. What stops being formatted: files outside any project,
+  and files in a repository with no `ruff.toml`, `.ruff.toml` or `[tool.ruff]`. A
+  project that uses ruff only through a dev dependency or pre-commit, with no config,
+  loses end-of-turn formatting; adding an empty `[tool.ruff]` table opts it back in.
+  An unreadable or malformed `pyproject.toml` counts as no declaration: nothing is
+  formatted, nothing is printed, and the hook still always exits 0. The legacy
+  single-file payload and `harness_adapters.format_decision` apply the same scope, so
+  other harnesses keep identical semantics. Displaces: the unconditional format of
+  every edited file, reworded in place in the README PostToolBatch bullet and the
+  `hooks.json` description; no `data-engineering-discipline` body words. Only a
+  `[tool.ruff]` table header
+  counts as a declaration in `pyproject.toml`: ruff's other valid spellings (`[tool]`
+  with a `ruff` dotted or inline key, a quoted `[tool."ruff"]`) are not detected, so
+  such a project is not formatted; pinned by a test. The `python-engineering`
+  SKILL.md enforcement sentence now says the hook formats each edit in ruff projects
+  (displaces "as it happens"; word-neutral, 2314/2314). (2026-10-06 delta triage: T141b.)
+- **scenarios.md Step 4.3 "Identify all consumers"**: replaces "Enumerate every
+  notebook, dashboard, downstream pipeline, export, or report" with a census rule
+  and method (a consumer list you read is a claim; one you enumerated is evidence).
+  Adds a new Watch for section naming two consumer failure modes. The Cross-scenario
+  notes section gains two rules: run each producer's exact statement against the real
+  store (not a stand-in), and a count step asserts its count against an independent
+  enumeration. Displaces: the named enumeration opening, replaced by the rule and
+  method. Reference prose only; SKILL.md body stays at 2312 words. (2026-10-06 delta
+  triage: T72c, T72e, T73b, T73c.)
+- **Recipe 18 "Versioning a frozen judge" in `parity-recipes.md`, with a pointer from
+  SKILL.md Oracle integrity**: after a red, repairing the judge is admissible only as
+  a new judge version in its own change by the judge's author, at least as strict
+  where the contract cares, with a self-test that keeps every earlier planted bank and
+  adds an intended-effect pass and a planted-loss fail, and a freeze file that appends
+  version, reason and sha with old and new verdicts shown side by side. The recipe also
+  carries the stale-surface rule: a verifier that reads a shared surface is re-run when
+  that surface's producer changes, with its own scratch state removed first. The
+  strictness table gains a row. Displaces: the body's "with the reason" becomes the
+  pointer "parity-recipes Recipe 18" (word-neutral, body stays at 2312 words); the
+  stale-surface rule lands as reference prose with no body words. (2026-10-06 delta
+  triage: T141a, T72d.)
+- **`data-engineering-discipline` SKILL.md source-of-truth bullet**: the "For a long
+  session" prose at non-negotiable 2 (source of truth) is replaced with guidance for
+  fact-checking under pressure: a fact from a compaction summary, an anchor, or an
+  adversarial reviewer must be re-measured before coding, not assumed. Displaces: "For
+  a long session: re-read the primary sources at each phase. Don't trust the session
+  summary." (word-neutral, 2312/2312). (2026-10-06 delta triage: T75b.)
+- **Recipe 9 "Constraint pre-flight against production data" in `parity-recipes.md`**:
+  the recipe is rewritten to measure the premise at the grain of the change before
+  design is committed. Before relaxing a constraint, count nulls for all mandatory
+  columns, not only the columns the first failing quarantine reason names. Before
+  trusting a switch is inert, run the fixture with and without it and diff what it
+  wrote, refusing a pass when either run failed or both wrote nothing. Displaces:
+  the header comment from "Run before declaring" to "Run before declaring or relaxing";
+  adds a new subsection with fixture-diff example (Python). (2026-10-06 delta triage:
+  T142a.)
+- **Principle 9 and new Recipe 19 "Capture a producer's output as a fixture"**: a
+  fixture or check target that stands in for a producer, whether its output (a CLI
+  table, a log line, an API envelope) or its address (the interface it binds, the view
+  it answers on), is a measurement taken from the producer, including the shapes where
+  a field is empty; it is not a value chosen beside the parser or read from the
+  producer's name. Principle 9 gains one short example of each half. Recipe 19 gives
+  the method: a scratch instance of the producer, each output shape provoked, verbatim
+  capture with the date and producer version, the scratch deleted. The strictness
+  table gains a row. Displaces: the how-to half of Principle 9's mechanical-defense
+  sentence ("sampled directly from production") moves into Recipe 19, and Principle 9
+  now points there, so the method is stated once. Reference prose only; SKILL.md body
+  unchanged. (2026-10-06 delta triage: T72a, T89a, T72b.)
+
 ## [0.5.1] - 2026-09-19
 
 The `python-engineering` recommended stack still pinned `ruff-pre-commit` to

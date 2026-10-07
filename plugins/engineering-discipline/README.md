@@ -44,7 +44,12 @@ else advisory text in the generated `AGENTS.md`. The decision cores are
 importable for other harnesses' hook systems via `hooks/harness_adapters.py`.
 
 - **PostToolBatch** — one `uvx ruff format` run at the end of each assistant turn
-  over every `.py` file that turn's Write/Edit calls touched. Non-blocking;
+  over every `.py` file that turn's Write/Edit calls touched, in a project that
+  declares ruff: a `ruff.toml`, `.ruff.toml` or `[tool.ruff]` table in a
+  `pyproject.toml`, found walking up from the file to the repository root (the
+  directory holding `.git`). Files outside any project, or in a repository with
+  no ruff config, keep their bytes; a project that uses ruff with no config
+  file adds a `[tool.ruff]` table to opt in. Non-blocking;
   requires Claude Code >= 2.1.218.
   `ruff check --fix` is deliberately excluded here (it strips an import added
   in one edit before a later edit uses it) and runs at the pre-commit/CI gate

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Harness adapters: the seam between hook cores and hook envelopes (ADR-0003).
 
-The decision logic lives (and stays) in the hook modules — `target_file` and
-`ruff_commands` in `ruff_format.py`, `verdict` and `cwd_is_uv_project` in
-`uv_enforce.py`. This module wraps those functions behind harness-agnostic entry
+The decision logic lives (and stays) in the hook modules — `target_file`,
+`declares_ruff` and `ruff_commands` in `ruff_format.py`, `verdict` and
+`cwd_is_uv_project` in `uv_enforce.py`. This module wraps those functions behind harness-agnostic entry
 points, so a harness other than Claude
 Code can reuse the tested semantics by writing one thin adapter: a function
 from that harness's event payload to the core call, plus a mapping from the
@@ -38,9 +38,13 @@ import uv_enforce
 def format_decision(file_path: str | None) -> list[list[str]]:
     """Commands to run after an edit to `file_path` ([] when none apply).
 
-    Non-blocking by contract: run them best-effort and never fail the edit.
+    Same scope as the Claude Code hook: a `.py` file whose project declares
+    ruff (`ruff_format.declares_ruff`). Non-blocking by contract: run them
+    best-effort and never fail the edit.
     """
     if not file_path or not str(file_path).endswith('.py'):
+        return []
+    if not ruff_format.declares_ruff(str(file_path)):
         return []
     return ruff_format.ruff_commands(str(file_path))
 

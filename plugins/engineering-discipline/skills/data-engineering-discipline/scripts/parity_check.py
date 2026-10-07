@@ -22,7 +22,9 @@ answers to `--null-tol` (`--no-null-mismatch` opts out); `--two-producer` assert
 the join between two writers of one shared column BEFORE comparing any value.
 
 Exit 1 if any metric is out of tolerance OR if a requested comparison could not be
-made (`PARITY NOT ASSESSED`) — unassessable is never a pass. Stdlib only.
+made (`PARITY NOT ASSESSED`) — unassessable is never a pass. Two empty inputs are
+such a case (an empty population: two empty tables match and prove nothing); pass
+`--allow-empty` when an empty result is the expected outcome. Stdlib only.
 """
 
 from __future__ import annotations
@@ -85,6 +87,9 @@ def _nonzero_count(rows: list[dict], col: str) -> int:
     return sum(1 for r in rows if (f := _to_float(r.get(col))) is not None and f != 0.0)
 
 
+EMPTY_POPULATION = 'empty population: two empty tables match and prove nothing'
+
+
 def compare(
     rows_a: list[dict],
     rows_b: list[dict],
@@ -95,6 +100,7 @@ def compare(
     tol_col: dict[str, float] | None = None,
     residual_zero: list[str] | None = None,
     null_mismatch: bool = True,
+    allow_empty: bool = False,
 ) -> dict:
     """Compare two list[dict] tables. Returns a report dict with an 'ok' flag.
 
@@ -114,7 +120,10 @@ def compare(
     `ok` is TRI-STATE, like `freshness_check`: True (every requested comparison
     ran and passed), False (something is out of tolerance), or **None** (nothing
     failed, but a requested comparison could not be made -- today that is null
-    placement without unique keys). None is not a pass and the CLI exits 1 on it.
+    placement without unique keys, or two empty tables). None is not a pass and the
+    CLI exits 1 on it. Two empty tables agree on every metric and prove nothing, so
+    they are unassessed unless `allow_empty` says an empty result is expected; one
+    empty side still fails on the row-count delta.
     Before this was tri-state, an unassessable null-placement comparison
     contributed a vacuously-true `all()` over an empty dict, so two tables with a
     null-placement swap and a non-unique key printed `NOT ASSESSED` and then
@@ -199,8 +208,12 @@ def compare(
     # vacuously True, which is how a null-placement swap under a duplicate key
     # used to print PARITY OK. Opting out with null_mismatch=False is a caller
     # decision and stays a clean True.
-    unassessed = null_mismatch and mismatch is None
-    report['unassessed'] = [report['null_mismatch_reason']] if unassessed else []
+    unassessed: list[str] = []
+    if null_mismatch and mismatch is None:
+        unassessed.append(report['null_mismatch_reason'])
+    if not rows_a and not rows_b and not allow_empty:
+        unassessed.append(EMPTY_POPULATION)
+    report['unassessed'] = unassessed
     report['ok'] = (None if unassessed else True) if comparable_ok else False
     return report
 
@@ -376,6 +389,11 @@ def main(argv: list[str] | None = None) -> int:
         action='store_true',
         help='skip the key-aligned null-placement comparison (on by default)',
     )
+    parser.add_argument(
+        '--allow-empty',
+        action='store_true',
+        help='accept two empty inputs as a pass (by default they are NOT ASSESSED, exit 1)',
+    )
     args = parser.parse_args(argv)
 
     keys = [k for k in args.keys.split(',') if k]
@@ -396,6 +414,7 @@ def main(argv: list[str] | None = None) -> int:
             tol_col=tol_col,
             residual_zero=args.residual_zero,
             null_mismatch=not args.no_null_mismatch,
+            allow_empty=args.allow_empty,
         )
     except ValueError as e:
         # usage error (e.g. typo'd --keys), distinct from a parity failure (1)
@@ -422,10 +441,12 @@ def main(argv: list[str] | None = None) -> int:
     ok = rep['ok']
     print({True: 'PARITY OK', False: 'PARITY FAILED', None: 'PARITY NOT ASSESSED'}[ok])
     if ok is None:
-        print(
-            f'  ({"; ".join(rep["unassessed"])}) - give unique --keys, or '
-            '--no-null-mismatch to compare aggregates only and say so'
-        )
+        hints = []
+        if any(r != EMPTY_POPULATION for r in rep['unassessed']):
+            hints.append('give unique --keys, or --no-null-mismatch to compare aggregates only')
+        if EMPTY_POPULATION in rep['unassessed']:
+            hints.append('pass --allow-empty if an empty result is the expected outcome')
+        print(f'  ({"; ".join(rep["unassessed"])}) - {"; or ".join(hints)} (and say so)')
     if ok is True:
         print(
             '  (aggregate-level only: a sum/count-preserving value swap also passes '

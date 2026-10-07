@@ -422,26 +422,97 @@ SELECT COUNT(*) FROM target_table WHERE partition_date = '2026-05-26';
 
 ## Recipe 9 — Constraint pre-flight against production data
 
-Tests that a proposed schema constraint is actually satisfiable by
-production data (Principle 10).
+Measure the premise at the grain of the change before the design is committed.
+Tests that a proposed schema constraint is actually satisfiable by production
+data, or that relaxing a constraint won't break on real values, or that a switch
+the refactor removes is inert (Principle 10).
+
+### Before declaring or relaxing `nullable: false`
+
+Count nulls for every mandatory column on the real load, not only the columns
+the first failing quarantine reason names — the first reason masks the rest.
 
 ```sql
--- Run before declaring `nullable: false`
+-- Run before declaring or relaxing nullable: false
 SELECT
-    SUM(CASE WHEN uc IS NULL THEN 1 ELSE 0 END) AS null_count_uc,
-    SUM(CASE WHEN margin IS NULL THEN 1 ELSE 0 END) AS null_count_margin
+    SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS null_count_user_id,
+    SUM(CASE WHEN amount IS NULL THEN 1 ELSE 0 END) AS null_count_amount,
+    SUM(CASE WHEN created_at IS NULL THEN 1 ELSE 0 END) AS null_count_created_at,
+    SUM(CASE WHEN status IS NULL THEN 1 ELSE 0 END) AS null_count_status
 FROM production_table
 WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
--- If null_count > 0, you cannot declare nullable: false on that column.
+-- Declaring: if a column's null_count > 0, you cannot declare nullable: false on it.
+-- Relaxing: the set to relax (or clean at the source) is every column with
+-- null_count > 0 in this one result, not only the column the first failing
+-- quarantine reason named.
+```
 
--- Run before declaring `ge: 0`
+### Before trusting a switch is inert
+
+Run the fixture with and without the switch; a true no-op produces identical
+output. Identical output only counts when both runs succeeded and produced
+something: two crashes, or two empty runs, are identical too. Diff what the
+switch can affect (the written files or tables), not only stdout.
+
+```python
+# fixture_test.py
+import difflib
+import subprocess
+import sys
+from pathlib import Path
+
+
+def run(fixture_path, out_dir, *flags):
+    result = subprocess.run(
+        [sys.executable, fixture_path, '--out', str(out_dir), *flags],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f'run failed: {result.stderr}'
+    written = {p.name: p.read_text() for p in sorted(Path(out_dir).glob('*'))}
+    assert written, 'empty output proves nothing'
+    return written
+
+
+def compare_fixture_outputs(fixture_path, work_dir):
+    """Run fixture with and without a switch; diff what it wrote."""
+    with_switch = run(fixture_path, Path(work_dir) / 'with', '--switch')
+    without_switch = run(fixture_path, Path(work_dir) / 'without')
+    assert with_switch.keys() == without_switch.keys(), 'different files written'
+    diff = [
+        line
+        for name in with_switch
+        for line in difflib.unified_diff(
+            with_switch[name].splitlines(),
+            without_switch[name].splitlines(),
+            fromfile=f'with_switch/{name}',
+            tofile=f'without_switch/{name}',
+            lineterm='',
+        )
+    ]
+    if diff:
+        print('Switch is NOT inert; outputs differ:')
+        print('\n'.join(diff))
+        return False
+    print('Switch is inert; outputs match.')
+    return True
+```
+
+### Before declaring `ge: 0`
+
+```sql
+-- Run before declaring ge: 0
 SELECT
     SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END) AS neg_count_amount,
     SUM(CASE WHEN amount = 0 THEN 1 ELSE 0 END) AS zero_count_amount
 FROM production_table
 WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
 -- If neg_count > 0, ge: 0 is too strict.
+```
 
+### Before declaring an enum constraint
+
+```sql
 -- Run before declaring an enum constraint
 SELECT DISTINCT status FROM production_table
 WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
@@ -609,7 +680,9 @@ assert old_inputs == new_inputs, (
 
 A parity check that has only ever been seen green proves nothing: green can
 mean "the outputs match" or "the check never actually compared anything." A
-typo in a join key, a filter that drops both sides to empty, a tolerance set
+typo in a join key, a filter that drops both sides to empty (`parity_check.py`
+refuses it: exit 1, empty population; a hand-written judge gates every
+relation-level check on a non-empty population first), a tolerance set
 so wide nothing trips it, a fixture that exercises a fallback path instead of
 the unit under test — each yields a passing check that verifies nothing. The
 discipline that separates a real gate from a green light is the same one
@@ -833,6 +906,120 @@ python scripts/parity_check.py base.csv cand.csv --keys id --residual-zero resid
 
 ---
 
+## Recipe 18 — Versioning a frozen judge: the admissible repair after a red
+
+Oracle integrity says the judge is not edited in the change it judges. That
+leaves the case where the judge itself is what went red: its rule was wrong
+for this data, or it measured the wrong thing. Repairing it in place, by the
+author of the lot it judges, is how a gate gets bent until it passes. The
+repair is admissible when it is a new judge version meeting four conditions.
+
+1. **Own change, written by the judge's author.** The repair is its own
+   change, made by whoever owns the judge, never by the lot it judges and
+   never in the same diff as the transform that went red. The reason is
+   written down before the new version is run on the red lot.
+2. **At least as strict wherever the contract cares.** The new version must
+   still fail every divergence the old one failed for a column or property
+   the contract names. It may be stricter, or differently shaped for a
+   property the contract does not care about. A repair that only loosens
+   (a wider tolerance, a dropped column, a skipped row class) is a weakened
+   oracle, not a repair.
+3. **The self-test keeps every earlier bank and adds two passes.** Every
+   planted-divergence case the old version was tested against stays in the
+   bank (Recipe 13). The new version adds an intended-effect pass (the
+   change the repair exists to accept now passes) and a planted-loss fail
+   (a plant for the exact loss the repair could hide now fails). A repair
+   that drops the planted-loss bank is rejected, however green the lot is.
+4. **The freeze file appends; the acceptance record shows both verdicts.**
+   The freeze file gains an entry with version, reason and content sha of the
+   new judge; the old entry stays. The acceptance record shows the old and
+   the new verdict on the same lot, side by side, so a reader sees what the
+   repair changed.
+
+**Example: row preservation replaced by conservation on a complement.** A
+judge asserts that the output has exactly the input's rows. A change then
+legitimately withholds some rows into a separate relation. The judge goes
+red, and the tempting repair is to drop the row-count check. The admissible
+repair is a new version that asserts conservation instead: kept plus
+withheld equals input, with the two disjoint on the key.
+
+```python
+def conserved(src, kept, withheld, key):
+    # v2: replaces `len(kept) == len(src)`
+    k, w = set(kept[key]), set(withheld[key])
+    assert not (k & w), 'a key is both kept and withheld'
+    assert len(kept) + len(withheld) == len(src), 'a row was lost or duplicated'
+    assert k | w == set(src[key]), 'the keys do not add back up to the input'
+
+
+def test_conserved_self_test():
+    assert_passes(conserved, SRC, KEPT, WITHHELD, 'id')  # intended effect
+    assert_fails(conserved, SRC, KEPT, WITHHELD_MINUS_ONE, 'id')  # planted loss
+    assert_fails(conserved, SRC, KEPT_PLUS_DUP, WITHHELD, 'id')  # planted duplicate
+    assert_fails(conserved, SRC, KEPT_MINUS_ONE, EMPTY, 'id')  # v1 bank, now held against v2
+```
+
+It is at least as strict: a row lost or duplicated still fails, and the
+withheld rows are now accounted for rather than invisible. The v1 plant (one
+row dropped, nothing withheld) is run against v2 and still fails, and the
+planted loss is the case the loosening repair would have missed.
+
+**Example: a repair through a declared label map.** A judge compares a label
+column and goes red because the producer renamed a category. The loosening
+repair is to ignore the column. The admissible one is a new version that
+reads a declared map (`old_label -> new_label`, versioned in the freeze
+file) and compares through it. Every label must map exactly once; an
+unmapped label, or a label mapped to two, fails. The planted-loss bank adds a
+dropped category and a silently merged pair, so the map cannot hide a loss.
+
+**A judge goes stale without being edited.** A frozen judge that reads a
+shared surface (a probe's findings, a journal, a catalogue) can be wrong
+while its own sha is unchanged, because the surface moved under it. Re-run
+such a verifier whenever the surface's producer changes, and remove its own
+scratch state (cached extracts, intermediate files, a stored previous
+verdict) first, so the re-run reads the new surface and not its own old
+output. A green verdict dated before the producer's last change is not
+evidence about the surface as it is now.
+
+---
+
+## Recipe 19 — Capture a producer's output as a fixture
+
+A fixture or check target that stands in for a producer is a measurement, not
+a value chosen beside the parser (Principle 9). The method, once:
+
+1. **Stand up a scratch instance of the producer** at the version the code
+   will meet: a throwaway container, a temporary database, a local copy of
+   the service. Provoke output shapes only on the scratch instance, never the
+   live one, and never against a stub you wrote.
+2. **Provoke each output shape**, including the ones where a field is empty
+   or absent: a row with every optional field unset, a record with a null,
+   a permission string with unset bits, a log line for each level, an error
+   envelope as well as a success. An address is a property of the deployed
+   instance, and a scratch instance's bind configuration can differ: read
+   the live deployment's binding read-only (the listening interface, the
+   view or name it answers on) and probe from where the consumer will
+   stand, not from the producer's host.
+3. **Record verbatim into the fixtures**, byte for byte: no pretty-printing,
+   no trimmed whitespace, no hand-edited values. Put the capture date, the
+   producer's version and the command that produced each file beside it, so
+   a later reader can tell a stale fixture from a current one and recapture.
+4. **Delete the scratch instance.** The fixtures are now the only artefact;
+   a scratch left running becomes a second source of truth that drifts.
+
+```bash
+docker run -d --name scratch-producer producer:1.4.2
+docker exec scratch-producer producer list > fixtures/list_all_fields.txt
+docker exec scratch-producer producer list --empty > fixtures/list_empty_fields.txt
+echo "captured 2026-10-06, producer 1.4.2" > fixtures/CAPTURED.txt
+docker rm -f scratch-producer
+```
+
+Recapture when the producer's version changes; a fixture older than the
+version it stands for is a guess again.
+
+---
+
 ## Choosing the right strictness
 
 | Scenario | Recommended recipes |
@@ -850,6 +1037,8 @@ python scripts/parity_check.py base.csv cand.csv --keys id --residual-zero resid
 | Change landing in a suite with pre-existing / flaky failures | 15 (differential-baseline) |
 | A contract column written by more than one producer | 16 (census, then join before values) |
 | Null-vs-zero drift, algorithm noise, a residual column read as `> 0` | 17 |
+| Repairing or re-running a frozen judge after a red | 18 |
+| A fixture standing in for a producer's output or address | 19 |
 
 ---
 
