@@ -1,5 +1,5 @@
 {
-  "description": "Mechanical enforcement, always on once the plugin is installed: ruff-format at end of turn across every edited file (PostToolBatch, non-blocking; requires CLI >= 2.1.218), and steering Bash/PowerShell toward uv inside uv projects (PreToolUse, CLAUDE_ALLOW_PIP=1 to override one command). No env gate on either: they are the mechanical layer, not options.",
+  "description": "Mechanical enforcement, always on once the plugin is installed: ruff-format at end of turn across every edited file in a project that declares ruff (PostToolBatch, non-blocking; requires CLI >= 2.1.218), and steering Bash/PowerShell toward uv inside uv projects (PreToolUse, CLAUDE_ALLOW_PIP=1 to override one command). No env gate on either: they are the mechanical layer, not options.",
   "hooks": {
     "PostToolBatch": [
       {

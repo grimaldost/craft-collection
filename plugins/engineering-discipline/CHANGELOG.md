@@ -28,6 +28,24 @@ and an exit-code rule; the format hook narrows which files receive turn-level fo
 
 ### Changed
 
+- **The end-of-turn format hook formats only files in a project that declares ruff.**
+  Before, `hooks/ruff_format.py` ran `uvx ruff format` on every `.py` file a Write or
+  Edit touched, wherever it lived: it rewrote whole files in a repository not formatted
+  with ruff, and broke the recorded sha of a frozen file on its first edit. Now a file
+  is formatted only when a `ruff.toml`, a `.ruff.toml`, or a `pyproject.toml` with a
+  `[tool.ruff]` or `[tool.ruff.*]` table sits in its directory or an ancestor, up to
+  and including the repository root (the directory holding `.git`). A `pyproject.toml`
+  without a ruff table does not end the walk, so a monorepo subpackage under a root
+  `ruff.toml` still formats. What stops being formatted: files outside any project,
+  and files in a repository with no `ruff.toml`, `.ruff.toml` or `[tool.ruff]`. A
+  project that uses ruff only through a dev dependency or pre-commit, with no config,
+  loses end-of-turn formatting; adding an empty `[tool.ruff]` table opts it back in.
+  An unreadable or malformed `pyproject.toml` counts as no declaration: nothing is
+  formatted, nothing is printed, and the hook still always exits 0. The legacy
+  single-file payload and `harness_adapters.format_decision` apply the same scope, so
+  other harnesses keep identical semantics. Displaces: the unconditional format of
+  every edited file, reworded in place in the README PostToolBatch bullet and the
+  `hooks.json` description; no SKILL.md body words. (2026-10-06 delta triage: T141b.)
 - **scenarios.md Step 4.3 "Identify all consumers"**: replaces "Enumerate every
   notebook, dashboard, downstream pipeline, export, or report" with a census rule
   and method (a consumer list you read is a claim; one you enumerated is evidence).

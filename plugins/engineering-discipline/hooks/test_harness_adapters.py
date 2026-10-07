@@ -11,11 +11,19 @@ import harness_adapters as ha
 
 
 def main() -> int:
-    # format_decision: only .py files yield commands; commands come from the core.
+    # format_decision: only .py files in a project that declares ruff yield
+    # commands; the scope and the commands both come from the ruff_format core,
+    # so every harness formats exactly what the Claude Code hook formats.
     assert ha.format_decision(None) == []
-    assert ha.format_decision('notes.md') == []
-    cmds = ha.format_decision('mod.py')
-    assert cmds == [['uvx', 'ruff', 'format', 'mod.py']], f'unexpected commands: {cmds}'
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / '.git').mkdir()  # the repository boundary ends the config walk
+        mod, notes = str(Path(td) / 'mod.py'), str(Path(td) / 'notes.md')
+        assert ha.format_decision(notes) == []
+        assert ha.format_decision(mod) == [], 'a repo without ruff config must not format'
+        (Path(td) / 'ruff.toml').write_text('', encoding='utf-8')
+        assert ha.format_decision(notes) == []
+        cmds = ha.format_decision(mod)
+        assert cmds == [['uvx', 'ruff', 'format', mod]], f'unexpected commands: {cmds}'
 
     # bash_verdict delegates to the uv_enforce core with real cwd detection.
     with tempfile.TemporaryDirectory() as td:
