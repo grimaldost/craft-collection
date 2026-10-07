@@ -8,6 +8,22 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.17.1] - 2026-10-07
+
+Patch bump: the `planned-execution` reviewer prompts gain the APPROVE evidence bar (T43a).
+
+### Changed
+
+- **planned-execution/subagent-prompts.md carries the APPROVE evidence bar** (2026-08-11
+  triage: T43a). A new section above the reviewer templates, applying to both, lists what a
+  reviewer runs and shows before APPROVE: the gate's own invocation, an adversarial mutation
+  that turns a test red, an independent recompute of any stated number, and a reproduction
+  (with its cost) of any reported defect. The orchestrator adds it to each reviewer prompt.
+  The bar ships in the plugin because the installed plugin does not carry the repository's
+  `CONTRIBUTING.md`, which holds the fuller text under "Reviewing a pull request". The file
+  is a reference, not a `SKILL.md` body, so no word budget moves; the reviewer templates
+  themselves are unchanged.
+
 ## [0.17.0] - 2026-10-07
 
 Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and a required decision-log read, and the mirror walk gains a `sweep_roots` registry field (T21a, T21c, T101a).
