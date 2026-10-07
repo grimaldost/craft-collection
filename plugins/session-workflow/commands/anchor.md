@@ -103,3 +103,9 @@ moment work continues; for a long or autonomous run, arm `compaction-survival`
 — create the anchor at the start, update it whenever durable state moves, re-read it each
 turn. Use `/anchor` for the deliberate checkpoint: before a manual `/compact`,
 before stepping away, before an irreversible move.
+
+Between snapshots, when only a step boundary moved, one edit does both halves of it:
+`python <this-plugin>/skills/compaction-survival/scripts/anchor_inject.py --step <the anchor> "<what moved>"`
+sets the frontmatter `step:` to the next number and puts `- Step N: <what moved>` first in the
+Cursor section, atomically, then prints the head's size. It does not fold older entries; do that
+at the phase boundary. `--head-fit` also says when `step:` is behind the newest cursor entry.

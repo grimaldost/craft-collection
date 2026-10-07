@@ -49,6 +49,12 @@ It holds the **newest two steps**. Older ones fold into the TAIL at each phase
 boundary — the done-list is what actually accumulates, and a cursor that grows
 without bound spends the budget its own survival depends on.
 
+Entries are bullets, newest first, each opening with `Step N`. At a step boundary,
+`anchor_inject.py --step <anchor> "<text>"` sets the frontmatter `step:` to N+1 and puts
+`- Step N+1: <text>` at the top of this section in one atomic edit (it does not fold the
+older entries). `--head-fit` prints a line when `step:` is behind the cursor's newest
+`Step N`, so a field that nothing bumps does not stay wrong unnoticed.
+
 ### Resume steps
 
 How a cold reader re-orients: read this file, check the real state (version

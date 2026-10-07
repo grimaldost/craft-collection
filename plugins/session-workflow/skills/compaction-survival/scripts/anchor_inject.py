@@ -106,6 +106,12 @@ _FORMAT_LINE = re.compile(r'^\s*format\s*:\s*anchor/', re.I)
 # `parked: <what it waits on>`: the opt-in frontmatter field that marks a track as
 # deliberately waiting rather than dormant. Read from the HEAD frontmatter only.
 _PARKED_LINE = re.compile(r'^\s*parked\s*:\s*(.*?)\s*$', re.I)
+# `step: N`, the snapshot counter in the frontmatter; and a cursor entry that opens
+# with `Step N` (optionally bolded), the newest-first convention `--step` writes.
+_STEP_FIELD = re.compile(r'^\s*step\s*:\s*(\d*)', re.I)
+_CURSOR_STEP = re.compile(r'^\s*[-*]\s+\**step\s+(\d+)', re.I)
+_BULLET = re.compile(r'^\s*[-*]\s')
+_BOM = '﻿'  # ascii-ok: a byte-order mark in file content, never printed
 
 
 def is_content_terminal(text: str) -> bool:
@@ -342,6 +348,105 @@ def anchor_cursor(text: str) -> str:
     return ''
 
 
+def newest_step(head: str) -> int | None:
+    """The highest `Step N` among the cursor section's bullets, None when the
+    cursor carries none. Bullets only: `Step 3` in prose, or in another section,
+    is not a cursor entry. Pure, so the report and the writer share one reading."""
+    best = None
+    for name, block in split_sections(head):
+        if not _is_cursor_section(name):
+            continue
+        for line in block.splitlines()[1:]:
+            m = _CURSOR_STEP.match(line)
+            if m:
+                n = int(m.group(1))
+                best = n if best is None else max(best, n)
+    return best
+
+
+def frontmatter_step(head: str) -> int | None:
+    """The numeric value of `step:` in the HEAD frontmatter, None when the field
+    is absent or not a number."""
+    for line in _frontmatter_lines(head):
+        m = _STEP_FIELD.match(line)
+        if m:
+            return int(m.group(1)) if m.group(1) else None
+    return None
+
+
+def bump_step(text: str, entry: str) -> tuple[str, int | None, int]:
+    """Return (new text, old step, new step): frontmatter `step:` set to one past
+    the larger of itself and the cursor's newest `Step N`, and `- Step <new>: entry`
+    inserted as the first bullet of the HEAD's cursor section. Line endings and
+    every other byte are kept: the text is edited as a list of lines that still
+    carry their terminators. Raises ValueError, naming what is missing, before
+    anything is changed."""
+    bom = _BOM if text.startswith(_BOM) else ''
+    body = text[len(bom) :]
+    lines = body.splitlines(keepends=True)
+    eol = '\r\n' if '\r\n' in body else '\n'
+    end = len(lines)
+    for i, line in enumerate(lines):
+        if line.strip() == TAIL_MARKER:
+            if ''.join(lines[:i]).strip():
+                end = i
+            break  # a marker over an empty HEAD is malformed: whole file, as split_head does
+    if not lines or lines[0].strip() != '---':
+        raise ValueError('no frontmatter block')
+    close = next((j for j in range(1, end) if lines[j].strip() == '---'), None)
+    if close is None:
+        raise ValueError('no frontmatter block')
+
+    heading = None
+    in_fence = False
+    stop = end
+    for j in range(close + 1, end):
+        raw = lines[j].rstrip('\r\n')
+        if raw.lstrip().startswith('```'):
+            in_fence = not in_fence
+        match = None if in_fence else HEADING_RE.match(raw)
+        if match and heading is None and _is_cursor_section(match.group(1)):
+            heading = j
+        elif match and heading is not None:
+            stop = j
+            break
+    if heading is None:
+        raise ValueError('no Cursor section in the HEAD')
+
+    old = frontmatter_step(''.join(lines[:end]))
+    newest = newest_step(''.join(lines[:end]))
+    new = max(old or 0, newest or 0) + 1
+
+    at = next((j for j in range(heading + 1, stop) if _BULLET.match(lines[j])), None)
+    if at is None:
+        at = heading + 1
+        while at < stop and not lines[at].strip():
+            at += 1
+    if not lines[heading].endswith('\n'):
+        lines[heading] += eol
+    lines.insert(at, f'- Step {new}: {entry}{eol}')
+
+    field = next((j for j in range(1, close) if _STEP_FIELD.match(lines[j])), None)
+    if field is not None:
+        lines[field] = f'step: {new}' + lines[field][len(lines[field].rstrip('\r\n')) :]
+    else:
+        fmt = next((j for j in range(1, close) if _FORMAT_LINE.match(lines[j])), None)
+        lines.insert(close if fmt is None else fmt + 1, f'step: {new}{eol}')
+    return bom + ''.join(lines), old, new
+
+
+def step_report_line(head: str) -> str:
+    """The head-fit line for a `step:` field that lags the cursor, '' otherwise
+    (in step, ahead, or either side absent)."""
+    field, newest = frontmatter_step(head), newest_step(head)
+    if field is None or newest is None or newest <= field:
+        return ''
+    return (
+        f"step: frontmatter says {field}, cursor's newest is Step {newest}"
+        ' - run --step or correct the field'
+    )
+
+
 def head_fit_report(anchor: Path) -> list[str]:
     """What the injection would do to this anchor at its current size: head
     characters, the budget, the cursor section reserved, and the sections that
@@ -379,6 +484,9 @@ def head_fit_report(anchor: Path) -> list[str]:
     lines.append(f'would drop: {", ".join(fit.dropped) if fit.dropped else "(nothing)"}')
     if fit.byte_cut:
         lines.append('and would still be cut mid-section: one section alone overruns the budget')
+    lag = step_report_line(head)
+    if lag:
+        lines.append(lag)
     return lines
 
 
@@ -595,6 +703,51 @@ def _force_utf8_stdout() -> None:
         sys.stdout.reconfigure(encoding='utf-8')
 
 
+def step_main(argv: list[str]) -> int:
+    """`--step <anchor> "<text>"`: bump `step:` and prepend the cursor entry in one
+    atomic edit. Exit 2 for a usage error, with the file untouched and the path in
+    the message; the same contract as `--head-fit`. It does not fold older steps."""
+
+    def usage(why: str) -> int:
+        print(f'error: --step {why}', file=sys.stderr)
+        return 2
+
+    if len(argv) != 2:
+        return usage('needs two arguments: the path to one anchor file and the entry text')
+    path, entry = Path(argv[0]), argv[1].strip()
+    if not path.is_file():
+        return usage(f'needs the path to one anchor file (got: {path})')
+    if not entry:
+        return usage(f'needs non-empty entry text (anchor: {path})')
+    if '\n' in entry or '\r' in entry:
+        return usage(f'takes a one-line entry: it becomes one bullet (anchor: {path})')
+    try:
+        with open(path, encoding='utf-8', newline='') as fh:
+            text = fh.read()
+        new_text, old, new = bump_step(text, entry)
+    except (OSError, UnicodeDecodeError, ValueError) as e:
+        return usage(f'cannot edit {path}: {e}')
+    # Imported here, not at module top: the SessionStart hook never writes.
+    import shutil
+    import tempfile
+
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8', newline='') as fh:
+            fh.write(new_text)
+        shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return usage(f'cannot write {path}: {type(e).__name__}')
+    print(f'step: {"(none)" if old is None else old} -> {new}; cursor entry added to {path}')
+    print(head_fit_report(path)[0])
+    return 0
+
+
 def main() -> int:
     if os.environ.get(ENV_GATE) == '0':
         return 0
@@ -702,6 +855,11 @@ if __name__ == '__main__':
         for line in head_fit_report(target):
             print(line)
         sys.exit(0)
+    # Authoring entry: `python anchor_inject.py --step <anchor> "<text>"` is the one
+    # edit a step boundary needs (frontmatter `step:` plus a new first cursor bullet),
+    # done together so the counter and the cursor cannot drift apart.
+    if len(sys.argv) > 1 and sys.argv[1] == '--step':
+        sys.exit(step_main(sys.argv[2:]))
     try:
         sys.exit(main())
     except Exception:

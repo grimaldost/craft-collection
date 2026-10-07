@@ -1223,6 +1223,237 @@ def test_without_a_parked_field_every_output_is_byte_identical_to_the_golden():
         assert ai.list_dormant(anchors) == GOLDEN_DORMANT
 
 
+# -- --step: bump `step:` and prepend the cursor entry in one edit ---------------
+
+STEP_ANCHOR = (
+    '---\n'
+    'format: anchor/v1\n'
+    'task: demo\n'
+    'step: 4\n'
+    '---\n'
+    '# Mission\n'
+    'ship it\n'
+    '\n'
+    '## Cursor\n'
+    '\n'
+    '- Step 4: older entry\n'
+    '- Step 3: oldest entry\n'
+    '\n'
+    '## Invariants\n'
+    'keep step: 4 out of this prose\n'
+    '<!-- anchor:tail -->\n'
+    '## Decisions log\n'
+    '- Step 2: tail text\n'
+)
+
+
+def _write_anchor(base: Path, text: str, name: str = 'run.md') -> Path:
+    f = base / name
+    with open(f, 'w', encoding='utf-8', newline='') as fh:
+        fh.write(text)
+    return f
+
+
+def _step_cli(*args, encoding: str = 'utf-8'):
+    env = dict(os.environ)
+    env['PYTHONIOENCODING'] = encoding
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(SCRIPT), '--step', *args],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        env=env,
+        timeout=30,
+    )
+
+
+def test_step_bumps_the_frontmatter_and_puts_the_new_entry_first_in_the_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), STEP_ANCHOR)
+        proc = _step_cli(str(f), 'pushed the branch')
+        out = proc.stdout.decode('utf-8')
+        assert proc.returncode == 0, proc.stderr
+        want = STEP_ANCHOR.replace('step: 4\n---', 'step: 5\n---').replace(
+            '## Cursor\n\n', '## Cursor\n\n- Step 5: pushed the branch\n'
+        )
+        assert f.read_bytes() == want.encode('utf-8')
+        assert 'step: 4 -> 5' in out
+        assert 'head:' in out and 'budget' in out
+        assert out.isascii()
+
+
+def test_step_text_with_a_windows_path_and_an_arrow_round_trips_byte_exactly():
+    # Backslashes and a non-ASCII arrow are the two ways a text-handling shortcut
+    # (a regex replacement template, a locale-default write) corrupts an entry.
+    text = 'moved C:\\Users\\x\\repo \u2192 D:\\work\\repo\\new'
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), STEP_ANCHOR)
+        proc = _step_cli(str(f), text)
+        assert proc.returncode == 0, proc.stderr
+        raw = f.read_bytes()
+        assert ('- Step 5: ' + text + '\n').encode('utf-8') in raw
+        assert raw.decode('utf-8').count('\u2192') == 1
+
+
+def test_step_survives_a_cp1252_stdout():
+    # The confirmation names the anchor; an arrow in the file name would raise
+    # under a cp1252 console unless the arm forces UTF-8 before it prints.
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), STEP_ANCHOR, name='fase \u2192 dois.md')
+        proc = _step_cli(str(f), 'proximo \u2192 passo', encoding='cp1252')
+        assert proc.returncode == 0, f'--step died on a cp1252 stdout: {proc.stderr[-300:]}'
+        assert 'proximo \u2192 passo' in f.read_text(encoding='utf-8')
+
+
+def test_step_adds_a_missing_field_as_step_1_after_the_format_line():
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace('step: 4\n', '').replace(
+            '- Step 4: older entry\n- Step 3: oldest entry\n', 'nothing yet\n'
+        )
+        f = _write_anchor(Path(d), text)
+        proc = _step_cli(str(f), 'first entry')
+        assert proc.returncode == 0, proc.stderr
+        got = f.read_text(encoding='utf-8')
+        assert got.startswith('---\nformat: anchor/v1\nstep: 1\ntask: demo\n---\n')
+        assert '## Cursor\n\n- Step 1: first entry\nnothing yet\n' in got
+
+
+def test_step_keeps_the_line_endings_of_the_file():
+    with tempfile.TemporaryDirectory() as d:
+        crlf = STEP_ANCHOR.replace('\n', '\r\n')
+        f = _write_anchor(Path(d), crlf)
+        proc = _step_cli(str(f), 'on a windows editor')
+        assert proc.returncode == 0, proc.stderr
+        raw = f.read_bytes()
+        assert b'\r\n- Step 5: on a windows editor\r\n' in raw
+        assert raw.count(b'\n') == raw.count(b'\r\n'), 'a bare LF crept into a CRLF file'
+        assert b'step: 5\r\n' in raw
+
+
+def test_step_edits_only_the_head_frontmatter_and_cursor():
+    # `step: 4` in the prose and a Cursor-like heading in the TAIL are not targets.
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace(
+            '## Decisions log\n', '## Decisions log\nstep: 9\n## Cursor\n- Step 2: tail cursor\n'
+        )
+        f = _write_anchor(Path(d), text)
+        assert _step_cli(str(f), 'only the head').returncode == 0
+        got = f.read_text(encoding='utf-8')
+        assert 'keep step: 4 out of this prose' in got
+        assert got.count('step: 9\n') == 1
+        assert got.count('- Step 5: only the head') == 1
+        assert got.index('- Step 5: only the head') < got.index('<!-- anchor:tail -->')
+
+
+def test_step_after_a_lagging_field_numbers_past_the_cursor():
+    # The field says 3 but the cursor already shows Step 5: the next entry is 6,
+    # and the field is repaired in the same edit.
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace('step: 4\n', 'step: 3\n').replace(
+            '- Step 4: older entry', '- Step 5: older entry'
+        )
+        f = _write_anchor(Path(d), text)
+        assert _step_cli(str(f), 'catch up').returncode == 0
+        got = f.read_text(encoding='utf-8')
+        assert '\nstep: 6\n' in got
+        assert '- Step 6: catch up\n- Step 5: older entry' in got
+
+
+def test_step_on_an_anchor_without_a_cursor_exits_2_and_leaves_the_file_untouched():
+    with tempfile.TemporaryDirectory() as d:
+        text = '---\nformat: anchor/v1\nstep: 4\n---\n# Mission\nship it\n'
+        f = _write_anchor(Path(d), text)
+        before = f.read_bytes()
+        proc = _step_cli(str(f), 'nowhere to put it')
+        assert proc.returncode == 2
+        assert str(f) in proc.stderr.decode('utf-8')
+        assert f.read_bytes() == before
+        assert [p.name for p in f.parent.iterdir()] == ['run.md'], 'a temp file was left behind'
+
+
+def test_step_usage_errors_exit_2_and_say_which_path():
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), STEP_ANCHOR)
+        before = f.read_bytes()
+        missing = Path(d) / 'nope.md'
+        cases = [
+            (str(missing), 'text'),  # no such file
+            (str(f), '   '),  # empty text
+            (str(f), 'two\nlines'),  # an entry is one bullet
+            (str(f),),  # no text at all
+            (),  # nothing at all
+        ]
+        for args in cases:
+            proc = _step_cli(*args)
+            assert proc.returncode == 2, f'{args!r}: exit {proc.returncode}'
+            err = proc.stderr.decode('utf-8')
+            assert err.startswith('error: --step'), err
+        assert str(missing) in _step_cli(str(missing), 'text').stderr.decode('utf-8')
+        assert f.read_bytes() == before
+
+
+def test_step_into_a_cursor_with_no_bullets_still_lands_under_the_heading():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        spaced = '---\nformat: anchor/v1\nstep: 2\n---\n## Cursor\n\nprose, no bullets\n'
+        f = _write_anchor(base, spaced)
+        assert _step_cli(str(f), 'first bullet').returncode == 0
+        assert f.read_text(encoding='utf-8').endswith(
+            '## Cursor\n\n- Step 3: first bullet\nprose, no bullets\n'
+        )
+        bare = '---\nformat: anchor/v1\nstep: 2\n---\n## Cursor'
+        g = _write_anchor(base, bare, name='eof.md')
+        assert _step_cli(str(g), 'at eof').returncode == 0
+        assert g.read_text(encoding='utf-8').endswith('## Cursor\n- Step 3: at eof\n')
+
+
+def test_step_keeps_a_byte_order_mark():
+    with tempfile.TemporaryDirectory() as d:
+        f = _write_anchor(Path(d), '﻿' + STEP_ANCHOR)
+        assert _step_cli(str(f), 'edited under a bom').returncode == 0
+        raw = f.read_bytes()
+        assert raw.startswith(b'\xef\xbb\xbf---\n')
+        assert b'- Step 5: edited under a bom\n' in raw
+
+
+def test_newest_step_reads_the_cursor_bullets_only():
+    import anchor_inject as ai
+
+    head = '## Cursor\n- Step 5: a\n- Step 4: b\nStep 99 in prose\n## Other\n- Step 70: not here\n'
+    assert ai.newest_step(head) == 5
+    assert ai.newest_step('## Cursor\n- done: all\n') is None
+    assert ai.newest_step('# Mission\n- Step 3: x\n') is None
+    assert ai.newest_step('## Cursor\n- **Step 12**: bold label\n') == 12
+
+
+LAG_LINE = "step: frontmatter says 3, cursor's newest is Step 5 - run --step or correct the field"
+
+
+def test_head_fit_flags_a_step_field_behind_the_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace('step: 4\n', 'step: 3\n').replace('Step 4:', 'Step 5:')
+        f = _write_anchor(Path(d), text)
+        proc = _head_fit(str(f))
+        assert proc.returncode == 0
+        assert LAG_LINE in proc.stdout.splitlines()
+
+
+def test_head_fit_is_quiet_when_step_agrees_or_either_side_is_absent():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        cases = {
+            'agree': STEP_ANCHOR,
+            'ahead': STEP_ANCHOR.replace('step: 4\n', 'step: 9\n'),
+            'nofield': STEP_ANCHOR.replace('step: 4\n', ''),
+            'nobullets': STEP_ANCHOR.replace(
+                '- Step 4: older entry\n- Step 3: oldest entry\n', 'idle\n'
+            ),
+        }
+        for name, text in cases.items():
+            proc = _head_fit(str(_write_anchor(base, text, name + '.md')))
+            assert proc.returncode == 0
+            assert 'step: frontmatter' not in proc.stdout, name
+
+
 if __name__ == '__main__':
     test_injects_with_no_env_set()
     test_opt_out_silences_it()
@@ -1294,4 +1525,18 @@ if __name__ == '__main__':
     test_a_parked_anchor_beside_a_live_one_injects_the_live_one_and_names_the_parked()
     test_select_anchor_ranks_parked_below_live_and_above_content_terminal()
     test_without_a_parked_field_every_output_is_byte_identical_to_the_golden()
+    test_step_bumps_the_frontmatter_and_puts_the_new_entry_first_in_the_cursor()
+    test_step_text_with_a_windows_path_and_an_arrow_round_trips_byte_exactly()
+    test_step_survives_a_cp1252_stdout()
+    test_step_adds_a_missing_field_as_step_1_after_the_format_line()
+    test_step_keeps_the_line_endings_of_the_file()
+    test_step_edits_only_the_head_frontmatter_and_cursor()
+    test_step_after_a_lagging_field_numbers_past_the_cursor()
+    test_step_on_an_anchor_without_a_cursor_exits_2_and_leaves_the_file_untouched()
+    test_step_usage_errors_exit_2_and_say_which_path()
+    test_step_into_a_cursor_with_no_bullets_still_lands_under_the_heading()
+    test_step_keeps_a_byte_order_mark()
+    test_newest_step_reads_the_cursor_bullets_only()
+    test_head_fit_flags_a_step_field_behind_the_cursor()
+    test_head_fit_is_quiet_when_step_agrees_or_either_side_is_absent()
     print('ok: all anchor_inject tests passed')

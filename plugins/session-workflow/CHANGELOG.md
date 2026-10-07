@@ -67,6 +67,28 @@ routing rules that enable per-lens capacity dispatch.
   T125a). Names `format`, `task`, `step` and the new `parked`. The compaction-survival
   SKILL.md step 1 reads "close, adopt or park" instead of "close or adopt" (one word;
   1262 of 1265 body words, measured by `word_budget.py --report`).
+- **`anchor_inject.py --step <anchor> "<text>"`: bump `step:` and add the cursor entry
+  in one edit** (2026-10-06 craft-collection triage: T78b). The step boundary was two
+  hand edits, the frontmatter counter and a new cursor bullet, and nothing kept the two
+  in step. The arm sets `step:` to one past the larger of itself and the
+  cursor's newest `Step N` (a missing field becomes 1, inserted after `format:`), puts
+  `- Step N: <text>` first in the HEAD's cursor section, writes through a temp file in
+  the same directory and `os.replace`, and keeps the file's line endings and every other
+  byte. It prints one confirmation line plus the `head:` line from `--head-fit`. Exit 2,
+  with the path named in the stderr message and the file untouched, for a missing file,
+  empty or multi-line text, no frontmatter or no cursor section. It does not fold older
+  entries. Tests cover a Windows path and a U+2192 arrow round-tripping byte-exactly, a
+  cp1252 stdout, CRLF files, a byte-order mark, a missing field, a `Cursor` heading in the TAIL being
+  ignored and a cursor with no bullets; the suite goes from 70 to 84 test functions
+  (counted with grep), each new one seen failing first. `commands/anchor.md` and the
+  Cursor section of `anchor-spec.md` name the arm.
+- **`--head-fit` warns when `step:` is behind the cursor** (2026-10-06 craft-collection
+  triage: T78c). `step:` feeds `/anchor`'s telemetry and confirmation line, so the field
+  is mechanized rather than dropped. A new pure `newest_step(head)` reads the highest
+  `Step N` among the cursor section's bullets; when it exceeds the frontmatter `step:`,
+  the report adds `step: frontmatter says 3, cursor's newest is Step 5 - run --step or
+  correct the field`. Nothing is printed when they agree, when the field is ahead, or
+  when either side is absent. The SessionStart injection is unchanged.
 
 ### Changed
 
