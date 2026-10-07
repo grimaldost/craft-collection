@@ -15,6 +15,8 @@ project or global CLAUDE.md protocol snippet, where a menu-less session still ha
 it — enough to arm a hook-compatible anchor with nothing installed:
 
 - Anchor at `<project>/.claude/anchors/<date>-<slug>.md`, one file, overwritten.
+- Frontmatter (`format:`, `task:`, `step:`) opens and closes with a `---` line, as
+  `/anchor` writes it; `--step` and `parked:` read nothing outside that block.
 - `<!-- anchor:tail -->` on its own line: the hook injects only the HEAD above it.
 - HEAD carries a **Cursor** with a single next action; keep it near the top.
 - Close by renaming to `<name>.closed.md` — the rename is the only close signal.

@@ -8,6 +8,24 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.17.2] - 2026-10-07
+
+Patch bump from the 2026-10-07 read-only review: one wrong script path, one stale hook
+description, and `--help` on a check script.
+
+### Fixed
+
+- **`refresh-models` names `choosing-models/scripts/emit_lineup.py`** (review P7). The step
+  said `scripts/emit_lineup.py`, which resolves to nothing under `refresh-models`; the script
+  lives in `choosing-models`. The word count is unchanged.
+- **`hooks/hooks.json` describes the dispatch and spawn-routing hooks as on by default**
+  (review P1). The description said the dispatch hint was "silent unless
+  HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=1"; the guard in `inject_dispatch.py` returns early on
+  `== '0'`, so the hook ships on and `=0` is the opt-out, as the README says. The verification
+  gate's description is unchanged: it ships off.
+- **`check_red_exception.py --help` prints usage and exits 0** (review P9). It read the flag as
+  a skill directory and reported `--help\SKILL.md: not found`.
+
 ## [0.17.1] - 2026-10-07
 
 Patch bump: the `planned-execution` reviewer prompts gain the APPROVE evidence bar (T43a).

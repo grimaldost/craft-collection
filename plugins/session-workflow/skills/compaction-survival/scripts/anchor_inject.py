@@ -487,10 +487,10 @@ def bump_step(text: str, entry: str) -> tuple[str, int | None, int]:
                 end = i
             break  # a marker over an empty HEAD is malformed: whole file, as split_head does
     if not lines or lines[0].strip() != '---':
-        raise ValueError('no frontmatter block')
+        raise ValueError('no `---` frontmatter block at line 1')
     close = next((j for j in range(1, end) if lines[j].strip() == '---'), None)
     if close is None:
-        raise ValueError('no frontmatter block')
+        raise ValueError('no closing `---` line for the frontmatter block')
 
     heading = None
     in_fence = False

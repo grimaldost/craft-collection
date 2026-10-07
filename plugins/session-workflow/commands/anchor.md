@@ -63,7 +63,9 @@ motivated this).
    re-injection hook spends its budget top-down, so a section's position is its
    priority.
    - Frontmatter: `format: anchor/v1`, `date`, `task:` (one line), `step:`
-     (prior step + 1, or 1), `source: /anchor`.
+     (prior step + 1, or 1), `source: /anchor`. The block opens and closes with
+     a `---` line (line 1 and after the last field); `--step` and `parked:` read
+     only a block fenced this way.
    - **Mission** — the goal and its hard constraints, plus any user instruction
      about mechanism (not outcome) quoted verbatim with a stable id.
    - **Cursor** — done / in progress / the single next action. This is the

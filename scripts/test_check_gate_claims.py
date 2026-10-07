@@ -8,6 +8,9 @@ Contract under test:
   an "off by default" phrase anywhere in the same paragraph;
 - fenced code is exempt (a verification recipe legitimately sets the variable);
 - CHANGELOG.md is exempt (a dated record of what was true then);
+- the root README's Hooks table has one row per hook entry point in the plugins'
+  hooks.json files, so a hook added without a row (or a row left after a hook
+  is dropped) is a finding;
 - the live repository is clean.
 
 The red proof is `test_a_contradicting_doc_reddens_the_check`: it seeds the exact
@@ -18,6 +21,7 @@ it this file would assert only that a passing check passes.
 Stdlib-runnable: `python test_check_gate_claims.py`.
 """
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -151,6 +155,47 @@ def test_an_empty_tree_does_not_pass_quietly():
         assert 'resolved nothing' in proc.stdout
 
 
+def _hooks_tree(root: Path, commands: int, rows: int) -> None:
+    """A plugin with `commands` hook entry points and a README table of `rows`."""
+    _plugin_tree(root, ON_GUARD, '# Demo\n\nShips on; `DEMO_GATE=0` opts out.\n')
+    hooks = root / 'plugins' / 'demo' / 'hooks'
+    hooks.mkdir(parents=True)
+    entries = [
+        {'hooks': [{'type': 'command', 'command': 'uv', 'args': [f'h{i}']}]}
+        for i in range(commands)
+    ]
+    (hooks / 'hooks.json').write_text(
+        json.dumps({'hooks': {'SessionStart': entries}}), encoding='utf-8'
+    )
+    table = ''.join(f'| h{i} | on | `DEMO_GATE=0` |\n' for i in range(rows))
+    (root / 'README.md').write_text(
+        '# Root\n\n## Hooks\n\nSome prose.\n\n| Behaviour | Default | Opt out with |\n'
+        '|-----------|---------|--------------|\n'
+        + table
+        + '\n## Next\n\n| a | b |\n|---|---|\n| x | y |\n',
+        encoding='utf-8',
+    )
+
+
+def test_a_hooks_table_missing_a_row_reddens_the_check():
+    # The observed defect: three table rows for nine hook entry points.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _hooks_tree(root, commands=3, rows=2)
+        proc = run_cli(root)
+        assert proc.returncode == 1, 'a table with fewer rows than hooks must not pass'
+        assert 'Hooks table' in proc.stdout
+        assert '2 row(s)' in proc.stdout and '3 hook entry point(s)' in proc.stdout
+
+
+def test_a_hooks_table_with_one_row_per_hook_passes():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _hooks_tree(root, commands=3, rows=3)
+        proc = run_cli(root)
+        assert proc.returncode == 0, proc.stdout
+
+
 def test_the_live_repository_is_clean():
     assert cgc.run(REPO) == []
 
@@ -166,5 +211,7 @@ if __name__ == '__main__':
     test_changelog_is_exempt()
     test_conflicting_polarity_is_reported_not_skipped()
     test_an_empty_tree_does_not_pass_quietly()
+    test_a_hooks_table_missing_a_row_reddens_the_check()
+    test_a_hooks_table_with_one_row_per_hook_passes()
     test_the_live_repository_is_clean()
     print('ok: all check_gate_claims tests passed')

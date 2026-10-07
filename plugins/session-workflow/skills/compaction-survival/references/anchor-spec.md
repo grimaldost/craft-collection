@@ -13,8 +13,11 @@ re-injection hook emits the HEAD only.
 
 A short block of `key: value` lines above the HEAD sections. `format: anchor/v1` marks
 the file as an anchor, `task:` names the work in one line, and `step:` counts the
-snapshots. `parked: <what it waits on>` is optional and opt-in: it marks a track that is
-deliberately waiting, such as on a review or an outside answer, rather than dormant. A
+snapshots. The block opens on line 1 with a `---` line and closes with a `---` line, as
+`/anchor` writes it; `--step`, the `--head-fit` step warning and `parked:` read nothing
+from frontmatter that is not fenced this way. `parked: <what it waits on>` is optional and
+opt-in: it marks a track that is deliberately waiting, such as on a review or an outside
+answer, rather than dormant. A
 parked anchor ranks below every live one, is injected as a short block naming the wait
 instead of its HEAD, and is listed by `--list-dormant` under a `parked:` heading, so the
 arm-time sweep does not offer to close it. Remove the line to resume the track; a value of

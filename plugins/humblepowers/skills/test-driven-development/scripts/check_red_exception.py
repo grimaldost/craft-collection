@@ -58,6 +58,9 @@ def run(skill_dir: Path) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] in (['-h'], ['--help']):
+        print(__doc__.strip())
+        return 0
     skill_dir = Path(argv[0]) if argv else Path(__file__).resolve().parent.parent
     findings = run(skill_dir)
     for finding in findings:

@@ -56,8 +56,8 @@ overrides of that file are refreshed the same way, in their own location.
 
 5. **On approval:** apply the mechanical edits (and only explicitly approved
    guidance edits). Stamp `last_reviewed` and advance `review_by` (quarterly by
-   default). `scripts/emit_lineup.py` then prints the block authoring pastes
-   into an artefact, carrying that stamp.
+   default). `choosing-models/scripts/emit_lineup.py` then prints the block
+   authoring pastes into an artefact, carrying that stamp.
 
 6. **Walk the mirror sites** — run it, do not perform it:
 

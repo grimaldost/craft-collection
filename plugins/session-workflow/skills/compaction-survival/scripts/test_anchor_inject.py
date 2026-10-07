@@ -1451,6 +1451,27 @@ def test_step_on_an_anchor_without_a_cursor_exits_2_and_leaves_the_file_untouche
         assert [p.name for p in f.parent.iterdir()] == ['run.md'], 'a temp file was left behind'
 
 
+def test_step_without_a_fenced_frontmatter_block_says_so_and_leaves_the_file_untouched():
+    # `--step` (like --head-fit's step warning and `parked:`) reads `step:` from a
+    # block that opens on line 1 and closes with its own `---` line. A bare
+    # `step: 4` line used to fail with the unexplained "no frontmatter block".
+    with tempfile.TemporaryDirectory() as d:
+        body = '# Mission\nship it\n\n## Cursor\n\n- Step 4: x\n'
+        bare = 'format: anchor/v1\nstep: 4\n' + body
+        unclosed = '---\nformat: anchor/v1\nstep: 4\n' + body
+        for name, text, expect in [
+            ('bare.md', bare, 'no `---` frontmatter block at line 1'),
+            ('unclosed.md', unclosed, 'no closing `---` line for the frontmatter block'),
+        ]:
+            f = _write_anchor(Path(d), text, name)
+            before = f.read_bytes()
+            proc = _step_cli(str(f), 'entry')
+            assert proc.returncode == 2, name
+            err = proc.stderr.decode('utf-8')
+            assert expect in err, f'{name}: {err!r}'
+            assert f.read_bytes() == before
+
+
 def test_step_usage_errors_exit_2_and_say_which_path():
     with tempfile.TemporaryDirectory() as d:
         f = _write_anchor(Path(d), STEP_ANCHOR)
@@ -2210,6 +2231,7 @@ if __name__ == '__main__':
     test_step_edits_only_the_head_frontmatter_and_cursor()
     test_step_after_a_lagging_field_numbers_past_the_cursor()
     test_step_on_an_anchor_without_a_cursor_exits_2_and_leaves_the_file_untouched()
+    test_step_without_a_fenced_frontmatter_block_says_so_and_leaves_the_file_untouched()
     test_step_usage_errors_exit_2_and_say_which_path()
     test_step_into_a_cursor_with_no_bullets_still_lands_under_the_heading()
     test_step_keeps_a_byte_order_mark()

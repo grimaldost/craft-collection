@@ -28,6 +28,12 @@ does not guarantee.
 | Commit-time | the pre-commit floor: `adapters/pre-commit/craft-floor.yaml` (ruff + the `check-uv-hygiene` hook this repo exports via `.pre-commit-hooks.yaml`), plus `experiment-rigor-validate` / `experiment-rigor-render-check` from the same file for projects keeping experiment records | residue and format drift cannot be committed; an experiment record cannot be committed out of sync with its report or its frozen pre-registration | that the mistake never happened — it is caught after the fact |
 | Advisory | the rules stated in `AGENTS.md` and the skill bodies | the agent read the rule | that the agent followed it |
 
+The floor pins this repository by `rev` (a full SHA, since the repository tags
+plugins rather than the repository as a whole). Re-pin it when a hook the
+floor relies on changes: a new export, or a fix to one of the exported hooks. The
+`rev` must be a commit on `main` at or after the export a consumer needs, so a
+consumer adopting an experiment-rigor gate takes a `rev` that already carries it.
+
 ## Commands and output styles, by hand
 
 Both are plain markdown an agent can be pointed at — no command/output-style

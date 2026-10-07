@@ -25,7 +25,6 @@ REPO = Path(__file__).resolve().parents[2]
 def main() -> int:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    cfg = json.loads((REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
     ap = argparse.ArgumentParser(description='Full focused skill eval')
     ap.add_argument('--concurrency', type=int, default=6)
     ap.add_argument('--limit', type=int, default=None)
@@ -33,6 +32,7 @@ def main() -> int:
     ap.add_argument('--skip-triggers', action='store_true')
     ap.add_argument('--skip-grading', action='store_true')
     args = ap.parse_args()
+    cfg = json.loads((REPO / 'evals' / 'config.json').read_text(encoding='utf-8'))
     skills = sorted(cfg['plugin_of_skill'])
 
     def argv_for(skill):
