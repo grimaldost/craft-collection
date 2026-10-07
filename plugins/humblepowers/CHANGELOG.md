@@ -28,6 +28,21 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
   "Cut features not needed yet; go back when something stops making sense." The two new
   clauses add 17 and 15 words, so the body stays at 560 words against its 560 baseline,
   with no budget bump.
+- **choosing-models: agreement work keeps the `high` effort default, and the evidence for it
+  is recorded** (T96a). The effort reference now says the "mechanical, tightly scoped" row
+  does not cover work whose correctness is agreement between two independent statements of
+  one rule (two readers of one domain rule, a pin and its vocabulary, a docstring promise and
+  its binding, a mirror and its source): that work keeps `high` at any tier and any diff
+  size. `models.toml` gains one `[meta]` key, `effort_observations`, holding the six-task
+  table behind it (2-3 fix rounds at `medium` on both tiers where the obligation applied,
+  1 at `high`) and a later directional note; no threshold or rubric point moves. The key is
+  above the first `[[models]]` block, so `emit_lineup.py` and `lineup_check.py` do not read it.
+- **choosing-models: an Agent-tool spawn's effort is counted as inherited, and effort-sensitive
+  batches go through workflow `agent()`** (T106a). The no-knob paragraph of the effort
+  reference now says an effort read from an Agent-tool spawn is the session's, not a chosen
+  value, citing the 2026-09-26 measure (110 of 127 spawns inherited `xhigh` or `max`, 46 of
+  them sonnet), and sends mappers, verifiers and triage batches through `agent()`, which
+  carries effort. Reference prose only; no body words change.
 - **skill-authoring: the shipping-gate reference says when to stop tuning and how to read a
   resealed holdout** (2026-10-06 delta triage: T18c, T20d). Zero movement at an A/B design
   able to detect it points at the dataset or selection context, so tuning the description
@@ -38,6 +53,14 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
 
 ### Fixed
 
+- **choosing-models: the weak tier's effort flag is accepted and ignored, not rejected**
+  (T81a). `models.toml` said Haiku 4.5 errors if an effort parameter is set; measured on
+  2026-09-13, `claude -p --model claude-haiku-4-5 --effort low` exits 0 and so do two
+  governed spawns at `effort=low`. The note now says so, scoped to those surfaces (direct API
+  behaviour is unmeasured), and the effort reference says the weak tier has no effort
+  dimension instead of "no effort knob at all". The new
+  `scripts/test_effort_guidance.py` pins the three corrections and the `[meta]` key; watched
+  red against the previous files, green on the fixed ones.
 - **choosing-models: the scoring rubric's adjustment range is stated correctly, and the
   clamp is stated** (T117a). The heading read "-15 to +10", but the table's three negatives
   and three positives give -15 to +15. A sentence under the tier table now says an additive
