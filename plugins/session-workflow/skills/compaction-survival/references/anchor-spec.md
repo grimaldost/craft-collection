@@ -30,6 +30,10 @@ unanswered question or approval is armed here for verbatim re-ask after the
 reset. This is the part that earns the anchor, and the part the injection
 reserves.
 
+The cursor is the one block guaranteed to survive a cut, so write it to stand
+alone: name the next action, its inputs and where to look, with no dependence on
+history the cut drops.
+
 It holds the **newest two steps**. Older ones fold into the TAIL at each phase
 boundary — the done-list is what actually accumulates, and a cursor that grows
 without bound spends the budget its own survival depends on.
@@ -74,7 +78,9 @@ than a second copy of the plan.
 
 ## TAIL
 
-- **Decisions log** — why the non-obvious calls were made.
+- **Decisions log** — why the non-obvious calls were made, what was rejected with
+  the measurement that rejected it, and what the run got wrong and how it was
+  settled.
 - **Folded history** — closed phases' one-line outcomes, resolved incidents.
 
 ## What the injection does with all this

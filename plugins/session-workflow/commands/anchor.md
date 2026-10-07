@@ -58,21 +58,29 @@ motivated this).
 3. **Locate or create the anchor file.** Reuse the newest non-closed `*.md` in
    `.claude/anchors/` when its task line matches the current work; otherwise
    create `<YYYY-MM-DD>-<short-run-slug>.md`.
-4. **Write the snapshot** — one full-file Write, all seven categories, each at
-   task-appropriate depth:
+4. **Write the snapshot** — one full-file Write: every HEAD section in survival
+   order, then the tail, each at task-appropriate depth. The order matters: the
+   re-injection hook spends its budget top-down, so a section's position is its
+   priority.
    - Frontmatter: `format: anchor/v1`, `date`, `task:` (one line), `step:`
      (prior step + 1, or 1), `source: /anchor`.
-   - **Mission** — the goal and its hard constraints, 1–3 sentences.
-   - **Plan pointer** — where the full plan lives. Point, don't copy.
+   - **Mission** — the goal and its hard constraints, plus any user instruction
+     about mechanism (not outcome) quoted verbatim with a stable id.
    - **Cursor** — done / in progress / the single next action. This is the
      load-bearing section; make it current, not aspirational.
+   - **Resume steps** — how a cold reader re-orients: read this file, verify
+     the real state, continue from the cursor. Keep them idempotent, in
+     absolute paths.
    - **Invariants** — decisions and constraints a post-reset turn must not
      relitigate.
+   - **Parallel tracks** — only when a peer run shares these trees: the other
+     track's anchor path and this track's never-touch surface.
+   - **In-flight work** — background or async tasks the cursor depends on: ids,
+     log paths, and a do-not-relaunch guard.
    - **Last-known-good** — branch and commit SHA, artifacts written,
      checkpoints reached. Check the real state (`git log --oneline -1`,
      the files on disk) rather than recalling it.
-   - **Resume steps** — how a cold reader re-orients: read this file, verify
-     the real state, continue from the cursor. Keep them idempotent.
+   - **Plan pointer** — where the full plan lives. Point, don't copy.
    - `<!-- anchor:tail -->` on its own line — the re-injection hook emits only
      what is above this marker; everything below stays on disk.
    - **Decisions log** — append-only; why the non-obvious calls were made.

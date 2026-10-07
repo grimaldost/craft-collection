@@ -68,6 +68,36 @@ routing rules that enable per-lens capacity dispatch.
   receives its prior findings inline and returns a per-finding status (addressed,
   partly, not addressed, or regressed) before attacking afresh. Stop when a round's
   verdicts meet the declared bar and no blocker survives refutation.
+- **compaction-survival reference lines: a standalone cursor, a fuller decisions
+  log, a fold rule and the `.gitignore` line** (2026-10-06 craft-collection triage:
+  T91a, T76c, T24b, T86g). `anchor-spec.md` says the cursor is the one block
+  guaranteed to survive a cut, so it names the next action, its inputs and where to
+  look without relying on dropped history, and the decisions log also records what
+  was rejected with the measurement that rejected it and what the run got wrong.
+  The minimal contract in `cold-start.md` gains two bullets: fold each closed phase
+  into the TAIL and measure with `anchor_inject.py --head-fit` (in hookless mode
+  nothing else bounds the HEAD), and `.claude/anchors/` carries a `.gitignore`
+  containing `*`, so a commit after an anchor update correctly reports nothing to
+  commit. The compaction-survival SKILL.md body is unchanged (1265 words, at its
+  budget).
+
+### Fixed
+
+- **`/anchor` listed the snapshot sections in the wrong order, with two missing**
+  (2026-10-06 craft-collection triage: T34d). The command's snapshot step ran
+  Mission, Plan pointer, Cursor, Invariants, Last-known-good, Resume steps ("all
+  seven categories", a count that was also wrong) and asked for a 1-3 sentence
+  Mission, while the injection spends its budget top-down in the order
+  `anchor-spec.md` and the skill body give: Mission, Cursor, Resume steps,
+  Invariants, Parallel tracks, In-flight work, Last-known-good, Plan pointer. A
+  snapshot written to the old list put the plan pointer above the cursor and had
+  no place for peer-track or background-task state. The step now lists all eight
+  in the spec's order, states no count, and takes the spec's Mission rule (quote a
+  mechanism instruction verbatim with a stable id). The same stale order in the
+  by-hand recipe of `cold-start.md` is corrected too.
+  `skills/compaction-survival/scripts/test_anchor_section_order.py` parses the section order from the spec,
+  the skill body, the command and the cold-start recipe and fails if any differs
+  (seen failing on the old command and recipe, passing on the new text).
 
 ## [0.24.4] - 2026-10-06
 

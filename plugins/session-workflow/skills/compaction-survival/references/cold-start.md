@@ -18,18 +18,24 @@ it — enough to arm a hook-compatible anchor with nothing installed:
 - `<!-- anchor:tail -->` on its own line: the hook injects only the HEAD above it.
 - HEAD carries a **Cursor** with a single next action; keep it near the top.
 - Close by renaming to `<name>.closed.md` — the rename is the only close signal.
+- At each phase boundary, fold the closed phase into the TAIL and measure with
+  `anchor_inject.py --head-fit <anchor>`; in hookless mode nothing else bounds the
+  HEAD.
+- `.claude/anchors/` carries a `.gitignore` containing `*`. It is gitignored on
+  purpose, so a commit after an anchor update correctly reports nothing to commit.
 
 The fuller by-hand recipe (hook registration, verify step) follows.
 
 ## The anchor file, by hand
 
 The anchor format is a convention, not a command's private output — reproduce
-it from the skill body's section list (mission, plan pointer, cursor,
-invariants, last-known-good, resume steps). What matters beyond the sections:
+it from the skill body's section list (mission, cursor, resume steps,
+invariants, parallel tracks, in-flight work, last-known-good, plan pointer), in
+that order. What matters beyond the sections:
 
 - Path: `<project>/.claude/anchors/<date>-<slug>.md`. One file, overwritten
   atomically.
-- Put `<!-- anchor:tail -->` on its own line between the resume steps and the
+- Put `<!-- anchor:tail -->` on its own line between the last HEAD section and the
   decisions log: the hook injects only what is above it, so the append-only
   tail never crowds the live state out of the injection budget.
 - When the run ends, rewrite the anchor to a minimal landed stub (status, a
