@@ -14,6 +14,11 @@ tagged.
   AsPredicted questions, which do not have typed record fields. The record has no typed field
   per question; answers go under `analysis_plan.preregistration`, which ER-PREREG's freeze
   covers like the rest of analysis_plan.
+- (T86x) The RG-2x2 example's `finalize.py` read `git rev-parse HEAD` in text mode with
+  the locale codec, the same pattern that produced the 0.3.2 ER-PREREG false drift. It
+  now decodes git's output as UTF-8, which is what git emits. The SHA it reads is ASCII,
+  so the finalized record does not change; a repository lint now flags this pattern in
+  every bundled script.
 
 ## [0.3.3] - 2026-09-05
 
