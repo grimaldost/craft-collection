@@ -92,8 +92,7 @@ plugin's LICENSE for third-party notices.
 ## Hooks
 
 Two engineering-discipline hooks are **always on** once that plugin is installed —
-they are its mechanical layer, not options: `ruff_format` re-formats every `.py`
-file edited in a turn, once at the end of that turn (PostToolBatch,
+they are its mechanical layer, not options: `ruff_format` formats, once at the end of the turn, the `.py` files edited in that turn whose project declares ruff (`ruff.toml`, `.ruff.toml`, or a `[tool.ruff]` table) (PostToolBatch,
 non-blocking; needs Claude Code >= 2.1.218), and `uv_enforce` blocks
 pip/poetry/virtualenv inside uv-managed projects (PreToolUse; override one command
 with `CLAUDE_ALLOW_PIP=1`).

@@ -34,9 +34,7 @@ DONE | DONE_WITH_CONCERNS: <the concerns> | NEEDS_CONTEXT: <what is missing>
 | BLOCKED: <what is blocking and what you tried>
 ```
 
-What a reviewer must run and show before APPROVE is written down once, in the
-craft-collection repository's `CONTRIBUTING.md` under "Reviewing a pull request";
-the reviewer prompts below do not restate it.
+The orchestrator must add the APPROVE evidence bar (four items) to each reviewer prompt below, for example by pasting it or by stating the bar as a rule in the review loop, since the installed plugin does not ship `CONTRIBUTING.md`.
 
 ## Spec-compliance reviewer
 
