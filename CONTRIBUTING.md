@@ -161,7 +161,9 @@ where a frozen record cannot name its own commit sha before that commit exists.
   takes an `# ascii-ok` comment. Enforced as a ratchet by
   `scripts/ascii_runtime_lint.py` in pre-commit (baseline burn-down tracked).
   When fixing findings, rewrite the line — never round-trip via `untokenize`,
-  which reflows the whole file.
+  which reflows the whole file. The same holds on the way in: a subprocess call
+  that opens text mode names its `encoding=` (UTF-8 for git), ratcheted by
+  `scripts/subprocess_encoding_lint.py`.
 - **Tests live beside code.** Every `script.py` ships a `test_script.py` that runs
   under plain `python` (no pytest). `scripts/run_tests.py` discovers them.
 - **Every shipped check declares how it was proved able to fail.**

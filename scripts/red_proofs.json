@@ -100,6 +100,9 @@
     "scripts/run_tests.py": [
       "evals/harness/test_run_tests.py::test_silent_exit0_module_fails_the_suite"
     ],
+    "scripts/subprocess_encoding_lint.py": [
+      "scripts/test_subprocess_encoding_lint.py::test_text_mode_without_encoding_exits_1"
+    ],
     "scripts/validate_plugins.py": [
       "evals/harness/test_validate_plugins.py::test_invalid_hooks_json_is_flagged"
     ],

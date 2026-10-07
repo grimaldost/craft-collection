@@ -1,0 +1,4 @@
+{
+  "plugins/session-workflow/skills/llm-signature/scripts/render_signature.py": 1,
+  "plugins/session-workflow/skills/toolkit-awareness/scripts/scan_toolkit.py": 3
+}
