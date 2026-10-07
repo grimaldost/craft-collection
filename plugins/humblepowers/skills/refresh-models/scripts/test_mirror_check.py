@@ -61,6 +61,12 @@ class Stack:
         p.write_text(text, encoding='utf-8')
         return p
 
+    def repo(self, name: str) -> Path:
+        """A directory that reads as a repository root: it holds ``.git/``."""
+        p = self.dir / name
+        (p / '.git').mkdir(parents=True, exist_ok=True)
+        return p
+
     def bind(self, body: str) -> None:
         header = f'canonical = "{self.canonical.as_posix()}"\n\n'
         self.bindings.write_text(header + body, encoding='utf-8')
@@ -249,6 +255,150 @@ def test_env_override_is_honored():
             os.environ[mc.BINDINGS_ENV] = saved
 
 
+RETIRED = 'claude-fable-5(?![-.0-9])'
+
+
+def _site(path: Path) -> str:
+    """A [[site]] block that is clean on its own, so any finding comes from the sweep."""
+    return f"""
+[[site]]
+path = "{path.as_posix()}"
+mirrors = "tier-to-model map"
+vocabulary = "tier"
+role = "fallback"
+backlog = "{(path.parent / 'backlog.md').as_posix()}"
+"""
+
+
+def _retired(*roots: Path) -> str:
+    listed = ', '.join(f'"{r.as_posix()}"' for r in roots)
+    return f"""
+[[retired]]
+pattern = "{RETIRED}"
+reason = "superseded by claude-fable-5-1"
+roots = [{listed}]
+"""
+
+
+def _hits(out: str) -> list[str]:
+    return [line for line in out.splitlines() if 'is still here' in line]
+
+
+def test_a_retired_id_in_an_unlisted_file_of_a_site_repository_is_found():
+    """Acceptance for T101a. A pattern's own roots are where someone thought to
+    look; the copy nobody wrote down sits elsewhere in the same repository. With
+    no ``sweep_roots`` key, every pattern is also swept across the repository
+    root of every registered site."""
+    s = Stack()
+    repo = s.repo('repo')
+    site = s.file('repo/src/gov.py', "TIER = {'frontier': 'claude-fable-5-1'}\n")
+    s.file('repo/docs/notes.md', 'The frontier tier runs claude-fable-5 today.\n')
+    s.bind(_site(site) + _retired(repo / 'src'))
+    rc, out = s.check()
+    assert rc == 1, out
+    assert any('notes.md' in line for line in _hits(out)), out
+
+
+def test_the_summary_names_the_roots_swept():
+    """A narrow walk must read as narrow: the closing line says which roots every
+    pattern was swept across, so a reader can see what was not searched."""
+    s = Stack()
+    repo = s.repo('repo')
+    site = s.file('repo/src/gov.py', "TIER = {'frontier': 'claude-fable-5-1'}\n")
+    s.bind(_site(site) + _retired(repo / 'src'))
+    rc, out = s.check()
+    assert rc == 0, out
+    last = out.strip().splitlines()[-1]
+    assert 'Swept 1 root(s)' in last, last
+    assert repo.resolve().as_posix() in last, last
+
+
+def test_an_explicit_sweep_roots_list_is_used_exactly():
+    """A present key replaces the default rather than adding to it, and an empty
+    list is the opt-out: no roots beyond each pattern's own."""
+    s = Stack()
+    repo = s.repo('repo')
+    site = s.file('repo/src/gov.py', "TIER = {'frontier': 'claude-fable-5-1'}\n")
+    s.file('repo/docs/notes.md', 'claude-fable-5\n')
+    loose = s.dir / 'loose'
+    s.file('loose/old.md', 'claude-fable-5\n')
+
+    s.bind(f'sweep_roots = ["{loose.as_posix()}"]\n' + _site(site) + _retired(repo / 'src'))
+    rc, out = s.check()
+    assert rc == 1, out
+    assert any('old.md' in line for line in _hits(out)), out
+    assert not any('notes.md' in line for line in _hits(out)), 'the default must not apply'
+
+    s.bind('sweep_roots = []\n' + _site(site) + _retired(repo / 'src'))
+    rc, out = s.check()
+    assert rc == 0, out
+    assert 'Swept 0 root(s)' in out, out
+
+
+def test_a_site_outside_any_repository_adds_no_default_root():
+    """The default is the repository root, never the site's own directory: a
+    site in no repository widens nothing, so the pattern's roots stay the walk."""
+    s = Stack()
+    assert not any((p / '.git').exists() for p in s.dir.parents), (
+        f'precondition: the temp dir {s.dir} must sit in no repository'
+    )
+    site = s.file('engine/src/gov.py', "TIER = {'frontier': 'claude-fable-5-1'}\n")
+    s.file('engine/notes.md', 'claude-fable-5\n')
+    s.bind(_site(site) + _retired(s.dir / 'engine' / 'src'))
+    rc, out = s.check()
+    assert rc == 0, out
+
+
+def test_a_file_under_a_rule_root_and_a_sweep_root_is_reported_once():
+    """``repo/src`` is both the pattern's own root and inside the sweep root
+    ``repo``; overlapping roots must not double-report."""
+    s = Stack()
+    repo = s.repo('repo')
+    site = s.file('repo/src/gov.py', "TIER = {'frontier': 'claude-fable-5-1'}\n")
+    s.file('repo/src/old.py', "MODEL = 'claude-fable-5'\n")
+    s.file('repo/docs/notes.md', 'claude-fable-5\n')
+    s.bind(_site(site) + _retired(repo / 'src'))
+    rc, out = s.check()
+    assert rc == 1, out
+    hits = _hits(out)
+    assert len(hits) == 2, out
+    assert sum('old.py' in line for line in hits) == 1, out
+    assert sum('notes.md' in line for line in hits) == 1, out
+
+
+def test_exclude_globs_apply_to_sweep_roots():
+    """A repository-wide sweep reaches frozen fixtures and historical records;
+    ``[[exclude]]`` is how they are kept out, and the count still says so."""
+    s = Stack()
+    repo = s.repo('repo')
+    site = s.file('repo/src/gov.py', "TIER = {'frontier': 'claude-fable-5-1'}\n")
+    s.file('repo/tasks/frozen-v1/models.toml', "api_string = 'claude-fable-5'\n")
+    s.bind(
+        _site(site)
+        + _retired(repo / 'src')
+        + """
+[[exclude]]
+glob = "**/tasks/**"
+reason = "byte-preserved eval fixture"
+"""
+    )
+    rc, out = s.check()
+    assert rc == 0, out
+    assert '1 file(s) excluded by glob' in out, out
+
+
+def test_a_sweep_root_that_does_not_exist_is_a_finding():
+    """A sweep root that moved would silently narrow the walk."""
+    s = Stack()
+    engine = s.dir / 'engine'
+    engine.mkdir()
+    missing = s.dir / 'moved-away'
+    s.bind(f'sweep_roots = ["{missing.as_posix()}"]\n' + _retired(engine))
+    rc, out = s.check()
+    assert rc == 1, out
+    assert f'{missing.as_posix()}: sweep root does not exist' in out, out
+
+
 def main() -> int:
     test_absent_bindings_file_says_so_and_does_not_fail()
     test_a_clean_stack_reports_every_site_walked()
@@ -261,6 +411,13 @@ def main() -> int:
     test_a_resolution_path_site_is_reported_as_the_goal_not_yet_met()
     test_unreadable_bindings_cannot_answer_and_exits_two()
     test_env_override_is_honored()
+    test_a_retired_id_in_an_unlisted_file_of_a_site_repository_is_found()
+    test_the_summary_names_the_roots_swept()
+    test_an_explicit_sweep_roots_list_is_used_exactly()
+    test_a_site_outside_any_repository_adds_no_default_root()
+    test_a_file_under_a_rule_root_and_a_sweep_root_is_reported_once()
+    test_exclude_globs_apply_to_sweep_roots()
+    test_a_sweep_root_that_does_not_exist_is_a_finding()
     print('ok: mirror_check')
     return 0
 

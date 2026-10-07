@@ -38,6 +38,10 @@ for, and why step 6 requires that line in the changeset verbatim.
 
 canonical = "/abs/path/to/humblepowers/skills/choosing-models/models.toml"
 
+# Optional. Roots every [[retired]] pattern is also swept across. Absent, the
+# default is the repository root of every registered site; [] opts out.
+# sweep_roots = ["/abs/path/to/engine", "/abs/path/to/harness"]
+
 [[site]]
 path = "/abs/path/to/engine/src/engine/core/governance.py"
 symbol = "DEFAULT_TIER_MODELS"          # optional: what to look for in the file
@@ -73,6 +77,7 @@ reason = "byte-preserved eval fixture, not a live mirror"
 | field | required | meaning |
 |---|---|---|
 | `canonical` (top level) | for stamps | Absolute path to `models.toml`. Its `[meta].last_reviewed` is the one date every stamp is held against. |
+| `sweep_roots` (top level) | no | Absolute directories every `[[retired]]` pattern is searched across, besides its own `roots`. Absent: the repository root of every registered site. `[]`: no extra roots. See below. |
 | `path` | yes | Absolute path to the file holding the copy. |
 | `mirrors` | yes | What the copy holds, in one phrase. |
 | `vocabulary` | yes | Which words the copy speaks — see below. |
@@ -84,9 +89,34 @@ reason = "byte-preserved eval fixture, not a live mirror"
 | `note` | no | Anything the next walk needs and would otherwise rediscover. |
 
 `[[retired]]` takes `pattern` (a Python regex), `reason`, and `roots` (absolute
-directories to search). `[[exclude]]` takes `glob` and `reason`, and the count of
-files it hid is printed — an exclusion that quietly swallows work is the failure
-mode it would otherwise become.
+directories to search); each pattern also searches the sweep roots. `[[exclude]]`
+takes `glob` and `reason`, applies to every root, and the count of files it hid
+is printed — an exclusion that quietly swallows work is the failure mode it would
+otherwise become.
+
+### `sweep_roots` widens the catch-all
+
+A pattern's own `roots` are where someone thought to look, and the copy nobody
+wrote down is by definition somewhere else. So every pattern is also swept
+across the sweep roots:
+
+- **Absent** (the default): the repository root of every registered site — the
+  nearest directory above the site's path holding `.git`, a directory in a clone
+  or a file in a worktree. A site in no repository adds nothing, and a site whose
+  path is missing adds nothing (the missing path is already a finding).
+- **Present**: exactly the listed directories. `sweep_roots = []` opts out, and
+  the walk searches each pattern's own roots only.
+
+A sweep root that does not exist is a finding. A file under two overlapping
+roots, such as a pattern root inside a sweep root, is read once and reported
+once. The closing line names the sweep roots with their count and source, so a
+narrow walk reads as narrow rather than as all-clean.
+
+A repository-wide sweep reaches the historical record as well as live copies:
+CHANGELOGs, ADRs, dated reports, and test fixtures that pin an outgoing id on
+purpose. Those are not drift. Keep them out with `[[exclude]]` globs (for
+example `**/docs/reports/**` or `**/CHANGELOG.md`), each with its reason, or
+narrow the walk with an explicit `sweep_roots`.
 
 ### `vocabulary` is not decoration
 

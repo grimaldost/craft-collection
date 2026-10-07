@@ -14,6 +14,27 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
 
 ### Added
 
+- **refresh-models: the mirror walk sweeps every repository that holds a site, and its
+  closing line names the roots it swept** (2026-10-06 delta triage: T101a). A new
+  top-level `sweep_roots` list in the mirrors file adds roots that every `[[retired]]`
+  pattern searches besides its own `roots`. When the key is absent, the default is the
+  repository root of every registered site (the nearest directory above it holding
+  `.git`). `sweep_roots = []` opts out, and a sweep root that does not exist is a finding.
+  A file under two overlapping roots is read and reported once, and the
+  excluded-by-glob count now counts each file once instead of once per pattern and root.
+  The walk lists each root once with `os.walk`, pruning `.git`, `node_modules` and the
+  other skipped directories before descending. The per-pattern `rglob` listed them in
+  full first: on one real registry, a naive repository-wide sweep took 89 s, and this
+  walk takes 3.6 s (the previous narrow walk took under 1 s).
+  **Consumer impact:** on that registry (10 sites, 4 retired patterns, 3 excludes, 4
+  default repository roots) the walk goes from 0 findings to 24, all in historical
+  records: CHANGELOGs, an ADR, a backlog, dated reports and test fixtures. A registry
+  like it needs `[[exclude]]` globs for those, or an explicit `sweep_roots`, after this
+  release. `references/mirrors-file.md` documents the field, its default and that
+  trade-off. Seven new tests in `scripts/test_mirror_check.py`. Six were watched red
+  against the previous script, and the seventh pins that a site in no repository adds
+  no root.
+
 ### Changed
 
 - **brainstorming: step 1 reads the area's decision log, and step 3 has a branch for
