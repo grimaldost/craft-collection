@@ -1944,14 +1944,9 @@ def test_post_write_matches_windows_separators():
     with tempfile.TemporaryDirectory() as d:
         anchor = _anchor_with_head(Path(d), 8_100)
         payload = _write_payload(str(anchor).replace('/', '\\'), tool='MultiEdit')
-        if os.sep == '/':
-            # A backslash path cannot be opened on POSIX; the filter must still accept it
-            # and then exit quietly because the file is not there.
-            proc = _post_write(payload)
-            assert proc.returncode == 0
-            assert proc.stdout == ''
-        else:
-            assert 'OVER by 100' in _post_write_context(_post_write(payload))
+        # Backslashes are normalised to the host's separator, so the same file is found
+        # whichever separator the payload carried.
+        assert 'OVER by 100' in _post_write_context(_post_write(payload))
 
 
 def test_post_write_ignores_closed_and_non_anchor_paths():
