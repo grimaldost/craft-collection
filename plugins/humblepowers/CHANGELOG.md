@@ -8,6 +8,16 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.17.0] - 2026-10-07
+
+Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and a required decision-log read, and the mirror walk gains a `sweep_roots` registry field (T21a, T21c, T101a).
+
+### Added
+
+### Changed
+
+### Fixed
+
 ## [0.16.2] - 2026-10-06
 
 ### Changed
