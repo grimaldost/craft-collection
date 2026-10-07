@@ -6,6 +6,19 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.5.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.6.0] - 2026-10-07
+
+Hook scope change and a new parity_check flag. The compaction-summary bullet replaces
+the over-broad re-read-at-each-phase framing; the parity check gains a new output mode
+and an exit-code rule; the format hook narrows which files receive turn-level formatting.
+
+### Changed
+
+- **`data-engineering-discipline` SKILL.md source-of-truth bullet**: the "For a long
+  session" prose at Axiom 2 is replaced with guidance for fact-checking under pressure
+  — a fact from a compaction summary, an anchor, or an adversarial reviewer must be
+  re-measured before coding, not assumed. (2026-10-06 delta triage: T75b.)
+
 ## [0.5.1] - 2026-09-19
 
 The `python-engineering` recommended stack still pinned `ruff-pre-commit` to

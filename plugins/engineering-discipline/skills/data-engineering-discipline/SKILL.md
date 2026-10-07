@@ -97,8 +97,8 @@ Concretely, this means:
   enumerate the registry. Don't trust your guess at what it's called.
 - For source data feeding a new pipeline: sample and inspect it.
   Don't trust the upstream documentation.
-- For a long session: re-read the primary sources at each phase.
-  Don't trust the session summary.
+- A fact from a compaction summary, an anchor or an adversarial
+  reviewer: re-measure it before coding.
 
 **A producer can look verified and still mislead** — four sharper sub-cases,
 consolidated here so other files point to this set rather than re-stating it:
