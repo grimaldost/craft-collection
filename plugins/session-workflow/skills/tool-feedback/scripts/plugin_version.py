@@ -111,15 +111,36 @@ def installed_versions(install_path: str, version: str) -> list[str]:
     return sorted(names, key=_version_key)
 
 
+def _manifest_paths(repo_root: Path, plugin: str) -> tuple[Path, Path]:
+    """The two places a checkout can hold `plugin`'s manifest: the marketplace
+    layout, then a single-plugin repository's root."""
+    return (
+        repo_root / 'plugins' / plugin / '.claude-plugin' / 'plugin.json',
+        repo_root / '.claude-plugin' / 'plugin.json',
+    )
+
+
 def tree_version(repo_root: Path, plugin: str) -> str | None:
-    """`plugins/<plugin>/.claude-plugin/plugin.json`'s version, or None."""
-    manifest = repo_root / 'plugins' / plugin / '.claude-plugin' / 'plugin.json'
-    try:
-        data = json.loads(manifest.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return None
-    version = data.get('version')
-    return str(version) if version else None
+    """The checkout's version of `plugin`, or None.
+
+    The marketplace layout (`plugins/<plugin>/.claude-plugin/plugin.json`) is
+    read first. A single-plugin repository keeps its manifest at the root, and
+    that one is accepted only when its `name` is this plugin: a root manifest
+    for some other plugin is a different tool's version, and returning it would
+    render as agreement."""
+    marketplace, root_manifest = _manifest_paths(repo_root, plugin)
+    for manifest in (marketplace, root_manifest):
+        try:
+            data = json.loads(manifest.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        if manifest is root_manifest and data.get('name') != plugin:
+            continue
+        version = data.get('version')
+        return str(version) if version else None
+    return None
 
 
 def field_line(
@@ -241,9 +262,11 @@ def main(argv: list[str] | None = None) -> int:
             # script exists not to do. Observed: --tree pointed at the plugin
             # directory instead of the repo root, and the line came back clean
             # over a real cache-versus-tree release skew.
+            marketplace, root_manifest = _manifest_paths(tree_root, entry['name'])
             print(
-                f'error: no plugins/{entry["name"]}/.claude-plugin/plugin.json under '
-                f'{tree_root} - point --tree at the repo root, or omit it',
+                f'error: no plugin.json for {entry["name"]} at {marketplace} or '
+                f'{root_manifest} (name must match) - point --tree at the repository '
+                'root, or omit it',
                 file=sys.stderr,
             )
             return 1

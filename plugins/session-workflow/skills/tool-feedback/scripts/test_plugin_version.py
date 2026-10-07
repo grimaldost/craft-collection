@@ -178,6 +178,72 @@ def test_cli_refuses_an_unresolvable_plugin_and_names_nothing_plausible():
     assert main([]) == 2
 
 
+def _write_manifest(directory: Path, data: dict) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / 'plugin.json').write_text(json.dumps(data), encoding='utf-8')
+
+
+def test_a_single_plugin_repository_resolves_through_its_root_manifest():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _write_manifest(root / '.claude-plugin', {'name': 'demo', 'version': '1.2.3'})
+        assert tree_version(root, 'demo') == '1.2.3'
+
+
+def test_a_root_manifest_for_another_plugin_is_not_this_plugins_version():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _write_manifest(root / '.claude-plugin', {'name': 'other', 'version': '1.2.3'})
+        assert tree_version(root, 'demo') is None
+        _write_manifest(root / '.claude-plugin', {'version': '1.2.3'})
+        assert tree_version(root, 'demo') is None
+
+
+def test_the_marketplace_layout_wins_when_both_manifests_exist():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _write_manifest(root / '.claude-plugin', {'name': 'demo', 'version': '1.2.3'})
+        _write_manifest(
+            root / 'plugins' / 'demo' / '.claude-plugin', {'name': 'demo', 'version': '4.5.6'}
+        )
+        assert tree_version(root, 'demo') == '4.5.6'
+
+
+def test_an_unresolved_tree_error_names_both_paths_it_tried():
+    import contextlib
+    import io
+
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / 'repo'
+        _write_manifest(root / '.claude-plugin', {'name': 'other', 'version': '1.2.3'})
+        reg = Path(d) / 'installed_plugins.json'
+        reg.write_text(
+            json.dumps(
+                {
+                    'plugins': {
+                        'demo@market': [
+                            {
+                                'scope': 'user',
+                                'installPath': '/c/u/.claude/plugins/cache/market/demo/1.2.3',
+                                'version': '1.2.3',
+                            }
+                        ]
+                    }
+                }
+            ),
+            encoding='utf-8',
+        )
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = main(['demo', '--registry', str(reg), '--tree', str(root)])
+        text = err.getvalue()
+        assert code == 1
+        assert str(root / 'plugins' / 'demo' / '.claude-plugin' / 'plugin.json') in text
+        assert str(root / '.claude-plugin' / 'plugin.json') in text
+        assert 'name must match' in text
+        assert text.isascii()
+
+
 if __name__ == '__main__':
     test_a_plugin_resolves_to_its_installed_version_and_path()
     test_an_unknown_plugin_resolves_to_nothing_rather_than_a_plausible_guess()
@@ -195,4 +261,8 @@ if __name__ == '__main__':
     test_read_registry_parses_a_real_file()
     test_tree_version_reads_the_manifest_and_is_none_when_there_is_no_checkout()
     test_cli_refuses_an_unresolvable_plugin_and_names_nothing_plausible()
+    test_a_single_plugin_repository_resolves_through_its_root_manifest()
+    test_a_root_manifest_for_another_plugin_is_not_this_plugins_version()
+    test_the_marketplace_layout_wins_when_both_manifests_exist()
+    test_an_unresolved_tree_error_names_both_paths_it_tried()
     print('ok: all plugin_version tests passed')

@@ -286,6 +286,18 @@ routing rules that enable per-lens capacity dispatch.
   (2026-10-06 craft-collection triage: T120b). The Common failure modes line said
   "The seven recurring ones" while `references/failure-modes.md` held 13 data rows
   (and 15 after this release). The line now states no count, so it cannot drift.
+- **`plugin_version.py --tree` could not resolve a single-plugin repository**
+  (2026-10-06 craft-collection triage: T127a). `tree_version` read only
+  `plugins/<name>/.claude-plugin/plugin.json`, so a repository holding one plugin at its
+  root (`.claude-plugin/plugin.json`) always failed, and the error told the author to point
+  `--tree` at the repository root, which was already where it pointed. `tree_version` now
+  tries the marketplace layout first and falls back to the root manifest, accepted only
+  when its `name` equals the plugin (a root manifest for another plugin returns None
+  rather than that plugin's version). The error names both paths it tried and keeps exit 1
+  and ASCII. `test_plugin_version.py` gains 4 test functions (16 to 20): the root
+  fallback, the name mismatch, marketplace precedence, and the two-path error text; the
+  fallback test failed on the old resolver, and the registered red-proof test passes
+  unchanged.
 
 ## [0.24.4] - 2026-10-06
 
