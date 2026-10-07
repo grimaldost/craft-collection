@@ -6,6 +6,29 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.24.4] - 2026-10-06
+
+One owner-approved row from the 2026-09-26 craft-collection triage: a correction
+to the open-row reader shipped in 0.24.3. Patch bump.
+
+### Fixed
+
+- **`feedback-triage`'s `triage_audit.py open-rows` counted a row once per
+  wording from T67 on.** 0.24.3 keyed every row by (id, description) because ids
+  were re-minted per triage doc before T67. From T67 on the numbering is shared,
+  so a row stated twice in one doc, or restated by a later doc under shorter text
+  with a closed status, read as two rows and the older, open wording never left
+  the open set. In the craft-collection namespace a row at or past T67 is now
+  keyed by its id alone and the newest statement wins; below T67, and in every
+  other tool's feedback folder, the (id, description) keying is unchanged, since
+  those folders re-mint ids per doc and an id past 66 there is not evidence of
+  uniqueness. The cut is a table in the script (`_UNIQUE_IDS_FROM`), keyed by the
+  folder's name, so another tool whose ids become shared adds one entry. Measured
+  on the maintainer's craft-collection folder: 426 open rows before, 424 after
+  (two post-T67 rows that were closed under a reworded restatement); the other
+  folders' counts are unchanged. Most of the remaining inflation is below T67,
+  where a reworded carry cannot be told from a reused id without a reading.
+
 ## [0.24.3] - 2026-09-19
 
 Two owner-approved rows from the 2026-09-19 craft-collection triage: an open-row
