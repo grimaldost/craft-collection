@@ -213,7 +213,8 @@ where a frozen record cannot name its own commit sha before that commit exists.
   fails a `SKILL.md` body with no entry in `scripts/word_budget.json`; add the
   one entry by hand. Read current headroom with
   `uv run --no-project -- python scripts/word_budget.py --report` (tightest
-  first) rather than counting by hand — there is exactly one counter in this
+  first; `--report <skill>` lists that skill's sections, longest first) rather
+  than counting by hand — there is exactly one counter in this
   repo, and an audit that compared a hand count against the gate's ceiling once
   reported 78 words of headroom where there were zero. (`scripts/word_budget.py --seed` exists, but it rewrites
   *every* baseline from the current tree, so it resets the ratchet — don't use it

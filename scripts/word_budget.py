@@ -14,6 +14,8 @@ body is always fine; only growth past the baseline trips.
 
     python scripts/word_budget.py            # check the tree against word_budget.json
     python scripts/word_budget.py --seed     # (re)write word_budget.json from the tree
+    python scripts/word_budget.py --report   # body / ceiling / headroom per skill
+    python scripts/word_budget.py --report <skill>   # that skill's sections, longest first
 
 Stdlib only.
 """
@@ -22,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -29,17 +32,66 @@ ROOT = Path(__file__).resolve().parent.parent
 BUDGET_FILE = ROOT / 'scripts' / 'word_budget.json'
 
 
+def _split_body(text: str) -> str:
+    """The SKILL.md body: everything after the frontmatter block (see body_word_count)."""
+    if text.startswith('---'):
+        parts = text.split('---', 2)
+        return parts[2] if len(parts) == 3 else text
+    return text
+
+
 def body_word_count(text: str) -> int:
     """Words in a SKILL.md BODY — everything after the frontmatter block. The
     frontmatter is delimited by the first two `---` lines; a `---` horizontal rule
     inside the body is preserved (split stops after two delimiters). A file without
     frontmatter counts whole. Words are whitespace-separated tokens. Pure."""
-    if text.startswith('---'):
-        parts = text.split('---', 2)
-        body = parts[2] if len(parts) == 3 else text
-    else:
-        body = text
-    return len(body.split())
+    return len(_split_body(text).split())
+
+
+HEADING = re.compile(r'#{1,6} ')
+PREAMBLE = '(before first heading)'
+
+
+def section_counts(text: str) -> list[tuple[int, str, int]]:
+    """`(line_no, heading, words)` per section of a SKILL.md body, longest first, ties
+    by line number. The body is cut at ATX headings (`#` to `######` plus a space)
+    outside ``` or ~~~ fences. Sections are flat: a `##` section's count excludes its
+    `###` children. Text before the first heading is `(before first heading)`, omitted
+    when empty. Sections partition the body's lines and a word never spans a line, so
+    the counts sum to `body_word_count(text)`. `line_no` counts from the top of the
+    file. Pure."""
+    body = _split_body(text)
+    first_line = text[: len(text) - len(body)].count('\n') + 1
+    sections: list[list] = [[first_line, PREAMBLE, 0]]
+    fence = ''
+    for offset, line in enumerate(body.split('\n')):
+        marker = line.lstrip()[:3]
+        if fence:
+            if marker == fence:
+                fence = ''
+        elif marker in ('```', '~~~'):
+            fence = marker
+        elif HEADING.match(line):
+            sections.append([first_line + offset, line.strip(), 0])
+        sections[-1][2] += len(line.split())
+    kept = [(n, heading, words) for n, heading, words in sections if words or heading != PREAMBLE]
+    return sorted(kept, key=lambda s: (-s[2], s[0]))
+
+
+def section_rows(path: str, text: str, budget: int | None) -> list[str]:
+    """The per-skill section report: a `path: body N / budget B, headroom H` line, one
+    line saying sections are flat, a column header, then `  words  line  heading`
+    rows. ASCII only, because it prints to a cp1252 console: a non-ASCII heading is
+    escaped. Pure."""
+    body = body_word_count(text)
+    room = '?' if budget is None else str(budget - body)
+    lines = [
+        f'{path}: body {body} / budget {"?" if budget is None else budget}, headroom {room}',
+        'sections are flat: a ## count excludes its ### children',
+        '  words  line  heading',
+    ]
+    lines += [f'{words:>7}  {n:>4}  {heading}' for n, heading, words in section_counts(text)]
+    return [line.encode('ascii', 'backslashreplace').decode('ascii') for line in lines]
 
 
 def _rel(path: Path) -> str:
@@ -103,6 +155,16 @@ def report_rows(counts: dict[str, int], baselines: dict[str, int]) -> list[str]:
     return [line for _, line in sorted(rows, key=lambda r: (r[0] is not None, r[0]))]
 
 
+def resolve_skill(target: str, root: Path = ROOT) -> Path | None:
+    """A skill name (`plugins/*/skills/<name>/SKILL.md`) or a path to a SKILL.md, else
+    None. Names are unique across the tree."""
+    for p in skill_files(root):
+        if p.parent.name == target:
+            return p
+    given = Path(target)
+    return given if given.is_file() else None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description='Skill-body word-budget ratchet (issue #54)')
     ap.add_argument(
@@ -110,13 +172,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument(
         '--report',
-        action='store_true',
-        help='print body / ceiling / headroom per skill and exit 0 - quote this, never a hand count',
+        nargs='?',
+        const='',
+        metavar='SKILL',
+        help='print body / ceiling / headroom per skill and exit 0 - quote this, never a hand '
+        'count; with a skill name or SKILL.md path, list the sections of that skill, longest first',
     )
     args = ap.parse_args(argv)
     counts = current_counts()
-    if args.report:
+    if args.report == '':
         for line in report_rows(counts, load_baselines()):
+            print(line)
+        return 0
+    if args.report is not None:
+        skill = resolve_skill(args.report)
+        if skill is None:
+            names = ', '.join(sorted(p.parent.name for p in skill_files()))
+            print(f'no skill {args.report!r}; available: {names}')
+            return 2
+        resolved = skill.resolve()
+        path = _rel(resolved) if resolved.is_relative_to(ROOT) else skill.as_posix()
+        text = skill.read_text(encoding='utf-8')
+        for line in section_rows(path, text, load_baselines().get(path)):
             print(line)
         return 0
     if args.seed:
