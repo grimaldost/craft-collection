@@ -10,19 +10,19 @@ tagged.
 
 ## [0.17.1] - 2026-10-07
 
-Patch bump: one pointer line in the `planned-execution` reviewer prompts (T43a).
+Patch bump: the `planned-execution` reviewer prompts gain the APPROVE evidence bar (T43a).
 
 ### Changed
 
-- **planned-execution/subagent-prompts.md points reviewers at the per-PR review
-  contract** (2026-08-11 triage: T43a). The contract itself (the reviewer runs the
-  gate's own invocation, an adversarial mutation and an independent recompute, and
-  reproduces a defect and prices it before reporting it; APPROVE requires that
-  execution evidence) lives once in the craft-collection repository's
-  `CONTRIBUTING.md`, under "Reviewing a pull request". The pointer carries the
-  evidence bar directly since the installed plugin does not ship `CONTRIBUTING.md`;
-  it is placed above the reviewer templates (applying to both) and is not a `SKILL.md`
-  body, so no word budget moves. The reviewer templates themselves are unchanged.
+- **planned-execution/subagent-prompts.md carries the APPROVE evidence bar** (2026-08-11
+  triage: T43a). A new section above the reviewer templates, applying to both, lists what a
+  reviewer runs and shows before APPROVE: the gate's own invocation, an adversarial mutation
+  that turns a test red, an independent recompute of any stated number, and a reproduction
+  (with its cost) of any reported defect. The orchestrator adds it to each reviewer prompt.
+  The bar ships in the plugin because the installed plugin does not carry the repository's
+  `CONTRIBUTING.md`, which holds the fuller text under "Reviewing a pull request". The file
+  is a reference, not a `SKILL.md` body, so no word budget moves; the reviewer templates
+  themselves are unchanged.
 
 ## [0.17.0] - 2026-10-07
 
