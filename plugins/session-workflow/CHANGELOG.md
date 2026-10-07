@@ -37,6 +37,15 @@ routing rules that enable per-lens capacity dispatch.
   against the shipped code and prefers a measurement on the target machine over
   inference from the repository. The pack header already allows use with or in place
   of the default quartet, so the SKILL.md table cell is unchanged.
+- **compaction-survival failure-modes: two new rows** (2026-10-06 craft-collection
+  triage: T120b, T121b). "Run moves or replaces its own project directory": the hook
+  looks in a directory that no longer holds the anchor, and a move that carries the
+  anchor along leaves two open copies; the row gives a four-step survivable sequence
+  and notes that on Windows the session's start directory cannot be renamed while
+  the session runs. "Subagent arms in the parent's anchors dir": a compaction of the
+  parent injects the subagent's cursor as the parent's own; the remedy is that the
+  subagent names its anchor path in its report back and the parent re-reads it by
+  hand. The table goes from 13 to 15 data rows (counted with grep).
 
 ### Changed
 
@@ -78,8 +87,18 @@ routing rules that enable per-lens capacity dispatch.
   into the TAIL and measure with `anchor_inject.py --head-fit` (in hookless mode
   nothing else bounds the HEAD), and `.claude/anchors/` carries a `.gitignore`
   containing `*`, so a commit after an anchor update correctly reports nothing to
-  commit. The compaction-survival SKILL.md body is unchanged (1265 words, at its
-  budget).
+  commit. The compaction-survival SKILL.md body is unchanged by this row (1265 words at that
+  point, at its budget).
+- **compaction-survival protocol steps 1 and 2 reworded, word-neutral** (2026-10-06
+  craft-collection triage: T121b, T78a). Step 1 drops the sentence about what
+  `close --stale` cannot reach (the "Track abandoned mid-cursor" row already holds
+  it) for a 13-word clause: a subagent anchors in its own work folder, never in
+  `<cwd>/.claude/anchors/`. Step 2 now reads "update the cursor whenever durable
+  state moves" (a commit, push, deploy step, background launch or write outside the
+  repo) instead of "after each step or phase", because a step boundary is not the
+  moment the state changes. `commands/anchor.md` takes the same wording in its
+  Boundary paragraph. The frontmatter description is untouched. Body words: 1265 to
+  1261 (`word_budget.py --report`).
 
 ### Fixed
 
@@ -98,6 +117,10 @@ routing rules that enable per-lens capacity dispatch.
   `skills/compaction-survival/scripts/test_anchor_section_order.py` parses the section order from the spec,
   the skill body, the command and the cold-start recipe and fails if any differs
   (seen failing on the old command and recipe, passing on the new text).
+- **compaction-survival SKILL.md stated a count of failure modes that was wrong**
+  (2026-10-06 craft-collection triage: T120b). The Common failure modes line said
+  "The seven recurring ones" while `references/failure-modes.md` held 13 data rows
+  (and 15 after this release). The line now states no count, so it cannot drift.
 
 ## [0.24.4] - 2026-10-06
 

@@ -100,6 +100,6 @@ motivated this).
 
 This command is the backstop, not the discipline. A one-off snapshot ages the
 moment work continues; for a long or autonomous run, arm `compaction-survival`
-— create the anchor at the start, update it after each step, re-read it each
+— create the anchor at the start, update it whenever durable state moves, re-read it each
 turn. Use `/anchor` for the deliberate checkpoint: before a manual `/compact`,
 before stepping away, before an irreversible move.
