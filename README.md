@@ -73,9 +73,9 @@ travelling `record.yaml` / `report.md` pair.
 `llm-signature`, `tool-feedback`, `feedback-triage`, `compaction-survival`, and
 `corpus-review`;
 the `/anchor` command; a live `scan_toolkit.py` inventory; the headless
-skill-eval engine in `scripts/`; a selectable `step-digest` output style; the
-control-anchor re-injection hook (on by default) plus two opt-in ones (see the
-plugin README).
+skill-eval engine in `scripts/`; a selectable `step-digest` output style; four
+hooks, all on by default: control-anchor re-injection, a stale skill-body check,
+an anchor-size warning and a feedback-debt nudge (see the plugin README).
 
 **humblepowers** — skills `choosing-tools`, `skill-authoring`, `brainstorming`,
 `test-driven-development`, `systematic-debugging`,
@@ -85,19 +85,23 @@ auto-triggering skill carries a trigger dataset and a sealed holdout under
 `evals/`, and four of them — `test-driven-development`, `systematic-debugging`,
 `verification-before-completion`, `planned-execution` — additionally carry
 correct-usage suites; register linter wired into pre-commit;
-a per-prompt dispatch-router hint hook, on by default. Derived from
+three hooks (a per-prompt dispatch-router hint and a spawn-routing hint, both on
+by default, and a subagent verification gate that ships off). Derived from
 [obra/superpowers](https://github.com/obra/superpowers) (MIT) — see the
 plugin's LICENSE for third-party notices.
 
 ## Hooks
 
-Two engineering-discipline hooks are **always on** once that plugin is installed —
-they are its mechanical layer, not options: `ruff_format` formats, once at the
-end of the turn, the `.py` files edited in that turn whose project declares ruff
-(`ruff.toml`, `.ruff.toml`, or a `[tool.ruff]` table) (PostToolBatch,
-non-blocking; needs Claude Code >= 2.1.218), and `uv_enforce` blocks
-pip/poetry/virtualenv inside uv-managed projects (PreToolUse; override one
-command with `CLAUDE_ALLOW_PIP=1`).
+The Hooks table below has one row per hook entry point in the plugins'
+`hooks.json` files; `scripts/check_gate_claims.py` fails when the row
+count and the entry-point count differ, and when a documented default contradicts
+the guard in the hook's script. The two engineering-discipline hooks are **always
+on** once that plugin is installed, with no environment gate: they are its
+mechanical layer, not options. `ruff_format` formats, once at the end of the turn,
+the `.py` files edited in that turn whose project declares ruff (`ruff.toml`,
+`.ruff.toml`, or a `[tool.ruff]` table); it is non-blocking and needs Claude Code
+>= 2.1.218. `uv_enforce` blocks pip/poetry/virtualenv inside uv-managed projects;
+`CLAUDE_ALLOW_PIP=1` overrides one command.
 
 The rule for every other hook here: **it ships on with a documented opt-out, or
 it does not ship.** A hook behind a variable nobody sets has never run, which
@@ -106,11 +110,23 @@ the `env` block of `~/.claude/settings.json` (every project) or
 `<repo>/.claude/settings.json` (one), e.g.
 `{ "env": { "SESSION_WORKFLOW_ANCHOR_HOOKS": "0" } }`.
 
-| Behaviour | Default | Opt out with |
-|-----------|---------|--------------|
-| Dispatch router hint injected on each prompt (UserPromptSubmit, not session start) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
-| Control-anchor re-injection on compact/resume | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0` |
-| Feedback-debt nudge on Stop (silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
+One hook is the stated exception to that rule: the humblepowers verification gate
+(SubagentStop) ships off and is armed by setting its variable to `1`, because it
+blocks a subagent's first stop where every other hook here only adds context or
+formats. Its plugin README gives the measurement behind that choice and what a
+default-on release waits for.
+
+| Plugin | Hook (event) | Default | Control |
+|--------|--------------|---------|---------|
+| engineering-discipline | `ruff_format`: format the edited `.py` files at end of turn (PostToolBatch) | always on | no gate |
+| engineering-discipline | `uv_enforce`: block pip/poetry/virtualenv in uv projects (PreToolUse) | always on | no gate; `CLAUDE_ALLOW_PIP=1` overrides one command |
+| session-workflow | Control-anchor re-injection on compact, resume, clear and startup (SessionStart) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0` |
+| session-workflow | Stale skill-body check on resume and compact (SessionStart) | on | `SESSION_WORKFLOW_STALE_BODY_CHECK=0` |
+| session-workflow | Anchor size warning after a write to an open anchor (PostToolUse) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0`, the same switch as re-injection |
+| session-workflow | Feedback-debt nudge (Stop; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
+| humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
+| humblepowers | Spawn-routing hint when a spawn names no model (PreToolUse on Agent and Workflow; advisory) | on | `HUMBLEPOWERS_SPAWN_ROUTING_HINT=0` |
+| humblepowers | Verification gate: blocks a subagent's first stop once (SubagentStop) | off | arm with `HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE=1` |
 
 Three hooks were retired rather than defaulted on: the toolkit-inventory session
 start inject (the harness already lists skills and descriptions in the system

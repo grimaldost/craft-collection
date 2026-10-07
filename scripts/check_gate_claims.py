@@ -26,12 +26,19 @@ What counts as a claim, and what deliberately does not:
 - Paragraph scope, not line scope. Markdown wraps, and the observed defect had
   "off by default" and the gate name on different lines of one bullet.
 
+One structural claim rides along: the root README's Hooks table lists one row per
+hook entry point in the plugins' `hooks.json` files. The table had three rows for
+nine entry points (and called the opt-in verification gate "on or not shipped")
+because nothing compared the two counts. The check counts `command` hooks and
+table body rows; it does not read the cell text.
+
 Usage: `python scripts/check_gate_claims.py [repo_root]`. Exit 1 on findings.
 """
 
 from __future__ import annotations
 
 import ast
+import json
 import re
 import sys
 from pathlib import Path
@@ -174,6 +181,60 @@ def check_markdown(path: Path, gates: dict[str, str], rel: str) -> list[str]:
     return findings
 
 
+def hook_entry_points(root: Path) -> int:
+    """Number of `command` hooks across every plugin's hooks/hooks.json."""
+    count = 0
+    for manifest in sorted((root / 'plugins').glob('*/hooks/hooks.json')):
+        try:
+            events = json.loads(manifest.read_text(encoding='utf-8')).get('hooks', {})
+        except (OSError, ValueError, AttributeError):
+            continue
+        for groups in events.values() if isinstance(events, dict) else []:
+            for group in groups if isinstance(groups, list) else []:
+                for hook in group.get('hooks', []) if isinstance(group, dict) else []:
+                    if isinstance(hook, dict) and hook.get('type') == 'command':
+                        count += 1
+    return count
+
+
+def hooks_table_rows(readme: str) -> int | None:
+    """Body rows of the first table under the README's `## Hooks` heading, or
+    None when the section has no table."""
+    rows: list[str] = []
+    in_section = False
+    for line in readme.splitlines():
+        if line.startswith('## '):
+            if in_section:
+                break
+            in_section = line.strip() == '## Hooks'
+            continue
+        if not in_section:
+            continue
+        if line.startswith('|'):
+            rows.append(line)
+        elif rows:
+            break
+    if not rows:
+        return None
+    return max(len(rows) - 2, 0)  # header and separator are not hooks
+
+
+def check_hooks_table(root: Path) -> list[str]:
+    readme = root / 'README.md'
+    if not readme.is_file():
+        return []
+    entry_points = hook_entry_points(root)
+    rows = hooks_table_rows(readme.read_text(encoding='utf-8'))
+    if rows is None:
+        return ['README.md: no table under "## Hooks"; one row per hook entry point is expected']
+    if rows != entry_points:
+        return [
+            f'README.md: Hooks table has {rows} row(s) but the plugins ship '
+            f'{entry_points} hook entry point(s) in hooks.json; one row per hook'
+        ]
+    return []
+
+
 def run(root: Path) -> list[str]:
     gates, findings = collect_gates(root)
     if not gates:
@@ -183,6 +244,7 @@ def run(root: Path) -> list[str]:
         if md.name in EXEMPT_MD or '__pycache__' in md.parts:
             continue
         findings.extend(check_markdown(md, gates, md.relative_to(root).as_posix()))
+    findings.extend(check_hooks_table(root))
     return findings
 
 
