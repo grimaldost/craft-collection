@@ -6,6 +6,35 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.25.1] - 2026-10-07
+
+Patch bump from the 2026-10-07 read-only review: the anchor frontmatter fence is stated where
+the CLI needs it, `--step` names the missing fence, the four evaluate-skill drivers answer
+`--help`, and two changelog citations of private report names are replaced by their role.
+
+### Fixed
+
+- **`--step` says which frontmatter part is missing** (review P2). A file with no `---`
+  line at line 1 now fails with "no `---` frontmatter block at line 1", and one whose block
+  never closes with "no closing `---` line for the frontmatter block"; both used to say "no
+  frontmatter block". Parsing is unchanged: `step:`, the `--head-fit` step warning and
+  `parked:` still read only a block fenced by `---` lines, as `/anchor` writes it.
+- **The fence is documented where it is needed** (review P2): `references/anchor-spec.md`
+  (Frontmatter), `commands/anchor.md` (the snapshot's frontmatter line) and
+  `references/cold-start.md` (the minimal contract) each state that the block opens on
+  line 1 and closes with a `---` line.
+- **`aggregate.py`, `grade_tasks.py`, `run_all.py` and `run_triggers.py` answer `--help`**
+  (review P9). They read `evals/config.json` before looking at the arguments, so `--help`
+  was a traceback wherever the config is not beside the script. Three print their module
+  docstring and exit 0 before touching the config; `run_all.py` parses its arguments first,
+  so argparse prints its own usage. Nothing else about how they are called changes.
+
+### Changed
+
+- **Two citations of private report names in the 0.2x entries below are replaced by their
+  role** ("a private refactor session report (#2)" and "(#3)"), as the earlier
+  public-name-hygiene pass did for the others (review, privacy).
+
 ## [0.25.0] - 2026-10-07
 
 Twenty-eight feedback rows from the 2026-10-06 craft-collection triage, across the
@@ -1229,12 +1258,12 @@ gained capability.
 - **tool-feedback step 2 rebuilds the INDEX before the recurrence check
   (T6b)** — an existing index may predate recent reports or an older detection
   rule; rebuild-always displaces the build-only-if-missing branch and the
-  false-positive-prone count heuristic (`trs-etl-refactor-session-workflow#2`,
+  false-positive-prone count heuristic (a private refactor session report (#2),
   `dc-v1-session-workflow#2`).
 - **tool-feedback granularity wording (T4a):** one report per tool per
   distinct concern/surface (a library vs its consumer plugin) — displaces the
   ambiguous "one report per tool" line (`v16-cycle-disciplines#2`,
-  `trs-etl-refactor-session-workflow#3`).
+  a private refactor session report (#3)).
 - Word budgets re-seeded for the growth these mechanisms brought:
   compaction-survival 952→1143 (two-tier anchor + close protocol displace the
   flat section list and its "keep it bounded" clause), feedback-triage
