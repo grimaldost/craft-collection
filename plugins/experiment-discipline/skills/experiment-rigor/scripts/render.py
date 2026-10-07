@@ -1074,9 +1074,11 @@ def schema_markdown(schema: dict[str, Any]) -> str:
     lines.append('## Pre-registration content (Q4, measurement tier)')
     lines.append('')
     lines.append(
-        'The frozen pre-registration maps the eight AsPredicted content questions to record '
-        'fields; `decision_rule` is a structured object (`metric`, `comparison`, `threshold`, '
-        '`direction`), not prose:'
+        'The eight AsPredicted content questions listed below are the content a measurement-tier '
+        'pre-registration answers. The record has no typed field per question: write the answers '
+        "under `analysis_plan.preregistration`, which ER-PREREG's freeze covers like the rest of "
+        'analysis_plan (amendments excepted). `decision_rule` is a structured object (`metric`, '
+        '`comparison`, `threshold`, `direction`), not prose:'
     )
     lines.append('')
     for field in schema['prereg_fields']:

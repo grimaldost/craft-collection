@@ -96,6 +96,21 @@ def test_a_missing_schema_file_is_loud():
 # --- schema.json <-> SCHEMA.md (the generated field guide) ------------------
 
 
+def test_schema_markdown_does_not_claim_field_mapping():
+    # T143a: the pre-registration paragraph no longer claims a field mapping
+    schema = _schema_json()
+    generated = render.schema_markdown(schema)
+    assert 'maps the eight AsPredicted' not in generated, (
+        'schema_markdown still claims a field mapping for the eight AsPredicted questions'
+    )
+    assert '`analysis_plan.preregistration`' in generated, (
+        'schema_markdown does not mention analysis_plan.preregistration as the record location'
+    )
+    # Still lists all eight prereg field names from the schema
+    for field in schema['prereg_fields']:
+        assert f'`{field}`' in generated, f'schema_markdown does not list prereg field {field}'
+
+
 def test_schema_md_is_in_sync_with_schema_json():
     generated = render.schema_markdown(_schema_json())
     on_disk = SCHEMA_MD.read_text(encoding='utf-8')  # universal newlines -> logical compare

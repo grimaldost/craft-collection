@@ -6,6 +6,15 @@ with each release.
 Tags start at 0.3.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.3.4] - 2026-10-07
+
+### Fixed
+
+- (T143a) Pre-registration content paragraph: stopped claiming a field mapping for the eight
+  AsPredicted questions, which do not have typed record fields. The record has no typed field
+  per question; answers go under `analysis_plan.preregistration`, which ER-PREREG's freeze
+  covers like the rest of analysis_plan.
+
 ## [0.3.3] - 2026-09-05
 
 ### Changed
