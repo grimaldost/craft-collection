@@ -10,7 +10,7 @@ tagged.
 
 Patch bump from the 2026-10-07 read-only review: the anchor frontmatter fence is stated where
 the CLI needs it, `--step` names the missing fence, the four evaluate-skill drivers answer
-`--help`, and two changelog citations of private report names are replaced by their role.
+`--help`, and eleven changelog citations of private report names are replaced by their role.
 
 ### Fixed
 
@@ -31,9 +31,9 @@ the CLI needs it, `--step` names the missing fence, the four evaluate-skill driv
 
 ### Changed
 
-- **Two citations of private report names in the 0.2x entries below are replaced by their
-  role** ("a private refactor session report (#2)" and "(#3)"), as the earlier
-  public-name-hygiene pass did for the others (review, privacy).
+- **Eleven citations of private project report names in the entries below are replaced by
+  their role** ("a private refactor session report", "a private project report"), as the
+  earlier public-name-hygiene pass did for the others (review, privacy).
 
 ## [0.25.0] - 2026-10-07
 
@@ -1139,8 +1139,8 @@ hook and two skills gained capability.
   *stops* injection — in-content status only reorders and offers the rename, so
   T5b's bright line holds. compaction-survival SKILL states close-at-cycle-end and
   the wind-down sweep; the failure-mode row for "closed in prose, never renamed"
-  now names the mitigation. (`v19-sw#1`, `dc-anchor-accumulation#1/#2/#3`,
-  `dc-reconciliation-sw#1`, `dc-campaign#3`.) **Scope of T13c, stated
+  now names the mitigation. (`v19-sw#1`, and private project reports on anchor accumulation #1/#2/#3,
+  reconciliation #1 and a campaign #3.) **Scope of T13c, stated
   honestly:** de-ranking resolves the *terminal-shadowing* case — a stale
   closed-but-unrenamed track shadowing a live one, which is what the accumulation
   reports evidenced. A genuinely-*active* wrong-track anchor (`context-handoff#2`)
@@ -1153,7 +1153,7 @@ hook and two skills gained capability.
   lines: a cursor is eventually-consistent during tool outages — trust the
   version-control log/ledgers over it when they disagree (CS2); a stored recovery
   command is validated against the live artifact before an unattended run (CS1).
-  (`staging-runall-sw#2`, `dc-campaign#1`, `tu-grounding §Friction`.)
+  (`staging-runall-sw#2`, and private project reports: a campaign #1, grounding §Friction.)
 - **compaction-survival cold-start reachability (T15a).** The by-hand recipe lives
   inside the skill, unreachable exactly when the skill is absent from the menu; the
   doctrine now keeps a compact minimal contract (anchor path, tail marker, cursor,
@@ -1215,12 +1215,12 @@ gained capability.
   exists on disk. Marker-less anchors keep the whole-file behavior; the 8K
   truncation stays as the final bound. Displaces: the blind whole-file slice
   as the only behavior (5-report truncation lineage:
-  `w4-compaction-anchor#1 → multiwave#1 → restarts#1 → dc-v1 §Friction
-  → v18-postcycle#1`).
+  `w4-compaction-anchor#1` → `multiwave#1` → `restarts#1` → a private project
+  report §Friction → `v18-postcycle#1`).
 - **Multi-track warning in the hook (T5a).** With more than one open anchor in
   a cwd, the injection warns and names the others, so a resumed session on a
   concurrent track doesn't silently follow the wrong cursor; telemetry gains
-  `open_anchors`. (`dc-v1-session-workflow#1`.)
+  `open_anchors`. (a private project report, #1.)
 - **Close is stub-then-rename (T1c/T5b).** SKILL.md protocol, `/anchor close`,
   and cold-start.md now state: on close, rewrite the anchor to a minimal
   landed stub, then rename to `*.closed.md` — the rename is the only close
@@ -1259,7 +1259,7 @@ gained capability.
   (T6b)** — an existing index may predate recent reports or an older detection
   rule; rebuild-always displaces the build-only-if-missing branch and the
   false-positive-prone count heuristic (a private refactor session report (#2),
-  `dc-v1-session-workflow#2`).
+  a private project report (#2)).
 - **tool-feedback granularity wording (T4a):** one report per tool per
   distinct concern/surface (a library vs its consumer plugin) — displaces the
   ambiguous "one report per tool" line (`v16-cycle-disciplines#2`,
@@ -1292,7 +1292,7 @@ the rebuild targets the registered dir (budget 1170→1188).
 
 ## [0.12.0] - 2026-07-06
 
-Build round for the 2026-07-06 triage (the tu-v16 campaign reports + the
+Build round for the 2026-07-06 triage (a private project's v16 campaign reports + the
 polish-session residuals): the anchor hook's Windows encoding defect with its
 lying telemetry, UTF-8 output across the unicode-printing scripts, the skew
 check one layer below installed-vs-source, compaction-survival's cold-start
