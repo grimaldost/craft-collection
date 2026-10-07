@@ -89,6 +89,39 @@ routing rules that enable per-lens capacity dispatch.
   the report adds `step: frontmatter says 3, cursor's newest is Step 5 - run --step or
   correct the field`. Nothing is printed when they agree, when the field is ahead, or
   when either side is absent. The SessionStart injection is unchanged.
+- **PostToolUse hook: a write to an open anchor warns when its HEAD is over the budget or
+  within 10% of it** (2026-10-06 craft-collection triage: T122a). The 8000-character
+  injection budget was enforced only at the next injection, so an anchor could grow past it
+  over a run and the cut (a dropped section, in the worst case a held-back cursor) showed
+  up after the fact. A new `PostToolUse` entry in `hooks.json` (matcher
+  `Write|Edit|MultiEdit`, timeout 10) runs `anchor_inject.py --post-write`. The arm reads the
+  payload's `tool_input.file_path`, normalises backslashes, and exits at once unless the path
+  is `*/.claude/anchors/*.md` and not `*.closed.md`. It measures the HEAD (above the tail
+  marker) with the existing `split_head` and `fit_head`, stays silent below 7,200
+  characters (90% of the budget), and above that prints a `PostToolUse` `additionalContext`
+  block: the `--head-fit` lines (`head: N chars / budget 8000 chars`, `OVER by X` or
+  `headroom Y`, the sections that would drop; `head_fit_report` now delegates to a new
+  `head_fit_lines(text)` so the wording is shared) and the Cursor's older bullets, oldest
+  first, as entries to fold below `<!-- anchor:tail -->` (the newest is never offered; at
+  most five, each clipped to 100 characters). It shares the SessionStart gate: **on by
+  default**, `SESSION_WORKFLOW_ANCHOR_HOOKS=0` opts out of both. Every path, including a
+  forced internal exception, exits 0. The `hooks.json` description and the README Hooks
+  list name the new hook. Measured on Windows 11 with a non-anchor payload, the median of 10
+  runs of the hook command (`uv run --no-project -- python anchor_inject.py --post-write`)
+  was 297 ms. Fourteen new tests feed the arm a synthetic payload through a subprocess: a
+  head of 11,397 characters reports `OVER by 3397`, 7,743 warns and reports `headroom 257`,
+  5,143 and a short HEAD over a 20,000-character TAIL are silent, 7,199 is silent and 7,200
+  warns; closed, non-anchor and non-`.md` paths, malformed or empty stdin, a missing file and
+  the opt-out all exit 0 with empty stdout; the module's suite goes from 102 to 116 test
+  functions (counted with grep), each new one seen failing first.
+- **The same hook makes `.claude/anchors/` ignore itself at write time** (2026-10-06
+  craft-collection triage: T123a). The SessionStart half only runs when a session starts,
+  so an anchor armed and written mid-session sat untracked in the repository until the next
+  start. `--post-write` calls `ensure_gitignore` on the directory of any open anchor it was
+  asked about, before the size check, so the file appears on the first write, including
+  when the HEAD is small and the arm prints nothing. It stays create-only: a test pins an
+  existing `.gitignore` byte-identical across a run, and no file is created for a missing
+  anchor, a closed anchor or a path outside `.claude/anchors/`.
 
 ### Changed
 

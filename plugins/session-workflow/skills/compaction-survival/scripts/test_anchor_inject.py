@@ -1815,6 +1815,231 @@ def test_hook_ensures_the_ignore_file_even_when_a_stale_startup_injects_nothing(
         assert (anchor.parent / '.gitignore').read_bytes() == b'*'
 
 
+# --- PostToolUse arm: --post-write warns when an anchor write leaves the HEAD over
+# budget or within 10% of it, and makes the anchors directory self-ignoring. ---
+
+_CURSOR_BULLETS = (
+    '- Step 3: newest entry\n- Step 2: middle entry\n- Step 1: oldest entry\n'
+    '  continuation of the oldest\n'
+)
+
+
+def _head_of_size(n: int) -> str:
+    """An anchor HEAD of exactly n characters (no trailing newline), with a Mission, a
+    padded Standing directives section and a Cursor of three newest-first bullets."""
+    head_start = '---\nformat: anchor/v1\nstep: 3\n---\n# Mission\nm\n# Standing directives\n'
+    cursor = '# Cursor\n' + _CURSOR_BULLETS.rstrip('\n')
+    pad = n - len(head_start) - len(cursor) - 1
+    assert pad > 0
+    head = head_start + 'x' * pad + '\n' + cursor
+    assert len(head) == n
+    return head
+
+
+def _anchor_with_head(base: Path, n: int, name: str = 'run.md', tail: str = 'old\n' * 5000) -> Path:
+    anchors = base / '.claude' / 'anchors'
+    anchors.mkdir(parents=True, exist_ok=True)
+    f = anchors / name
+    with open(f, 'w', encoding='utf-8', newline='') as fh:
+        fh.write(_head_of_size(n) + '\n<!-- anchor:tail -->\n' + tail)
+    return f
+
+
+def _post_write(payload, env_off: bool = False, raw: str | None = None):
+    env = dict(os.environ)
+    env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
+    if env_off:
+        env['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '0'
+    env['PYTHONIOENCODING'] = 'utf-8'
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(SCRIPT), '--post-write'],
+        input=raw if raw is not None else json.dumps(payload),
+        capture_output=True,
+        encoding='utf-8',
+        env=env,
+        timeout=30,
+    )
+
+
+def _write_payload(path, tool: str = 'Write') -> dict:
+    return {
+        'hook_event_name': 'PostToolUse',
+        'tool_name': tool,
+        'tool_input': {'file_path': str(path)},
+        'session_id': 'test-session',
+    }
+
+
+def _post_write_context(proc) -> str:
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)['hookSpecificOutput']
+    assert out['hookEventName'] == 'PostToolUse'
+    return out['additionalContext']
+
+
+def test_post_write_reports_how_far_over_budget_an_anchor_head_is():
+    with tempfile.TemporaryDirectory() as d:
+        proc = _post_write(_write_payload(_anchor_with_head(Path(d), 11_397)))
+        ctx = _post_write_context(proc)
+        assert 'head: 11397 chars / budget 8000 chars' in ctx
+        assert 'OVER by 3397' in ctx
+        assert 'Standing directives' in ctx, 'the section that would drop is named'
+
+
+def test_post_write_warns_inside_the_ten_percent_band_and_reports_headroom():
+    with tempfile.TemporaryDirectory() as d:
+        proc = _post_write(_write_payload(_anchor_with_head(Path(d), 7_743), tool='Edit'))
+        ctx = _post_write_context(proc)
+        assert 'headroom 257' in ctx
+        assert 'OVER' not in ctx
+
+
+def test_post_write_band_edge_is_ninety_percent_of_the_budget():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        assert _post_write(_write_payload(_anchor_with_head(base, 7_199))).stdout == ''
+        assert 'headroom 800' in _post_write_context(
+            _post_write(_write_payload(_anchor_with_head(base, 7_200, name='edge.md')))
+        )
+
+
+def test_post_write_is_silent_for_a_head_well_inside_the_budget():
+    with tempfile.TemporaryDirectory() as d:
+        proc = _post_write(_write_payload(_anchor_with_head(Path(d), 5_143)))
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+
+
+def test_post_write_measures_the_head_not_the_whole_file():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 2_000, tail='history line\n' * 3000)
+        assert anchor.stat().st_size > 20_000
+        proc = _post_write(_write_payload(anchor))
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+
+
+def test_post_write_lists_fold_candidates_oldest_cursor_bullet_first():
+    with tempfile.TemporaryDirectory() as d:
+        ctx = _post_write_context(_post_write(_write_payload(_anchor_with_head(Path(d), 11_397))))
+        assert 'anchor:tail' in ctx
+        oldest, middle = ctx.index('Step 1: oldest entry'), ctx.index('Step 2: middle entry')
+        assert oldest < middle
+        assert 'Step 3: newest entry' not in ctx, 'the newest entry is never offered for folding'
+        assert 'continuation of the oldest' not in ctx
+
+
+def test_post_write_a_cursor_with_one_entry_offers_nothing_to_fold():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = Path(d) / '.claude' / 'anchors' / 'run.md'
+        anchor.parent.mkdir(parents=True)
+        with open(anchor, 'w', encoding='utf-8', newline='') as fh:
+            fh.write('# Mission\n' + 'x' * 7_500 + '\n# Cursor\n- Step 1: only entry\n')
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert 'Step 1: only entry' not in ctx
+        assert 'headroom' in ctx
+
+
+def test_post_write_matches_windows_separators():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 8_100)
+        payload = _write_payload(str(anchor).replace('/', '\\'), tool='MultiEdit')
+        if os.sep == '/':
+            # A backslash path cannot be opened on POSIX; the filter must still accept it
+            # and then exit quietly because the file is not there.
+            proc = _post_write(payload)
+            assert proc.returncode == 0
+            assert proc.stdout == ''
+        else:
+            assert 'OVER by 100' in _post_write_context(_post_write(payload))
+
+
+def test_post_write_ignores_closed_and_non_anchor_paths():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        closed = _anchor_with_head(base, 11_397, name='run.closed.md')
+        elsewhere = base / 'notes.md'
+        elsewhere.write_text(_head_of_size(11_397), encoding='utf-8')
+        not_md = _anchor_with_head(base, 11_397, name='log.txt')
+        for target in (closed, elsewhere, not_md):
+            proc = _post_write(_write_payload(target))
+            assert proc.returncode == 0
+            assert proc.stdout == '', target
+        assert not (base / '.claude' / 'anchors' / '.gitignore').exists()
+
+
+def test_post_write_exits_zero_and_silent_on_every_unusable_input():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        missing = base / '.claude' / 'anchors' / 'gone.md'
+        cases = [
+            _post_write(None, raw='{not json'),
+            _post_write(None, raw=''),
+            _post_write(None, raw='[]'),
+            _post_write({'tool_input': 'x'}),
+            _post_write({'tool_input': {'file_path': 42}}),
+            _post_write({'tool_input': {}}),
+            _post_write(_write_payload(missing)),
+        ]
+        for proc in cases:
+            assert proc.returncode == 0, proc.stderr
+            assert proc.stdout == ''
+        assert not (base / '.claude').exists()
+
+
+def test_post_write_honours_the_shared_opt_out():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 11_397)
+        proc = _post_write(_write_payload(anchor), env_off=True)
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+        assert not (anchor.parent / '.gitignore').exists(), 'the opt-out also skips the ignore file'
+
+
+def test_post_write_exits_zero_when_the_measurement_itself_raises():
+    import io
+
+    import anchor_inject as ai
+
+    def boom(_head):
+        raise RuntimeError('forced')
+
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 11_397)
+        saved = (ai.fit_head, sys.stdin, sys.stdout)
+        ai.fit_head = boom
+        sys.stdin, sys.stdout = io.StringIO(json.dumps(_write_payload(anchor))), io.StringIO()
+        try:
+            code = ai.post_write_entry()
+            printed = sys.stdout.getvalue()
+        finally:
+            ai.fit_head, sys.stdin, sys.stdout = saved
+        assert code == 0
+        assert printed == ''
+
+
+def test_post_write_creates_the_gitignore_when_missing_and_never_rewrites_one():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 2_000)
+        ignore = anchor.parent / '.gitignore'
+        assert not ignore.exists()
+        assert _post_write(_write_payload(anchor)).returncode == 0
+        assert ignore.read_bytes() == b'*'
+        ignore.write_bytes(b'custom\r\n*.tmp')
+        assert _post_write(_write_payload(anchor)).returncode == 0
+        assert ignore.read_bytes() == b'custom\r\n*.tmp'
+
+
+def test_post_write_templates_are_ascii_even_for_a_non_ascii_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_head(Path(d), 11_397)
+        text = anchor.read_text(encoding='utf-8').replace('oldest entry', 'oldest → entry')
+        anchor.write_text(text, encoding='utf-8')
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert '→' in ctx, 'anchor content passes through unchanged'
+        assert [c for c in ctx.replace('→', '') if ord(c) > 127] == []
+
+
 if __name__ == '__main__':
     test_injects_with_no_env_set()
     test_opt_out_silences_it()
@@ -1918,4 +2143,18 @@ if __name__ == '__main__':
     test_hook_still_injects_and_logs_when_the_gitignore_write_fails()
     test_hook_with_no_open_anchor_creates_no_gitignore()
     test_hook_ensures_the_ignore_file_even_when_a_stale_startup_injects_nothing()
+    test_post_write_reports_how_far_over_budget_an_anchor_head_is()
+    test_post_write_warns_inside_the_ten_percent_band_and_reports_headroom()
+    test_post_write_band_edge_is_ninety_percent_of_the_budget()
+    test_post_write_is_silent_for_a_head_well_inside_the_budget()
+    test_post_write_measures_the_head_not_the_whole_file()
+    test_post_write_lists_fold_candidates_oldest_cursor_bullet_first()
+    test_post_write_a_cursor_with_one_entry_offers_nothing_to_fold()
+    test_post_write_matches_windows_separators()
+    test_post_write_ignores_closed_and_non_anchor_paths()
+    test_post_write_exits_zero_and_silent_on_every_unusable_input()
+    test_post_write_honours_the_shared_opt_out()
+    test_post_write_exits_zero_when_the_measurement_itself_raises()
+    test_post_write_creates_the_gitignore_when_missing_and_never_rewrites_one()
+    test_post_write_templates_are_ascii_even_for_a_non_ascii_cursor()
     print('ok: all anchor_inject tests passed')

@@ -33,6 +33,10 @@ When it finds open anchors it also creates `<anchors>/.gitignore` containing `*`
 that file is missing (never touching one that exists), so anchors and this hook's
 own log stay out of the repository's status.
 
+`--post-write` is the PostToolUse(Write|Edit|MultiEdit) arm of the same script: after a
+write to an open anchor it warns when the HEAD is over the budget or within 10% of it,
+and creates the same `.gitignore`. It shares the opt-out below and exits 0 on every path.
+
 Ships ON. `SESSION_WORKFLOW_ANCHOR_HOOKS=0` is the documented opt-out. It shipped
 inert behind an unset variable until 2026-08, which meant the mechanism carrying
 this plugin's strongest claim had never run anywhere while the claim rested on
@@ -517,7 +521,7 @@ def step_report_line(head: str) -> str:
     )
 
 
-def head_fit_report(anchor: Path) -> list[str]:
+def head_fit_lines(text: str) -> list[str]:
     """What the injection would do to this anchor at its current size: head
     characters, the budget, the cursor section reserved, and the sections that
     would drop.
@@ -535,7 +539,7 @@ def head_fit_report(anchor: Path) -> list[str]:
     within budget returns early with nothing reserved, and reading that empty
     reservation as "no cursor" told an author a false thing about the anchor on
     the common case."""
-    head, has_tail = split_head(_read(anchor))
+    head, has_tail = split_head(text)
     fit = fit_head(head)
     over = len(head) - MAX_CONTEXT_CHARS
     verdict = f'OVER by {over}' if over > 0 else f'headroom {-over}'
@@ -558,6 +562,11 @@ def head_fit_report(anchor: Path) -> list[str]:
     if lag:
         lines.append(lag)
     return lines
+
+
+def head_fit_report(anchor: Path) -> list[str]:
+    """`head_fit_lines` for an anchor file on disk."""
+    return head_fit_lines(_read(anchor))
 
 
 def list_dormant(anchors_dir: Path, min_age_s: float = DORMANT_AFTER_S) -> list[str]:
@@ -839,6 +848,110 @@ def append_telemetry(anchors_dir: Path, record: dict) -> None:
         pass  # telemetry is best-effort, never load-bearing
 
 
+# PostToolUse: the anchor is written many times a session, and the HEAD budget is only
+# enforced at injection, long after the write that broke it. Warn from the write.
+POST_WRITE_WARN_FRACTION = 0.9  # warn from 90% of the budget up (the last 10% is the margin)
+MAX_FOLD_CANDIDATES = 5
+MAX_CANDIDATE_CHARS = 100
+_TOP_BULLET = re.compile(r'^[-*]\s')
+
+
+def _is_open_anchor_path(raw: object) -> Path | None:
+    """The anchor path a write touched, or None when it is not an open anchor:
+    `*/.claude/anchors/*.md` and not `*.closed.md`. Backslashes are normalised first,
+    because a Windows tool payload carries them whatever the host is."""
+    if not isinstance(raw, str) or not raw:
+        return None
+    path = raw.replace('\\', '/')
+    if '/.claude/anchors/' not in path or not path.endswith('.md') or path.endswith('.closed.md'):
+        return None
+    return Path(path)
+
+
+def fold_candidates(head: str) -> list[str]:
+    """The cursor's top-level bullets that could move below the tail marker, oldest
+    first. Cursor entries are newest-first (`--step` prepends), so the oldest is last
+    in document order; the newest is never offered, it is the line a resuming
+    session needs. Each is clipped to MAX_CANDIDATE_CHARS, and at most
+    MAX_FOLD_CANDIDATES are returned."""
+    for name, block in split_sections(head):
+        if _is_cursor_section(name):
+            bullets = [ln.rstrip() for ln in block.splitlines()[1:] if _TOP_BULLET.match(ln)]
+            older = bullets[1:][::-1][:MAX_FOLD_CANDIDATES]
+            return [
+                b if len(b) <= MAX_CANDIDATE_CHARS else b[:MAX_CANDIDATE_CHARS] + '...'
+                for b in older
+            ]
+    return []
+
+
+def build_post_write_warning(anchor: Path, text: str) -> str:
+    """The additionalContext for an anchor write whose HEAD is over budget or inside
+    the last 10% of it: the head-fit lines, then the entries to fold below the tail
+    marker."""
+    head, _ = split_head(text)
+    lines = [f'<anchor-size-warning file="{anchor.name}">']
+    lines.extend(head_fit_lines(text))
+    candidates = fold_candidates(head)
+    if candidates:
+        lines.append(f'Fold candidates, oldest first (move below {TAIL_MARKER}):')
+        lines.extend(candidates)
+    else:
+        lines.append(
+            f'Fold candidates: none in the Cursor; move resolved history below {TAIL_MARKER}.'
+        )
+    lines.append('</anchor-size-warning>')
+    return '\n'.join(lines)
+
+
+def post_write_main() -> int:
+    """PostToolUse(Write|Edit|MultiEdit) arm. Silent unless the write touched an open
+    anchor whose HEAD is at or past 90% of the budget; it also makes the anchors
+    directory self-ignoring (create-only), as the SessionStart hook does."""
+    if os.environ.get(ENV_GATE) == '0':
+        return 0
+    try:
+        payload = json.loads(sys.stdin.read() or '{}')
+    except json.JSONDecodeError:
+        return 0
+    tool_input = payload.get('tool_input') if isinstance(payload, dict) else None
+    anchor = _is_open_anchor_path(
+        tool_input.get('file_path') if isinstance(tool_input, dict) else None
+    )
+    if anchor is None:
+        return 0
+    try:
+        text = anchor.read_text(encoding='utf-8', errors='ignore')
+    except OSError:
+        return 0
+    ensure_gitignore(anchor.parent)
+    head, _ = split_head(text)
+    if len(head) < POST_WRITE_WARN_FRACTION * MAX_CONTEXT_CHARS:
+        return 0
+    print(
+        json.dumps(
+            {
+                'hookSpecificOutput': {
+                    'hookEventName': 'PostToolUse',
+                    'additionalContext': build_post_write_warning(anchor, text),
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def post_write_entry() -> int:
+    """Every path out of the PostToolUse arm is exit 0: a broken size warning must
+    never fail a Write."""
+    try:
+        _force_utf8_stdout()
+        return post_write_main()
+    except Exception:
+        return 0
+
+
 def _force_utf8_stdout() -> None:
     """Hook runners on Windows hand this script a cp1252 stdout; campaign anchors
     essentially always carry non-ASCII (arrows, accented prose), so any print of
@@ -1010,6 +1123,10 @@ if __name__ == '__main__':
     # done together so the counter and the cursor cannot drift apart.
     if len(sys.argv) > 1 and sys.argv[1] == '--step':
         sys.exit(step_main(sys.argv[2:]))
+    # PostToolUse entry: `python anchor_inject.py --post-write` reads the hook payload on
+    # stdin and warns when the anchor just written has a HEAD over budget or within 10% of it.
+    if len(sys.argv) > 1 and sys.argv[1] == '--post-write':
+        sys.exit(post_write_entry())
     try:
         sys.exit(main())
     except Exception:

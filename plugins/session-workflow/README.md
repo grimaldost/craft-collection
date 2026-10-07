@@ -120,6 +120,17 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   Enabling it in a session whose plugin snapshot predates the hook (or in a
   harness without the plugin surface):
   `skills/compaction-survival/references/cold-start.md` has the manual recipe.
+- **PostToolUse (Write/Edit/MultiEdit)** — anchor size warning: after a write to an
+  open anchor (`.claude/anchors/*.md`, not `*.closed.md`) whose HEAD is over the
+  8000-character injection budget or within 10% of it (7,200 characters and up), adds
+  the head-fit lines (characters, budget, `OVER by X` or `headroom Y`, the sections
+  that would drop) and the Cursor's oldest entries as candidates to fold below
+  `<!-- anchor:tail -->`, so the overrun is seen at the write rather than at the next
+  injection. It is silent for every other path and for a HEAD with room, and it
+  creates `.claude/anchors/.gitignore` (content `*`) when that file is missing, the
+  write-time half of the SessionStart behaviour above. It costs one Python start per
+  Write, Edit or MultiEdit, with the path filter first. **On by default**; opt out with
+  `SESSION_WORKFLOW_ANCHOR_HOOKS=0` (the same switch as the SessionStart hook).
 - **Stop** — feedback-debt nudge: once per session, when the transcript shows
   plugin tools were exercised, no tool-feedback invocation is on record, and
   the session has at least `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) real
