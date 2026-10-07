@@ -75,11 +75,14 @@ def make_anchor(
     name: str = 'run.md',
     body: str = '# Mission\ntest mission\n# Cursor\nnext: step 7\n',
     age_s: int = 0,
+    extra_frontmatter: str = '',
 ):
     anchors = base / '.claude' / 'anchors'
     anchors.mkdir(parents=True, exist_ok=True)
     f = anchors / name
-    f.write_text('---\nformat: anchor/v0\nstep: 7\n---\n' + body, encoding='utf-8')
+    f.write_text(
+        '---\nformat: anchor/v0\nstep: 7\n' + extra_frontmatter + '---\n' + body, encoding='utf-8'
+    )
     if age_s:
         old = time.time() - age_s
         os.utime(f, (old, old))
@@ -993,6 +996,233 @@ def test_sweeps_survive_a_cp1252_stdout():
         assert 'passo' in proc.stdout.decode('utf-8'), 'the cursor must survive the seam intact'
 
 
+# -- parked anchors: `parked: <what it waits on>` in the frontmatter -------------
+
+PARKED_AGE_H = 466
+WAITS_ON = 'vendor sign-off on the schema change'
+PARKED_BODY = '# Schema rollout\n# Cursor\nPhase 2 blocked until the vendor answers\n'
+
+
+def make_parked(base: Path, name: str = 'schema-rollout.md', age_h: int = 0, waits=WAITS_ON):
+    return make_anchor(
+        base,
+        name=name,
+        body=PARKED_BODY,
+        age_s=age_h * 3600,
+        extra_frontmatter=f'parked: {waits}\n',
+    )
+
+
+def test_parked_reason_reads_the_frontmatter_field():
+    import anchor_inject as ai
+
+    text = f'---\nformat: anchor/v1\nparked: {WAITS_ON}\nstep: 3\n---\n{PARKED_BODY}'
+    assert ai.parked_reason(text) == WAITS_ON
+
+
+def test_parked_reason_is_empty_when_the_field_is_absent_or_blank():
+    import anchor_inject as ai
+
+    assert ai.parked_reason('---\nformat: anchor/v1\nstep: 3\n---\n' + PARKED_BODY) == ''
+    assert ai.parked_reason('---\nformat: anchor/v1\nparked:\n---\n' + PARKED_BODY) == ''
+    assert ai.parked_reason(PARKED_BODY) == ''
+
+
+def test_parked_reason_ignores_a_parked_line_in_the_tail_or_the_body():
+    import anchor_inject as ai
+
+    fm = '---\nformat: anchor/v1\nstep: 3\n---\n'
+    in_body = fm + '# Cursor\nparked: a note about another track\n'
+    in_tail = fm + PARKED_BODY + '<!-- anchor:tail -->\nparked: folded decision text\n'
+    no_frontmatter = 'parked: not frontmatter at all\n' + PARKED_BODY
+    assert ai.parked_reason(in_body) == ''
+    assert ai.parked_reason(in_tail) == ''
+    assert ai.parked_reason(no_frontmatter) == ''
+
+
+def test_a_parked_anchor_lists_under_the_parked_heading_and_not_as_dormant():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_parked(tmp, age_h=PARKED_AGE_H)
+        make_anchor(
+            tmp,
+            name='abandoned.md',
+            body='# Remodel wave\n# Cursor\nPhase 1 IN PROGRESS\n',
+            age_s=96 * 3600,
+        )
+        anchors = tmp / '.claude' / 'anchors'
+        lines = ai.list_dormant(anchors)
+        dormant = [ln for ln in lines if ln.startswith('abandoned.md')]
+        assert len(dormant) == 1, lines
+        assert not any(ln.startswith('schema-rollout.md') for ln in lines), (
+            'a parked anchor must not read as dormant: the sweep would offer to close it'
+        )
+        assert 'parked:' in lines, lines
+        parked = lines[lines.index('parked:') + 1 :]
+        assert len(parked) == 1, lines
+        for part in ('schema-rollout.md', f'{PARKED_AGE_H}h', WAITS_ON, 'Phase 2 blocked'):
+            assert part in parked[0], (part, parked[0])
+        assert lines.index('parked:') > lines.index(dormant[0]), 'dormant lines come first'
+
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, str(SCRIPT), '--list-dormant', str(anchors)],
+            capture_output=True,
+            encoding='utf-8',
+            timeout=30,
+        )
+        assert proc.returncode == 0
+        assert 'parked:' in proc.stdout.splitlines()
+
+
+def test_a_fresh_parked_anchor_is_still_listed_as_parked():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_parked(tmp)
+        lines = ai.list_dormant(tmp / '.claude' / 'anchors')
+        assert lines[0] == 'parked:' and WAITS_ON in lines[1], lines
+
+
+def test_a_parked_anchor_that_is_the_only_open_one_injects_the_short_block():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        f = make_parked(tmp)
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert str(f) in ctx
+        assert f'parked: {WAITS_ON}' in ctx
+        assert 'remove the `parked:` line' in ctx, 'the block must say how to un-park'
+        assert f'mv {f.name} {f.stem}.closed.md' in ctx, 'and how to close instead'
+        assert 'Phase 2 blocked' not in ctx, 'the HEAD is withheld for a parked anchor'
+        assert 'format: anchor/' not in ctx
+        assert len(ctx) < 700, f'one short block, got {len(ctx)} chars'
+        log = (tmp / '.claude' / 'anchors' / 'log.ndjson').read_text(encoding='utf-8')
+        assert json.loads(log.splitlines()[-1])['tier'] == 'parked'
+
+
+def test_a_parked_anchor_beside_a_live_one_injects_the_live_one_and_names_the_parked():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='live.md', body='# Cursor\nlive cursor text\n', age_s=3600)
+        make_parked(tmp)  # newer than the live one, so recency alone would pick it
+        proc = run_hook(tmp)
+        ctx = json.loads(proc.stdout)['hookSpecificOutput']['additionalContext']
+        assert 'live cursor text' in ctx
+        assert 'Phase 2 blocked' not in ctx
+        assert 'schema-rollout.md' in ctx
+        assert f'parked: {WAITS_ON}' in ctx
+
+
+def test_select_anchor_ranks_parked_below_live_and_above_content_terminal():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        done = make_anchor(tmp, name='done.md', body='**Status:** CLOSED\nfinished\n')
+        parked = make_parked(tmp)
+        live = make_anchor(tmp, name='live.md', body='# Cursor\nlive\n', age_s=48 * 3600)
+        newest_first = sorted([done, parked, live], key=lambda p: -p.stat().st_mtime)
+        primary, _ = ai.select_anchor(newest_first)
+        assert primary == live
+        primary, _ = ai.select_anchor([a for a in newest_first if a != live])
+        assert primary == parked, 'parked outranks a content-terminal anchor'
+        primary, _ = ai.select_anchor([parked])
+        assert primary == parked, 'the only anchor is still selected'
+
+
+GOLDEN_CONTEXT_WITH_OTHERS = (
+    '<control-anchor>\n'
+    'A control anchor for this project exists at {DIR}/run.md (compaction-survival protocol). '
+    'Re-read it before acting: verify the real state (git log, files on disk), then continue '
+    'from its cursor. Treat it as the source of truth for run state over any summary above.\n'
+    'WARNING - 3 other open anchor(s) in this dir: old-track.md, done.md, design.md. '
+    "Concurrent tracks share this cwd; if this anchor is not your track's, read the right one "
+    'before acting. 1 of them read as "not an anchor" (no format: anchor/... line and no cursor '
+    'section): design.md. 1 read as closed in-content but were never renamed; close each: '
+    'mv done.md done.closed.md\n'
+    '---\n---\nformat: anchor/v0\nstep: 7\n---\n# Mission\nship the thing\n# Cursor\n'
+    'next: step 7\n# Notes\nsome notes\n'
+    '[anchor tail (decisions log / resolved history) on disk - read the file if needed]\n'
+    '</control-anchor>'
+)
+GOLDEN_CONTEXT_ALONE = (
+    '<control-anchor>\n'
+    'A control anchor for this project exists at {DIR}/run.md (compaction-survival protocol). '
+    'Re-read it before acting: verify the real state (git log, files on disk), then continue '
+    'from its cursor. Treat it as the source of truth for run state over any summary above.\n'
+    '---\n---\nformat: anchor/v0\nstep: 7\n---\n# Mission\nship the thing\n# Cursor\n'
+    'next: step 7\n# Notes\nsome notes\n'
+    '[anchor tail (decisions log / resolved history) on disk - read the file if needed]\n'
+    '</control-anchor>'
+)
+GOLDEN_POINTER_WITH_OTHERS = (
+    '<control-anchor>\n'
+    'A control anchor exists at {DIR}/old-track.md but is STALE: last updated ~100h ago, '
+    'so its body is withheld to spare context.\n'
+    'Title: Remodel wave\n'
+    'If you are continuing that track, read the file now - it is the source of truth for its '
+    'run state. If the track is finished, close it: mv old-track.md old-track.closed.md\n'
+    'Cursor it still asserts: Phase 1 IN PROGRESS\n'
+    'WARNING - 2 other open anchor(s) in this dir: run.md, done.md. Concurrent tracks share '
+    "this cwd; if this anchor is not your track's, read the right one before acting. "
+    '1 read as closed in-content but were never renamed; close each: '
+    'mv done.md done.closed.md\n'
+    '</control-anchor>'
+)
+GOLDEN_POINTER_ALONE = (
+    '<control-anchor>\n'
+    'A control anchor exists at {DIR}/old-track.md but is STALE: last updated ~100h ago, '
+    'so its body is withheld to spare context.\n'
+    'Title: Remodel wave\n'
+    'If you are continuing that track, read the file now - it is the source of truth for its '
+    'run state. If the track is finished, close it: mv old-track.md old-track.closed.md\n'
+    'Cursor it still asserts: Phase 1 IN PROGRESS\n'
+    '</control-anchor>'
+)
+GOLDEN_DORMANT = ['old-track.md  96h  Remodel wave  | cursor: Phase 1 IN PROGRESS']
+
+
+def test_without_a_parked_field_every_output_is_byte_identical_to_the_golden():
+    """Goldens captured from the code as it was before the parked field existed."""
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        run = make_anchor(
+            tmp,
+            name='run.md',
+            body=(
+                '# Mission\nship the thing\n# Cursor\nnext: step 7\n# Notes\nsome notes\n'
+                '<!-- anchor:tail -->\nlog line\n'
+            ),
+        )
+        old = make_anchor(
+            tmp,
+            name='old-track.md',
+            body='# Remodel wave\n# Cursor\nPhase 1 IN PROGRESS\n',
+            age_s=96 * 3600,
+        )
+        done = make_anchor(
+            tmp, name='done.md', body='**Status:** CLOSED\nfinished\n', age_s=96 * 3600
+        )
+        anchors = run.parent
+        design = anchors / 'design.md'
+        design.write_text('just a design doc\n', encoding='utf-8')
+
+        def scrub(s: str) -> str:
+            return s.replace(str(anchors) + os.sep, '{DIR}/')
+
+        assert scrub(ai.build_context(run, [old, done, design])) == GOLDEN_CONTEXT_WITH_OTHERS
+        assert scrub(ai.build_context(run)) == GOLDEN_CONTEXT_ALONE
+        assert scrub(ai.build_pointer(old, 100 * 3600, [run, done])) == GOLDEN_POINTER_WITH_OTHERS
+        assert scrub(ai.build_pointer(old, 100 * 3600)) == GOLDEN_POINTER_ALONE
+        assert ai.list_dormant(anchors) == GOLDEN_DORMANT
+
+
 if __name__ == '__main__':
     test_injects_with_no_env_set()
     test_opt_out_silences_it()
@@ -1055,4 +1285,13 @@ if __name__ == '__main__':
     test_list_dormant_names_untouched_active_anchors()
     test_list_dormant_skips_fresh_and_content_terminal_anchors()
     test_sweeps_survive_a_cp1252_stdout()
+    test_parked_reason_reads_the_frontmatter_field()
+    test_parked_reason_is_empty_when_the_field_is_absent_or_blank()
+    test_parked_reason_ignores_a_parked_line_in_the_tail_or_the_body()
+    test_a_parked_anchor_lists_under_the_parked_heading_and_not_as_dormant()
+    test_a_fresh_parked_anchor_is_still_listed_as_parked()
+    test_a_parked_anchor_that_is_the_only_open_one_injects_the_short_block()
+    test_a_parked_anchor_beside_a_live_one_injects_the_live_one_and_names_the_parked()
+    test_select_anchor_ranks_parked_below_live_and_above_content_terminal()
+    test_without_a_parked_field_every_output_is_byte_identical_to_the_golden()
     print('ok: all anchor_inject tests passed')

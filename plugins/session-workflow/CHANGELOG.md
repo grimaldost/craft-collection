@@ -46,6 +46,27 @@ routing rules that enable per-lens capacity dispatch.
   parent injects the subagent's cursor as the parent's own; the remedy is that the
   subagent names its anchor path in its report back and the parent re-reads it by
   hand. The table goes from 13 to 15 data rows (counted with grep).
+- **`anchor_inject.py`: a `parked: <waits on>` frontmatter field for a track that is
+  waiting on purpose** (2026-10-06 craft-collection triage: T125a). A track parked on an
+  outside answer appeared in the arm-time `--list-dormant` sweep as abandoned, and as the
+  newest open file it could win selection over a live track at session start. A new pure helper
+  `parked_reason(text)` reads the field from the HEAD frontmatter only, with the same
+  frontmatter scan `is_anchor_shaped` uses; a `parked:` line in the body or the TAIL
+  never parks a file. Three places honour it: `--list-dormant` lists parked anchors after
+  the dormant ones under a `parked:` heading line, with age, the wait and the cursor, at
+  any age; `select_anchor` ranks a parked anchor below every live one and above a
+  content-terminal one; and when a parked anchor is the primary the hook injects one
+  short block (path, `parked: <waits on>`, how to un-park, how to close) in place of the
+  HEAD or the stale pointer, with telemetry tier `parked`. Beside a live anchor, the
+  live one is injected and the existing concurrent-tracks warning names the parked one
+  with its wait. With no `parked:` field, output is unchanged: a golden test captured
+  from the previous code pins `build_context`, `build_pointer` and `list_dormant`
+  byte for byte. The suite goes from 61 to 70 test functions (counted with grep), each
+  new one seen failing first.
+- **`anchor-spec.md`: a short Frontmatter section** (2026-10-06 craft-collection triage:
+  T125a). Names `format`, `task`, `step` and the new `parked`. The compaction-survival
+  SKILL.md step 1 reads "close, adopt or park" instead of "close or adopt" (one word;
+  1262 of 1265 body words, measured by `word_budget.py --report`).
 
 ### Changed
 

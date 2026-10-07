@@ -9,6 +9,17 @@ The HEAD is bounded and rewritten in place. The TAIL, below the literal
 `<!-- anchor:tail -->` marker line, is append-only and stays on disk: the
 re-injection hook emits the HEAD only.
 
+## Frontmatter
+
+A short block of `key: value` lines above the HEAD sections. `format: anchor/v1` marks
+the file as an anchor, `task:` names the work in one line, and `step:` counts the
+snapshots. `parked: <what it waits on>` is optional and opt-in: it marks a track that is
+deliberately waiting, such as on a review or an outside answer, rather than dormant. A
+parked anchor ranks below every live one, is injected as a short block naming the wait
+instead of its HEAD, and is listed by `--list-dormant` under a `parked:` heading, so the
+arm-time sweep does not offer to close it. Remove the line to resume the track. Only
+the frontmatter counts: a `parked:` line in the body or the TAIL is prose.
+
 ## HEAD
 
 ### Mission

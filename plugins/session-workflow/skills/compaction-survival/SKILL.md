@@ -72,8 +72,8 @@ injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
 
 1. **Create the anchor at the start of the run**, before the first irreversible
    step, so there is something to resume from immediately. Arming is also the
-   sweep moment — read `anchor_inject.py --list-dormant <anchors dir>` and close
-   or adopt any track it names. A subagent anchors in its own work folder, never in
+   sweep moment — read `anchor_inject.py --list-dormant <anchors dir>` and close,
+   adopt or park any track it names. A subagent anchors in its own work folder, never in
    `<cwd>/.claude/anchors/`; see failure-modes.
 2. **Update the cursor whenever durable state moves** — a commit, push, deploy step,
    background launch, or write outside the repo. State only in the context window is

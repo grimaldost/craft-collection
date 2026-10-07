@@ -103,6 +103,9 @@ _TERMINAL_STATUS = re.compile(
 # The frontmatter line `/anchor` writes on every snapshot; one of the two signals
 # that a `*.md` in anchors/ is an anchor rather than a document parked there.
 _FORMAT_LINE = re.compile(r'^\s*format\s*:\s*anchor/', re.I)
+# `parked: <what it waits on>`: the opt-in frontmatter field that marks a track as
+# deliberately waiting rather than dormant. Read from the HEAD frontmatter only.
+_PARKED_LINE = re.compile(r'^\s*parked\s*:\s*(.*?)\s*$', re.I)
 
 
 def is_content_terminal(text: str) -> bool:
@@ -137,14 +140,36 @@ def is_anchor_shaped(text: str) -> bool:
     anchors in the wild carry no `format:` line, and a predicate that silenced
     them would silence exactly the long-running tracks this protocol is for."""
     head, _ = split_head(text)
-    lines = head.splitlines()
-    if lines and lines[0].strip() == '---':
-        for line in lines[1:]:
-            if line.strip() == '---':
-                break
-            if _FORMAT_LINE.match(line):
-                return True
+    if any(_FORMAT_LINE.match(line) for line in _frontmatter_lines(head)):
+        return True
     return any(_is_cursor_section(name) for name, _ in split_sections(head))
+
+
+def _frontmatter_lines(head: str) -> list[str]:
+    """The lines between the opening `---` and the next `---` of a HEAD; empty
+    when the HEAD does not open with a frontmatter block."""
+    lines = head.splitlines()
+    if not lines or lines[0].strip() != '---':
+        return []
+    out = []
+    for line in lines[1:]:
+        if line.strip() == '---':
+            break
+        out.append(line)
+    return out
+
+
+def parked_reason(text: str) -> str:
+    """What a parked anchor waits on: the value of `parked:` in the HEAD
+    frontmatter, '' when the field is absent or blank. A `parked:` line in the
+    body or the TAIL is prose (a decision, a note about another track) and never
+    parks the file."""
+    head, _ = split_head(text)
+    for line in _frontmatter_lines(head):
+        m = _PARKED_LINE.match(line)
+        if m:
+            return m.group(1).strip('"\'')
+    return ''
 
 
 def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
@@ -153,11 +178,12 @@ def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
     and a content-terminal-but-unrenamed anchor, are de-ranked and become primary
     only when nothing better remains (the recovery path never drops to zero bytes).
     `open_anchors` is newest-first; the sort is stable, so recency still decides
-    within a rank, and `others` keeps that order minus the primary."""
+    within a rank, and `others` keeps that order minus the primary. A parked anchor
+    ranks below every live track and above a content-terminal one."""
 
-    def rank(a: Path) -> tuple[bool, bool]:
+    def rank(a: Path) -> tuple[bool, bool, bool]:
         text = _read(a)
-        return (not is_anchor_shaped(text), is_content_terminal(text))
+        return (not is_anchor_shaped(text), is_content_terminal(text), bool(parked_reason(text)))
 
     primary = sorted(open_anchors, key=rank)[0]
     return primary, [a for a in open_anchors if a != primary]
@@ -361,21 +387,31 @@ def list_dormant(anchors_dir: Path, min_age_s: float = DORMANT_AFTER_S) -> list[
     the cursor each still asserts. `list_stale` cannot reach these — it keys on
     content that reads as done, and an anchor abandoned mid-cursor never says so.
     Read at the moment a new anchor is armed, which is the one moment a human is
-    reliably present to answer close-or-adopt."""
+    reliably present to answer close-or-adopt. Anchors carrying a `parked:` field
+    are listed after the dormant ones, under a `parked:` heading line."""
     now = time.time()
     out = []
+    parked = []
     for f in find_open_anchors(anchors_dir):
         age_s = now - _mtime(f)
-        if age_s < min_age_s:
-            continue
         text = _read(f)
+        waits = parked_reason(text)
+        if age_s < min_age_s and not waits:
+            continue
         if is_content_terminal(text):
             continue  # list_stale owns the closed-but-unrenamed ones
         line = f'{f.name}  {int(age_s // 3600)}h  {anchor_title(text)}'
+        if waits:
+            # Deliberately waiting, so not dormant: listed apart, at any age, with
+            # what it waits on, and never offered for close-or-adopt.
+            line += f'  | parked: {waits}'
         cursor = anchor_cursor(text)
         if cursor:
             line += f'  | cursor: {cursor}'
-        out.append(line)
+        (parked if waits else out).append(line)
+    if parked:
+        out.append('parked:')
+        out.extend('  ' + line for line in parked)
     return out
 
 
@@ -398,6 +434,16 @@ def _other_open_warning(other_open: list[Path] | None) -> str:
         warn += (
             f' {len(strays)} of them read as "not an anchor" (no format: anchor/... line and '
             f'no cursor section): {names}' + (f' (+{more} more)' if more > 0 else '') + '.'
+        )
+    waiting = [(f, parked_reason(_read(f))) for f in other_open]
+    waiting = [(f, why) for f, why in waiting if why]
+    if waiting:
+        listed = '; '.join(f'{f.name} (parked: {why})' for f, why in waiting[:MAX_NAMED_OPEN])
+        more = len(waiting) - MAX_NAMED_OPEN
+        warn += (
+            f' {len(waiting)} of them are parked, not live: {listed}'
+            + (f' (+{more} more)' if more > 0 else '')
+            + '.'
         )
     terminal = [f for f in other_open if is_content_terminal(_read(f))]
     if terminal:
@@ -484,6 +530,25 @@ def build_context(anchor: Path, other_open: list[Path] | None = None) -> str:
     return '\n'.join(header) + '\n---\n' + '\n'.join(body) + '\n</control-anchor>'
 
 
+def build_parked(anchor: Path, waits_on: str, other_open: list[Path] | None = None) -> str:
+    """PARKED tier: the one short block a parked anchor gets in place of the full
+    or pointer tier: path, what it waits on, and the two ways out. Its body stays
+    on disk - a track that is waiting is not the run being resumed."""
+    lines = [
+        '<control-anchor>',
+        f'A control anchor exists at {anchor} but is PARKED: it waits on {waits_on}.',
+        f'parked: {waits_on}',
+        'Its body is withheld; this is not a live track. To resume it, remove the '
+        '`parked:` line from its frontmatter and re-read the file. To close it: '
+        f'mv {anchor.name} {anchor.stem}.closed.md',
+    ]
+    warn = _other_open_warning(other_open)
+    if warn:
+        lines.append(warn)
+    lines.append('</control-anchor>')
+    return '\n'.join(lines)
+
+
 def build_pointer(anchor: Path, stale_s: float, other_open: list[Path] | None = None) -> str:
     """POINTER tier for a stale anchor: identity + age + confirm-to-expand +
     the close command — a short pointer, never the 8K body, and never silence.
@@ -557,9 +622,13 @@ def main() -> int:
     if source == 'startup' and stale_s > STARTUP_RECENT_S:
         return 0
     pointer = stale_s > STALE_AFTER_S
-    context = (
-        build_pointer(anchor, stale_s, other_open) if pointer else build_context(anchor, other_open)
-    )
+    waits_on = parked_reason(_read(anchor))
+    if waits_on:
+        context = build_parked(anchor, waits_on, other_open)
+    elif pointer:
+        context = build_pointer(anchor, stale_s, other_open)
+    else:
+        context = build_context(anchor, other_open)
 
     record = {
         'event': 'anchor-inject',
@@ -567,7 +636,7 @@ def main() -> int:
         'session': payload.get('session_id', ''),
         'file': anchor.name,
         'stale': pointer,
-        'tier': 'pointer' if pointer else 'full',
+        'tier': 'parked' if waits_on else 'pointer' if pointer else 'full',
         'open_anchors': len(open_anchors),
         'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
     }
