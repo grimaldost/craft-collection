@@ -422,26 +422,90 @@ SELECT COUNT(*) FROM target_table WHERE partition_date = '2026-05-26';
 
 ## Recipe 9 — Constraint pre-flight against production data
 
-Tests that a proposed schema constraint is actually satisfiable by
-production data (Principle 10).
+Measure the premise at the grain of the change before the design is committed.
+Tests that a proposed schema constraint is actually satisfiable by production
+data, or that relaxing a constraint won't break on real values, or that a switch
+the refactor removes is inert (Principle 10).
+
+### Before declaring or relaxing `nullable: false`
+
+Count nulls for every mandatory column on the real load, not only the columns
+the first failing quarantine reason names — the first reason masks the rest.
 
 ```sql
--- Run before declaring `nullable: false`
+-- Run before declaring or relaxing nullable: false
 SELECT
-    SUM(CASE WHEN uc IS NULL THEN 1 ELSE 0 END) AS null_count_uc,
-    SUM(CASE WHEN margin IS NULL THEN 1 ELSE 0 END) AS null_count_margin
+    SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS null_count_user_id,
+    SUM(CASE WHEN amount IS NULL THEN 1 ELSE 0 END) AS null_count_amount,
+    SUM(CASE WHEN created_at IS NULL THEN 1 ELSE 0 END) AS null_count_created_at,
+    SUM(CASE WHEN status IS NULL THEN 1 ELSE 0 END) AS null_count_status
 FROM production_table
 WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
--- If null_count > 0, you cannot declare nullable: false on that column.
+-- If any null_count > 0, you cannot declare (or relax to) nullable: false on that column.
+```
 
--- Run before declaring `ge: 0`
+### Before trusting a switch is inert
+
+Run the fixture with and without the switch; a true no-op produces identical output.
+
+```python
+# fixture_test.py
+import subprocess
+import tempfile
+import difflib
+
+
+def compare_fixture_outputs(fixture_path):
+    """Run fixture with and without a switch; diff the outputs."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Run with the switch present (or enabled)
+        result_with = subprocess.run(
+            ['python', fixture_path, '--switch'], capture_output=True, text=True
+        )
+
+        # Run without the switch
+        result_without = subprocess.run(['python', fixture_path], capture_output=True, text=True)
+
+        # Diff the outputs
+        diff = list(
+            difflib.unified_diff(
+                result_with.stdout.splitlines(),
+                result_without.stdout.splitlines(),
+                fromfile='with_switch',
+                tofile='without_switch',
+                lineterm='',
+            )
+        )
+
+        if diff:
+            print('Switch is NOT inert; outputs differ:')
+            for line in diff:
+                print(line)
+            return False
+        else:
+            print('Switch is inert; outputs match.')
+            return True
+
+
+if __name__ == '__main__':
+    assert compare_fixture_outputs('integration_test.py')
+```
+
+### Before declaring `ge: 0`
+
+```sql
+-- Run before declaring ge: 0
 SELECT
     SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END) AS neg_count_amount,
     SUM(CASE WHEN amount = 0 THEN 1 ELSE 0 END) AS zero_count_amount
 FROM production_table
 WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';
 -- If neg_count > 0, ge: 0 is too strict.
+```
 
+### Before declaring an enum constraint
+
+```sql
 -- Run before declaring an enum constraint
 SELECT DISTINCT status FROM production_table
 WHERE partition_date >= CURRENT_DATE - INTERVAL '90 days';

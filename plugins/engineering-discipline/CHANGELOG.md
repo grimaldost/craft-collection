@@ -44,6 +44,14 @@ and an exit-code rule; the format hook narrows which files receive turn-level fo
   session" prose at Axiom 2 is replaced with guidance for fact-checking under pressure
   — a fact from a compaction summary, an anchor, or an adversarial reviewer must be
   re-measured before coding, not assumed. (2026-10-06 delta triage: T75b.)
+- **Recipe 9 "Constraint pre-flight against production data" in `parity-recipes.md`**:
+  the recipe is rewritten to measure the premise at the grain of the change before
+  design is committed. Before relaxing a constraint, count nulls for all mandatory
+  columns, not only the columns the first failing quarantine reason names. Before
+  trusting a switch is inert, run the fixture with and without it and diff. Displaces:
+  the header comment from "Run before declaring" to "Run before declaring or relaxing";
+  adds a new subsection with fixture-diff example (Python). (2026-10-06 delta triage:
+  T142a.)
 
 ## [0.5.1] - 2026-09-19
 
