@@ -11,7 +11,9 @@ Contract under test:
 - a doc with no `# Triage` H1 is not a triage doc;
 - `--emit` prints one line per finding, so the claim is read rather than typed;
 - open-rows reports the newest status per row and names the doc that set it;
-- a row later restated as shipped/declined leaves the open set.
+- a row later restated as shipped/declined leaves the open set;
+- from T67 on, in the craft-collection namespace only, a row is keyed by its id
+  alone: a reworded restatement or a same-doc repeat is one row (T94c).
 
 The red proof is `test_an_undispositioned_finding_reddens_coverage`: it seeds the
 observed defect -- a report named under Inputs whose findings the doc never
@@ -232,6 +234,75 @@ def test_a_bare_id_reused_by_an_unrelated_doc_does_not_mask_the_earlier_row():
         assert len(t1a_rows) == 2, 'both unrelated T1a rows must surface, not just the newest'
 
 
+def _doc(rows: str) -> str:
+    return (
+        '# Triage - demo\n\n'
+        '| # | proposed promotion | fix shape | home | status |\n'
+        '|---|---|---|---|---|\n' + rows
+    )
+
+
+# A post-T67 row proposed under a long wording, then restated by a later doc under
+# shorter text with a closed status -- the shape the real corpus has 22 times.
+LONG_WORDING = '| T70a | `plugin_version.py` globs the parent and reports every copy | mechanize | x | proposed |\n'
+SHORT_WORDING = '| T70a | `plugin_version.py` names every copy | mechanize | x | shipped(0.1.0) |\n'
+
+
+def _namespace_corpus(root: Path, name: str, first: str, second: str) -> Path:
+    corpus = root / name
+    corpus.mkdir()
+    (corpus / '2026-09-13-triage-a.md').write_text(_doc(first), encoding='utf-8')
+    (corpus / '2026-09-19-triage-b.md').write_text(_doc(second), encoding='utf-8')
+    return corpus
+
+
+def test_a_post_t67_row_reworded_by_a_later_doc_leaves_the_open_set():
+    # THE RED PROOF for T94c. From T67 on, craft-collection row ids are globally
+    # unique, so the same id is the same row however a later doc words it. Keyed
+    # by (id, description), the long proposed wording and the short shipped one
+    # read as two rows and the long one stayed open for good -- the reader
+    # listed 426 lineages for a corpus with far fewer open rows.
+    with tempfile.TemporaryDirectory() as d:
+        corpus = _namespace_corpus(Path(d), 'craft-collection', LONG_WORDING, SHORT_WORDING)
+        assert [r for r in ta.open_rows(corpus) if r[0] == 'T70a'] == []
+
+
+def test_a_post_t67_row_stated_twice_in_one_doc_counts_once():
+    # Same defect, same-doc form: two wordings of one id in one doc were two
+    # lineages. One id is one row; the later statement sets the status.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        corpus = root / 'craft-collection'
+        corpus.mkdir()
+        (corpus / '2026-09-13-triage-a.md').write_text(
+            _doc(LONG_WORDING + LONG_WORDING.replace('globs the parent', 'scans the parent')),
+            encoding='utf-8',
+        )
+        assert len([r for r in ta.open_rows(corpus) if r[0] == 'T70a']) == 1
+
+
+def test_the_t67_cut_leaves_earlier_ids_keyed_by_description():
+    # Below T67 ids were re-minted per doc, so a reworded id is not provably the
+    # same row; the (id, description) keying of T94b stays in force there.
+    with tempfile.TemporaryDirectory() as d:
+        corpus = _namespace_corpus(
+            Path(d),
+            'craft-collection',
+            LONG_WORDING.replace('T70a', 'T66a'),
+            SHORT_WORDING.replace('T70a', 'T66a'),
+        )
+        assert [r[0] for r in ta.open_rows(corpus)] == ['T66a']
+
+
+def test_the_t67_cut_is_scoped_to_the_craft_collection_namespace():
+    # Another tool's feedback dir has its own id numbering, re-minted per doc;
+    # a number past 66 there is not evidence of uniqueness. The same corpus
+    # under a different directory name keeps the (id, description) keying.
+    with tempfile.TemporaryDirectory() as d:
+        corpus = _namespace_corpus(Path(d), 'other-tool', LONG_WORDING, SHORT_WORDING)
+        assert [r[0] for r in ta.open_rows(corpus)] == ['T70a']
+
+
 def test_open_rows_on_a_corpus_with_no_triage_docs():
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
@@ -284,6 +355,10 @@ if __name__ == '__main__':
     test_open_rows_takes_the_newest_status_and_names_its_doc()
     test_a_bare_id_reused_by_an_unrelated_doc_does_not_mask_the_earlier_row()
     test_open_rows_cli_reports_the_count()
+    test_a_post_t67_row_reworded_by_a_later_doc_leaves_the_open_set()
+    test_a_post_t67_row_stated_twice_in_one_doc_counts_once()
+    test_the_t67_cut_leaves_earlier_ids_keyed_by_description()
+    test_the_t67_cut_is_scoped_to_the_craft_collection_namespace()
     test_open_rows_on_a_corpus_with_no_triage_docs()
     test_usage_error_without_a_mode()
     test_a_qualified_status_is_still_an_open_row()

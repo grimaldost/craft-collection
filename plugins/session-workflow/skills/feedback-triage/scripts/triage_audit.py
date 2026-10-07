@@ -109,41 +109,52 @@ def rows_in(doc: Path) -> list[tuple[str, str, str]]:
     return out
 
 
+# Where row ids are known to be unique, and from which number. craft-collection's
+# triage passes minted a local `T1a`, `T2a`, ... per doc until T67; from T67 on
+# the numbering is shared, so an id is one row however a later doc words it.
+# Another tool's feedback dir has its own numbering (convoy, fathom, keel and
+# mantis-research each re-mint per doc, and none had reached T67 when this was written), so a corpus
+# not listed here keeps the (id, description) keying throughout.
+_UNIQUE_IDS_FROM = {'craft-collection': 67}
+
+
+def _row_number(row_id: str) -> int:
+    return int(re.findall(r'\d+', row_id)[0])
+
+
 def open_rows(feedback_dir: Path) -> list[tuple[str, str, str]]:
     """(row id, latest status, the doc that set it) for every row still open.
 
-    Before ids became globally unique (T67), each triage pass re-minted its own
-    local `T1a`, `T2a`, ... -- so the same bare id can name two unrelated rows
-    from two unrelated docs, not one row restated. Keying purely by id let a
+    A row's identity depends on how its id was minted. In the craft-collection
+    namespace, ids are globally unique from T67 on (`_UNIQUE_IDS_FROM`): the id
+    alone names the row, so a later doc that restates it under shorter or
+    reworded text, or a doc that states it twice, updates that one row and the
+    newest status wins -- the rule the delta form states in prose ("a row named
+    in a table below takes the status given here"). Keyed by description there,
+    every rewording was a separate lineage and the older, open one never closed
+    (T94c; measured: 426 open lineages in a corpus whose real open set is far
+    smaller).
+
+    Below that cut, and in every other feedback dir, each triage pass re-minted
+    its own local `T1a`, `T2a`, ... -- so the same bare id can name two unrelated
+    rows from two unrelated docs, not one row restated. Keying purely by id let a
     later doc's unrelated row silently replace an earlier doc's still-open one
     (T94b; measured: 2026-06-09 and 2026-06-13's distinct, both-`proposed` T1a
-    rows were both hidden behind 2026-07-23's T1a).
-
-    A row is instead tracked per (id, description): two mentions of the same id
-    are the SAME row -- and the later one's status wins, which is the rule the
-    delta form already states in prose ("a row named in a table below takes the
-    status given here") -- only when their description cells also match. A
-    changed description under a repeated id is read as a distinct row, set by
-    whichever doc most recently stated it, rather than assumed to be a reworded
-    carry; that assumption is exactly what over-counts in the heuristic scan
-    that found this bug, and the doubt is left for the reconciliation read
-    rather than resolved by guessing here. Since ids have been globally unique
-    since T67, this only ever recovers rows the old keying hid -- it prints
-    nothing extra for a post-T67 id, which is never reused."""
-    lineages: dict[str, list[dict[str, str]]] = {}
+    rows were both hidden behind 2026-07-23's T1a). There a row is tracked per
+    (id, description): the same id with the same description is one row and the
+    later status wins; a changed description under a repeated id is read as a
+    distinct row, set by whichever doc most recently stated it, rather than
+    assumed to be a reworded carry. That doubt is left for the reconciliation
+    read rather than resolved by guessing here."""
+    unique_from = _UNIQUE_IDS_FROM.get(feedback_dir.resolve().name)
+    lineages: dict[tuple[str, str], dict[str, str]] = {}
     for doc in sorted(p for p in feedback_dir.glob('*.md') if _is_triage_doc(p)):
         for row_id, description, status in rows_in(doc):
-            group = lineages.setdefault(row_id, [])
-            lineage = next((ln for ln in group if ln['description'] == description), None)
-            if lineage is None:
-                group.append({'description': description, 'status': status, 'doc': doc.stem})
-            else:
-                lineage['status'] = status
-                lineage['doc'] = doc.stem
+            unique = unique_from is not None and _row_number(row_id) >= unique_from
+            lineages[(row_id, '' if unique else description)] = {'status': status, 'doc': doc.stem}
     return sorted(
         (row_id, lineage['status'], lineage['doc'])
-        for row_id, group in lineages.items()
-        for lineage in group
+        for (row_id, _), lineage in lineages.items()
         if lineage['status'].lower().startswith(_OPEN_STATUSES)
     )
 
