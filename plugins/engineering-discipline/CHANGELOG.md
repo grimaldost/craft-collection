@@ -14,6 +14,18 @@ and an exit-code rule; the format hook narrows which files receive turn-level fo
 
 ### Changed
 
+- **Recipe 18 "Versioning a frozen judge" in `parity-recipes.md`, with a pointer from
+  SKILL.md Oracle integrity**: after a red, repairing the judge is admissible only as
+  a new judge version in its own change by the judge's author, at least as strict
+  where the contract cares, with a self-test that keeps every earlier planted bank and
+  adds an intended-effect pass and a planted-loss fail, and a freeze file that appends
+  version, reason and sha with old and new verdicts shown side by side. The recipe also
+  carries the stale-surface rule: a verifier that reads a shared surface is re-run when
+  that surface's producer changes, with its own scratch state removed first. The
+  strictness table gains a row. Displaces: the body's "with the reason" becomes the
+  pointer "parity-recipes Recipe 18" (word-neutral, body stays at 2312 words); the
+  stale-surface rule lands as reference prose with no body words. (2026-10-06 delta
+  triage: T141a, T72d.)
 - **`data-engineering-discipline` SKILL.md source-of-truth bullet**: the "For a long
   session" prose at Axiom 2 is replaced with guidance for fact-checking under pressure
   — a fact from a compaction summary, an anchor, or an adversarial reviewer must be

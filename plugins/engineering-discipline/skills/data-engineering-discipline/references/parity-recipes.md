@@ -833,6 +833,82 @@ python scripts/parity_check.py base.csv cand.csv --keys id --residual-zero resid
 
 ---
 
+## Recipe 18 — Versioning a frozen judge: the admissible repair after a red
+
+Oracle integrity says the judge is not edited in the change it judges. That
+leaves the case where the judge itself is what went red: its rule was wrong
+for this data, or it measured the wrong thing. Repairing it in place, by the
+author of the lot it judges, is how a gate gets bent until it passes. The
+repair is admissible when it is a new judge version meeting four conditions.
+
+1. **Own change, written by the judge's author.** The repair is its own
+   change, made by whoever owns the judge, never by the lot it judges and
+   never in the same diff as the transform that went red. The reason is
+   written down before the new version is run on the red lot.
+2. **At least as strict wherever the contract cares.** The new version must
+   still fail every divergence the old one failed for a column or property
+   the contract names. It may be stricter, or differently shaped for a
+   property the contract does not care about. A repair that only loosens
+   (a wider tolerance, a dropped column, a skipped row class) is a weakened
+   oracle, not a repair.
+3. **The self-test keeps every earlier bank and adds two passes.** Every
+   planted-divergence case the old version was tested against stays in the
+   bank (Recipe 13). The new version adds an intended-effect pass (the
+   change the repair exists to accept now passes) and a planted-loss fail
+   (a plant for the exact loss the repair could hide now fails). A repair
+   that drops the planted-loss bank is rejected, however green the lot is.
+4. **The freeze file appends; the acceptance record shows both verdicts.**
+   The freeze file gains an entry with version, reason and content sha of the
+   new judge; the old entry stays. The acceptance record shows the old and
+   the new verdict on the same lot, side by side, so a reader sees what the
+   repair changed.
+
+**Example: row preservation replaced by conservation on a complement.** A
+judge asserts that the output has exactly the input's rows. A change then
+legitimately withholds some rows into a separate relation. The judge goes
+red, and the tempting repair is to drop the row-count check. The admissible
+repair is a new version that asserts conservation instead: kept plus
+withheld equals input, with the two disjoint on the key.
+
+```python
+def conserved(src, kept, withheld, key):
+    # v2: replaces `len(kept) == len(src)`
+    k, w = set(kept[key]), set(withheld[key])
+    assert not (k & w), 'a key is both kept and withheld'
+    assert len(kept) + len(withheld) == len(src), 'a row was lost or duplicated'
+    assert k | w == set(src[key]), 'the keys do not add back up to the input'
+
+
+def test_conserved_self_test():
+    assert_passes(conserved, SRC, KEPT, WITHHELD, 'id')  # intended effect
+    assert_fails(conserved, SRC, KEPT, WITHHELD_MINUS_ONE, 'id')  # planted loss
+    assert_fails(conserved, SRC, KEPT_PLUS_DUP, WITHHELD, 'id')  # planted duplicate
+    assert_fails(row_count_equal, SRC, KEPT_MINUS_ONE, EMPTY, 'id')  # v1 bank, kept
+```
+
+It is at least as strict: a row lost or duplicated still fails, and the
+withheld rows are now accounted for rather than invisible. The v1 bank stays,
+and the planted loss is the case the loosening repair would have missed.
+
+**Example: a repair through a declared label map.** A judge compares a label
+column and goes red because the producer renamed a category. The loosening
+repair is to ignore the column. The admissible one is a new version that
+reads a declared map (`old_label -> new_label`, versioned in the freeze
+file) and compares through it. Every label must map exactly once; an
+unmapped label, or a label mapped to two, fails. The planted-loss bank adds a
+dropped category and a silently merged pair, so the map cannot hide a loss.
+
+**A judge goes stale without being edited.** A frozen judge that reads a
+shared surface (a probe's findings, a journal, a catalogue) can be wrong
+while its own sha is unchanged, because the surface moved under it. Re-run
+such a verifier whenever the surface's producer changes, and remove its own
+scratch state (cached extracts, intermediate files, a stored previous
+verdict) first, so the re-run reads the new surface and not its own old
+output. A green verdict dated before the producer's last change is not
+evidence about the surface as it is now.
+
+---
+
 ## Choosing the right strictness
 
 | Scenario | Recommended recipes |
@@ -850,6 +926,7 @@ python scripts/parity_check.py base.csv cand.csv --keys id --residual-zero resid
 | Change landing in a suite with pre-existing / flaky failures | 15 (differential-baseline) |
 | A contract column written by more than one producer | 16 (census, then join before values) |
 | Null-vs-zero drift, algorithm noise, a residual column read as `> 0` | 17 |
+| Repairing or re-running a frozen judge after a red | 18 |
 
 ---
 

@@ -202,7 +202,7 @@ the replay proves determinism and not historical correctness. Whether history
 The verifier, fixtures, expected values, baselines and tolerance settings are
 not edited in the change they judge. A diff that touches both the transform
 and its expected output has produced no evidence. If a baseline is genuinely
-wrong, repair it in its own change, with the reason. The tool-general form of
+wrong, repair it in its own change: parity-recipes Recipe 18. The tool-general form of
 this — evidence that was never produced — is
 `humblepowers:verification-before-completion`.
 
