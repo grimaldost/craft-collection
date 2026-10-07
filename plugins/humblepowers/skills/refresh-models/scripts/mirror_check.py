@@ -43,7 +43,7 @@ import os
 import re
 import sys
 from collections.abc import Iterator, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import tomllib
@@ -153,6 +153,33 @@ def repository_root(path: Path) -> Path | None:
     for candidate in (path, *path.parents):
         if (candidate / '.git').exists():
             return candidate
+    return None
+
+
+def _is_absolute(value: object) -> bool:
+    """A string naming an absolute path on either platform, so a registry written on
+    Windows or POSIX is judged the same wherever the walk runs."""
+    return isinstance(value, str) and (
+        PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
+    )
+
+
+def validate_roots(registry: dict[str, Any]) -> str | None:
+    """Why the registry's root lists cannot be walked, or None when they can.
+
+    A bare string is iterated one character at a time ('/', 'C:'), which names a
+    whole drive, and a relative entry resolves against wherever the walk ran, so
+    both are refused rather than widened or narrowed without a message.
+    """
+    candidates: list[tuple[str, object]] = []
+    if 'sweep_roots' in registry:
+        candidates.append(('sweep_roots', registry['sweep_roots']))
+    for rule in registry.get('retired', []):
+        if 'roots' in rule:
+            candidates.append(('[[retired]] roots', rule['roots']))
+    for name, value in candidates:
+        if not isinstance(value, list) or not all(_is_absolute(item) for item in value):
+            return f'{name} must be a list of absolute paths, got {value!r}.'
     return None
 
 
@@ -291,6 +318,11 @@ def main(argv: list[str] | None = None) -> int:
     sites = registry.get('site', [])
     retired = registry.get('retired', [])
     excludes = registry.get('exclude', [])
+
+    problem = validate_roots(registry)
+    if problem:
+        print(f'mirror walk CANNOT ANSWER: {bindings}: {problem}')
+        return 2
 
     roots, source = sweep_roots(registry)
 

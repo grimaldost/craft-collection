@@ -107,6 +107,11 @@ across the sweep roots:
 - **Present**: exactly the listed directories. `sweep_roots = []` opts out, and
   the walk searches each pattern's own roots only.
 
+`sweep_roots` and each `[[retired]]` `roots` must be a list of absolute paths. A
+bare string or a relative entry makes the walk print `CANNOT ANSWER` and exit 2: a
+string would be read one character at a time, and a relative path would resolve
+against wherever the walk ran.
+
 A sweep root that does not exist is a finding. A file under two overlapping
 roots, such as a pattern root inside a sweep root, is read once and reported
 once. The closing line names the sweep roots with their count and source, so a

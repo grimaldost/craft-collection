@@ -33,22 +33,28 @@ Minor bump: brainstorming gains a sanctioned branch for autonomous sessions and 
   release. `references/mirrors-file.md` documents the field, its default and that
   trade-off. Seven new tests in `scripts/test_mirror_check.py`. Six were watched red
   against the previous script, and the seventh pins that a site in no repository adds
-  no root.
+  no root. Review of the change found that a `sweep_roots` written as a bare string was
+  iterated one character at a time, naming `/` and `C:` and sweeping a whole drive, and
+  that a relative entry resolved against the working directory. The walk now exits 2
+  with `CANNOT ANSWER` unless `sweep_roots`, and each `[[retired]]` `roots`, is a list of
+  absolute paths; three further tests pin it (the string case was watched red by hanging
+  until killed).
 
 ### Changed
 
 - **brainstorming: step 1 reads the area's decision log, and step 3 has a branch for
   autonomous sessions** (2026-10-06 delta triage: T21a, T21c). Step 1 now names the area's
-  ADRs and recorded invariants as part of exploring context, and says a conflict with an
+  ADRs and invariants as part of exploring context, and says a conflict with an
   Accepted invariant is raised, never softened. Step 3 says what to do with no user
-  mid-task: fold the questions into the proposal awaiting approval (options,
-  recommendation, open questions). The branch is stated once and leaves the gate as it
-  was: implementation still starts after the user approves, and the recorded proposal is
-  what they approve. Paid for by removing `## Working principles` (44 words), whose items
-  restated steps 3 to 5 except two; those two now close step 5 as one 12-word sentence,
-  "Cut features not needed yet; go back when something stops making sense." The two new
-  clauses add 17 and 15 words, so the body stays at 560 words against its 560 baseline,
-  with no budget bump.
+  mid-task: fold the questions and the section confirmations of step 5 into the proposal
+  awaiting approval (options, recommendation, open questions), so step 5's "confirm each
+  section" does not stall an autonomous run. The branch is stated once and leaves the gate
+  as it was: implementation still starts after the user approves, and the recorded
+  proposal is what they approve. Paid for by removing `## Working principles` (44 words), whose items
+  restated steps 3 to 5 except two; those two now close step 5 as one 10-word sentence,
+  "Cut unneeded features; go back when it stops making sense." The new clauses and that
+  sentence fit in the freed words, so the body stays at 560 words against its 560
+  baseline, with no budget bump.
 - **choosing-models: agreement work keeps the `high` effort default, and the evidence for it
   is recorded** (T96a). The effort reference now says the "mechanical, tightly scoped" row
   does not cover work whose correctness is agreement between two independent statements of

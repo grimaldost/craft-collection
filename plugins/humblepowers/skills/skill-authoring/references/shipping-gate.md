@@ -44,9 +44,9 @@ leave the description alone).
 ## Reading a resealed holdout
 
 The body's bar is that the holdout is "never consulted while tuning". An A/B
-that reseals the holdout after a fix takes two reads of it, the resealed set
-before the fix and again after, and both comply: neither informed the tuning,
-because the fix was already written. A read that feeds a further description
+that reseals the holdout after a fix takes two reads of it, both after the fix was
+written: the resealed set read with the pre-fix description and again with the
+fixed one. Both comply, because neither informed the tuning. A read that feeds a further description
 edit breaks the bar and turns the holdout into dev data; reseal again before
 trusting it.
 

@@ -399,6 +399,40 @@ def test_a_sweep_root_that_does_not_exist_is_a_finding():
     assert f'{missing.as_posix()}: sweep root does not exist' in out, out
 
 
+def test_a_sweep_roots_string_cannot_answer_instead_of_walking_a_drive():
+    """A bare string is not a one-element list: iterated per character it names
+    '/' and 'C:', and the walk would sweep the whole drive."""
+    s = Stack()
+    engine = s.dir / 'engine'
+    engine.mkdir()
+    s.bind(f'sweep_roots = "{engine.as_posix()}"\n' + _retired(engine))
+    rc, out = s.check()
+    assert rc == 2, out
+    assert 'CANNOT ANSWER' in out and 'sweep_roots must be a list of absolute paths' in out, out
+
+
+def test_a_relative_sweep_root_cannot_answer():
+    """A relative entry would resolve against whatever directory the walk ran from."""
+    s = Stack()
+    engine = s.dir / 'engine'
+    engine.mkdir()
+    s.bind('sweep_roots = ["engine"]\n' + _retired(engine))
+    rc, out = s.check()
+    assert rc == 2, out
+    assert 'CANNOT ANSWER' in out and 'sweep_roots must be a list of absolute paths' in out, out
+
+
+def test_a_retired_roots_string_or_relative_entry_cannot_answer():
+    s = Stack()
+    engine = s.dir / 'engine'
+    engine.mkdir()
+    for roots in (f'"{engine.as_posix()}"', '["engine"]'):
+        s.bind(f'[[retired]]\npattern = "x"\nreason = "r"\nroots = {roots}\n')
+        rc, out = s.check()
+        assert rc == 2, out
+        assert 'CANNOT ANSWER' in out and '[[retired]] roots must be a list' in out, out
+
+
 def main() -> int:
     test_absent_bindings_file_says_so_and_does_not_fail()
     test_a_clean_stack_reports_every_site_walked()
@@ -418,6 +452,9 @@ def main() -> int:
     test_a_file_under_a_rule_root_and_a_sweep_root_is_reported_once()
     test_exclude_globs_apply_to_sweep_roots()
     test_a_sweep_root_that_does_not_exist_is_a_finding()
+    test_a_sweep_roots_string_cannot_answer_instead_of_walking_a_drive()
+    test_a_relative_sweep_root_cannot_answer()
+    test_a_retired_roots_string_or_relative_entry_cannot_answer()
     print('ok: mirror_check')
     return 0
 
