@@ -334,14 +334,23 @@ understatement (Principle 20, blast-radius corollary).
 
 ### Step 4.3 — Identify all consumers
 
-**What.** Enumerate every notebook, dashboard, downstream pipeline,
-export, or report that reads the existing output.
+**What.** A consumer list you read is a claim; one you enumerated is
+evidence. Census the running system (enabled units and timers, crontabs,
+listening sockets and established connections on the service's ports,
+recent writes under the data directory), then reconcile it against
+lineage and docs. The artifact kinds (notebooks, dashboards, pipelines,
+exports, reports) become what the census finds, not how it is done.
 
 **Why.** Bug-for-bug parity is measured against what consumers
 actually consume.
 
 **How.** Same as schema-evolution Step 2.3 — lineage walk + grep +
 SME query.
+
+**Watch for.** A census that finds no live consumer is a result to
+report, not a step to skip. Name each consumer that will fail quietly
+(a monitor, a healthcheck, a retry loop) and repoint or retire it in
+the same change.
 
 ### Step 4.4 — Define the parity gate
 
@@ -847,3 +856,12 @@ imports, reflow, reorder), restate the constraint in content terms (a
 pattern that must hold, a line that must be pure) rather than position
 terms (column, exact line). A constraint the repo's own ruff rejects is a
 defect you shipped to yourself.
+
+**Run each producer's exact statement, under its role, against the real
+store.** A simplified stand-in (a plain INSERT for an INSERT ... ON CONFLICT,
+a fake engine) proves only the stand-in.
+
+**A count step asserts how many units it counted.** An empty result where
+an independent enumeration is non-empty is a refusal, never a zero. See
+`parity_check.py` Recipe 13 for the mechanized form and Recipe 12 for
+coverage.

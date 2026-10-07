@@ -28,6 +28,15 @@ and an exit-code rule; the format hook narrows which files receive turn-level fo
 
 ### Changed
 
+- **scenarios.md Step 4.3 "Identify all consumers"**: replaces "Enumerate every
+  notebook, dashboard, downstream pipeline, export, or report" with a census rule
+  and method (a consumer list you read is a claim; one you enumerated is evidence).
+  Adds a new Watch for section naming two consumer failure modes. The Cross-scenario
+  notes section gains two rules: run each producer's exact statement against the real
+  store (not a stand-in), and a count step asserts its count against an independent
+  enumeration. Displaces: the named enumeration opening, replaced by the rule and
+  method. Reference prose only; SKILL.md body stays at 2312 words. (2026-10-06 delta
+  triage: T72c, T72e, T73b, T73c.)
 - **Recipe 18 "Versioning a frozen judge" in `parity-recipes.md`, with a pointer from
   SKILL.md Oracle integrity**: after a red, repairing the judge is admissible only as
   a new judge version in its own change by the judge's author, at least as strict
