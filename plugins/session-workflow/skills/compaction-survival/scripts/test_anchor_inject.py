@@ -1676,6 +1676,145 @@ def test_start_cwd_returns_the_first_cwd_and_skips_garbage():
             assert ai.start_cwd(bad) is None, bad
 
 
+def _git_env() -> dict:
+    # Same scrub as evals/harness/test_git_env_isolation.py: an ambient GIT_DIR
+    # (set by git itself inside a hook) would make `git -C <tmp>` answer about the
+    # outer repository.
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    env['GIT_CONFIG_GLOBAL'] = os.devnull
+    env['GIT_CONFIG_SYSTEM'] = os.devnull
+    return env
+
+
+def _git(cwd: Path, *args: str):
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ['git', '-C', str(cwd), *args],  # noqa: S607 - git resolved from PATH
+        capture_output=True,
+        encoding='utf-8',
+        timeout=30,
+        env=_git_env(),
+    )
+
+
+def _have_git() -> bool:
+    import shutil
+
+    return shutil.which('git') is not None
+
+
+def _hook_env_scrubbed(cwd: Path):
+    """run_hook with the same git scrub, so the hook itself never sees an ambient repo."""
+    return run_hook(cwd, extra_env=_git_env())
+
+
+def test_ensure_gitignore_writes_a_lone_star_when_missing():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        anchors = Path(d)
+        ai.ensure_gitignore(anchors)
+        assert (anchors / '.gitignore').read_bytes() == b'*'
+
+
+def test_ensure_gitignore_never_touches_an_existing_file():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        anchors = Path(d)
+        gi = anchors / '.gitignore'
+        original = b'# kept\r\n*.tmp\r\n!keep.md\r\n'
+        gi.write_bytes(original)
+        old = time.time() - 3600
+        os.utime(gi, (old, old))
+        mtime = gi.stat().st_mtime_ns
+        ai.ensure_gitignore(anchors)
+        assert gi.read_bytes() == original
+        assert gi.stat().st_mtime_ns == mtime
+
+
+def test_ensure_gitignore_swallows_every_oserror():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        # .gitignore is a directory: exists, never opened as a file, no raise.
+        blocked = base / 'blocked'
+        (blocked / '.gitignore').mkdir(parents=True)
+        ai.ensure_gitignore(blocked)
+        assert (blocked / '.gitignore').is_dir()
+        # The anchors dir itself is absent: the write fails, no raise, nothing created.
+        ai.ensure_gitignore(base / 'absent')
+        assert not (base / 'absent').exists()
+
+
+def test_hook_with_open_anchors_makes_the_anchors_dir_self_ignoring():
+    if not _have_git():
+        print('skip: git not on PATH; the check-ignore test did not run')
+        return
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        assert _git(tmp, 'init', '-q').returncode == 0
+        anchor = make_anchor(tmp)
+        assert not (anchor.parent / '.gitignore').exists()
+        proc = _hook_env_scrubbed(tmp)
+        assert proc.returncode == 0
+        assert '<control-anchor>' in proc.stdout
+        assert (anchor.parent / '.gitignore').read_bytes() == b'*'
+        rel = '.claude/anchors/' + anchor.name
+        assert _git(tmp, 'check-ignore', '-q', rel).returncode == 0
+        # The telemetry the hook wrote is ignored too: the file was there first.
+        assert (anchor.parent / 'log.ndjson').is_file()
+        assert _git(tmp, 'check-ignore', '-q', '.claude/anchors/log.ndjson').returncode == 0
+        status = _git(tmp, 'status', '--porcelain', '--untracked-files=all')
+        assert status.returncode == 0
+        assert '.claude' not in status.stdout, status.stdout
+
+
+def test_hook_leaves_an_existing_gitignore_byte_identical():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp)
+        gi = anchor.parent / '.gitignore'
+        original = b'*.tmp\n'
+        gi.write_bytes(original)
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        assert '<control-anchor>' in proc.stdout
+        assert gi.read_bytes() == original
+
+
+def test_hook_still_injects_and_logs_when_the_gitignore_write_fails():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp)
+        (anchor.parent / '.gitignore').mkdir()
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        assert '<control-anchor>' in proc.stdout
+        assert (anchor.parent / '.gitignore').is_dir()
+        assert (anchor.parent / 'log.ndjson').read_text(encoding='utf-8').strip()
+
+
+def test_hook_with_no_open_anchor_creates_no_gitignore():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp, name='done.closed.md')
+        proc = run_hook(tmp)
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+        assert not (anchor.parent / '.gitignore').exists()
+
+
+def test_hook_ensures_the_ignore_file_even_when_a_stale_startup_injects_nothing():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        anchor = make_anchor(tmp, age_s=7 * 3600)
+        proc = run_hook(tmp, source='startup')
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+        assert (anchor.parent / '.gitignore').read_bytes() == b'*'
+
+
 if __name__ == '__main__':
     test_injects_with_no_env_set()
     test_opt_out_silences_it()
@@ -1771,4 +1910,12 @@ if __name__ == '__main__':
     test_an_unreadable_transcript_keeps_the_payload_cwd_lookup()
     test_startup_reads_only_the_payload_cwd()
     test_start_cwd_returns_the_first_cwd_and_skips_garbage()
+    test_ensure_gitignore_writes_a_lone_star_when_missing()
+    test_ensure_gitignore_never_touches_an_existing_file()
+    test_ensure_gitignore_swallows_every_oserror()
+    test_hook_with_open_anchors_makes_the_anchors_dir_self_ignoring()
+    test_hook_leaves_an_existing_gitignore_byte_identical()
+    test_hook_still_injects_and_logs_when_the_gitignore_write_fails()
+    test_hook_with_no_open_anchor_creates_no_gitignore()
+    test_hook_ensures_the_ignore_file_even_when_a_stale_startup_injects_nothing()
     print('ok: all anchor_inject tests passed')

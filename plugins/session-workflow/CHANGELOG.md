@@ -177,6 +177,21 @@ routing rules that enable per-lens capacity dispatch.
   moment the state changes. `commands/anchor.md` takes the same wording in its
   Boundary paragraph. The frontmatter description is untouched. Body words: 1265 to
   1261 (`word_budget.py --report`).
+- **anchor_inject: the SessionStart hook makes `.claude/anchors/` ignore itself when it finds
+  open anchors** (2026-10-06 craft-collection triage: T123a). `/anchor` step 2 asked for a
+  `.gitignore` holding exactly `*` in the anchors directory, but only the manual snapshot
+  path ran it: a run armed through the protocol, with no `/anchor` call, left the anchors and
+  the hook's own `log.ndjson` showing as untracked in the user's repository. The step now
+  also lives in code the protocol path runs: `ensure_gitignore(anchors_dir)` creates the file
+  with the content `*` when it is missing, before the telemetry append, so the log written by
+  that same run is already ignored. It is create-only (opened in exclusive mode): an existing
+  `.gitignore` is never read, rewritten or appended to, and any OSError is swallowed so a
+  write failure cannot block the injection or the telemetry. Eight new tests, among them a
+  temp-git-repo test (`git check-ignore` exits 0 for the anchor and for `log.ndjson`, and
+  `git status --porcelain` lists nothing under `.claude`), byte-identity of an existing
+  file, a `.gitignore` that is a directory (exit 0, injection and telemetry still emitted)
+  and no file for an anchors directory with only closed anchors; the module's suite passes.
+  The helper is a module-level function so a write-time arm can call it too.
 
 ### Fixed
 

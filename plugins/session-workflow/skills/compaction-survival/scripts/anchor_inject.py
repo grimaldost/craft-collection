@@ -29,6 +29,10 @@ Lifecycle gates (T22a hardening):
   anchor in the first. startup, and an unreadable transcript, use the payload
   cwd alone.
 
+When it finds open anchors it also creates `<anchors>/.gitignore` containing `*` if
+that file is missing (never touching one that exists), so anchors and this hook's
+own log stay out of the repository's status.
+
 Ships ON. `SESSION_WORKFLOW_ANCHOR_HOOKS=0` is the documented opt-out. It shipped
 inert behind an unset variable until 2026-08, which meant the mechanism carrying
 this plugin's strongest claim had never run anywhere while the claim rested on
@@ -812,6 +816,20 @@ def build_pointer(
     return '\n'.join(lines)
 
 
+def ensure_gitignore(anchors_dir: Path) -> None:
+    """Make the anchors directory ignore itself: a `.gitignore` holding exactly `*`
+    (the content `/anchor` step 2 specifies), so anchors and the hook's own
+    `log.ndjson` never show up as untracked in the user's repository. Create-only:
+    an existing `.gitignore` (a file, or anything else at that path) is never
+    opened, rewritten or appended to. Best-effort like the telemetry: a failure
+    must not block the injection."""
+    try:
+        with (anchors_dir / '.gitignore').open('x', encoding='utf-8', newline='') as fh:
+            fh.write('*')
+    except OSError:
+        pass  # exists already (the common case), unwritable, or the dir is gone
+
+
 def append_telemetry(anchors_dir: Path, record: dict) -> None:
     try:
         log = anchors_dir / 'log.ndjson'
@@ -895,6 +913,8 @@ def main() -> int:
     anchors_dir, open_anchors, moved = resolve_anchors(cwd, source, payload.get('transcript_path'))
     if not open_anchors:
         return 0
+    # Before the telemetry append below, so the log this hook writes is already ignored.
+    ensure_gitignore(anchors_dir)
     anchor, other_open = select_anchor(open_anchors)
 
     stale_s = max(0.0, time.time() - _mtime(anchor))

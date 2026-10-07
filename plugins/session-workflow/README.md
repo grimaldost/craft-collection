@@ -106,7 +106,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   compaction and process restarts; warns and names the others when several
   anchors are open in one directory. On `compact`, `resume` and `clear` it looks
   first in the directory the session started in (the first `cwd` in its
-  transcript), then in the current one, and names both when they differ.
+  transcript), then in the current one, and names both when they differ. When it
+  finds open anchors it creates `.claude/anchors/.gitignore` (content `*`) if that
+  file is missing, so the anchors and the hook's log never show as untracked; an
+  existing `.gitignore` is never touched.
   Lifecycle gates: an anchor untouched for
   >24h degrades to a one-paragraph pointer (path + title + age +
   confirm-to-expand + close command) instead of the full body; `startup`
