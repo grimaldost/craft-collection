@@ -62,7 +62,6 @@ _BLOCKED = re.compile(
 _QUOTED_OR_COMMENT = re.compile(
     r""""[^"]*"|'[^']*'|(?:^|(?<=\s))\#[^\n]*""",
 )
-_QUOTED = re.compile(r""""[^"]*"|'[^']*'""")
 
 # Heredoc bodies are data too (a markdown table written with `cat <<EOF` put
 # `| virtualenv |` at a command position after the row's leading pipe). The
@@ -76,23 +75,34 @@ _HEREDOC_OP = re.compile(
     r"""(?=[\s|&;()<>]|$)"""
 )
 # A body fed to a shell interpreter is executed, so it stays scannable: the
-# command before the operator, or a command the operator line pipes into, is a
-# shell or names one (`sudo bash`, `env X=1 sh -s`, `| sudo bash`).
+# simple command holding the operator is a shell or names one (`sudo bash`,
+# `env X=1 sh -s`, `<<EOF bash`), the operator redirects a group or loop that
+# runs one (`{ bash; } <<EOF`), or the operator line pipes into one
+# (`| sudo bash`, `| (bash)`). A quoted shell name counts (`"bash"`).
 _SHELL_PROGRAMS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'ssh'})
 _SHELLS = _SHELL_PROGRAMS | {'source', '.', 'eval'}
-_SEGMENT_SPLIT = re.compile(r'[;&|(`{]')
+_SEGMENT_SPLIT = re.compile(r'[;&|(`{\n]')
+_COMMAND_END = re.compile(r'[;&|)}`\n]')
+_ANY_SPLIT = re.compile(r'[;&|(){}`\n]')
+_GROUP_ENDS = frozenset({'done', 'fi', 'esac'})
+_KEYWORDS = frozenset({'!', 'do', 'then', 'else', 'elif', 'if', 'while', 'until', 'time'})
+_QUOTED_WORD = re.compile(r""""([^"]*)"|'([^']*)'""")
+_PLAIN = re.compile(r'[^\s;&|()<>`$]*')
 _ASSIGNMENT = re.compile(r'[A-Za-z_]\w*=')
 # Contexts in which `<<` is a redirection: top-level code, a subshell, and a
 # command substitution (`$(...)` or backticks, also inside double quotes).
 _CODE = frozenset({'code', 'paren', 'subst', 'backtick'})
 _ESCAPED = ('escaped',)
+# A `#` starts a comment at the start of a word: after whitespace or a
+# metacharacter (`true;#`), never inside one (`url#frag`, `${#x}`).
+_WORD_START = frozenset(' \t\r\n;&|()<>')
 
 
 class _Context:
     """A coarse shell context tracker, fed the command text line by line.
 
     Tracks quotes, backslash escapes, `#`-comments, `$(`, backticks, `(` and
-    arithmetic `((`/`$((` as a stack. Not a parser: it only has to say whether
+    arithmetic `((`/`$((`/`$[` as a stack. Not a parser: it only has to say whether
     a `<<` sits in code and whether a line leaves a quote open.
     """
 
@@ -102,10 +112,13 @@ class _Context:
         self.escaped_newline = False
 
     def _push_expansion(self, text: str, i: int) -> int:
-        """Push `$((` or `$(` at `i`; return its length, or 0 if neither."""
+        """Push `$((`, `$[` or `$(` at `i`; return its length, or 0 if none."""
         if text.startswith('$((', i):
             self.stack.append('arith')
             return 3
+        if text.startswith('$[', i):
+            self.stack.append('arith[')
+            return 2
         if text.startswith('$(', i):
             self.stack.append('subst')
             return 2
@@ -143,10 +156,15 @@ class _Context:
                     self.stack.pop()
                 else:
                     self.stack.append('backtick')
-            elif ch == '#' and self.prev.isspace() and top != 'arith':
+            elif ch == '#' and self.prev in _WORD_START and not top.startswith('arith'):
                 self.stack.append('#')
-            elif text.startswith('$(', i):
+            elif text.startswith(('$(', '$['), i):
                 step = self._push_expansion(text, i)
+            elif ch in '[]' and top == 'arith[':
+                if ch == '[':
+                    self.stack.append('arith[')
+                else:
+                    self.stack.pop()
             elif text.startswith('((', i):
                 self.stack.append('arith')
                 step = 2
@@ -160,7 +178,8 @@ class _Context:
                     self.stack.pop()
             while len(snaps) < min(i + step, len(text)):
                 snaps.append(snaps[-1])
-            self.prev = text[min(i + step, len(text)) - 1]
+            # An escaped character is part of a word, never a word boundary.
+            self.prev = 'x' if snaps[-1] == _ESCAPED else text[min(i + step, len(text)) - 1]
             i += step
         return snaps
 
@@ -169,40 +188,71 @@ class _Context:
         return self.stack[-1] in ('"', "'") or self.escaped_newline
 
 
+def _unquote(text: str) -> str:
+    """Join continued lines; unquote a plain quoted word, blank any other quoted span."""
+
+    def plain(m: re.Match[str]) -> str:
+        inner = m.group(1) if m.group(1) is not None else m.group(2)
+        return inner if _PLAIN.fullmatch(inner) else ' '
+
+    return _QUOTED_WORD.sub(plain, text.replace('\\\n', ' '))
+
+
 def _runs_a_shell(segment: str) -> bool:
     names = [w.rsplit('/', 1)[-1] for w in segment.split() if not _ASSIGNMENT.match(w)]
+    while names and names[0] in _KEYWORDS:
+        names.pop(0)
     return bool(names) and (names[0] in _SHELLS or bool(_SHELL_PROGRAMS.intersection(names)))
 
 
 def _feeds_a_shell(prefix: str, rest: str) -> bool:
-    if _runs_a_shell(_SEGMENT_SPLIT.split(_QUOTED.sub(' ', prefix))[-1]):
+    prefix, rest = _unquote(prefix), _unquote(rest)
+    head = _SEGMENT_SPLIT.split(prefix)[-1]
+    if _runs_a_shell(head + ' ' + _COMMAND_END.split(rest, 1)[0]):
         return True
-    piped = _QUOTED.sub(' ', rest).split('|')[1:]
-    return any(_runs_a_shell(_SEGMENT_SPLIT.split(p.lstrip('&'))[0]) for p in piped)
+    # The operator redirects a group or loop: what runs inside it reads the body.
+    group = ')' in head or '}' in head or (head.split() or [''])[0] in _GROUP_ENDS
+    if group and any(_runs_a_shell(s) for s in _ANY_SPLIT.split(prefix)):
+        return True
+    _, pipe, piped = rest.partition('|')
+    return bool(pipe) and any(_runs_a_shell(s) for s in _ANY_SPLIT.split(piped))
 
 
-def _expansions_only(line: str, state: list[int]) -> str:
+def _substitution_end(ctx: _Context, text: str) -> int | None:
+    """Feed `text` to the open substitution in `ctx`; where it closes, or None."""
+    snaps = ctx.feed(text)
+    return next((j for j, s in enumerate(snaps) if s == ('code',)), None)
+
+
+def _expansions_only(line: str, state: list) -> str:
     """Keep the `$(...)` and backtick spans of an unquoted-heredoc body line.
 
     Those run; the rest of the line is literal text and becomes spaces. A
-    backtick becomes `;` so its contents sit at a command position. `state`
-    is `[paren depth, inside backticks]`, carried from line to line.
+    backtick becomes `;` so its contents sit at a command position. A `$(...)`
+    span is code, read with the same context tracker, so a quoted or escaped
+    `)` does not close it. `state` is `[open substitution's _Context or None,
+    inside backticks]`, carried from line to line.
     """
     out: list[str] = []
     i = 0
     while i < len(line):
         ch = line[i]
-        if state[0]:
-            state[0] += (ch == '(') - (ch == ')')
-            out.append(ch)
-        elif state[1]:
+        if state[0] is not None:
+            end = _substitution_end(state[0], line[i:] + '\n')
+            stop = len(line) if end is None else min(i + end, len(line))
+            out.append(line[i:stop])
+            state[0] = state[0] if end is None else None
+            i = stop
+            continue
+        if state[1]:
             state[1] = int(ch != '`')
             out.append(';' if ch == '`' else ch)
         elif ch == '\\':
             out.append('  ')
             i += 1
         elif line.startswith('$(', i):
-            state[0] = 1
+            state[0] = _Context()
+            state[0].stack.append('subst')
             out.append('$(')
             i += 1
         elif ch == '`':
@@ -242,7 +292,7 @@ def _strip_heredoc_bodies(command: str) -> str:
     ctx = _Context()
     logical = ''
     fresh: list[_Heredoc] = []
-    expand = [0, 0]
+    expand: list = [None, 0]
     body_open = False
     for raw in command.split('\n'):
         line = raw
@@ -254,13 +304,13 @@ def _strip_heredoc_bodies(command: str) -> str:
             rest = probe[len(doc.word) :] if probe.startswith(doc.word) else None
             if probe == doc.word:
                 pending.pop(0)
-                expand = [0, 0]
+                expand = [None, 0]
                 body_open = bool(pending)
                 out.append('')
                 continue
             if doc.nested and rest is not None and (')' in rest or '`' in rest):
                 pending.pop(0)
-                expand = [0, 0]
+                expand = [None, 0]
                 body_open = bool(pending)
                 line = rest
             else:
