@@ -260,8 +260,12 @@ def cluster_arrays(
         for arm, nums, dens in ((arm_a, a_num, a_den), (arm_b, b_num, b_den)):
             cell = per_arm.get(arm)
             counts = _cluster_cell(cell)
-            den = cell.get('denominator') if isinstance(cell, dict) else None
-            if _is_int(den) and den == 0:
+            num, den = (
+                (cell.get('numerator'), cell.get('denominator'))
+                if isinstance(cell, dict)
+                else (None, None)
+            )
+            if _is_int(num) and _is_int(den) and num == 0 and den == 0:
                 return None, (
                     f'cluster {pid!r} has zero units in arm {arm!r}: leave the cluster out of '
                     'the clusters block and report how many were left out; with an arms block '

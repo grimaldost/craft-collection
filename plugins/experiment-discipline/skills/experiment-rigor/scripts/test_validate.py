@@ -395,10 +395,24 @@ def test_zero_size_cluster_cell_names_the_cluster_and_the_leave_out_rule():
         and "arm 'control'" in m
         and 'zero units' in m
         and 'leave the cluster out of the clusters block' in m
+        and 'report how many were left out' in m
         and 'ER-RECON' in m
         for m in messages
     ), messages
     assert not any('no well-formed cell' in m for m in messages), messages
+
+
+def test_malformed_cell_with_zero_denominator_is_not_called_empty():
+    # T143b: only a 0/0 cell is an empty cluster. Successes over zero units, or a
+    # missing numerator, is a data-entry error; advising to drop it would hide that.
+    for cell in ({'numerator': 3, 'denominator': 0}, {'denominator': 0}):
+        rec = base_contrast()
+        rec['results']['signal']['clusters']['p6']['control'] = cell
+        messages = [f.message for f in check(rec).failures if f.code == 'ER-STATS']
+        assert any(
+            "'p6'" in m and "arm 'control'" in m and 'no well-formed cell' in m for m in messages
+        ), (cell, messages)
+        assert not any('zero units' in m for m in messages), (cell, messages)
 
 
 def _drop_p6_and_restate_the_contrast(rec: dict) -> None:
