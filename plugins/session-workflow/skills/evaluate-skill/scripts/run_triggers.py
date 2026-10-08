@@ -72,7 +72,7 @@ def resolve_trigger_cwd(skill: str, cfg: dict, repo: Path) -> tuple[str | None, 
     """Choose the trigger arm's working directory for `skill`, returning (cwd, is_temp).
     When cfg maps the skill to a `cwd_fixture` (a repo-relative populated dir), returns
     (abspath, False) — a real fixture the caller must NOT delete — so a cwd-dependent
-    skill (corpus-review: 'audit the repo docs') can fire over real files instead of
+    skill (a repo auditor: 'audit the repo docs') can fire over real files instead of
     reading 0.00 recall in an empty cwd. Otherwise (None, True): the caller mkdtemps a
     throwaway empty cwd and cleans it up. Pure."""
     fixture = (cfg.get('cwd_fixture_of_skill') or {}).get(skill)

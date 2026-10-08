@@ -28,14 +28,29 @@ the frontmatter counts: a `parked:` line in the body or the TAIL is prose.
 
 ### Mission
 
-The goal in a sentence or two, the hard constraints, and any user instruction
-that constrains *mechanism* rather than outcome — quoted in the user's own words
-with a stable id.
+The anchor has authority over task position only: the cursor. The Mission is a
+record that helps the run keep its bearings, not a source of permission.
+
+It holds the goal in a sentence or two, and the owner's authorizations and
+instructions that constrain *mechanism* rather than outcome, as dated, literal
+quotes with a stable id: a record of what the owner said and when, never a grant
+the anchor makes itself. A line such as
+`M3 (2026-10-08, owner): "push only after the full suite is green"` can be checked
+against the conversation it came from; a line such as `M3: pushing is approved`
+cannot, and reads as a permission the anchor issued.
 
 Paraphrase is where an order dies: once the wording is gone, a substituted
-mechanism reads as a design choice rather than a violation. A reversal of a
-standing rule is quoted the same way and names what it supersedes; the old rule
-lives in other copies and will not overwrite itself.
+mechanism reads as a design choice rather than a violation. The date does the
+same work for time: an undated authorization cannot be told apart from one the
+owner has since withdrawn. A reversal of a standing rule is quoted the same way
+and names what it supersedes; the old rule lives in other copies and will not
+overwrite itself.
+
+A rule that must never be broken belongs in a hook that enforces it, not in the
+anchor. The anchor is prose: a compaction summary, a later rewrite or a fold into
+the TAIL can lose the line, and nothing stops a turn that did not re-read it. When
+such a hook exists, the Mission can name it and what it guards, so the run knows
+why a step is refused.
 
 ### Cursor
 
@@ -71,8 +86,10 @@ next turn — an anchor that cannot be found is no anchor.
 
 ### Invariants
 
-Decisions and constraints that hold across the whole run, so a post-compaction
-turn does not relitigate them.
+Decisions about the task that a post-compaction turn must not relitigate: the
+approach chosen, an alternative rejected and why, a scope cut. They are not
+inviolable rules; a rule that has to hold whatever a later turn believes goes in
+a hook (see Mission).
 
 ### Parallel tracks
 
@@ -105,6 +122,14 @@ than a second copy of the plan.
 - **Folded history** — closed phases' one-line outcomes, resolved incidents.
 
 ## What the injection does with all this
+
+The hook runs at SessionStart and emits the HEAD of the newest **active** anchor.
+An anchor marked done in-content, or one that does not read as an anchor at all,
+is de-ranked below live tracks, and the injection names any other open anchors;
+the rename to `*.closed.md` is the only signal that stops injection entirely. An
+anchor untouched for 24h injects as a short pointer: path, title, age, close
+command, and the cursor it still asserts, which is the part a reader can check
+against reality. Anchor-less sessions pay nothing.
 
 Over budget, the hook reserves the cursor section and then spends what is left
 top-down on whole sections, naming what it dropped. So a section's position is

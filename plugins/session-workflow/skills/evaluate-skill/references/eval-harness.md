@@ -38,7 +38,7 @@ evals/
   "gates": { "trigger_recall": 0.8, "trigger_specificity": 0.9, "correct_usage": 0.7 },
   "command_first_skills": ["review-panel"],
   "action_discipline_skills": ["my-action-skill"],
-  "cwd_fixture_of_skill": { "my-cwd-skill": "evals/trigger/fixtures/corpus" },
+  "cwd_fixture_of_skill": { "my-cwd-skill": "evals/trigger/fixtures/my-repo" },
   "plugin_of_skill": { "my-skill": "my-plugin" }
 }
 ```
@@ -176,14 +176,14 @@ work happen" vs "emitted a one-line confirmation."
   routing, so its recall reads ~0 as an artifact, not a description defect. Measure
   such a skill with the trigger eval pointed at a *populated* cwd — map it in
   `cwd_fixture_of_skill` (the config key that implements exactly this) — or confirm
-  activation by a manual run in a real tree. (Observed:
-  `corpus-review` scored 0/8 in the empty cwd, yet fired and correctly out-selected
-  its `review-panel` / `code-review` siblings 2/3 on the same positives once the cwd
-  held a real repo.) A compounding limit for a *heavy* orchestration skill: once it
-  does fire in a populated cwd, completing the fan-out needs Task/subagents
-  (disallowed in the trigger arm), so the run flails to the `trigger_max_turns` cap
-  and is scored as errored rather than as a fire (`corpus-review`'s populated-cwd
-  holdout errored 19/21 this way). Such a skill is not cleanly auto-gateable on
+  activation by a manual run in a real tree. (Observed on a corpus-auditing skill
+  since retired: it scored 0/8 in the empty cwd, yet fired and correctly
+  out-selected its `review-panel` / `code-review` siblings 2/3 on the same positives
+  once the cwd held a real repo.) A compounding limit for a *heavy* orchestration
+  skill: once it does fire in a populated cwd, completing the fan-out needs
+  Task/subagents (disallowed in the trigger arm), so the run flails to the
+  `trigger_max_turns` cap and is scored as errored rather than as a fire (that
+  skill's populated-cwd holdout errored 19/21 this way). Such a skill is not cleanly auto-gateable on
   trigger recall here — confirm activation by direct observation, and gate it via
   the grading arm or a raised turn cap.
 - **Stale deny-tool names**: `disallowed_tools_trigger` must list only tools the

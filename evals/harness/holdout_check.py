@@ -201,6 +201,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f'no held-out set at {holdout_path}')
         return 1
     queries = json.loads(holdout_path.read_text(encoding='utf-8'))
+    if skill not in cfg['plugin_of_skill']:
+        print(
+            f'{skill} is not in evals/config.json plugin_of_skill '
+            '(not a trigger-measured skill: manual-only skills and non-skill '
+            'sets such as dispatch-router-* are excluded)'
+        )
+        return 2
     plugin = cfg['plugin_of_skill'][skill]
     plugin_dir = str(REPO / 'plugins' / plugin)
     n_spawn = len(queries) * repeats
