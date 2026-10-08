@@ -8,6 +8,95 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.18.0] - 2026-10-08
+
+Minor bump: the weak and mid tiers move to Haiku 5.5 and Sonnet 5.5, the scoring rubric
+gains two role floors, and the SubagentStop verification gate and the PreToolUse
+spawn-routing hint are removed.
+
+### Changed
+
+- **choosing-models: the weak tier is Haiku 5.5 (`claude-haiku-5-5`) and the mid tier is
+  Sonnet 5.5 (`claude-sonnet-5-5`).** Haiku 5.5 was released on 2026-10-07 and Sonnet 5.5 on
+  2026-09-28; the platform model page lists Haiku 4.5 and Sonnet 5 as legacy (2026-10-07).
+  The harness aliases were measured on 2026-10-08 by asking spawned agents for the model id
+  their system prompt names: `haiku` resolves to `claude-haiku-5-5` and `sonnet` to
+  `claude-sonnet-5-5`. The two rows' notes state only those facts, mark effort behaviour,
+  context window and per-task cost as unmeasured, and point at the platform model reference
+  for prices and limits. Haiku 4.5's accepted-and-ignored effort reading, its 200K context
+  window and Sonnet 5's price and tokenizer note are no longer stated as facts about the
+  current models; `references/emission-and-effort.md` keeps the Haiku 4.5 effort reading as
+  dated history and says the weak tier's response to effort is unmeasured on Haiku 5.5.
+  `[typical_cost]` says the weak and mid baselines were observed on Haiku 4.5 and Sonnet 5.
+  `last_reviewed` 2026-10-08, `review_by` 2027-01-08. No threshold moves. A new
+  `scripts/test_shipped_lineup.py` pins the model per tier.
+- **choosing-models: the calibration record is marked as predating the 5.5 lineup.**
+  `[meta].calibration` gains a note that all calibration recorded in `models.toml` predates
+  the 5.5 models: the weak and mid rows now name models no bank has measured, and Opus 5.5
+  was already uncalibrated. A note, not a re-measurement. `lineup_reconciled` gains the
+  2026-10-08 entry.
+- **choosing-models: an Agent-tool spawn passes `effort`.** Claude Code 2.1.292 (published
+  2026-10-06) added an `effort` parameter to the Agent tool. `references/emission-and-effort.md`
+  no longer says the Agent tool has no effort control or sends effort-sensitive batches
+  through workflow `agent()` instead; it says to pass `effort` with `model`, and still counts
+  the effort of a spawn that omits it as inherited. The emission table's Agent-tool row now
+  emits `model` + `effort`.
+- **choosing-models: two role floors in the scoring rubric.** A new section after the
+  cross-shape floor in `references/scoring-rubric.md`: a fix round answering a review's
+  findings, and a task that writes prose other people read in public (README, CHANGELOG,
+  docs, PR or issue bodies), run at the mid tier or above whatever the score. The evidence
+  is observations from the 2026-10-06/07 maintenance runs, where weak-tier fix rounds
+  (scored 8 to 23) left defects and a weak-tier release task wrote process narration into a
+  public CHANGELOG. Because they are observations, not calibration, the floors sit outside
+  the score: like the context modifiers in `SKILL.md`, they act on the tier after scoring
+  and change no points, base or floor of the score, which still never moves without
+  calibration evidence. `SKILL.md` is unchanged (786 of 786 words), so the floors reach a
+  decider who reads the rubric; a strong-tier session routing a single task skips the rubric
+  and does not see them. The keyword shortcuts no longer list "update docs" as likely weak
+  and open with a line saying they are a first guess the role floors still apply to. The
+  rubric does not grow (1946 to 1940 words): the additions displace the provenance
+  paragraph, the base-15 rationale sentence, a cross-shape paragraph and the last sentence
+  of example 5's cross-shape bullet (both restated the trigger rule), the old lead-ins to
+  the shortcuts and the scoring signals, the opening's "no external tool needed" clause, and
+  part of the frontier note. `scripts/test_scoring_rubric.py` pins both floors, that they
+  sit outside the score while `SKILL.md` keeps its calibration rule, and that the
+  likely-weak shortcuts name none of the public surfaces the floor lists.
+
+### Removed
+
+- **The SubagentStop verification gate** (`verification-before-completion/scripts/subagent_gate.py`,
+  off by default). In a placebo-controlled run of 2026-08-11 it scored 7/10 against a
+  placebo's 7/10. Its variables `HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE`,
+  `HUMBLEPOWERS_VERIFICATION_GATE_STATE_DIR` and `HUMBLEPOWERS_VERIFICATION_GATE_SKIP_MODELS`
+  go with it, and so does its plugin README section, including that section's claim that no
+  gate or placebo trial existed.
+- **The PreToolUse spawn-routing hint** (`choosing-models/scripts/inject_spawn_routing.py`, on
+  `Agent` and `Workflow`). There is no recorded instance of it changing a route. It
+  false-fired on routed spawns: on every `Workflow` call until the 0.15.1 fix, on a spread of
+  a routing helper until the 0.16.1 fix, and on two-level routing helpers after that (a
+  2026-10-07 maintenance-run observation). Since Claude Code 2.1.292 (2026-10-06) the Agent
+  tool takes `effort` natively, which removes the hint's reason to exist.
+  `HUMBLEPOWERS_SPAWN_ROUTING_HINT` and `HUMBLEPOWERS_SPAWN_HINT_STATE_DIR` go with it, as do
+  its plugin README section and the spawn-hint paragraph in
+  `references/emission-and-effort.md`.
+- **Both hooks' registrations.** `hooks/hooks.json` now registers the UserPromptSubmit
+  dispatch router alone, and its description says so; `hooks/test_hooks_registration.py`
+  pins that no SubagentStop and no PreToolUse `Agent` hook is registered. The root README's
+  Hooks table loses both rows. An installed copy keeps running the old hooks until it
+  updates to 0.18.0.
+
+Not edited here, for another session: the legacy ids `claude-haiku-4-5` and
+`claude-sonnet-5` are still live, among other places, in convoy (`src/convoy/core/governance.py`
+`DEFAULT_TIER_MODELS`, `src/convoy/interface/scaffold.py`, `skills/convoy/SKILL.md`,
+`README.md`, `docs/design/02-formats.md`) and in fathom (`src/fathom/smoke.py`,
+`src/fathom/armingprobe.py`, `skills/fathom-eval/reference/arming.md` and
+`recipe-guardrail-tiers.md`, `examples/data-root/scenarios/*.toml`,
+`examples/data-root/README.md`, `docs/ledger-contract.md`). The mirror walk
+(`refresh-models/scripts/mirror_check.py`), run against this release's `models.toml`, reports
+one finding: convoy's `src/convoy/core/governance.py` does not carry the
+`lineup synced 2026-10-08` stamp. The family-keyed price rows for haiku and sonnet in the
+registered mirrors were not checked.
+
 ## [0.17.2] - 2026-10-07
 
 Patch bump from the 2026-10-07 read-only review: one wrong script path, one stale hook
