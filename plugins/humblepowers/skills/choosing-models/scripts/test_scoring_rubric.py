@@ -111,13 +111,37 @@ def test_role_floors_hold_whatever_the_score():
     assert 'exception to calibration-only changes' in flat, 'exception not stated'
 
 
+def public_surfaces(text: str) -> list[str]:
+    """The surfaces the public-prose floor names, as lower-case word stems: the
+    bullet's list after `--`, articles dropped, `A or B body` split in two, a
+    plural `docs` cut to `doc` so `documentation` matches too."""
+    section = text.split('## Role floors', 1)[1].split('## Scoring Signals', 1)[0]
+    bullet = next(b for b in section.split('\n- ')[1:] if 'read in public' in b)
+    listed = ' '.join(bullet.split('\n\n')[0].split()).split(' -- ', 1)[1]
+    listed = listed.split(' runs at ', 1)[0]
+    stems = []
+    for item in listed.replace(' or ', ', ').split(','):
+        words = [w for w in item.lower().split() if w not in ('a', 'an', 'the', 'body')]
+        if words:
+            stems.append(words[0][:-1] if words[0] == 'docs' else words[0])
+    return stems
+
+
 def test_shortcuts_defer_to_the_role_floors():
-    """The keyword shortcuts are a first guess: none may point public docs at weak,
-    and the section says the role floors still apply to whatever they suggest."""
+    """The keyword shortcuts are a first guess: no surface the public-prose floor
+    names may appear in the weak list, and the section says the role floors still
+    apply to whatever the shortcuts suggest."""
     text = _text()
+    stems = public_surfaces(text)
+    assert stems == ['readme', 'changelog', 'doc', 'pr', 'issue'], stems
     section = text.split('## Quick Heuristic Shortcuts', 1)[1].split('---', 1)[0]
     weak = section.split('**Likely weak', 1)[1].split('**Likely mid', 1)[0]
-    assert 'docs' not in weak, 'a weak shortcut still covers docs'
+    for stem in stems:
+        # A stem of three letters or more matches as a word prefix (`doc` covers
+        # `documentation`); `pr` only as a whole word, so `process` does not trip it.
+        pattern = rf'\b{stem}\w*' if len(stem) >= 3 else rf'\b{stem}s?\b'
+        hit = re.search(pattern, weak, re.IGNORECASE)
+        assert not hit, f'a weak shortcut still covers {stem!r}: {hit.group(0)!r}'
     assert 'role floors still apply' in ' '.join(section.split()), 'no pointer to floors'
 
 
