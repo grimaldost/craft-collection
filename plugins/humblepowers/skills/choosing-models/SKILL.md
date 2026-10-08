@@ -50,8 +50,8 @@ unaided choice rises as the decider gets dearer. So:
 ## The procedure
 
 1. **Score the task** with [references/scoring-rubric.md](references/scoring-rubric.md),
-   at authoring or spawn time. The rubric owns *how to score* and never moves
-   without calibration evidence.
+   at authoring or spawn time. The rubric owns *how to score*; points move only
+   on calibration evidence.
 2. **Map score → tier** with the thresholds in [models.toml](models.toml),
    which owns *what runs* and changes when models ship.
 3. **Map tier → the surface's vocabulary** (table below).

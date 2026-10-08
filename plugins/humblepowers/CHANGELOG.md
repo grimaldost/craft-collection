@@ -47,20 +47,17 @@ spawn-routing hint are removed.
   docs, PR or issue bodies), run at the mid tier or above whatever the score. The evidence is
   observations from the 2026-10-06/07 maintenance runs, where weak-tier fix rounds (scored 8
   to 23) left defects and a weak-tier release task wrote process narration into a public
-  CHANGELOG. The rule that the rubric moves only on calibration evidence lived in the rubric's
-  provenance paragraph, which these floors displace; the floors are a deliberate exception to
-  it, and the rubric says so: observations, not a calibrated threshold, an exception to
-  calibration-only changes. The procedure in `SKILL.md` still says the rubric never moves
-  without calibration evidence, and does not name the exception. The keyword shortcuts no
-  longer list "update docs" as likely weak, and open with a line saying they are a first guess
-  and the role floors still apply. The rubric does not grow (1946 to 1940 words). The additions
-  displace the provenance paragraph, the sentence giving the base-15 rationale, a cross-shape
-  paragraph that restated the trigger rule, the old lead-in to the keyword shortcuts, example 5's
-  closing restatement of the same rule, the opening's "no external tool needed" clause, and
-  the "Evaluate these signals" lead-in to the scoring signals. `SKILL.md` is unchanged (786 of
-  786 words). `scripts/test_scoring_rubric.py` pins both floors, the tier and score they set,
-  that the shortcuts defer to them, and that the likely-weak list names none of the public
-  surfaces the floor lists.
+  CHANGELOG. The floors are not calibrated: like the context modifiers, they route by role
+  and leave the points alone, and the procedure in `SKILL.md` now says the points (not the
+  whole rubric) move only on calibration evidence, at the same word count (786 of 786). The
+  keyword shortcuts no longer list "update docs" as likely weak and open with a line saying
+  they are a first guess the role floors still apply to. The rubric does not grow (1946 to
+  1942 words): the additions displace the provenance paragraph, the base-15 rationale
+  sentence, a cross-shape paragraph and example 5's closing sentence (both restated the
+  trigger rule), the old lead-ins to the shortcuts and the scoring signals, the opening's "no
+  external tool needed" clause, and part of the frontier note. `scripts/test_scoring_rubric.py`
+  pins both floors, that they route by role, and that the likely-weak shortcuts name none of
+  the public surfaces the floor lists.
 
 ### Removed
 

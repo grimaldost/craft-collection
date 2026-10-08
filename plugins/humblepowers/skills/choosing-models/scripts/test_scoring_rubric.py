@@ -105,10 +105,10 @@ def test_role_floors_hold_whatever_the_score():
         assert 'runs at `mid` or above' in bullet, bullet
     for surface in ('README', 'CHANGELOG', 'PR or issue bod'):
         assert surface in bullets[1], surface
-    # The rubric otherwise moves only on calibration evidence; these floors say they
-    # are an exception to that rule.
+    # The points move only on calibration evidence; the floors rest on observations
+    # and route by role, so they must say so and leave the points alone.
     assert 'not a calibrated threshold' in flat
-    assert 'exception to calibration-only changes' in flat, 'exception not stated'
+    assert 'route by role and leave the points' in flat, 'floors not scoped to role'
 
 
 def public_surfaces(text: str) -> list[str]:

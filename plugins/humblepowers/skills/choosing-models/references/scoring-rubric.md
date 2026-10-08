@@ -23,9 +23,8 @@ only the upper clamp can bind in practice.
 > -- data, calibratable, refreshed by `/refresh-models`. This file defines
 > *how to score*; `models.toml` defines *what runs*.
 >
-> A fourth opt-in tier (`frontier`) exists above strong but is **never
-> assigned by score** -- the author opts in manually. See the skill body for
-> the criteria.
+> A fourth tier, `frontier`, is opt-in and **never assigned by score**
+> (criteria in the skill body).
 
 ---
 
@@ -76,8 +75,7 @@ handed over. Every recorded mis-score ran the other way.
 
 ## Role floors
 
-Two floors hold whatever the score, raising a lower score to 26 (the bottom of
-`mid`):
+Two floors hold whatever the score, raising a lower score to 26:
 
 - **A fix round answering a review's findings** runs at `mid` or above.
 - **A task that writes prose other people read in public** -- a README, a
@@ -85,8 +83,9 @@ Two floors hold whatever the score, raising a lower score to 26 (the bottom of
 
 Evidence from the 2026-10-06/07 maintenance runs: weak-tier fix rounds (scored 8
 to 23) left defects, and a weak-tier release task wrote process narration into a
-public CHANGELOG. Observations, not a calibrated threshold: an exception to
-calibration-only changes.
+public CHANGELOG. Observations, not a calibrated threshold: like the skill's
+context modifiers, the floors route by role and leave the points, which move only
+on calibration evidence, as they are.
 
 ---
 
