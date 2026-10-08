@@ -6,6 +6,72 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.26.0] - 2026-10-08
+
+The anchor's authority is limited to task position, new anchor features are frozen, three
+maintenance skills and `/anchor` become manual-only, review-panel defaults to one reviewer,
+and `corpus-review` is retired. Minor bump: what the model can invoke and what the review
+skill does by default both change for an installed copy, and a skill is removed.
+
+### Changed
+
+- **The anchor has authority over task position only: the cursor.** Mission now records the
+  owner's authorizations and mechanism instructions as dated, literal quotes with a stable
+  id (a record of what the owner said and when, never a grant the anchor makes itself), and
+  Invariants holds decisions about the task rather than inviolable rules. A rule that must
+  never be broken belongs in a hook that enforces it. `SKILL.md`,
+  `references/anchor-spec.md` and `commands/anchor.md` carry the same wording, and
+  `references/failure-modes.md` gains a row for an undated or paraphrased authorization and
+  one for a never-break rule kept only in the anchor. It displaces the "hard constraints"
+  that Mission and the `/anchor` snapshot used to ask for. `test_anchor_authority.py` fails
+  if a copy drops the rule.
+- **New anchor features are frozen as of 0.26.0.** One sentence in `compaction-survival`'s
+  body: fixes and documentation still land, and a new capability first needs evidence that
+  the existing ones are used. The authority rule, the freeze and the `/anchor` wording below
+  are paid for by shortening the "Automatic re-injection" bullet under "Explicit surfaces":
+  ranking, the done-in-content de-rank, the 24h pointer and what a cut drops now live in
+  `anchor-spec.md`'s injection section. The body goes from 1262 to 1225 words and its
+  baseline from 1265 to 1225.
+- **`feedback-triage`, `consolidate-knowledge`, `evaluate-skill` and `/anchor` are
+  manual-only.** Each sets `disable-model-invocation: true`, as `refresh-stack` and
+  `refresh-models` do: the owner runs them as slash commands. Their descriptions are
+  unchanged. `compaction-survival` now says the owner runs `/anchor` (the wind-down
+  `close --stale` sweep, the one-off backstop) and that the model closes an anchor by the
+  step 7 rename; that displaces the wording that had the model run the command. The three
+  skills leave `evals/config.json` `plugin_of_skill`, per the harness rule that a skill
+  which cannot auto-activate is not measured on triggers; their trigger sets and tasks stay
+  on disk. `scripts/test_manual_only_skills.py` checks the four flags and that no
+  `plugin_of_skill` key names a manual-only skill.
+- **review-panel defaults to one reviewer.** Level 1 is the default rung: one reviewer
+  subagent that did not see the session, briefed to refute; Levels 2 and 3 are escalations
+  for higher stakes, and the four-lens quartet becomes the Level 3 default. It displaces
+  the "Default quartet" as the skill-wide default and the "quick gut-check" framing of
+  Level 1. `references/running-a-panel.md` cites the evidence: arXiv:2603.12123 v2
+  (2026-10-01) reports cross-context review not significantly ahead of a context-aware
+  subagent reviewer (p = 0.057). The description is unchanged, and
+  `scripts/test_review_panel_text.py` pins its hand-off trigger and draft negative verbatim
+  along with the body's default-rung sentence. The body goes from 1163 to 1183 words inside
+  its 1187 baseline, which drops to 1183.
+
+### Fixed
+
+- **review-panel no longer says reasoning effort is settable only through the Workflow
+  tool.** Claude Code 2.1.292 added an `effort` parameter to the Agent tool, so the body's
+  "Effort is only settable on the Workflow path" is removed and `running-a-panel.md` says
+  concurrent Agent calls can pass model and effort per lens; the Workflow path is kept for
+  Level 3 and schema-forced output.
+
+### Removed
+
+- **`corpus-review` is retired.** The Workflow tool's fan-out (parallel agents with
+  per-agent model and effort) covers what it orchestrated, and it had no recorded use. Gone
+  with it: its word-budget entry, its trigger and holdout sets, the
+  `evals/trigger/fixtures/corpus` fixture, and its `cwd_fixture_of_skill` and
+  `plugin_of_skill` entries (the harness's cwd-fixture feature stays). The plugin
+  description and keywords, both READMEs and `AGENTS.md` drop it; review-panel's boundary
+  bullet points at the Workflow tool's fan-out instead, and `eval-harness.md` names the
+  empty-cwd example generically.
+
 ## [0.25.1] - 2026-10-07
 
 Patch bump from the 2026-10-07 read-only review: the anchor frontmatter fence is stated where
