@@ -188,6 +188,8 @@ def test_heredoc_body_is_data_not_a_command():
         'cat <<EOF>out.md\n| virtualenv |\nEOF',
         '<<EOF cat > b.md\n| virtualenv |\nEOF',
         'LC_ALL=C /bin/cat > b.md <<EOF\n| virtualenv |\nEOF',
+        '"cat" > b.md <<EOF\n| virtualenv |\nEOF',
+        'mkdir -p docs && cd docs\ncat > b.md <<EOF\n| virtualenv |\nEOF\ngit add b.md',
         'tee b.md <<EOF\n| virtualenv | 21.3.0 |\nEOF',
         # The whole word is the delimiter.
         'cat <<END-OF-FILE\n| virtualenv |\nEND-OF-FILE',
@@ -274,7 +276,9 @@ def test_a_body_something_can_run_is_still_scanned():
         'sudo bash <<EOF\npip install requests\nEOF',
         'env FOO=1 cat <<EOF | bash\npip install requests\nEOF',
         '<<EOF bash\npip install x\nEOF',
-        '"cat" <<EOF\npip install x\nEOF',
+        # The program word is read as bash reads it: quotes and escapes removed.
+        "'bash' '-s' cat <<'EOF'\npip install foo\nEOF",
+        '<> cat bash <<EOF\npip install foo\nEOF',
         'cat <<EOF | bash\npip install requests\nEOF',
         'cat <<EOF | sudo -u ci bash\npip install requests\nEOF',
         'cat <<EOF | (bash)\npip install x\nEOF',
@@ -298,6 +302,31 @@ def test_a_body_something_can_run_is_still_scanned():
         "python3 - <<A\nprint('hi')\ncat > f <<B\nA\npip install x\nB",
         # git and gh are not sinks: an alias can hand the body to a shell.
         "git -c alias.x='!sh' x <<EOF\npip install x\nEOF",
+    ]
+    for command in blocked:
+        assert _v(command) == 'block', command
+
+
+def test_the_walk_stops_where_it_cannot_follow_bash():
+    # Each command runs `pip` under bash 5.2. The walk stops at the line it cannot
+    # follow exactly and leaves the rest to the scan.
+    blocked = [
+        # A compound opened on an earlier line can send a later `cat` to a shell.
+        'for f in a b; do\ncat <<EOF\npip install $f\nEOF\ndone | sh',
+        'if true; then\ncat <<EOF\npip install foo\nEOF\nfi | bash',
+        '{\ncat <<EOF\npip install foo\nEOF\n} | bash',
+        'gen() {\n  cat <<EOF\npip install foo\nEOF\n}\ngen | bash',
+        'bash <(\ncat <<EOF\npip install foo\nEOF\n)',
+        # A `<<` whose delimiter the walk cannot parse.
+        'cat <<1\ncat <<X\n1\npip install foo\nX',
+        # An unquoted body joins a backslash-newline before it expands or ends.
+        'cat <<EOF\n$' + BACKSLASH + '\n(true; pip install foo)\nEOF',
+        'cat <<EOF\nEO' + BACKSLASH + '\nF\npip install foo\nEOF',
+        # A real comment hides a `<<`; an escaped space keeps `#` inside a word.
+        'cat > f # <<EOF\npip install z\nEOF',
+        'cat f' + BACKSLASH + ' #<<A\ncat <<X\nA\npip install foo\nX',
+        # An escaped quote is not a quote, so the next one opens a string.
+        'echo ' + BACKSLASH + "' foo ' bar\ncat <<X\n' ; echo\npip install foo\nX",
     ]
     for command in blocked:
         assert _v(command) == 'block', command
