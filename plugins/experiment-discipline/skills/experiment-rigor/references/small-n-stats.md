@@ -113,6 +113,12 @@ validator tells the two scopes apart: with it, the outcome is held to the
 full-cell-set reconciliation; without it, no full-cell-set rule applies and no
 per-arm rate is stated to be believed.
 
+A cluster with zero units in a contrasted arm (`denominator: 0`) has no rate and
+so no delta. Leave it out of the clusters block and report how many clusters were
+left out; `ER-STATS` names such a cell by cluster and arm. With an `arms` block
+present, leaving it out also fails `ER-RECON`, because the clusters must sum to
+the arms.
+
 ## The Beta(1, 1) prior and its sensitivity
 
 The within-experiment posterior for one arm is `Beta(prior_alpha + k, prior_beta

@@ -258,7 +258,15 @@ def cluster_arrays(
         if not isinstance(per_arm, dict):
             return None, f'cluster {pid!r} is not a mapping of arm -> counts'
         for arm, nums, dens in ((arm_a, a_num, a_den), (arm_b, b_num, b_den)):
-            counts = _cluster_cell(per_arm.get(arm))
+            cell = per_arm.get(arm)
+            counts = _cluster_cell(cell)
+            den = cell.get('denominator') if isinstance(cell, dict) else None
+            if _is_int(den) and den == 0:
+                return None, (
+                    f'cluster {pid!r} has zero units in arm {arm!r}: leave the cluster out of '
+                    'the clusters block and report how many were left out; with an arms block '
+                    'present that also fails ER-RECON, because the clusters must sum to the arms'
+                )
             if counts is None:
                 return None, f'cluster {pid!r} carries no well-formed cell for arm {arm!r}'
             nums.append(counts[0])
@@ -946,6 +954,7 @@ def check_contrasts(record: dict) -> list[Finding]:
             _pids, a_num, a_den, b_num, b_den = arrays
             try:
                 diff = stats.paired_difference(a_num, a_den, b_num, b_den)
+                deltas = stats.cluster_deltas(a_num, a_den, b_num, b_den)
             except ValueError as exc:
                 out.append(_fail('ER-STATS', f'{where}: paired difference recompute failed: {exc}'))
                 continue
@@ -1010,7 +1019,6 @@ def check_contrasts(record: dict) -> list[Finding]:
                                 )
                             )
 
-            deltas = stats.cluster_deltas(a_num, a_den, b_num, b_den)
             signs = stats.sign_test(deltas)
             ties = len(deltas) - signs.effective_n
             stated_signs = contrast.get('sign_test')

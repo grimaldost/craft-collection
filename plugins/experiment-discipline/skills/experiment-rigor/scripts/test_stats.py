@@ -348,6 +348,25 @@ def test_cluster_deltas_is_the_one_definition_paired_difference_averages():
     assert _approx(stats.paired_difference(a, sizes, b, sizes).mean_diff, sum(deltas) / 3)
 
 
+def test_cluster_deltas_names_the_cluster_and_arm_of_a_zero_size():
+    # T143b: the error names the offending cluster index, the arm and the size, so a
+    # caller handing parallel arrays can find the cell; it is still a ValueError.
+    for args, index, arm in (
+        (([1, 2], [4, 0], [1, 2], [4, 4]), 1, 'a'),
+        (([1, 2], [4, 4], [1, 0], [0, 4]), 0, 'b'),
+    ):
+        for fn in (stats.cluster_deltas, stats.paired_difference):
+            try:
+                fn(*args)
+            except ValueError as exc:
+                message = str(exc)
+                assert f'cluster index {index}' in message, message
+                assert f'arm {arm}' in message, message
+                assert 'size 0' in message, message
+                continue
+            raise AssertionError(f'{fn.__name__} accepted a zero cluster size: {args}')
+
+
 # ---------------------------------------------------------------------------
 # Student-t: the stdlib-only quantile behind paired_interval (schema v1.1)
 # ---------------------------------------------------------------------------

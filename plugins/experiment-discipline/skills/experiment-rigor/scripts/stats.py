@@ -389,8 +389,12 @@ def cluster_deltas(
     n_g = len(a_successes)
     if not (len(a_sizes) == len(b_successes) == len(b_sizes) == n_g):
         raise ValueError('per-cluster arrays must share one length (the same tasks in both arms)')
-    if any(s <= 0 for s in a_sizes) or any(s <= 0 for s in b_sizes):
-        raise ValueError('cluster sizes must be positive')
+    for g in range(n_g):
+        for arm, size in (('a', a_sizes[g]), ('b', b_sizes[g])):
+            if size <= 0:
+                raise ValueError(
+                    f'cluster sizes must be positive: cluster index {g}, arm {arm}, size {size!r}'
+                )
     return [a_successes[g] / a_sizes[g] - b_successes[g] / b_sizes[g] for g in range(n_g)]
 
 

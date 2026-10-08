@@ -383,6 +383,55 @@ def test_contrast_arm_missing_from_the_clusters_block_fails():
     assert any("'p4'" in m and "arm 'control'" in m for m in messages), messages
 
 
+def test_zero_size_cluster_cell_names_the_cluster_and_the_leave_out_rule():
+    # T143b: a cell with zero units is told apart from an absent or malformed one,
+    # and ER-STATS names the cluster, the arm and what to do instead of a generic shape.
+    rec = base_contrast()
+    rec['results']['signal']['clusters']['p6']['control'] = {'numerator': 0, 'denominator': 0}
+    report = check(rec)
+    messages = [f.message for f in report.failures if f.code == 'ER-STATS']
+    assert any(
+        "'p6'" in m
+        and "arm 'control'" in m
+        and 'zero units' in m
+        and 'leave the cluster out of the clusters block' in m
+        and 'ER-RECON' in m
+        for m in messages
+    ), messages
+    assert not any('no well-formed cell' in m for m in messages), messages
+
+
+def _drop_p6_and_restate_the_contrast(rec: dict) -> None:
+    # The five clusters left after p6 is dropped, recomputed by hand: deltas
+    # 0.5, 0.25, 0, 0.25, 0.5 -> mean 0.3, se sqrt(0.175 / 4 / 5); t(0.975, 4).
+    del rec['results']['signal']['clusters']['p6']
+    contrast = _contrast(rec)
+    contrast.update(estimate=0.3, se=0.0935, n_clusters=5)
+    contrast['interval'].update(low=0.0403, high=0.5597, t_quantile=2.7764)
+    contrast['sign_test'] = {'p_value': 0.125, 'effective_n': 4, 'positive': 4}
+
+
+def test_zero_size_cluster_left_out_of_a_subset_scoped_outcome_passes():
+    # T143b: the documented path -- the empty cluster left out, no arms block (subset
+    # scope), the contrast restated over the clusters that remain -- is clean.
+    rec = base_contrast()
+    del rec['results']['signal']['arms']
+    _drop_p6_and_restate_the_contrast(rec)
+    report = check(rec)
+    assert report.failures == [], report.failures
+
+
+def test_zero_size_cluster_left_out_beside_an_arms_block_fails_er_recon():
+    # T143b: with an arms block the outcome claims the full cell set, so leaving a
+    # cluster out breaks the clusters-sum-to-arms rule, and that stays a named failure.
+    rec = base_contrast()
+    _drop_p6_and_restate_the_contrast(rec)
+    report = check(rec)
+    assert fail_codes(report) == {'ER-RECON'}, report.failures
+    messages = [f.message for f in report.failures]
+    assert any("arm 'control'" in m and 'sums to 10/20' in m for m in messages), messages
+
+
 def test_stated_sign_test_is_required_on_every_contrast():
     # Fail-closed: the distribution-free bound is not optional decoration beside an
     # approximate interval. Dropping it, or any of its three fields, is ER-SCHEMA.
