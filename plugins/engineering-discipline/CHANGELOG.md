@@ -20,20 +20,24 @@ refresh-stack at 484/484.
   `| virtualenv | 21.3.0 |` put `virtualenv` at a command position after the row's
   leading pipe. A heredoc body is now skipped when two things hold: its operator line is
   one simple command (outside quotes, no `;`, `&`, `|`, parentheses, braces, `$(` or
-  backtick, and no trailing backslash) whose program is `cat`, `tee`, `git` or `gh`, past
-  any assignments and redirections; and the body cannot run code (a quoted or
-  backslashed delimiter, or no `$(` or backtick in the body). The terminator is the exact
-  word on its own line (leading tabs dropped after `<<-`; a CR ignored), several heredocs
-  on one line are read in order, and an unterminated body runs to the end of input, as
-  in bash. Every other heredoc is scanned as in 0.6.0, so a body fed to a shell, an
-  interpreter, a pipe, a loop or a substitution still blocks, and the walk stops
-  stripping at a line that leaves a quote open or ends in a backslash. The rule is
-  fail-closed by design: a data-only heredoc of another shape (`body=$(cat <<EOF`,
-  `cat <<EOF | grep x`, `sudo tee`) is still scanned, so a table row like the one above
-  still blocks there; writing it as `cat > file <<'EOF'` avoids that. The block message now names the matched words
-  (``Blocked `virtualenv`.``); `verdict()` still returns `'block'` or `'allow'`, and the
-  new `blocked_match()` returns the words. Displaces: nothing (the README PreToolUse
-  bullet; no SKILL.md body words). (2026-10-07 maintenance triage.)
+  backtick, and no trailing backslash) whose program is `cat` or `tee`, past any
+  assignments and redirections; and the body cannot run code (a quoted or backslashed
+  delimiter, or no `$(` or backtick in the body). The terminator is the exact word on its
+  own line (leading tabs dropped after `<<-`; a CR ignored), several heredocs on one line
+  are read in order, and an unterminated body runs to the end of input. Every other
+  heredoc body is passed to the scan whole, as in 0.6.0, and is not read for heredocs of
+  its own, so a body fed to a shell, an interpreter, a pipe, a loop or a substitution
+  still blocks; the walk also stops at a line that leaves a quote open or ends in a
+  backslash. `git` and `gh` are not sinks, because an alias can hand stdin to a shell.
+  One case 0.6.0 blocked now passes: a body written to a file that a later command runs
+  (`cat > x.sh <<EOF ... EOF`, then `bash x.sh`); the hook does not follow files. The
+  rule is otherwise fail-closed: a data-only heredoc of another shape (`body=$(cat <<EOF`,
+  `cat <<EOF | grep x`, `sudo tee`, `git commit -F - <<EOF`) is still scanned, so a table
+  row like the one above still blocks there; writing it as `cat > file <<'EOF'` avoids
+  that. The block message now names the matched words (``Blocked `virtualenv`.``);
+  `verdict()` still returns `'block'` or `'allow'`, and the new `blocked_match()` returns
+  the words. Displaces: nothing (the README PreToolUse bullet; no SKILL.md body words).
+  (2026-10-07 maintenance triage.)
 - **The READMEs no longer say the data checks run in this project's gates.** The
   plugin README said the runnable data checks were wired into this project's pre-commit
   and CI gate, and the root README said they were already in the gates; neither

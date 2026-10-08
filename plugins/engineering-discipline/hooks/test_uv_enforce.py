@@ -171,8 +171,8 @@ def _v(command):
 
 
 def test_heredoc_body_is_data_not_a_command():
-    # One simple command into a data sink (cat, tee, git, gh), and a body that
-    # cannot run code: the body is data and is not scanned.
+    # One simple command into cat or tee, and a body that cannot run code: the
+    # body is data and is not scanned.
     allowed = [
         REPORTED_HEREDOC,
         "cat > b.md <<'EOF'\n| virtualenv | 21.3.0 |\nEOF",
@@ -189,8 +189,6 @@ def test_heredoc_body_is_data_not_a_command():
         '<<EOF cat > b.md\n| virtualenv |\nEOF',
         'LC_ALL=C /bin/cat > b.md <<EOF\n| virtualenv |\nEOF',
         'tee b.md <<EOF\n| virtualenv | 21.3.0 |\nEOF',
-        "git commit -F - <<'EOF'\nBump virtualenv\n\n| virtualenv | 21.3.0 |\nEOF",
-        "gh pr create --title 'Bump deps' --body-file - <<'EOF'\n| virtualenv | 21.3.0 |\nEOF",
         # The whole word is the delimiter.
         'cat <<END-OF-FILE\n| virtualenv |\nEND-OF-FILE',
         "cat <<'END OF'\n| virtualenv |\nEND OF",
@@ -262,7 +260,7 @@ def test_lookalikes_of_a_heredoc_operator_strip_nothing():
 
 
 def test_a_body_something_can_run_is_still_scanned():
-    # The body is skipped only for one simple command into cat, tee, git or gh.
+    # The body is skipped only for one simple command into cat or tee.
     # A shell, an interpreter, a pipe, a subshell or a substitution may run it.
     blocked = [
         'bash <<EOF\npip install requests\nEOF',
@@ -294,6 +292,12 @@ def test_a_body_something_can_run_is_still_scanned():
         # the operator line, and runs `pip`.
         'echo "a\ncat > x <<EOF\n"\npip install z\nEOF',
         'cat <<EOF ' + BACKSLASH + '\n&& pip install z\nbody\nEOF',
+        # A body that is scanned is not read for heredoc operators: here bash
+        # ends the outer body at A and runs `pip` itself.
+        'sh <<A\ncat <<B\nA\npip install x\nB',
+        "python3 - <<A\nprint('hi')\ncat > f <<B\nA\npip install x\nB",
+        # git and gh are not sinks: an alias can hand the body to a shell.
+        "git -c alias.x='!sh' x <<EOF\npip install x\nEOF",
     ]
     for command in blocked:
         assert _v(command) == 'block', command
@@ -326,6 +330,8 @@ def test_shapes_outside_the_rule_keep_the_old_behaviour():
         'while read l; do echo "$l"; done <<EOF\n| virtualenv |\nEOF',
         'cat <<EOF | grep x\n| virtualenv |\nEOF',
         'sudo tee /etc/x <<EOF\n| virtualenv |\nEOF',
+        "git commit -F - <<'EOF'\nBump virtualenv\n\n| virtualenv | 21.3.0 |\nEOF",
+        "gh pr create --title 'Bump deps' --body-file - <<'EOF'\n| virtualenv | 21.3.0 |\nEOF",
     ]
     for command in blocked:
         assert _v(command) == 'block', command

@@ -58,7 +58,7 @@ importable for other harnesses' hook systems via `hooks/harness_adapters.py`.
   a uv project (`uv.lock` or `[tool.uv]`/`uv_build`). Override one command with
   `CLAUDE_ALLOW_PIP=1`; never fires outside a uv project. Quoted text and
   comments are data and are not scanned. So is a heredoc body when its line is
-  one simple command into `cat`, `tee`, `git` or `gh` (`cat > b.md <<'EOF'`) and
+  one simple command into `cat` or `tee` (`cat > b.md <<'EOF'`) and
   the body cannot run code (a quoted delimiter, or no `$(` or backtick in it);
   every other heredoc body is scanned. The block message names the matched words.
 

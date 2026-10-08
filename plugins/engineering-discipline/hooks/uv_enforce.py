@@ -6,8 +6,8 @@ when the cwd is a uv project (uv.lock, or [tool.uv]/uv_build in pyproject.toml),
 unless CLAUDE_ALLOW_PIP=1. Exits 2 (blocking, stderr fed to Claude, naming the
 matched words) on a block; otherwise 0. Never fires outside a uv project. Quoted
 spans and comments are data, not commands, and are not scanned; so is a heredoc
-body written by one simple command into cat, tee, git or gh that cannot run code
-(see `_data_heredocs`). Stdlib-only.
+body written by one simple command into cat or tee that cannot run code (see
+`_heredocs`). Stdlib-only.
 """
 
 from __future__ import annotations
@@ -67,11 +67,12 @@ _QUOTED_OR_COMMENT = re.compile(
 # row's leading pipe. The rule is narrow on purpose. A body is skipped only when
 # its operator line is one simple command (outside quotes: no `;`, `&`, `|`,
 # parentheses, braces, `$(` or backtick, and no trailing backslash) whose
-# program is a data sink, and the body cannot run code (a quoted delimiter, or no
-# `$(` or backtick in it). Every other heredoc is scanned as before, and so is
-# everything after a line that leaves a quote open: a shape the rule does not
-# recognise keeps the 0.6.0 behaviour.
-_DATA_SINKS = frozenset({'cat', 'tee', 'git', 'gh'})
+# program is `cat` or `tee`, and the body cannot run code (a quoted delimiter, or
+# no `$(` or backtick in it). Every other heredoc body is passed through to the
+# scan whole, without being read for heredocs of its own, and so is everything
+# after a line that leaves a quote open: a shape the rule does not recognise
+# keeps the 0.6.0 behaviour.
+_DATA_SINKS = frozenset({'cat', 'tee'})
 _HEREDOC_OP = re.compile(
     r"""(?<![<\\])<<(?!<)(-?)[ \t]*"""
     r"""(?:'([^'\n]+)'|"([^"\n]+)"|(\\?)([A-Za-z_][\w.-]*))"""
@@ -90,6 +91,7 @@ class _Heredoc:
     word: str
     dash: bool  # `<<-`: leading tabs are stripped before the terminator check
     literal: bool  # a quoted or backslashed delimiter: no expansion in the body
+    data: bool  # opened by one simple command into a data sink
 
 
 def _program(words: list[str]) -> str | None:
@@ -105,12 +107,11 @@ def _program(words: list[str]) -> str | None:
     return None
 
 
-def _data_heredocs(line: str) -> list[_Heredoc] | None:
-    """The heredocs opened on `line` whose bodies are data.
+def _heredocs(line: str) -> list[_Heredoc] | None:
+    """The heredocs opened on `line`, in order, each marked data or not.
 
-    Empty when the line opens none, or is not one simple command into a data
-    sink. None when the line leaves a quote open or ends in a backslash: the
-    walk cannot follow the command past it, so it stops stripping there.
+    None when the line leaves a quote open or ends in a backslash: the walk
+    cannot follow the command past it, so it stops there.
     """
     masked = _QUOTED_SPAN.sub(lambda m: ' ' * len(m.group(0)), line.rstrip('\r'))
     if '"' in masked or "'" in masked or masked.endswith('\\'):
@@ -122,15 +123,14 @@ def _data_heredocs(line: str) -> list[_Heredoc] | None:
     rest = masked
     for m in ops:
         rest = rest[: m.start()] + ' ' * (m.end() - m.start()) + rest[m.end() :]
-    if not ops or _NOT_SIMPLE.search(rest) or '$(' in rest:
-        return []
-    if _program(rest.split()) not in _DATA_SINKS:
-        return []
+    simple = not _NOT_SIMPLE.search(rest) and '$(' not in rest
+    data = simple and _program(rest.split()) in _DATA_SINKS
     return [
         _Heredoc(
             word=m.group(2) or m.group(3) or m.group(5),
             dash=m.group(1) == '-',
             literal=not m.group(5) or bool(m.group(4)),
+            data=data,
         )
         for m in ops
     ]
@@ -142,7 +142,8 @@ def _strip_heredoc_bodies(command: str) -> str:
     A line walk; the bodies of several heredocs on one line follow in order, as
     bash reads them. A terminator is the exact word on its own line (`\\r`
     ignored, and leading tabs after `<<-`); an unterminated body runs to the end
-    of input. An unquoted body holding `$(` or a backtick is kept for scanning.
+    of input. A body that is not data, or an unquoted one holding `$(` or a
+    backtick, is kept for scanning as it stands.
     """
     lines = command.split('\n')
     out: list[str] = []
@@ -151,7 +152,7 @@ def _strip_heredoc_bodies(command: str) -> str:
         line = lines[i]
         out.append(line)
         i += 1
-        docs = _data_heredocs(line)
+        docs = _heredocs(line)
         if docs is None:
             out.extend(lines[i:])
             break
@@ -164,7 +165,7 @@ def _strip_heredoc_bodies(command: str) -> str:
                 body.append(lines[i])
                 i += 1
             runs_code = not doc.literal and any('$(' in b or '`' in b for b in body)
-            out.extend(body if runs_code else [''] * len(body))
+            out.extend(body if runs_code or not doc.data else [''] * len(body))
     return '\n'.join(out)
 
 
