@@ -10,12 +10,16 @@ stdlib only.
 ## Coverage
 
 Every auto-triggering skill across the four plugins has a trigger dataset under
-`trigger/` (most also have correct-usage tasks under `tasks/`). `refresh-stack`
-and `refresh-models` are intentionally **excluded** — they set
-`disable-model-invocation: true` (they are the manual-only `/refresh-stack` and
-`/refresh-models` commands), so auto-activation is not-applicable
-by design rather than a failure, and their real behavior needs live
-PyPI/changelog/model-lineup access a headless run can't supply.
+`trigger/` (most also have correct-usage tasks under `tasks/`). `refresh-stack`,
+`refresh-models`, `feedback-triage`, `consolidate-knowledge` and `evaluate-skill`
+are intentionally **excluded** from `plugin_of_skill` — they set
+`disable-model-invocation: true` (the owner runs them as slash commands), so
+auto-activation is not-applicable by design rather than a failure, and the two
+refresh skills' real behavior needs live PyPI/changelog/model-lineup access a
+headless run can't supply. The last three were auto-triggered until
+session-workflow 0.26.0; their trigger sets and tasks stay on disk as the record
+of what was measured, and `scripts/test_manual_only_skills.py` fails if a
+manual-only skill is listed in `plugin_of_skill` again.
 `command_first_skills` in `config.json` lists skills whose low auto-recall is
 expected (slash-first invocation) and reported as informational rather than
 gated.
@@ -190,8 +194,7 @@ gate also caught a real plugin bug (a redundant `hooks` manifest key causing a
   per-task `with_activation_rate` comes back low (< ~0.7), read its correct-usage
   contribution as a *triggering* miss (cross-check the trigger eval) rather than
   a discipline failure.
-- `feedback-triage` has a single grading task, so at `agent_repeats: 3` its
-  correct-usage CI is very wide — treat the gate verdict as directional until
-  more tasks or repeats exist. (A second, incremental-triage task wants a
-  per-task rubric, which the engine's one-rubric-per-skill schema does not yet
-  support — recorded 2026-06-09.)
+- `feedback-triage` had a single grading task, so at `agent_repeats: 3` its
+  correct-usage CI was very wide — read its past gate verdicts as directional.
+  It is manual-only since session-workflow 0.26.0 and out of `plugin_of_skill`,
+  so the engine no longer grades it; the task stays on disk.

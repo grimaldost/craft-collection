@@ -1,14 +1,14 @@
 [
   { "id": "neutral-brief", "weight": 2,
-    "text": "Curates a NEUTRAL artifact brief for the reviewers — gives them the design, constraints, and dropped alternatives but strips the author's stated leaning/conclusion, so the panel is not anchored on the Redis token-bucket choice." },
-  { "id": "right-lenses", "weight": 2,
-    "text": "Picks several appropriate adversarial lenses for an architecture decision (e.g. architect, skeptic/simplest-thing, ops/failure, performance/scale) rather than a single generic 'reviewer'." },
+    "text": "Curates a NEUTRAL artifact brief for the reviewer(s) — gives them the design, constraints, and dropped alternatives but strips the author's stated leaning/conclusion, so the review is not anchored on the Redis token-bucket choice." },
+  { "id": "right-rung", "weight": 2,
+    "text": "Picks the ladder level by stakes: Level 1, one fresh reviewer briefed to refute, is the default and fits this prompt, which states no high stakes; picking several adversarial lenses (e.g. architect, skeptic/simplest-thing, ops/failure, performance/scale) meets this only when the response escalates to Level 2 or 3 and names the stakes that justify it. A single generic, polite 'reviewer' does not meet this." },
   { "id": "blind-adversarial", "weight": 1,
-    "text": "Sets the reviewers up blind to one another and framed to refute / find what's missing, not to politely 'review'." },
+    "text": "Frames the reviewer(s) to refute / find what's missing, not to politely 'review'; if it convenes more than one, it also keeps them blind to one another." },
   { "id": "structured-output", "weight": 1,
-    "text": "Specifies a fixed, comparable per-reviewer output so the results can be synthesized side by side." },
+    "text": "Specifies a fixed per-reviewer output (e.g. verdict, scores, reasons) so the result can be checked against the artifact, and, if it convenes more than one reviewer, synthesized side by side." },
   { "id": "plan-and-consent", "weight": 2,
-    "text": "Shows the plan (how many agents, which lenses, rough cost) and asks before firing — does not silently spawn a panel or assume consent." },
+    "text": "Shows the plan (how many agents, which lenses, rough cost) and asks before firing — does not silently spawn a reviewer or assume consent." },
   { "id": "not-solo", "weight": 2,
-    "text": "Convenes independent fresh reviewers rather than just delivering its own single critique — the independence/anti-anchoring is the point, not one more opinion from the same context." }
+    "text": "Convenes at least one independent fresh reviewer rather than just delivering its own single critique — the independence/anti-anchoring is the point, not one more opinion from the same context." }
 ]

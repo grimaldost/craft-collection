@@ -70,8 +70,7 @@ travelling `record.yaml` / `report.md` pair.
 
 **session-workflow** — skills `journaling-sessions`, `consolidate-knowledge`,
 `context-handoff`, `review-panel`, `evaluate-skill`, `toolkit-awareness`,
-`llm-signature`, `tool-feedback`, `feedback-triage`, `compaction-survival`, and
-`corpus-review`;
+`llm-signature`, `tool-feedback`, `feedback-triage`, and `compaction-survival`;
 the `/anchor` command; a live `scan_toolkit.py` inventory; the headless
 skill-eval engine in `scripts/`; a selectable `step-digest` output style; four
 hooks, all on by default: control-anchor re-injection, a stale skill-body check,

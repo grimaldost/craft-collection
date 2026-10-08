@@ -1,6 +1,7 @@
 ---
 name: consolidate-knowledge
 description: Use when a body of captured journal entries from many sessions should be distilled into durable, higher-level guidance — cluster related entries, synthesize the one generalization each cluster supports, promote only the reinforced and specific ones into long-lived guidance, and reconcile supersession when newer evidence overrides older. Triggers on "consolidate my journals", "what patterns emerged across these sessions", "distill these notes into guidance", "what have we learned over time", "promote the durable insights", "synthesize my entries into wisdom", or running "/consolidate-knowledge". This is the downstream pass that journaling-sessions feeds — journaling captures raw entries one session at a time, this consolidates many of them across sessions. Not for capturing a single session (use journaling-sessions), not for a one-off summary, and distinct from consolidating your agent memory files.
+disable-model-invocation: true
 user-invocable: true
 ---
 

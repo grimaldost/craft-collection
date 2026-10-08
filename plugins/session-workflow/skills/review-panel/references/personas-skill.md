@@ -1,6 +1,6 @@
 # Persona pack — a skill / plugin / prompt pack
 
-Use with, or in place of, the default quartet; rename to the specific skill.
+Use with, or in place of, the Level 3 quartet; rename to the specific skill.
 Fire on the assembled skill (description, body, references, scripts) rather than
 on one edit, so the lenses can judge how the parts fit.
 

@@ -8,6 +8,12 @@ Run from this directory (run_tests.py does: cwd = the test's own dir):
 
 from __future__ import annotations
 
+import contextlib
+import io
+import json
+import tempfile
+from pathlib import Path
+
 import holdout_check
 
 
@@ -19,6 +25,56 @@ def test_missing_holdout_returns_1() -> None:
     # A skill with no evals/trigger/holdout/<skill>.json exits 1 *before* any
     # spawn or plugin lookup, so this never touches the network.
     assert holdout_check.main(['no-such-skill-xyz']) == 1
+
+
+def test_skill_outside_plugin_of_skill_exits_2_with_a_message() -> None:
+    # A manual-only skill (disable-model-invocation) keeps its held-out set on
+    # disk but has no plugin_of_skill entry. The check names that and exits 2
+    # before any spawn, instead of a KeyError traceback.
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        (repo / 'evals' / 'trigger' / 'holdout').mkdir(parents=True)
+        (repo / 'evals' / 'config.json').write_text(
+            json.dumps({'plugin_of_skill': {}}), encoding='utf-8'
+        )
+        (repo / 'evals' / 'trigger' / 'holdout' / 'manual-skill.json').write_text(
+            json.dumps([{'query': 'q', 'should_trigger': True}]), encoding='utf-8'
+        )
+        saved, holdout_check.REPO = holdout_check.REPO, repo
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                code = holdout_check.main(['manual-skill'])
+        finally:
+            holdout_check.REPO = saved
+    assert code == 2
+    assert 'not in evals/config.json plugin_of_skill' in out.getvalue()
+
+
+def test_non_skill_holdout_message_does_not_blame_manual_only() -> None:
+    # evals/trigger/holdout/ also holds sets that are not skills, such as the
+    # dispatch-router regex holdouts. The message must cover that case rather
+    # than give 'manual-only' as the only reason.
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        (repo / 'evals' / 'trigger' / 'holdout').mkdir(parents=True)
+        (repo / 'evals' / 'config.json').write_text(
+            json.dumps({'plugin_of_skill': {}}), encoding='utf-8'
+        )
+        (repo / 'evals' / 'trigger' / 'holdout' / 'dispatch-router-recall.json').write_text(
+            json.dumps([{'query': 'q', 'should_trigger': True}]), encoding='utf-8'
+        )
+        saved, holdout_check.REPO = holdout_check.REPO, repo
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                code = holdout_check.main(['dispatch-router-recall'])
+        finally:
+            holdout_check.REPO = saved
+    assert code == 2
+    text = out.getvalue()
+    assert 'not a trigger-measured skill' in text
+    assert 'dispatch-router-*' in text
 
 
 def test_holdout_comparison_flags_drop() -> None:
@@ -189,6 +245,8 @@ def test_the_caveat_is_ascii_because_it_prints_to_a_cp1252_console() -> None:
 if __name__ == '__main__':
     test_no_args_returns_usage_code()
     test_missing_holdout_returns_1()
+    test_skill_outside_plugin_of_skill_exits_2_with_a_message()
+    test_non_skill_holdout_message_does_not_blame_manual_only()
     test_holdout_comparison_flags_drop()
     test_holdout_comparison_ok_within_ci()
     test_holdout_comparison_no_dev_entry()
