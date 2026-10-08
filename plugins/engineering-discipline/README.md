@@ -56,11 +56,11 @@ importable for other harnesses' hook systems via `hooks/harness_adapters.py`.
   instead, where the file is complete; `test_ruff_format.py` guards the exclusion.
 - **PreToolUse** — blocks `pip install` / `poetry` / `virtualenv` / `venv` inside
   a uv project (`uv.lock` or `[tool.uv]`/`uv_build`). Override one command with
-  `CLAUDE_ALLOW_PIP=1`; never fires outside a uv project. Quoted text, comments
-  and heredoc bodies are data and are not scanned, except what runs: a heredoc
-  body fed to a shell (`bash <<EOF`, `cat <<EOF | sudo bash`), and the `$(...)`
-  and backtick spans in the body of an unquoted heredoc (`<<EOF`, not
-  `<<'EOF'`). The block message names the matched words.
+  `CLAUDE_ALLOW_PIP=1`; never fires outside a uv project. Quoted text and
+  comments are data and are not scanned. So is a heredoc body when its line is
+  one simple command into `cat`, `tee`, `git` or `gh` (`cat > b.md <<'EOF'`) and
+  the body cannot run code (a quoted delimiter, or no `$(` or backtick in it);
+  every other heredoc body is scanned. The block message names the matched words.
 
 Both hooks append one JSON line per firing to a local log, `hook-log.ndjson`:
 `uv_enforce` on each block (`ts`, `hook`, `verdict`, `matched` for the blocked

@@ -5,10 +5,9 @@ Blocks `pip install`, `poetry add/install`, `virtualenv`, and `python -m venv`
 when the cwd is a uv project (uv.lock, or [tool.uv]/uv_build in pyproject.toml),
 unless CLAUDE_ALLOW_PIP=1. Exits 2 (blocking, stderr fed to Claude, naming the
 matched words) on a block; otherwise 0. Never fires outside a uv project. Quoted
-spans, comments and heredoc bodies are data, not commands, and are not scanned,
-with two exceptions that run: a heredoc body fed to a shell (`bash <<EOF`), and
-the `$(...)` and backtick spans in the body of an unquoted heredoc (`<<EOF`).
-Stdlib-only.
+spans and comments are data, not commands, and are not scanned; so is a heredoc
+body written by one simple command into cat, tee, git or gh that cannot run code
+(see `_data_heredocs`). Stdlib-only.
 """
 
 from __future__ import annotations
@@ -63,289 +62,114 @@ _QUOTED_OR_COMMENT = re.compile(
     r""""[^"]*"|'[^']*'|(?:^|(?<=\s))\#[^\n]*""",
 )
 
-# Heredoc bodies are data too (a markdown table written with `cat <<EOF` put
-# `| virtualenv |` at a command position after the row's leading pipe). The
-# operator is `<<` or `<<-` followed by a bare, 'quoted', "quoted" or
-# backslashed word, which ends at a shell metacharacter; any other word shape
-# is left unstripped. `<<<` (a here-string) and a `<<` inside an arithmetic
-# context (`$((1<<2))`, `(( x << y ))`) are not heredocs.
+# Heredoc bodies are data when nothing can run them: a markdown table written
+# with `cat > b.md <<EOF` put `| virtualenv |` at a command position after the
+# row's leading pipe. The rule is narrow on purpose. A body is skipped only when
+# its operator line is one simple command (outside quotes: no `;`, `&`, `|`,
+# parentheses, braces, `$(` or backtick, and no trailing backslash) whose
+# program is a data sink, and the body cannot run code (a quoted delimiter, or no
+# `$(` or backtick in it). Every other heredoc is scanned as before, and so is
+# everything after a line that leaves a quote open: a shape the rule does not
+# recognise keeps the 0.6.0 behaviour.
+_DATA_SINKS = frozenset({'cat', 'tee', 'git', 'gh'})
 _HEREDOC_OP = re.compile(
-    r"""(?<!<)<<(?!<)(-?)[ \t]*"""
+    r"""(?<![<\\])<<(?!<)(-?)[ \t]*"""
     r"""(?:'([^'\n]+)'|"([^"\n]+)"|(\\?)([A-Za-z_][\w.-]*))"""
-    r"""(?=[\s|&;()<>]|$)"""
+    r"""(?=[\s;&|()<>]|$)"""
 )
-# A body fed to a shell interpreter is executed, so it stays scannable: the
-# simple command holding the operator is a shell or names one (`sudo bash`,
-# `env X=1 sh -s`, `<<EOF bash`), the operator redirects a group or loop that
-# runs one (`{ bash; } <<EOF`), or the operator line pipes into one
-# (`| sudo bash`, `| (bash)`). A quoted shell name counts (`"bash"`).
-_SHELL_PROGRAMS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'ssh'})
-_SHELLS = _SHELL_PROGRAMS | {'source', '.', 'eval'}
-_SEGMENT_SPLIT = re.compile(r'[;&|(`{\n]')
-_COMMAND_END = re.compile(r'[;&|)}`\n]')
-_ANY_SPLIT = re.compile(r'[;&|(){}`\n]')
-_GROUP_ENDS = frozenset({'done', 'fi', 'esac'})
-_KEYWORDS = frozenset({'!', 'do', 'then', 'else', 'elif', 'if', 'while', 'until', 'time'})
-_QUOTED_WORD = re.compile(r""""([^"]*)"|'([^']*)'""")
-_PLAIN = re.compile(r'[^\s;&|()<>`$]*')
+_QUOTED_SPAN = re.compile(r""""(?:[^"\\\n]|\\.)*"|'[^'\n]*'""")
+_COMMENT_START = re.compile(r'(?:^|(?<=\s))#')
+_NOT_SIMPLE = re.compile(r'[;&|(){}`]')
 _ASSIGNMENT = re.compile(r'[A-Za-z_]\w*=')
-# Contexts in which `<<` is a redirection: top-level code, a subshell, and a
-# command substitution (`$(...)` or backticks, also inside double quotes).
-_CODE = frozenset({'code', 'paren', 'subst', 'backtick'})
-_ESCAPED = ('escaped',)
-# A `#` starts a comment at the start of a word: after whitespace or a
-# metacharacter (`true;#`), never inside one (`url#frag`, `${#x}`).
-_WORD_START = frozenset(' \t\r\n;&|()<>')
-
-
-class _Context:
-    """A coarse shell context tracker, fed the command text line by line.
-
-    Tracks quotes, backslash escapes, `#`-comments, `$(`, backticks, `(` and
-    arithmetic `((`/`$((`/`$[` as a stack. Not a parser: it only has to say whether
-    a `<<` sits in code and whether a line leaves a quote open.
-    """
-
-    def __init__(self) -> None:
-        self.stack = ['code']
-        self.prev = '\n'
-        self.escaped_newline = False
-
-    def _push_expansion(self, text: str, i: int) -> int:
-        """Push `$((`, `$[` or `$(` at `i`; return its length, or 0 if none."""
-        if text.startswith('$((', i):
-            self.stack.append('arith')
-            return 3
-        if text.startswith('$[', i):
-            self.stack.append('arith[')
-            return 2
-        if text.startswith('$(', i):
-            self.stack.append('subst')
-            return 2
-        return 0
-
-    def feed(self, text: str) -> list[tuple[str, ...]]:
-        """Consume `text`; return the context stack before each character."""
-        snaps: list[tuple[str, ...]] = []
-        self.escaped_newline = False
-        i = 0
-        while i < len(text):
-            snaps.append(tuple(self.stack))
-            ch, top, step = text[i], self.stack[-1], 1
-            if top == "'":
-                if ch == "'":
-                    self.stack.pop()
-            elif top == '#':
-                if ch == '\n':
-                    self.stack.pop()
-            elif ch == '\\':
-                step = 2
-                self.escaped_newline = text[i + 1 : i + 2] == '\n' and i + 2 == len(text)
-                snaps.append(_ESCAPED)
-            elif top == '"':
-                if ch == '"':
-                    self.stack.pop()
-                elif ch == '`':
-                    self.stack.append('backtick')
-                else:
-                    step = self._push_expansion(text, i) or 1
-            elif ch in '"\'':
-                self.stack.append(ch)
-            elif ch == '`':
-                if top == 'backtick':
-                    self.stack.pop()
-                else:
-                    self.stack.append('backtick')
-            elif ch == '#' and self.prev in _WORD_START and not top.startswith('arith'):
-                self.stack.append('#')
-            elif text.startswith(('$(', '$['), i):
-                step = self._push_expansion(text, i)
-            elif ch in '[]' and top == 'arith[':
-                if ch == '[':
-                    self.stack.append('arith[')
-                else:
-                    self.stack.pop()
-            elif text.startswith('((', i):
-                self.stack.append('arith')
-                step = 2
-            elif ch == '(':
-                self.stack.append('paren')
-            elif ch == ')':
-                if top == 'arith' and text.startswith('))', i):
-                    self.stack.pop()
-                    step = 2
-                elif top in ('paren', 'subst'):
-                    self.stack.pop()
-            while len(snaps) < min(i + step, len(text)):
-                snaps.append(snaps[-1])
-            # An escaped character is part of a word, never a word boundary.
-            self.prev = 'x' if snaps[-1] == _ESCAPED else text[min(i + step, len(text)) - 1]
-            i += step
-        return snaps
-
-    def continues(self) -> bool:
-        """Whether the text fed so far leaves the current command line open."""
-        return self.stack[-1] in ('"', "'") or self.escaped_newline
-
-
-def _unquote(text: str) -> str:
-    """Join continued lines; unquote a plain quoted word, blank any other quoted span."""
-
-    def plain(m: re.Match[str]) -> str:
-        inner = m.group(1) if m.group(1) is not None else m.group(2)
-        return inner if _PLAIN.fullmatch(inner) else ' '
-
-    return _QUOTED_WORD.sub(plain, text.replace('\\\n', ' '))
-
-
-def _runs_a_shell(segment: str) -> bool:
-    names = [w.rsplit('/', 1)[-1] for w in segment.split() if not _ASSIGNMENT.match(w)]
-    while names and names[0] in _KEYWORDS:
-        names.pop(0)
-    return bool(names) and (names[0] in _SHELLS or bool(_SHELL_PROGRAMS.intersection(names)))
-
-
-def _feeds_a_shell(prefix: str, rest: str) -> bool:
-    prefix, rest = _unquote(prefix), _unquote(rest)
-    head = _SEGMENT_SPLIT.split(prefix)[-1]
-    if _runs_a_shell(head + ' ' + _COMMAND_END.split(rest, 1)[0]):
-        return True
-    # The operator redirects a group or loop: what runs inside it reads the body.
-    group = ')' in head or '}' in head or (head.split() or [''])[0] in _GROUP_ENDS
-    if group and any(_runs_a_shell(s) for s in _ANY_SPLIT.split(prefix)):
-        return True
-    _, pipe, piped = rest.partition('|')
-    return bool(pipe) and any(_runs_a_shell(s) for s in _ANY_SPLIT.split(piped))
-
-
-def _substitution_end(ctx: _Context, text: str) -> int | None:
-    """Feed `text` to the open substitution in `ctx`; where it closes, or None."""
-    snaps = ctx.feed(text)
-    return next((j for j, s in enumerate(snaps) if s == ('code',)), None)
-
-
-def _expansions_only(line: str, state: list) -> str:
-    """Keep the `$(...)` and backtick spans of an unquoted-heredoc body line.
-
-    Those run; the rest of the line is literal text and becomes spaces. A
-    backtick becomes `;` so its contents sit at a command position. A `$(...)`
-    span is code, read with the same context tracker, so a quoted or escaped
-    `)` does not close it. `state` is `[open substitution's _Context or None,
-    inside backticks]`, carried from line to line.
-    """
-    out: list[str] = []
-    i = 0
-    while i < len(line):
-        ch = line[i]
-        if state[0] is not None:
-            end = _substitution_end(state[0], line[i:] + '\n')
-            stop = len(line) if end is None else min(i + end, len(line))
-            out.append(line[i:stop])
-            state[0] = state[0] if end is None else None
-            i = stop
-            continue
-        if state[1]:
-            state[1] = int(ch != '`')
-            out.append(';' if ch == '`' else ch)
-        elif ch == '\\':
-            out.append('  ')
-            i += 1
-        elif line.startswith('$(', i):
-            state[0] = _Context()
-            state[0].stack.append('subst')
-            out.append('$(')
-            i += 1
-        elif ch == '`':
-            state[1] = 1
-            out.append(';')
-        else:
-            out.append(' ')
-        i += 1
-    return ''.join(out)
+_BARE_REDIRECT = re.compile(r'\d*(?:>>|>\||>|<)')
+_ATTACHED_REDIRECT = re.compile(r'\d*(?:>>|>\||>|<)\S')
 
 
 @dataclass
 class _Heredoc:
     word: str
     dash: bool  # `<<-`: leading tabs are stripped before the terminator check
-    literal: bool  # a quoted delimiter: no expansion in the body
-    nested: bool  # the operator sits inside `$(...)` or backticks
-    span: tuple[int, int]  # the operator's place in its logical line
-    executed: bool = False  # the body is fed to a shell
+    literal: bool  # a quoted or backslashed delimiter: no expansion in the body
+
+
+def _program(words: list[str]) -> str | None:
+    """The command word of a simple command, past assignments and redirections."""
+    skip_next = False
+    for word in words:
+        if skip_next:
+            skip_next = False
+        elif _BARE_REDIRECT.fullmatch(word):
+            skip_next = True
+        elif not (_ASSIGNMENT.match(word) or _ATTACHED_REDIRECT.match(word)):
+            return word.rsplit('/', 1)[-1]
+    return None
+
+
+def _data_heredocs(line: str) -> list[_Heredoc] | None:
+    """The heredocs opened on `line` whose bodies are data.
+
+    Empty when the line opens none, or is not one simple command into a data
+    sink. None when the line leaves a quote open or ends in a backslash: the
+    walk cannot follow the command past it, so it stops stripping there.
+    """
+    masked = _QUOTED_SPAN.sub(lambda m: ' ' * len(m.group(0)), line.rstrip('\r'))
+    if '"' in masked or "'" in masked or masked.endswith('\\'):
+        return None
+    comment = _COMMENT_START.search(masked)
+    if comment:
+        masked = masked[: comment.start()]
+    ops = [m for m in _HEREDOC_OP.finditer(line) if masked[m.start() : m.start() + 2] == '<<']
+    rest = masked
+    for m in ops:
+        rest = rest[: m.start()] + ' ' * (m.end() - m.start()) + rest[m.end() :]
+    if not ops or _NOT_SIMPLE.search(rest) or '$(' in rest:
+        return []
+    if _program(rest.split()) not in _DATA_SINKS:
+        return []
+    return [
+        _Heredoc(
+            word=m.group(2) or m.group(3) or m.group(5),
+            dash=m.group(1) == '-',
+            literal=not m.group(5) or bool(m.group(4)),
+        )
+        for m in ops
+    ]
 
 
 def _strip_heredoc_bodies(command: str) -> str:
-    """Blank the body and terminator lines of each heredoc, keeping all else.
+    """Blank the body and terminator lines of each data heredoc, keeping all else.
 
-    A line-based walk with a FIFO of pending terminators, as bash reads them:
-    the bodies of several operators on one line follow in order, starting after
-    the line that ends the command (a quote left open or a trailing backslash
-    continues it). A terminator is the exact word on its own line (`\\r`
-    ignored; leading tabs too after `<<-`); inside `$(...)` or backticks, a line
-    that starts with the word and closes the substitution ends the body too, and
-    the rest of that line is code. An unterminated heredoc runs to the end of
-    input, as in bash. A quoted delimiter makes the body literal; an unquoted one
-    leaves its `$(...)` and backticks running, so those are kept.
+    A line walk; the bodies of several heredocs on one line follow in order, as
+    bash reads them. A terminator is the exact word on its own line (`\\r`
+    ignored, and leading tabs after `<<-`); an unterminated body runs to the end
+    of input. An unquoted body holding `$(` or a backtick is kept for scanning.
     """
+    lines = command.split('\n')
     out: list[str] = []
-    pending: list[_Heredoc] = []
-    ctx = _Context()
-    logical = ''
-    fresh: list[_Heredoc] = []
-    expand: list = [None, 0]
-    body_open = False
-    for raw in command.split('\n'):
-        line = raw
-        if body_open:
-            doc = pending[0]
-            probe = line.rstrip('\r')
-            if doc.dash:
-                probe = probe.lstrip('\t')
-            rest = probe[len(doc.word) :] if probe.startswith(doc.word) else None
-            if probe == doc.word:
-                pending.pop(0)
-                expand = [None, 0]
-                body_open = bool(pending)
-                out.append('')
-                continue
-            if doc.nested and rest is not None and (')' in rest or '`' in rest):
-                pending.pop(0)
-                expand = [None, 0]
-                body_open = bool(pending)
-                line = rest
-            else:
-                if doc.executed:
-                    out.append(line)
-                elif doc.literal:
-                    out.append('')
-                else:
-                    out.append(_expansions_only(line, expand))
-                continue
-        start = len(logical)
-        snaps = ctx.feed(line + '\n')
-        logical += line + '\n'
-        for m in _HEREDOC_OP.finditer(line):
-            stack = snaps[m.start()]
-            if stack[-1] not in _CODE or 'arith' in stack:
-                continue
-            word = m.group(2) or m.group(3) or m.group(5)
-            literal = not m.group(5) or bool(m.group(4))
-            nested = 'subst' in stack or 'backtick' in stack
-            span = (start + m.start(), start + m.end())
-            fresh.append(_Heredoc(word, m.group(1) == '-', literal, nested, span))
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         out.append(line)
-        if ctx.continues():
-            continue
-        for doc in fresh:
-            doc.executed = _feeds_a_shell(logical[: doc.span[0]], logical[doc.span[1] :])
-        pending.extend(fresh)
-        logical, fresh = '', []
-        body_open = bool(pending)
+        i += 1
+        docs = _data_heredocs(line)
+        if docs is None:
+            out.extend(lines[i:])
+            break
+        for doc in docs:
+            body: list[str] = []
+            ended = False
+            while i < len(lines) and not ended:
+                probe = lines[i].rstrip('\r')
+                ended = (probe.lstrip('\t') if doc.dash else probe) == doc.word
+                body.append(lines[i])
+                i += 1
+            runs_code = not doc.literal and any('$(' in b or '`' in b for b in body)
+            out.extend(body if runs_code else [''] * len(body))
     return '\n'.join(out)
 
 
 def _strip_noncommand(command: str) -> str:
-    """Blank out heredoc bodies, quoted spans and `#`-comments, leaving command text."""
+    """Blank out data heredoc bodies, quoted spans and `#`-comments, leaving command text."""
     return _QUOTED_OR_COMMENT.sub(' ', _strip_heredoc_bodies(command))
 
 

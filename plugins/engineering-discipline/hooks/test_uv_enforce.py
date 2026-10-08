@@ -171,6 +171,8 @@ def _v(command):
 
 
 def test_heredoc_body_is_data_not_a_command():
+    # One simple command into a data sink (cat, tee, git, gh), and a body that
+    # cannot run code: the body is data and is not scanned.
     allowed = [
         REPORTED_HEREDOC,
         "cat > b.md <<'EOF'\n| virtualenv | 21.3.0 |\nEOF",
@@ -182,34 +184,31 @@ def test_heredoc_body_is_data_not_a_command():
         "cat > notes.md <<'EOF'\n```\npip install foo\n```\nEOF",
         'cat > t.md <<EOF\n| name | virtualenv |\n| poetry add | x |\nEOF',
         'cat > t.md <<EOF\npoetry add x\nvirtualenv .venv\npython -m venv .venv\nEOF',
+        'cat <<EOF >out.md\n| virtualenv |\nEOF',
+        'cat <<EOF>out.md\n| virtualenv |\nEOF',
+        '<<EOF cat > b.md\n| virtualenv |\nEOF',
+        'LC_ALL=C /bin/cat > b.md <<EOF\n| virtualenv |\nEOF',
+        'tee b.md <<EOF\n| virtualenv | 21.3.0 |\nEOF',
+        "git commit -F - <<'EOF'\nBump virtualenv\n\n| virtualenv | 21.3.0 |\nEOF",
+        "gh pr create --title 'Bump deps' --body-file - <<'EOF'\n| virtualenv | 21.3.0 |\nEOF",
+        # The whole word is the delimiter.
+        'cat <<END-OF-FILE\n| virtualenv |\nEND-OF-FILE',
+        "cat <<'END OF'\n| virtualenv |\nEND OF",
         # Two heredocs on one line: their bodies follow in order.
         'cat <<A <<B\n| virtualenv |\nA\npip install x\nB',
         # CRLF line endings.
         'cat > b.md <<EOF\r\n| virtualenv | 21.3.0 |\r\nEOF\r\n',
         # Unterminated: bash reads the rest of the input as the body.
         'cat > b.md <<EOF\n| virtualenv | 21.3.0 |',
-        # Inside a command substitution, quoted (as before) and unquoted.
-        'gh pr create --body "$(cat <<\'EOF\'\n| virtualenv | 21.3.0 |\nEOF\n)"',
-        'body=$(cat <<EOF\n| virtualenv | 21.3.0 |\nEOF\n)',
-        # A wrong terminator does not end the body.
+        # Only the exact word ends the body, so what follows a near miss is body.
         'cat <<EOF\n| virtualenv |\nEOFX\npip install z',
         'cat <<EOF\n| virtualenv |\n  EOF\npip install z',
-        'cat <<EOF\n| virtualenv |\n\tEOF\npip install z',
-        # `<<-` strips leading tabs only, never spaces.
         'cat <<-EOF\n| virtualenv |\n  EOF\npip install z',
-        # A PowerShell here-string is a quoted span already.
+        # A body with an apostrophe no longer pairs quotes across the command.
+        "cat > b.md <<'EOF'\nit's the | virtualenv | row\nEOF",
+        # Unchanged from 0.6.0: a quoted span and a PowerShell here-string.
+        'gh pr create --body "$(cat <<\'EOF\'\n| virtualenv | 21.3.0 |\nEOF\n)"',
         "$b = @'\n| virtualenv | 21.3.0 |\n'@",
-        # A PR body inside "$(...)" with an odd number of double quotes.
-        'gh pr create --title t --body "$(cat <<\'EOF\'\nBumps the 3.5" floppy driver.\n'
-        '| virtualenv | 21.3.0 |\nEOF\n)"',
-        # An unquoted body: only its command substitutions run.
-        'cat > t.md <<EOF\n| virtualenv | $(date) |\nEOF',
-        'cat > t.md <<EOF\n' + BACKSLASH + '$(pip install x)\nEOF',
-        # A loop that only reads the body, a quoted `|bash`, and a `#` that an
-        # escape keeps inside a word.
-        'while read l; do echo "$l"; done <<EOF\n| virtualenv |\nEOF',
-        'cat <<EOF | grep "a|bash"\n| virtualenv |\nEOF',
-        'echo x' + BACKSLASH + ';#<<EOF\n| virtualenv |\nEOF',
     ]
     for command in allowed:
         assert _v(command) == 'allow', command
@@ -219,15 +218,17 @@ def test_command_text_around_a_heredoc_is_still_scanned():
     blocked = [
         'virtualenv x',
         'echo x | virtualenv .venv',
-        # After the terminator, on the operator line after and before the operator.
+        # After the terminator.
         'cat <<EOF > a\nhi\nEOF\npip install requests',
+        'cat <<EOF\r\nhi\r\nEOF\r\npip install z',
+        'cat <<A <<B\nx\nA\ny\nB\npip install z',
+        'cat <<-EOF\n\tbody\n\tEOF\npip install z',
+        'cat <<END-OF-FILE\nx\nEND-OF-FILE\npip install z',
+        "cat <<'END OF'\nx\nEND OF\npip install z",
+        'cat <<EOF>out.md\nx\nEOF\npip install z',
+        # A second command on the operator line, before or after the operator.
         'cat <<EOF && pip install requests\nhi\nEOF',
         'pip install requests && cat <<EOF\nhi\nEOF',
-        'cat <<EOF\r\nhi\r\nEOF\r\npip install z',
-        # The second body ends at its own terminator.
-        'cat <<A <<B\nx\nA\ny\nB\npip install z',
-        # `<<-` with a tab-indented terminator ends the body.
-        'cat <<-EOF\n\tbody\n\tEOF\npip install z',
         # A table row outside any heredoc blocks as before.
         'printf x\n| virtualenv | 1 |',
     ]
@@ -240,133 +241,91 @@ def test_lookalikes_of_a_heredoc_operator_strip_nothing():
         # Here-strings are not heredocs.
         'cat <<< x\n| virtualenv |',
         "cat <<< 'x'\npip install z",
-        # Arithmetic shifts, in an expansion or an arithmetic command.
+        # Arithmetic shifts.
         'echo $((1<<2))\npip install z',
         'echo $((x<<y))\npip install z',
         '(( y = x << z ))\npip install z',
-        'echo $(( ((1)) << y ))\npip install z',
-        'echo $(( (x << y) ))\npip install z',
-        # A quoted or commented operator.
+        'echo $[ x << y ]\npip install x',
+        # A quoted, escaped or commented operator.
         'echo "<<EOF"\npip install z',
         "echo '<<EOF'\npip install z",
         'echo "a\nb <<EOF\n"\npip install z',
+        'cat ' + BACKSLASH + '<<EOF\npip install foo',
         'ls # cat <<EOF\npip install z',
-        # A comment also starts after a metacharacter, as in bash.
         'true;#<<EOF\npip install x',
-        'true;# see <<EOF\npip install x',
         'true&&#<<EOF\npip install x',
-        'true|#<<EOF\npip install x',
-        '(#<<EOF\npip install x\n)',
-        # Old-style arithmetic, `$[ ... ]`.
-        'echo $[ x << y ]\npip install x',
-        'echo $[ a[1] << y ]\npip install x',
+        # A delimiter of another shape is not read at all.
+        'cat <<EO$F\nx\nEO$F\npip install z',
     ]
     for command in blocked:
         assert _v(command) == 'block', command
 
 
-def test_delimiter_is_the_whole_shell_word():
-    # bash takes the whole word as the delimiter: `END-OF-FILE`, not `END`. A
-    # partial word would never meet its terminator and swallow what follows.
-    assert _v('cat <<END-OF-FILE\n| virtualenv |\nEND-OF-FILE') == 'allow'
-    assert _v('cat <<END-OF-FILE\nx\nEND-OF-FILE\npip install z') == 'block'
-    assert _v("cat <<'END OF'\n| virtualenv |\nEND OF") == 'allow'
-    assert _v("cat <<'END OF'\nx\nEND OF\npip install z") == 'block'
-    assert _v('cat <<EOF>out.md\n| virtualenv |\nEOF') == 'allow'
-    assert _v('cat <<EOF>out.md\nx\nEOF\npip install z') == 'block'
-    # A word shape the stripper does not model is left scanned, never half-read.
-    assert _v('cat <<EO$F\nx\nEO$F\npip install z') == 'block'
-
-
-def test_body_fed_to_a_shell_interpreter_is_still_scanned():
+def test_a_body_something_can_run_is_still_scanned():
+    # The body is skipped only for one simple command into cat, tee, git or gh.
+    # A shell, an interpreter, a pipe, a subshell or a substitution may run it.
     blocked = [
         'bash <<EOF\npip install requests\nEOF',
         'sh -s <<EOF\npip install requests\nEOF',
         '/bin/bash <<EOF\npip install requests\nEOF',
-        'zsh <<EOF\npoetry add x\nEOF',
-        'dash <<EOF\nvirtualenv .venv\nEOF',
-        'ksh <<EOF\npip install x\nEOF',
         'ssh build-host <<EOF\npip install requests\nEOF',
         'source /dev/stdin <<EOF\npip install requests\nEOF',
         '. /dev/stdin <<EOF\npip install requests\nEOF',
         'eval "$(cat)" <<EOF\npip install requests\nEOF',
-        'FOO=1 bash <<EOF\npip install requests\nEOF',
-        'cat <<EOF | bash\npip install requests\nEOF',
-        # A shell behind a wrapper command still runs the body.
+        'python - <<EOF\nimport os\npip install x\nEOF',
         'sudo bash <<EOF\npip install requests\nEOF',
-        'sudo -u ci sh -s <<EOF\npip install requests\nEOF',
-        'env FOO=1 /usr/bin/bash <<EOF\npip install requests\nEOF',
-        # The same behind a pipe, and a shell named on a continued line.
-        'cat <<EOF | sudo bash\npip install requests\nEOF',
-        'cat <<EOF | sudo -u ci bash\npip install requests\nEOF',
-        'cat <<EOF | env A=1 bash\npip install requests\nEOF',
-        'cat <<EOF | env bash\npip install requests\nEOF',
-        'cat <<EOF | tee log | /bin/sh\npip install requests\nEOF',
-        'bash ' + BACKSLASH + '\n<<EOF\npip install requests\nEOF',
-        # A shell in a group or subshell, a quoted shell name, and a redirection
-        # written before the command word; each runs `pip` under bash 5.2.
-        'cat <<EOF | (bash)\npip install x\nEOF',
-        'cat <<EOF | { bash; }\npip install x\nEOF',
-        'cat <<EOF | (cd . && bash)\npip install x\nEOF',
-        'cat <<EOF | tee >(bash)\npip install x\nEOF',
-        'cat <<EOF | "bash"\npip install x\nEOF',
-        '"bash" <<EOF\npip install x\nEOF',
-        "'/bin/bash' <<EOF\npip install x\nEOF",
-        '{ bash; } <<EOF\npip install x\nEOF',
-        '(bash) <<EOF\npip install x\nEOF',
-        '(bash; true) <<EOF\npip install x\nEOF',
+        'env FOO=1 cat <<EOF | bash\npip install requests\nEOF',
         '<<EOF bash\npip install x\nEOF',
-        '<<EOF source /dev/stdin\npip install x\nEOF',
-        # A loop or `if` reading the body runs a shell inside it.
-        'while read l; do bash -c "$l"; done <<EOF\npip install x\nEOF',
+        '"cat" <<EOF\npip install x\nEOF',
+        'cat <<EOF | bash\npip install requests\nEOF',
+        'cat <<EOF | sudo -u ci bash\npip install requests\nEOF',
+        'cat <<EOF | (bash)\npip install x\nEOF',
+        'tee >(bash) <<EOF\npip install x\nEOF',
+        '{ bash; } <<EOF\npip install x\nEOF',
         'while read l; do eval "$l"; done <<EOF\npip install x\nEOF',
-        'if true; then bash; fi <<EOF\npip install x\nEOF',
+        '$(cat <<EOF\npip install x\nEOF\n)',
+        'v=$(cat <<EOF\nhello\nEOF)\npip install foo',
+        'v=`cat <<EOF\nhello\nEOF`\npip install foo',
+        'bash ' + BACKSLASH + '\n<<EOF\npip install requests\nEOF',
+        'cat <<EOF && ' + BACKSLASH + '\npip install foo\nEOF',
+        'cat <<EOF; echo "a\n"; pip install foo\nbody\nEOF',
+        # The walk stops at a line that leaves a quote open or ends in a
+        # backslash: here bash reads the operator inside a string, or continues
+        # the operator line, and runs `pip`.
+        'echo "a\ncat > x <<EOF\n"\npip install z\nEOF',
+        'cat <<EOF ' + BACKSLASH + '\n&& pip install z\nbody\nEOF',
     ]
     for command in blocked:
         assert _v(command) == 'block', command
 
 
-def test_command_substitution_in_an_unquoted_body_is_scanned():
-    # An unquoted delimiter leaves `$(...)` and backticks live in the body.
+def test_an_unquoted_body_with_a_substitution_is_scanned():
+    # Under an unquoted delimiter bash runs `$(...)` and backticks in the body,
+    # so such a body is scanned whole; a quoted delimiter makes it literal.
     blocked = [
         'cat <<EOF\n$(pip install x)\nEOF',
-        'cat > t.md <<EOF\nbuilt with `pip install x`\nEOF',
         'cat <<EOF\n$(\npip install x\n)\nEOF',
         'cat <<EOF\n${v:-$(pip install x)}\nEOF',
-        # A markdown fence is three backticks: bash runs what sits between two.
         'cat > notes.md <<EOF\n```\npip install foo\n```\nEOF',
-        # A quoted, escaped or commented `)` does not close the substitution.
         'cat <<EOF\n$(echo ")" ; pip install x)\nEOF',
-        "cat <<EOF\n$(echo ')' ; pip install x)\nEOF",
-        'cat <<EOF\n$(echo ' + BACKSLASH + ') ; pip install x)\nEOF',
-        'cat <<EOF\n$(echo "\n)" ; pip install x)\nEOF',
-        'cat <<EOF\n$(echo x # )\npip install x)\nEOF',
+        # Scanned whole, so a table row beside a substitution blocks too.
+        'cat > t.md <<EOF\n| virtualenv | $(date) |\nEOF',
     ]
     for command in blocked:
         assert _v(command) == 'block', command
-    # Text after a closed substitution is literal again.
-    assert _v('cat > t.md <<EOF\n| $(echo ")") | virtualenv |\nEOF') == 'allow'
-    assert _v('cat > t.md <<EOF\n| $((1+2)) | virtualenv |\nEOF') == 'allow'
-    # A quoted or backslashed delimiter makes the whole body literal.
     assert _v("cat <<'EOF'\n$(pip install x)\nEOF") == 'allow'
     assert _v('cat <<"EOF"\n`pip install x`\nEOF') == 'allow'
     assert _v('cat <<' + BACKSLASH + 'EOF\n$(pip install x)\nEOF') == 'allow'
 
 
-def test_body_starts_where_bash_starts_it():
-    # Each command runs `pip` under bash 5.2; the body must not swallow it.
+def test_shapes_outside_the_rule_keep_the_old_behaviour():
+    # Not one simple command into a data sink: scanned as in 0.6.0, so a table
+    # row in the body still blocks. Rewrite as `cat > file <<'EOF'` instead.
     blocked = [
-        # Inside a substitution, a terminator line may close it too.
-        'v=$(cat <<EOF\nhello\nEOF)\npip install foo',
-        'v=`cat <<EOF\nhello\nEOF`\npip install foo',
-        # A quote open at the end of the operator line continues that line.
-        'cat <<EOF; echo "a\n"; pip install foo\nbody\nEOF',
-        # A backslash escapes a double quote, so the operator is quoted.
-        'echo "x' + BACKSLASH + '" <<EOF ;"\npip install foo',
-        # A backslash-newline continues the operator line.
-        'cat <<EOF && ' + BACKSLASH + '\npip install foo\nEOF',
-        # An escaped `<` is a literal word; `<EOF` then reads a file.
-        'cat ' + BACKSLASH + '<<EOF\npip install foo',
+        'body=$(cat <<EOF\n| virtualenv | 21.3.0 |\nEOF\n)',
+        'while read l; do echo "$l"; done <<EOF\n| virtualenv |\nEOF',
+        'cat <<EOF | grep x\n| virtualenv |\nEOF',
+        'sudo tee /etc/x <<EOF\n| virtualenv |\nEOF',
     ]
     for command in blocked:
         assert _v(command) == 'block', command
