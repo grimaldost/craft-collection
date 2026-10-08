@@ -157,6 +157,159 @@ def test_py_launcher_does_not_false_positive_on_similar_words():
     assert verdict('numpy -m pip install x', cwd_has_uv=True, allow_env=False) == 'allow'
 
 
+# The command reported on 2026-10-07: a PR body written with a heredoc, holding a
+# markdown table with one row per updated package. A row's leading `|` put
+# `virtualenv` at a command position and the hook blocked the write.
+REPORTED_HEREDOC = (
+    'cat > b.md <<EOF\n| Package | Version |\n| urllib3 | 2.0.7 |\n| virtualenv | 21.3.0 |\nEOF'
+)
+BACKSLASH = chr(92)
+
+
+def _v(command):
+    return verdict(command, cwd_has_uv=True, allow_env=False)
+
+
+def test_heredoc_body_is_data_not_a_command():
+    allowed = [
+        REPORTED_HEREDOC,
+        "cat > b.md <<'EOF'\n| virtualenv | 21.3.0 |\nEOF",
+        'cat > b.md <<"EOF"\n| virtualenv | 21.3.0 |\nEOF',
+        'cat > b.md <<' + BACKSLASH + 'EOF\n| virtualenv | 21.3.0 |\nEOF',
+        'cat > b.md << EOF\n| virtualenv | 21.3.0 |\nEOF',
+        'cat > b.md <<-EOF\n\t| virtualenv | 21.3.0 |\n\tEOF',
+        'cat > notes.md <<EOF\npip install x\nEOF',
+        'cat > notes.md <<EOF\n```\npip install foo\n```\nEOF',
+        'cat > t.md <<EOF\n| name | virtualenv |\n| poetry add | x |\nEOF',
+        'cat > t.md <<EOF\npoetry add x\nvirtualenv .venv\npython -m venv .venv\nEOF',
+        # Two heredocs on one line: their bodies follow in order.
+        'cat <<A <<B\n| virtualenv |\nA\npip install x\nB',
+        # CRLF line endings.
+        'cat > b.md <<EOF\r\n| virtualenv | 21.3.0 |\r\nEOF\r\n',
+        # Unterminated: bash reads the rest of the input as the body.
+        'cat > b.md <<EOF\n| virtualenv | 21.3.0 |',
+        # Inside a command substitution, quoted (as before) and unquoted.
+        'gh pr create --body "$(cat <<\'EOF\'\n| virtualenv | 21.3.0 |\nEOF\n)"',
+        'body=$(cat <<EOF\n| virtualenv | 21.3.0 |\nEOF\n)',
+        # A wrong terminator does not end the body.
+        'cat <<EOF\n| virtualenv |\nEOFX\npip install z',
+        'cat <<EOF\n| virtualenv |\n  EOF\npip install z',
+        'cat <<EOF\n| virtualenv |\n\tEOF\npip install z',
+        # `<<-` strips leading tabs only, never spaces.
+        'cat <<-EOF\n| virtualenv |\n  EOF\npip install z',
+        # A PowerShell here-string is a quoted span already.
+        "$b = @'\n| virtualenv | 21.3.0 |\n'@",
+    ]
+    for command in allowed:
+        assert _v(command) == 'allow', command
+
+
+def test_command_text_around_a_heredoc_is_still_scanned():
+    blocked = [
+        'virtualenv x',
+        'echo x | virtualenv .venv',
+        # After the terminator, on the operator line after and before the operator.
+        'cat <<EOF > a\nhi\nEOF\npip install requests',
+        'cat <<EOF && pip install requests\nhi\nEOF',
+        'pip install requests && cat <<EOF\nhi\nEOF',
+        'cat <<EOF\r\nhi\r\nEOF\r\npip install z',
+        # The second body ends at its own terminator.
+        'cat <<A <<B\nx\nA\ny\nB\npip install z',
+        # `<<-` with a tab-indented terminator ends the body.
+        'cat <<-EOF\n\tbody\n\tEOF\npip install z',
+        # A table row outside any heredoc blocks as before.
+        'printf x\n| virtualenv | 1 |',
+    ]
+    for command in blocked:
+        assert _v(command) == 'block', command
+
+
+def test_lookalikes_of_a_heredoc_operator_strip_nothing():
+    blocked = [
+        # Here-strings are not heredocs.
+        'cat <<< x\n| virtualenv |',
+        "cat <<< 'x'\npip install z",
+        # Arithmetic shifts.
+        'echo $((1<<2))\npip install z',
+        'echo $((x<<y))\npip install z',
+        # A quoted or commented operator.
+        'echo "<<EOF"\npip install z',
+        "echo '<<EOF'\npip install z",
+        'echo "a\nb <<EOF\n"\npip install z',
+        'ls # cat <<EOF\npip install z',
+    ]
+    for command in blocked:
+        assert _v(command) == 'block', command
+
+
+def test_body_fed_to_a_shell_interpreter_is_still_scanned():
+    blocked = [
+        'bash <<EOF\npip install requests\nEOF',
+        'sh -s <<EOF\npip install requests\nEOF',
+        '/bin/bash <<EOF\npip install requests\nEOF',
+        'zsh <<EOF\npoetry add x\nEOF',
+        'dash <<EOF\nvirtualenv .venv\nEOF',
+        'ksh <<EOF\npip install x\nEOF',
+        'ssh build-host <<EOF\npip install requests\nEOF',
+        'source /dev/stdin <<EOF\npip install requests\nEOF',
+        '. /dev/stdin <<EOF\npip install requests\nEOF',
+        'eval "$(cat)" <<EOF\npip install requests\nEOF',
+        'FOO=1 bash <<EOF\npip install requests\nEOF',
+        'cat <<EOF | bash\npip install requests\nEOF',
+    ]
+    for command in blocked:
+        assert _v(command) == 'block', command
+
+
+def test_blocked_match_names_the_matched_word():
+    from uv_enforce import blocked_match
+
+    assert blocked_match('echo x | virtualenv .venv') == 'virtualenv'
+    assert blocked_match('cd a && pip3   install x') == 'pip3 install'
+    assert blocked_match(REPORTED_HEREDOC) is None
+    assert blocked_match('uv add requests') is None
+
+
+def _run_main(command, uv_project=True):
+    """Run uv_enforce.main() on a hook JSON payload: (return code, stderr)."""
+    import io
+    import json
+    import os
+    import sys
+    import tempfile
+
+    import uv_enforce
+
+    with tempfile.TemporaryDirectory() as d:
+        if uv_project:
+            with open(os.path.join(d, 'uv.lock'), 'w', encoding='utf-8') as fh:
+                fh.write('')
+        payload = {'tool_input': {'command': command}, 'cwd': d, 'session_id': 's1'}
+        old_stdin, old_stderr = sys.stdin, sys.stderr
+        old_allow = os.environ.pop('CLAUDE_ALLOW_PIP', None)
+        sys.stdin = io.StringIO(json.dumps(payload))
+        sys.stderr = io.StringIO()
+        try:
+            rc = uv_enforce.main()
+            err = sys.stderr.getvalue()
+        finally:
+            sys.stdin, sys.stderr = old_stdin, old_stderr
+            if old_allow is not None:
+                os.environ['CLAUDE_ALLOW_PIP'] = old_allow
+    return rc, err
+
+
+def test_main_allows_the_reported_heredoc():
+    assert _run_main(REPORTED_HEREDOC) == (0, '')
+
+
+def test_main_block_names_the_matched_word():
+    rc, err = _run_main('virtualenv .venv')
+    assert rc == 2
+    assert '`virtualenv`' in err, err
+    assert 'uv add' in err, err
+
+
 if __name__ == '__main__':
     for name, fn in list(globals().items()):
         if name.startswith('test_') and callable(fn):
