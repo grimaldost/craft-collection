@@ -71,9 +71,9 @@ content is written, and nothing is sent over the network. The directory is
 per-plugin data directory Claude Code gives a plugin's hooks), else
 `engineering-discipline` under the system temp directory. Appending stops at
 1,000,000 bytes, and a failed write never changes a hook's verdict or exit code.
-To read it, run `uv run --no-project -- python hooks/hook_log.py` with one of
-those two variables set to the directory the hooks write to; it prints the path
-it read and the firings per hook.
+To read it, run `uv run --no-project -- python hooks/hook_log.py` with the same
+values of those two variables that the hooks saw (neither set reads the temp
+directory fallback); it prints the path it read and the firings per hook.
 
 There is no third hook. A Stop nudge to run the data pre-shipping checklist was
 retired in 0.4.0: it was exhortation delivered through a hook, it sat behind an
@@ -81,8 +81,7 @@ unset variable and had therefore never fired, and its path globs (`models/*`)
 would have matched ORM and ML model directories the moment it did. The seven
 data scripts above reject rather than remind: each exits non-zero on a finding.
 This repository's own gates run only their unit tests, not the checks on any
-data; a project wires the checks into its own CI (Recipe 10 in
-`skills/data-engineering-discipline/references/parity-recipes.md` shows a CI job).
+data; a project that wants them as a gate wires them into its own CI.
 
 ## Freshness loop
 

@@ -1,5 +1,5 @@
 {
-  "description": "Mechanical enforcement, always on once the plugin is installed: ruff-format at end of turn across every edited file in a project that declares ruff (PostToolBatch, non-blocking; requires CLI >= 2.1.218), and steering Bash/PowerShell toward uv inside uv projects (PreToolUse, CLAUDE_ALLOW_PIP=1 to override one command). No env gate on either: they are the mechanical layer, not options. Each firing (a block, a format run) appends one line to a local hook-log.ndjson with no command text; nothing is sent over the network.",
+  "description": "Mechanical enforcement, always on once the plugin is installed: ruff-format at end of turn across every edited file in a project that declares ruff (PostToolBatch, non-blocking; requires CLI >= 2.1.218), and steering Bash/PowerShell toward uv inside uv projects (PreToolUse, CLAUDE_ALLOW_PIP=1 to override one command). No env gate on either: they are the mechanical layer, not options. Each firing (a block, a format run) appends one line with no command text to hook-log.ndjson in the plugin data directory (CLAUDE_PLUGIN_DATA); python hooks/hook_log.py prints the counts per hook, and nothing is sent over the network.",
   "hooks": {
     "PostToolBatch": [
       {
