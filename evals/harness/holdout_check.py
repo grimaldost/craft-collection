@@ -204,7 +204,8 @@ def main(argv: list[str] | None = None) -> int:
     if skill not in cfg['plugin_of_skill']:
         print(
             f'{skill} is not in evals/config.json plugin_of_skill '
-            '(manual-only skills are not trigger-measured)'
+            '(not a trigger-measured skill: manual-only skills and non-skill '
+            'sets such as dispatch-router-* are excluded)'
         )
         return 2
     plugin = cfg['plugin_of_skill'][skill]

@@ -51,6 +51,32 @@ def test_skill_outside_plugin_of_skill_exits_2_with_a_message() -> None:
     assert 'not in evals/config.json plugin_of_skill' in out.getvalue()
 
 
+def test_non_skill_holdout_message_does_not_blame_manual_only() -> None:
+    # evals/trigger/holdout/ also holds sets that are not skills, such as the
+    # dispatch-router regex holdouts. The message must cover that case rather
+    # than give 'manual-only' as the only reason.
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        (repo / 'evals' / 'trigger' / 'holdout').mkdir(parents=True)
+        (repo / 'evals' / 'config.json').write_text(
+            json.dumps({'plugin_of_skill': {}}), encoding='utf-8'
+        )
+        (repo / 'evals' / 'trigger' / 'holdout' / 'dispatch-router-recall.json').write_text(
+            json.dumps([{'query': 'q', 'should_trigger': True}]), encoding='utf-8'
+        )
+        saved, holdout_check.REPO = holdout_check.REPO, repo
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                code = holdout_check.main(['dispatch-router-recall'])
+        finally:
+            holdout_check.REPO = saved
+    assert code == 2
+    text = out.getvalue()
+    assert 'not a trigger-measured skill' in text
+    assert 'dispatch-router-*' in text
+
+
 def test_holdout_comparison_flags_drop() -> None:
     out = holdout_check.holdout_comparison(0.90, [0.70, 0.98], 0.50)
     assert 'DROP' in out and 'overfit' in out  # held-out below dev's lower CI bound
@@ -220,6 +246,7 @@ if __name__ == '__main__':
     test_no_args_returns_usage_code()
     test_missing_holdout_returns_1()
     test_skill_outside_plugin_of_skill_exits_2_with_a_message()
+    test_non_skill_holdout_message_does_not_blame_manual_only()
     test_holdout_comparison_flags_drop()
     test_holdout_comparison_ok_within_ci()
     test_holdout_comparison_no_dev_entry()
