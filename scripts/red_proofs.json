@@ -112,7 +112,8 @@
       "evals/harness/test_validate_plugins.py::test_invalid_hooks_json_is_flagged"
     ],
     "scripts/word_budget.py": [
-      "evals/harness/test_word_budget.py::test_check_budgets_flags_over_baseline"
+      "evals/harness/test_word_budget.py::test_check_budgets_flags_over_baseline",
+      "evals/harness/test_word_budget.py::test_check_reference_budgets_flags_over_ceiling"
     ]
   },
   "gaps": {

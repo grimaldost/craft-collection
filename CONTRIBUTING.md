@@ -219,7 +219,10 @@ where a frozen record cannot name its own commit sha before that commit exists.
   reported 78 words of headroom where there were zero. (`scripts/word_budget.py --seed` exists, but it rewrites
   *every* baseline from the current tree, so it resets the ratchet — don't use it
   to add a single entry.) Growing an existing body means bumping its baseline in
-  the same reviewed diff and naming what the growth displaces.
+  the same reviewed diff and naming what the growth displaces. A skill's
+  `references/` directory with a ceiling in `scripts/reference_budget.json` (all
+  its `.md` files, counted the same way) fails the same check when it grows, and
+  `--report` lists it below the skill bodies.
 - **The evaluate-skill engine is mirrored.**
   `evals/harness/{aggregate,claude_runner,grade_tasks,judge,run_all,run_triggers,stats}.py`
   must stay identical to
