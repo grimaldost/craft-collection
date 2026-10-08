@@ -20,28 +20,38 @@ refresh-stack at 484/484.
   `| virtualenv | 21.3.0 |` put `virtualenv` at a command position after the row's
   leading pipe. Heredoc bodies (`<<WORD`, `<<'WORD'`, `<<"WORD"`, `<<\WORD`, and
   `<<-WORD` with a tab-stripped terminator) are now blanked before matching, by a
-  line-based walk that queues the pending terminators in order. The operator line and
-  everything after the terminator are still scanned. Here-strings (`<<<`), arithmetic
-  shifts (`$((1<<2))`), and an operator inside quotes or a comment are not heredocs. A
-  body fed to a shell stays scannable, because it runs: the command before `<<` starts
-  with `sh`, `bash`, `zsh`, `dash`, `ksh`, `source`, `.`, `eval` or `ssh`, names one of
-  those shell programs later (`sudo bash`, `env X=1 sh -s`), or pipes the operator line
-  into one (`cat <<EOF | bash`). Where the stripper does not recognise an operator,
-  nothing is stripped and the old behaviour holds: a delimiter of another shape
-  (`<<EO$F`), or an apostrophe earlier on the line (`echo it's; cat <<EOF`). A
-  PowerShell here-string whose body holds an apostrophe still blocks, and a body run by
-  another interpreter (`python <<EOF`) is not scanned, both as before. The block
-  message now names the matched
-  words (``Blocked `virtualenv`.``); `verdict()` still returns `'block'` or `'allow'`,
-  and the new `blocked_match()` returns the words. Displaces: nothing (two sentences in
-  the README PreToolUse bullet; no SKILL.md body words). (2026-10-07 maintenance
-  triage.)
+  line-based walk that queues the pending terminators in order and tracks quotes,
+  backslash escapes, comments and `$(...)` the way bash reads them. The body starts
+  after the line that ends the command, so a line continued by an open quote or a
+  trailing backslash is still scanned, and the operator line and everything after the
+  terminator are scanned too. Inside `$(...)` or backticks, a line that starts with the
+  terminator and closes the substitution (`EOF)`) ends the body, as in bash. An operator
+  inside `"$(...)"` counts, so the PR-body form `--body "$(cat <<'EOF' ... EOF\n)"` is
+  stripped even when the body holds a stray double quote. Here-strings (`<<<`), a `<<`
+  in arithmetic (`$((1<<2))`, `(( x << y ))`), an escaped `\<<`, and an operator inside
+  quotes or a comment are not heredocs. What runs stays scannable. A body fed to a shell:
+  the command before `<<` starts with `sh`, `bash`, `zsh`, `dash`, `ksh`, `source`, `.`,
+  `eval` or `ssh` or names one of those shell programs later (`sudo bash`,
+  `env X=1 sh -s`), or the operator line pipes into such a command
+  (`cat <<EOF | sudo bash`). And the `$(...)` and backtick spans in the body of an
+  unquoted heredoc (`<<EOF`); a markdown code fence there is three backticks, which
+  bash runs as a substitution, so a fenced `pip install` in an unquoted body still
+  blocks, while the same body under `<<'EOF'` does not. Where the stripper does not
+  recognise an operator, nothing is stripped and the old behaviour holds: a delimiter of
+  another shape (`<<EO$F`), or an apostrophe earlier on the line
+  (`echo it's; cat <<EOF`). A PowerShell here-string whose body holds an apostrophe
+  still blocks, as before. A body run by a non-shell interpreter (`python <<EOF`) is new
+  ground: 0.6.0 scanned it, and it is now treated as data. The block message now names
+  the matched words (``Blocked `virtualenv`.``); `verdict()` still returns `'block'` or
+  `'allow'`, and the new `blocked_match()` returns the words. Displaces: nothing (the
+  README PreToolUse bullet; no SKILL.md body words). (2026-10-07 maintenance triage;
+  the bash cases from the 2026-10-08 release review.)
 - **The READMEs no longer say the data checks run in this project's gates.** The
   plugin README said the runnable data checks were wired into this project's pre-commit
   and CI gate, and the root README said they were already in the gates; neither
   `.pre-commit-config.yaml` nor the validate workflow runs them, only their unit tests.
   Both now say the seven data scripts exit non-zero on a finding and that a project
-  wires them into its own CI, pointing at Recipe 10 in `parity-recipes.md` for a CI job.
+  wires them into its own CI.
   The 0.4.0 entry below keeps its original wording as the dated record. Displaces: the
   false sentence, reworded in place. (2026-10-08 release review.)
 
@@ -56,8 +66,9 @@ refresh-stack at 484/484.
   `engineering-discipline` under the system temp directory. Appending stops at
   1,000,000 bytes, and every write error is swallowed, so `uv_enforce` still exits 2 on
   a block and `ruff_format` still exits 0. Only the hooks' `main()` functions log, so
-  `verdict()` and `harness_adapters` never touch the filesystem. `python
-  hooks/hook_log.py` prints the firings per hook. There is no opt-out variable. Every
+  `verdict()` and `harness_adapters` never write the log. `python hooks/hook_log.py`,
+  run with the same state-directory variables the hooks saw, prints the firings per
+  hook and skips any line it cannot read. There is no opt-out variable. Every
   test that runs a hook's `main()` points the state directory at a temporary directory.
   Displaces: nothing (a README paragraph, a sentence each in the `hooks.json`
   description, the root README and SECURITY.md; no SKILL.md body words). SECURITY.md also
