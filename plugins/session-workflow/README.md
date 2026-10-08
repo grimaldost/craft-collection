@@ -64,10 +64,6 @@ tool-dogfooding feedback loop (capture + triage).
   (mission, plan pointer, live cursor, invariants, exact resume steps) so a
   long autonomous run survives context compaction without losing the plot —
   updated after each step, re-read at the start of each turn.
-- **corpus-review** — audit a large file corpus (dozens to hundreds of files)
-  by fanning out blind reviewers over partitions, adversarially verifying
-  high-severity findings, fixing in disjoint partitions, and re-auditing with
-  fresh eyes until findings converge.
 
 ## Command
 

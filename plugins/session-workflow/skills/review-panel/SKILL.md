@@ -117,7 +117,7 @@ The default quartet works for anything; the packs sharpen it. Mix and match.
 
 ## What this does NOT do
 
-- Audit a large file corpus — that is a blind fan-out over many files; use
-  `corpus-review`.
+- Audit a large file corpus — fan agents out over partitions with the Workflow
+  tool instead.
 - Auto-fire — it proposes and waits for the go-ahead.
 - Reach consensus by averaging — disagreement is the signal, not noise.
