@@ -2,7 +2,7 @@
 
 This rubric defines how to score a development task for model routing. The
 score is 0-100, mapping to three tiers. Apply it mentally as you write or
-read each task -- no external tool needed.
+read each task.
 
 ---
 
@@ -85,14 +85,15 @@ Two floors hold whatever the score, raising a lower score to 26 (the bottom of
 
 Evidence from the 2026-10-06/07 maintenance runs: weak-tier fix rounds (scored 8
 to 23) left defects, and a weak-tier release task wrote process narration into a
-public CHANGELOG. Observations, not a calibrated threshold.
+public CHANGELOG. Observations, not a calibrated threshold: an exception to
+calibration-only changes.
 
 ---
 
 ## Scoring Signals
 
-Evaluate these signals and add/subtract points. Start at the appropriate
-**base** (15 or 30 per the pre-check above), then adjust.
+Start at the appropriate **base** (15 or 30 per the pre-check above), then
+adjust.
 
 ### Task structure (+0 to +25)
 
@@ -169,10 +170,12 @@ boilerplate -- length does not imply cognitive complexity.
 
 ## Quick Heuristic Shortcuts
 
+A first guess; the role floors still apply.
+
 **Likely weak (0-25):**
 - add field/column, rename, format, fix typo, bump version, add test for
-  simple function, scaffold/template, change label/text, update docs,
-  simple migration, add env var, boilerplate endpoint
+  simple function, scaffold/template, change label/text, simple migration,
+  add env var, boilerplate endpoint
 
 **Likely mid (26-55):**
 - refactor, pipeline, integrate API, migrate data, aggregate/transform,

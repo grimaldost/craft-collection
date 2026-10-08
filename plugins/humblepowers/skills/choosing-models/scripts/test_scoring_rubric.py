@@ -89,16 +89,36 @@ def test_role_floors_hold_whatever_the_score():
     fix round answering review findings, and prose other people read in public, run
     at mid or above. Both sit after the cross-shape floor and before the axes."""
     text = _text()
-    flat = ' '.join(text.split())
-    assert 'fix round answering a review' in flat, 'fix-round floor missing'
-    assert 'prose other people read in public' in flat, 'public-prose floor missing'
-    for surface in ('README', 'CHANGELOG', 'PR or issue bod'):
-        assert surface in flat.split('## Role floors', 1)[-1].split('## Scoring Signals')[0]
-    assert 'not a calibrated threshold' in flat
     order = [
         text.index(h) for h in ('## Cross-shape floor', '## Role floors', '## Scoring Signals')
     ]
     assert order == sorted(order), order
+    section = text.split('## Role floors', 1)[1].split('## Scoring Signals', 1)[0]
+    flat = ' '.join(section.split())
+    assert 'Two floors hold whatever the score' in flat, 'floors not stated as binding'
+    assert 'raising a lower score to 26' in flat, 'floor value not 26'
+    bullets = [' '.join(b.split('\n\n')[0].split()) for b in section.split('\n- ')[1:]]
+    assert len(bullets) == 2, bullets
+    assert 'fix round answering a review' in bullets[0], 'fix-round floor missing'
+    assert 'prose other people read in public' in bullets[1], 'public-prose floor missing'
+    for bullet in bullets:
+        assert 'runs at `mid` or above' in bullet, bullet
+    for surface in ('README', 'CHANGELOG', 'PR or issue bod'):
+        assert surface in bullets[1], surface
+    # The rubric otherwise moves only on calibration evidence; these floors say they
+    # are an exception to that rule.
+    assert 'not a calibrated threshold' in flat
+    assert 'exception to calibration-only changes' in flat, 'exception not stated'
+
+
+def test_shortcuts_defer_to_the_role_floors():
+    """The keyword shortcuts are a first guess: none may point public docs at weak,
+    and the section says the role floors still apply to whatever they suggest."""
+    text = _text()
+    section = text.split('## Quick Heuristic Shortcuts', 1)[1].split('---', 1)[0]
+    weak = section.split('**Likely weak', 1)[1].split('**Likely mid', 1)[0]
+    assert 'docs' not in weak, 'a weak shortcut still covers docs'
+    assert 'role floors still apply' in ' '.join(section.split()), 'no pointer to floors'
 
 
 def main() -> int:
@@ -106,6 +126,7 @@ def main() -> int:
     test_each_heading_range_matches_its_table()
     test_clamp_sentence_is_present_and_its_totals_are_true()
     test_role_floors_hold_whatever_the_score()
+    test_shortcuts_defer_to_the_role_floors()
     print('ok: scoring_rubric')
     return 0
 
