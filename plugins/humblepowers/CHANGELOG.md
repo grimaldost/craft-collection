@@ -47,17 +47,18 @@ spawn-routing hint are removed.
   docs, PR or issue bodies), run at the mid tier or above whatever the score. The evidence is
   observations from the 2026-10-06/07 maintenance runs, where weak-tier fix rounds (scored 8
   to 23) left defects and a weak-tier release task wrote process narration into a public
-  CHANGELOG. The floors are not calibrated: like the context modifiers, they route by role
-  and leave the points alone, and the procedure in `SKILL.md` now says the points (not the
-  whole rubric) move only on calibration evidence, at the same word count (786 of 786). The
-  keyword shortcuts no longer list "update docs" as likely weak and open with a line saying
-  they are a first guess the role floors still apply to. The rubric does not grow (1946 to
-  1942 words): the additions displace the provenance paragraph, the base-15 rationale
-  sentence, a cross-shape paragraph and example 5's closing sentence (both restated the
-  trigger rule), the old lead-ins to the shortcuts and the scoring signals, the opening's "no
-  external tool needed" clause, and part of the frontier note. `scripts/test_scoring_rubric.py`
-  pins both floors, that they route by role, and that the likely-weak shortcuts name none of
-  the public surfaces the floor lists.
+  CHANGELOG. Because they are observations, not calibration, the floors sit outside the
+  score: like the context modifiers in `SKILL.md`, they act on the tier after scoring and
+  change no points, base or floor of the score, which still never moves without calibration
+  evidence. `SKILL.md` is unchanged (786 of 786 words). The keyword shortcuts no longer list
+  "update docs" as likely weak and open with a line saying they are a first guess the role
+  floors still apply to. The rubric does not grow (1946 to 1940 words): the additions
+  displace the provenance paragraph, the base-15 rationale sentence, a cross-shape paragraph
+  and example 5's closing sentence (both restated the trigger rule), the old lead-ins to the
+  shortcuts and the scoring signals, the opening's "no external tool needed" clause, and
+  part of the frontier note. `scripts/test_scoring_rubric.py` pins both floors, that they sit
+  outside the score while `SKILL.md` keeps its calibration rule, and that the likely-weak
+  shortcuts name none of the public surfaces the floor lists.
 
 ### Removed
 

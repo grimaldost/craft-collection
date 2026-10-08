@@ -95,8 +95,8 @@ def test_role_floors_hold_whatever_the_score():
     assert order == sorted(order), order
     section = text.split('## Role floors', 1)[1].split('## Scoring Signals', 1)[0]
     flat = ' '.join(section.split())
-    assert 'Two floors hold whatever the score' in flat, 'floors not stated as binding'
-    assert 'raising a lower score to 26' in flat, 'floor value not 26'
+    assert 'Two floors act on the tier after scoring' in flat, 'floors not stated'
+    assert 'change no points, base or floor of the score' in flat, 'floors touch the score'
     bullets = [' '.join(b.split('\n\n')[0].split()) for b in section.split('\n- ')[1:]]
     assert len(bullets) == 2, bullets
     assert 'fix round answering a review' in bullets[0], 'fix-round floor missing'
@@ -105,10 +105,13 @@ def test_role_floors_hold_whatever_the_score():
         assert 'runs at `mid` or above' in bullet, bullet
     for surface in ('README', 'CHANGELOG', 'PR or issue bod'):
         assert surface in bullets[1], surface
-    # The points move only on calibration evidence; the floors rest on observations
-    # and route by role, so they must say so and leave the points alone.
+    # SKILL.md says the rubric never moves without calibration evidence. The
+    # floors rest on observations, so they have to sit outside the score, and
+    # the two files have to keep saying so.
     assert 'not a calibrated threshold' in flat
-    assert 'route by role and leave the points' in flat, 'floors not scoped to role'
+    assert 'floors sit outside the score' in flat, 'floors not placed outside the score'
+    skill = ' '.join((RUBRIC.parent.parent / 'SKILL.md').read_text(encoding='utf-8').split())
+    assert 'never moves without calibration evidence' in skill, 'SKILL.md calibration rule'
 
 
 def public_surfaces(text: str) -> list[str]:
