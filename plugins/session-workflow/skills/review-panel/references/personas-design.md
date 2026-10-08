@@ -1,6 +1,6 @@
 # Persona pack — design / spec / architecture
 
-Use with, or in place of, the default quartet; rename to the specific system.
+Use with, or in place of, the Level 3 quartet; rename to the specific system.
 The lenses are calibrated for *services* — reviewing a library, re-ground the
 ops lens to the operator of a consumer pipeline, not of a deployed service.
 

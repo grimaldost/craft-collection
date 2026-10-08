@@ -6,6 +6,77 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.5.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.6.1] - 2026-10-08
+
+A false block in the uv hook, a README claim no gate backed, a local firing counter for
+both hooks, and a word ceiling on the data skill's references. No SKILL.md body changed:
+data-engineering-discipline stays at 2312/2312, python-engineering at 2314/2314 and
+refresh-stack at 484/484.
+
+### Fixed
+
+- **`uv_enforce` no longer blocks a heredoc that writes a blocked word as data.** A PR body
+  written with `cat > b.md <<EOF` holding a markdown table was blocked: the row `|
+  virtualenv | 21.3.0 |` put `virtualenv` at a command position after the row's leading
+  pipe. A heredoc body is now skipped only when its operator line is one simple command
+  whose program is `cat` or `tee` (read as bash reads it: past assignments and redirections,
+  with quotes and escapes removed), and the body cannot run code: a quoted or backslashed
+  delimiter, or no `$(` or backtick in the body. The walk reads the command line by line and
+  stops, leaving the rest to the 0.6.0 scan, at the first line it cannot follow exactly: a
+  quote left open or a trailing backslash; a parenthesis, brace or backtick outside
+  `${...}`, or a keyword such as `do`, `then`, `case`, `function` or `exec`, any of which
+  can send a later `cat` to a shell; a `<<` whose delimiter it cannot parse; a heredoc
+  operator on a line with more than one command; or a backslash at the end of a line in an
+  unquoted body. Every other body (fed to `bash`, `python`, `git`, ...) is passed to the
+  scan whole and is not read for heredocs of its own. One case 0.6.0 blocked now passes: a
+  body written to a file that a later command runs (`cat > x.sh <<EOF ... EOF`, then `bash
+  x.sh`); the hook does not follow files. Two differential runs against 0.6.0, over 10,284
+  and then 101,210 generated commands with every allow-now and block-before case run in bash
+  with stub commands, found no other command that now passes and runs a blocked tool, and
+  none that 0.6.0 allowed and this version blocks. The price of failing closed: a data-only
+  heredoc after a line the walk stops at (`today=$(date)`, a loop) or of another shape (`cat
+  <<EOF | grep x`, `sudo tee`, `git commit -F - <<EOF`) is still scanned, so a table row
+  like the one above still blocks there. The block message now names the matched words
+  (``Blocked `virtualenv`.``); `verdict()` still returns `'block'` or `'allow'`, and the new
+  `blocked_match()` returns the words. Displaces: nothing (the README PreToolUse bullet; no
+  SKILL.md body words). (2026-10-07 maintenance triage.) - **The READMEs no longer say the
+  data checks run in this project's gates.** The plugin README said the runnable data checks
+  were wired into this project's pre-commit and CI gate, and the root README said they were
+  already in the gates; neither `.pre-commit-config.yaml` nor the validate workflow runs
+  them, only their unit tests. Both now say the seven data scripts exit non-zero on a
+  finding and that a project wires them into its own CI. The 0.4.0 entry below keeps its
+  original wording as the dated record. Displaces: the false sentence, reworded in place.
+  (2026-10-08 release review.)
+
+### Added
+
+- **A local firing counter for both hooks.** A new stdlib module, `hooks/hook_log.py`,
+  appends one JSON line per firing to `hook-log.ndjson`: `uv_enforce` on each block
+  (`ts`, `hook`, `verdict`, `matched`, `session`), `ruff_format` on each format run it
+  starts (`ts`, `hook`, `files`, `session`). No command text, file path or file content
+  is written, and nothing is sent over the network. The directory is
+  `ENGINEERING_DISCIPLINE_STATE_DIR` when set, else `CLAUDE_PLUGIN_DATA`, else
+  `engineering-discipline` under the system temp directory. Appending stops at
+  1,000,000 bytes, and every write error is swallowed, so `uv_enforce` still exits 2 on
+  a block and `ruff_format` still exits 0. Only the hooks' `main()` functions log, so
+  `verdict()` and `harness_adapters` never write the log. `python hooks/hook_log.py`,
+  run with the same state-directory variables the hooks saw, prints the firings per
+  hook and skips any line it cannot read. There is no opt-out variable. Every
+  test that runs a hook's `main()` points the state directory at a temporary directory.
+  Displaces: nothing (a README paragraph, a sentence each in the `hooks.json`
+  description, the root README and SECURITY.md; no SKILL.md body words). SECURITY.md also
+  drops its claim that the other plugins' hooks are off by default, which the root
+  README's Hooks table contradicts.
+- **A word ceiling on `data-engineering-discipline/references/`, at 18,319 words.**
+  `scripts/word_budget.py` counts every `.md` file under a recorded `references/`
+  directory (recursive, with the same counter as SKILL.md bodies), and
+  `scripts/validate_plugins.py` fails when the count passes the ceiling in the new
+  `scripts/reference_budget.json`, naming the directory, the count and the ceiling. A
+  recorded directory that is missing or holds no `.md` files fails too. The ceiling is
+  today's count, so any growth needs a reviewed bump that names what it displaces.
+  `word_budget.py --report` lists the directory below the skill bodies. Displaces:
+  nothing (one sentence in CONTRIBUTING.md; no SKILL.md body words).
+
 ## [0.6.0] - 2026-10-07
 
 Hook scope change and a new parity_check flag. The compaction-summary bullet replaces

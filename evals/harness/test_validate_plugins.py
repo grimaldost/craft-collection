@@ -213,6 +213,28 @@ def test_marketplace_description_mismatch_flagged():
     assert any('description' in e and 'differs' in e for e in errs), errs
 
 
+def test_reference_budget_follows_patched_root():
+    # Same contract as the SKILL.md budget: no scripts/reference_budget.json
+    # under ROOT -> no reference check; with one, the fixture's own references/
+    # directory is counted against it.
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        pdir = _make_plugin(base)
+        refs = pdir / 'skills' / 's' / 'references'
+        refs.mkdir()
+        (refs / 'a.md').write_text('word ' * 50, encoding='utf-8')
+        assert not any('ceiling' in e for e in _run(base))
+        (base / 'scripts').mkdir()
+        budget = base / 'scripts' / 'reference_budget.json'
+        budget.write_text('{"plugins/p/skills/s/references": 3}', encoding='utf-8')
+        errs = _run(base)
+        assert any('plugins/p/skills/s/references' in e and '> ceiling 3' in e for e in errs), errs
+        budget.write_text('{"plugins/p/skills/s/references": 50}', encoding='utf-8')
+        assert not any('ceiling' in e for e in _run(base))
+        budget.write_text('{}', encoding='utf-8')
+        assert any('reference_budget.json' in e for e in _run(base))
+
+
 def main() -> int:
     test_invalid_hooks_json_is_flagged()
     test_unknown_event_and_missing_hook_script_flagged()
@@ -224,6 +246,7 @@ def main() -> int:
     test_valid_plugin_has_no_errors()
     test_bad_frontmatter_flagged_when_yaml_present()
     test_word_budget_follows_patched_root()
+    test_reference_budget_follows_patched_root()
     test_marketplace_description_mismatch_flagged()
     print('ok: validate_plugins')
     return 0

@@ -12,6 +12,11 @@ The **body** is everything after the SKILL.md frontmatter block; the frontmatter
 whitespace-separated token — reproducible, not a proxy for rendered length. Shrinking a
 body is always fine; only growth past the baseline trips.
 
+A skill's `references/` directory can carry a ceiling too, recorded in
+`reference_budget.json` (a separate file, so `--seed` cannot drop it): the words of
+every `*.md` under it, recursive, counted the same way. A missing directory, or one
+with no `.md` files, fails rather than passing on nothing.
+
     python scripts/word_budget.py            # check the tree against word_budget.json
     python scripts/word_budget.py --seed     # (re)write word_budget.json from the tree
     python scripts/word_budget.py --report   # body / ceiling / headroom per skill
@@ -30,6 +35,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BUDGET_FILE = ROOT / 'scripts' / 'word_budget.json'
+# Ceilings for a skill's `references/` directory, kept apart from word_budget.json
+# so `--seed` (which rewrites that file from SKILL.md counts alone) cannot drop them.
+REFERENCE_BUDGET_FILE = ROOT / 'scripts' / 'reference_budget.json'
 
 
 def _split_body(text: str) -> str:
@@ -134,6 +142,65 @@ def check_budgets(counts: dict[str, int], baselines: dict[str, int]) -> list[str
     return errors
 
 
+def reference_word_count(directory: Path) -> tuple[int, int]:
+    """`(words, files)` over every `*.md` under `directory`, recursive, each file
+    counted by `body_word_count`."""
+    files = sorted(directory.rglob('*.md'))
+    return sum(body_word_count(p.read_text(encoding='utf-8')) for p in files), len(files)
+
+
+def current_reference_counts(
+    ceilings: dict[str, int], root: Path = ROOT
+) -> dict[str, tuple[int, int] | None]:
+    """`{dir: (words, files)}` for each directory with a recorded ceiling; None
+    where the directory does not exist."""
+    out: dict[str, tuple[int, int] | None] = {}
+    for path in ceilings:
+        d = root / path
+        out[path] = reference_word_count(d) if d.is_dir() else None
+    return out
+
+
+def check_reference_budgets(
+    counts: dict[str, tuple[int, int] | None], ceilings: dict[str, int]
+) -> list[str]:
+    """Return reference-ceiling violations (empty == all within ceiling). A
+    directory over its ceiling fails; so do a missing directory and one with no
+    `.md` files, since a check over nothing passes vacuously. Pure."""
+    errors: list[str] = []
+    for path, ceiling in sorted(ceilings.items()):
+        got = counts.get(path)
+        if got is None:
+            errors.append(
+                f'{path}: reference ceiling recorded but the directory is missing - '
+                f'restore it or remove its entry from reference_budget.json'
+            )
+        elif got[1] == 0:
+            errors.append(f'{path}: no .md files under a recorded reference ceiling')
+        elif got[0] > ceiling:
+            errors.append(
+                f'{path}: references {got[0]} words > ceiling {ceiling} - either shrink '
+                f'them, or raise the ceiling in reference_budget.json and name what the '
+                f'growth displaces'
+            )
+    return errors
+
+
+def reference_report_rows(
+    counts: dict[str, tuple[int, int] | None], ceilings: dict[str, int]
+) -> list[str]:
+    """One `words / ceiling  headroom N  dir/` line per recorded references
+    directory, in the same columns as `report_rows`. Pure."""
+    rows = []
+    for path, ceiling in sorted(ceilings.items()):
+        got = counts.get(path)
+        if got is None:
+            rows.append(f'    ? / {ceiling:>5}  headroom      ?  {path}/ (missing)')
+        else:
+            rows.append(f'{got[0]:>5} / {ceiling:>5}  headroom {ceiling - got[0]:>6}  {path}/')
+    return rows
+
+
 def report_rows(counts: dict[str, int], baselines: dict[str, int]) -> list[str]:
     """One `body / ceiling  headroom N  path` line per skill, widest-first by
     pressure. The reason this exists: an audit computed a body count by hand,
@@ -183,6 +250,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.report == '':
         for line in report_rows(counts, load_baselines()):
             print(line)
+        ceilings = load_baselines(REFERENCE_BUDGET_FILE)
+        for line in reference_report_rows(current_reference_counts(ceilings), ceilings):
+            print(line)
         return 0
     if args.report is not None:
         skill = resolve_skill(args.report)
@@ -203,12 +273,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f'seeded {len(counts)} baseline(s) -> {_rel(BUDGET_FILE)}')
         return 0
     errors = check_budgets(counts, load_baselines())
+    ceilings = load_baselines(REFERENCE_BUDGET_FILE)
+    errors += check_reference_budgets(current_reference_counts(ceilings), ceilings)
     if errors:
         print('WORD BUDGET EXCEEDED:')
         for e in errors:
             print(f'  - {e}')
         return 1
-    print(f'word budget: {len(counts)} skill bodies within budget')
+    print(
+        f'word budget: {len(counts)} skill bodies within budget, '
+        f'{len(ceilings)} references directories within ceiling'
+    )
     return 0
 
 

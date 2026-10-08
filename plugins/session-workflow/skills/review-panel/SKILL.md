@@ -10,8 +10,8 @@ Fresh, independent eyes on something you have been too close to. After many roun
 on an artifact, both the user and the model **anchor** on the current direction —
 each new pass defends it rather than questioning it. A panel of agents that have
 *never seen the iteration*, pointed at the artifact from adversarial angles,
-surfaces what the anchored view structurally cannot. The deliverable is a
-**comparison and synthesis**, not a single opinion.
+surfaces what the anchored view structurally cannot. From Level 2 up, the
+deliverable is a **comparison and synthesis**, not a single opinion.
 
 ## When to convene — and at what size
 
@@ -32,12 +32,14 @@ bikeshedding and false confidence, not defects; iterate it to concreteness first
 Level-1 contrarian instead). Design-stage review is a qualifier on the high-stakes trigger above,
 not a standing "always review the design" gate.
 
-Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 question):
+Scale effort to stakes — **the ladder**. Level 1 is the default: one reviewer
+subagent that did not see the session, briefed to refute. Escalate to Level 2 or
+3 only when the stakes call for them (evidence: `references/running-a-panel.md`).
 
 | Level | Convene | For |
 |---|---|---|
-| 1 — Solo contrarian | 1 fresh agent told to *refute* | a quick gut-check |
-| 2 — Small panel | 2–3 lenses (skeptic + domain expert [+ user]) | a normal decision |
+| 1 — Solo contrarian (default) | 1 fresh subagent told to *refute* | most reviews |
+| 2 — Small panel | 2–3 lenses (skeptic + domain expert [+ user]) | a costly decision |
 | 3 — Full panel | 4–5 lenses | an expensive / irreversible call |
 
 ## The protocol — this is what makes it work
@@ -45,9 +47,10 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
 1. **Curate a NEUTRAL artifact brief.** Like a context hand-off, but stripped of
    your conclusions: give reviewers the artifact and what to judge, never "here's
    what I decided, do you agree?".
-2. **Pick the lenses.** Default quartet: **Skeptic/Minimalist**, **Best-Practices
-   Auditor**, **End-User Advocate**, **Domain Expert**. For depth, load the persona
-   pack for the artifact type (below) and tailor a couple of personas to specifics.
+2. **Pick the lenses.** Level 1 needs one, a refuter. Level 3 default quartet:
+   **Skeptic/Minimalist**, **Best-Practices Auditor**, **End-User Advocate**,
+   **Domain Expert**. For depth, load the persona pack for the artifact type
+   (below) and tailor a couple of personas to specifics.
 3. **Make them adversarial.** Frame the job as *refute / find what's missing*,
    not "review" — independence over politeness. What blindness requires
    mechanically is a guard-rail below.
@@ -56,8 +59,8 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    Re-reviewing a revised artifact: re-review mode and stop rule in
    `references/prompt-template.md`.
 5. **Fire them — mechanism by ladder level.** Levels 1–2: one fresh reviewer per
-   lens, concurrently (Claude Code: one message, multiple Agent calls). Level 3,
-   or per-lens effort control: drive the lenses through the Workflow tool;
+   lens, concurrently (Claude Code: one message, multiple Agent calls). Level 3:
+   drive the lenses through the Workflow tool;
    mechanism and fallback in `references/running-a-panel.md`. **Show the plan first** — lenses, agent count, rough cost —
    and get a go-ahead; never fire silently. A **durable pre-authorization**
    counts as the go-ahead: show the plan, cite the grant, and fire — an
@@ -66,7 +69,7 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
    at the snapshot, so the author can keep editing the working copy. Before
    firing, route each lens through the installed capacity-dispatch policy
    (e.g. humblepowers' choosing-models) and pass model and effort explicitly per
-   lens. Effort is only settable on the Workflow path.
+   lens.
 6. **Persist raw output before synthesis.** Write each reviewer's structured
    output to disk as it lands, at a destination named in the plan (the reviewed
    tool's own feedback intake is often right). A max-effort panel returns more
@@ -92,7 +95,7 @@ Scale effort to stakes — **the ladder** (don't fire a full panel at a Level-1 
 | a release (assembled diff + changelog + docs) | `references/personas-release.md` | consumer-upgrade · docs-coherence · changelog · interactions |
 | a skill / plugin / prompt pack | `references/personas-skill.md` | trigger-surface · token-budget · cold-install · eval-method · maintenance-cost |
 
-The default quartet works for anything; the packs sharpen it. Mix and match.
+The quartet works for anything; the packs sharpen it. Mix and match.
 
 ## Guard-rails
 
@@ -117,7 +120,7 @@ The default quartet works for anything; the packs sharpen it. Mix and match.
 
 ## What this does NOT do
 
-- Audit a large file corpus — that is a blind fan-out over many files; use
-  `corpus-review`.
+- Audit a large file corpus — that is the Workflow tool's fan-out over
+  partitions.
 - Auto-fire — it proposes and waits for the go-ahead.
 - Reach consensus by averaging — disagreement is the signal, not noise.

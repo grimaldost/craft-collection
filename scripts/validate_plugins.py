@@ -27,7 +27,13 @@ try:
 except ImportError:  # frontmatter checks degrade; everything else still runs
     yaml = None
 
-from word_budget import check_budgets, current_counts, load_baselines
+from word_budget import (
+    check_budgets,
+    check_reference_budgets,
+    current_counts,
+    current_reference_counts,
+    load_baselines,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 DESC_CAP = 1536
@@ -179,6 +185,15 @@ def validate() -> list[str]:
     budget_file = ROOT / 'scripts' / 'word_budget.json'
     if budget_file.is_file():
         errors += check_budgets(current_counts(ROOT), load_baselines(budget_file))
+
+    # The same ratchet for a skill's references/ directory, under the same
+    # follows-ROOT contract. A file that yields no ceilings is an error, not a skip.
+    reference_file = ROOT / 'scripts' / 'reference_budget.json'
+    if reference_file.is_file():
+        ceilings = load_baselines(reference_file)
+        if not ceilings:
+            errors.append(f'{reference_file}: no reference ceilings could be read')
+        errors += check_reference_budgets(current_reference_counts(ceilings, ROOT), ceilings)
 
     return errors
 
