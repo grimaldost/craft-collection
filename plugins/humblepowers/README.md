@@ -107,106 +107,12 @@ as no better than no injection, and the wall-clock / prompt-count cadence was
 never validated. Only the concrete-candidate router hint — the one shape the
 A/B favored — survives.
 
-## Spawn-routing hint (on by default)
+## Removed hooks
 
-A PreToolUse hook on the spawn surface
-(`skills/choosing-models/scripts/inject_spawn_routing.py`, matched on `Agent`
-and on `Workflow` where the harness has one) injects the `choosing-models`
-activation test when a spawn names **no** model — the case where the subagent
-inherits whatever the parent is running on.
-
-It exists because `choosing-models` had no trigger at the one moment it governs.
-Measured: zero invocations across a 40-hour, 139-subagent programme, under a
-written owner instruction repeated three times, with 65% of output tokens left
-at the top tier; twenty frontier-tier subagents in one day and 23 the next. The
-hook is the rung below prose, and it is the only shape that scales with a
-fan-out: a 54-item batch is reminded once, at the script.
-
-Three silences keep it quiet. A spawn that already carries `model` has been
-routed — the field is present only when the caller passed one — so it says
-nothing. `Workflow` has no top-level `model`, so there the hook reads the script
-(inline, or the file at `scriptPath`) and stays silent only when every
-`agent()` call names a model; a script it cannot read or resolve keeps the
-hint. It emits at most once per session per ten minutes. And it ignores
-anything that is not a spawn.
-
-It is **advisory**: the payload is `additionalContext` with no
-`permissionDecision`, so it never changes whether a tool call is allowed. One
-consequence to know: context added during a turn reaches the model's next turn,
-so the hint does not stop the spawn that triggered it — it stands in front of the
-rest of the batch and the rest of the run, which is where the measured loss
-accumulated.
-
-It ships **on**, for the same reason the dispatch hint does. Opt out in the `env`
-block of your settings file:
-
-```json
-{ "env": { "HUMBLEPOWERS_SPAWN_ROUTING_HINT": "0" } }
-```
-
-The block names the activation test and the batch counter-rule and points at the
-skill. It does not restate the tier thresholds: `models.toml` owns those, and a
-second copy inside a hook is the drift this pack pays for elsewhere.
-
-## Verification gate (off by default, opt in)
-
-A SubagentStop hook
-(`skills/verification-before-completion/scripts/subagent_gate.py`) blocks a
-subagent's **first** stop once and returns a discipline reconsideration —
-"are you actually confident this is correct, or are you assuming it is?" — then
-lets every later stop through. One shot per `(session_id, agent_id)`, so the
-block cannot loop and concurrent subagents do not share a counter; it fails open
-on any error, because a hook that cannot decide must never be the reason a
-subagent cannot stop.
-
-Arm it in the `env` block of your settings file:
-
-```json
-{ "env": { "HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE": "1" } }
-```
-
-It ships **off**, unlike the dispatch hint, and the asymmetry is deliberate: a
-hint costs a few tokens, while this one blocks a stop in every subagent in your
-environment. What funds it today is one bank — three tiers, two tasks, nine
-repeats per cell — where the same wording moved the rate at which delegated work
-left a regression check behind by **+0.22 (haiku) / +0.56 (sonnet) / +0.44
-(opus, 90% CI [+0.11, +0.78])**, at a false-positive rate of 0/12 on trivial
-edits where verification work would have been over-scope. That is enough to
-offer, not enough to impose; default-on waits on a replication with a different
-task family.
-
-Read those numbers with three scope limits attached. **The +0.44 is not known to
-be the gate firing.** At the strong tier the arm was mounted and never delivered
-its treatment: the gate's own sentence appears in **0 of 15** opus streams
-against **16 of 21** haiku streams on the same plugin directory. The lift is
-real in the ledger (9/9 against 5/9), and the sentence is absent in any form, so
-the strong-tier figure's cause is **unexplained** — not refuted, and not the
-gate. Do not quote it as a three-tier ladder without that clause. **Both arms
-behind all of the numbers ran with no skill body mounted** — the measured
-contrast is gate-vs-no-gate in a bare
-delegated session, so it does not say what the gate adds *on top of* the
-discipline this plugin already ships as prose. And the replication commissioned
-to re-measure the gate here — including its false-positive rate and a
-shape-matched placebo control — **was never bought**: no gate trial and no
-placebo trial exists in this codebase's ledgers. The mechanism is offered as
-unmeasured-here and inherited-from-elsewhere, which is why it is opt-in and why
-it fails open.
-
-Two things about the wording are worth knowing before editing it. It names no
-artifact — no test, no check, no "add one now" — and a prescriptive sibling
-measured on the same bank, which did name one, wrote a test on **every** trivial
-code edit and was rejected on that alone. So the words are the treatment, and
-`test_subagent_gate.py` pins them byte-for-byte.
-
-`HUMBLEPOWERS_VERIFICATION_GATE_SKIP_MODELS` (comma-separated substrings, e.g.
-`opus`) no-ops the gate when the stop payload names a matching model. It is
-**provisional**: no measurement licenses any particular value, the payload key
-it reads is unconfirmed across harness versions, and an absent model gates
-rather than skips. It exists because a tier fact, if one is ever measured, is
-implementable here and nowhere else — the harness cannot condition a skill's
-activation on a subagent's model, so the same claim written into a skill
-description would be a sentence nothing can act on. Left unset, the hook behaves
-exactly like the fixture that was measured.
+0.18.0 removed the PreToolUse spawn-routing hint and the SubagentStop
+verification gate, together with their opt-out and arming variables; the
+CHANGELOG entry for that release gives the evidence. An installed copy keeps
+the old hooks until it updates.
 
 ## Register linter
 

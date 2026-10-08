@@ -85,8 +85,7 @@ auto-triggering skill carries a trigger dataset and a sealed holdout under
 `evals/`, and four of them — `test-driven-development`, `systematic-debugging`,
 `verification-before-completion`, `planned-execution` — additionally carry
 correct-usage suites; register linter wired into pre-commit;
-three hooks (a per-prompt dispatch-router hint and a spawn-routing hint, both on
-by default, and a subagent verification gate that ships off). Derived from
+one hook (a per-prompt dispatch-router hint, on by default). Derived from
 [obra/superpowers](https://github.com/obra/superpowers) (MIT) — see the
 plugin's LICENSE for third-party notices.
 
@@ -112,12 +111,6 @@ the `env` block of `~/.claude/settings.json` (every project) or
 `<repo>/.claude/settings.json` (one), e.g.
 `{ "env": { "SESSION_WORKFLOW_ANCHOR_HOOKS": "0" } }`.
 
-One hook is the stated exception to that rule: the humblepowers verification gate
-(SubagentStop) ships off and is armed by setting its variable to `1`, because it
-blocks a subagent's first stop where every other hook here only adds context or
-formats. Its plugin README gives the measurement behind that choice and what a
-default-on release waits for.
-
 | Plugin | Hook (event) | Default | Control |
 |--------|--------------|---------|---------|
 | engineering-discipline | `ruff_format`: format the edited `.py` files at end of turn (PostToolBatch) | always on | no gate |
@@ -127,8 +120,6 @@ default-on release waits for.
 | session-workflow | Anchor size warning after a write to an open anchor (PostToolUse) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0`, the same switch as re-injection |
 | session-workflow | Feedback-debt nudge (Stop; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
 | humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
-| humblepowers | Spawn-routing hint when a spawn names no model (PreToolUse on Agent and Workflow; advisory) | on | `HUMBLEPOWERS_SPAWN_ROUTING_HINT=0` |
-| humblepowers | Verification gate: blocks a subagent's first stop once (SubagentStop) | off | arm with `HUMBLEPOWERS_VERIFICATION_SUBAGENT_GATE=1` |
 
 Three hooks were retired rather than defaulted on: the toolkit-inventory session
 start inject (the harness already lists skills and descriptions in the system
@@ -136,6 +127,8 @@ prompt), the data pre-shipping checklist Stop nudge (exhortation through a hook,
 against seven runnable data checks that reject rather than remind, which a
 project wires into its own CI), and the skill-exercise ledger (a second write path for a fact the
 session transcript already carried — the Stop nudge reads the transcript).
+humblepowers 0.18.0 removed two more, the subagent verification gate and the
+spawn-routing hint; its CHANGELOG gives the evidence.
 
 ## Optional output style
 

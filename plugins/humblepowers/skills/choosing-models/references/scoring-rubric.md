@@ -2,12 +2,7 @@
 
 This rubric defines how to score a development task for model routing. The
 score is 0-100, mapping to three tiers. Apply it mentally as you write or
-read each task -- no external tool needed.
-
-Ported near-verbatim from the predecessor cycle's calibrated rubric; the
-worked calibration (trivial-task override, cross-shape floor, verification
-discount) carries observed-run evidence and moves only on new calibration
-evidence.
+read each task.
 
 ---
 
@@ -28,9 +23,8 @@ only the upper clamp can bind in practice.
 > -- data, calibratable, refreshed by `/refresh-models`. This file defines
 > *how to score*; `models.toml` defines *what runs*.
 >
-> A fourth opt-in tier (`frontier`) exists above strong but is **never
-> assigned by score** -- the author opts in manually. See the skill body for
-> the criteria.
+> A fourth tier, `frontier`, is opt-in and **never assigned by score**
+> (criteria in the skill body).
 
 ---
 
@@ -40,9 +34,6 @@ Before applying the point system, check: **does this task involve any
 logic at all?** If the task is purely text substitution, config edits,
 version bumps, typo fixes, or boilerplate documentation with no
 conditional logic, start from a **base of 15** instead of 30.
-
-This unlocks the 0-14 score range for truly mechanical work and prevents
-simple tasks from clustering near the weak/mid boundary.
 
 | Task type                                    | Base |
 |----------------------------------------------|------|
@@ -74,10 +65,6 @@ prompt is a reason to fire the floor, not to bump past mid).
 | **Uncovered shared-helper fan-out** -- the change is to shared / common / helper / base code, AND the prompt does not enumerate every caller that must stay correct (you need not know the exact count; if you cannot name all consumers from the prompt, treat it as fired) |
 | **Uncovered backend / parity** -- two or more implementations (backends, dialects, code paths, an ETL-vs-serving pair) must produce equivalent results, AND at least one is not named in the prompt as an edit site (if the prompt names every implementation to change, that is breadth, not cross-shape -- do not fire) |
 
-Every trigger keys on a site the prompt does NOT point at -- the *relationship*
-between symptom and fix, not how many files or modules the task spans; raw
-breadth or repo size never fires this floor.
-
 Coverage governs in both directions, and the axes below read the same brief:
 score the task **as briefed**, not the problem behind it. Where the prompt
 already enumerates the edit sites, the decomposition, or the acceptance cases,
@@ -86,10 +73,26 @@ handed over. Every recorded mis-score ran the other way.
 
 ---
 
+## Role floors
+
+Two floors act on the tier after scoring, as the skill's context modifiers do;
+they change no points, base or floor of the score:
+
+- **A fix round answering a review's findings** runs at `mid` or above.
+- **A task that writes prose other people read in public** -- a README, a
+  CHANGELOG, docs, a PR or issue body -- runs at `mid` or above.
+
+Evidence from the 2026-10-06/07 maintenance runs: weak-tier fix rounds (scored 8
+to 23) left defects, and a weak-tier release task wrote process narration into a
+public CHANGELOG. Observations, not a calibrated threshold, which is why the
+floors sit outside the score.
+
+---
+
 ## Scoring Signals
 
-Evaluate these signals and add/subtract points. Start at the appropriate
-**base** (15 or 30 per the pre-check above), then adjust.
+Start at the appropriate **base** (15 or 30 per the pre-check above), then
+adjust.
 
 ### Task structure (+0 to +25)
 
@@ -166,12 +169,12 @@ boilerplate -- length does not imply cognitive complexity.
 
 ## Quick Heuristic Shortcuts
 
-For speed, you can also pattern-match on keywords:
+A first guess; the role floors still apply.
 
 **Likely weak (0-25):**
 - add field/column, rename, format, fix typo, bump version, add test for
-  simple function, scaffold/template, change label/text, update docs,
-  simple migration, add env var, boilerplate endpoint
+  simple function, scaffold/template, change label/text, simple migration,
+  add env var, boilerplate endpoint
 
 **Likely mid (26-55):**
 - refactor, pipeline, integrate API, migrate data, aggregate/transform,
@@ -269,7 +272,7 @@ tiers.
 - Additive total: 15 + 10 + 3 - 5 = 23 -> weak
 - **Cross-shape floor: does NOT fire.** The change fans out across 6 files, but the
   prompt *enumerates every file and reference* -- coverage is complete, so this is
-  breadth, not cross-shape. Raw file count never fires the floor.
+  breadth, not cross-shape.
 - **Final: weak, confidence: high.** Contrast with Example 4: there the fix site was
   *uncovered* -> mid; here the brief names every one -> weak. Coverage, not breadth --
   and that same coverage is why reasoning scored +0 on a six-file change.
