@@ -67,8 +67,12 @@ motivated this).
      (prior step + 1, or 1), `source: /anchor`. The block opens and closes with
      a `---` line (line 1 and after the last field); `--step` and `parked:` read
      only a block fenced this way.
-   - **Mission** — the goal and its hard constraints, plus any user instruction
-     about mechanism (not outcome) quoted verbatim with a stable id.
+   - **Mission** — the goal, plus the owner's authorizations and instructions
+     about mechanism (not outcome) as dated, literal quotes with a stable id: a
+     record of what the owner said and when, never a grant the anchor makes
+     itself. The anchor has authority over task position only, the cursor. A
+     rule that must never be broken belongs in a hook that enforces it, not in
+     the anchor.
    - **Cursor** — done / in progress / the single next action. This is the
      load-bearing section; make it current, not aspirational. Number the
      entries `- Step N: ...`, newest first: the fold-candidate warning offers
@@ -76,8 +80,8 @@ motivated this).
    - **Resume steps** — how a cold reader re-orients: read this file, verify
      the real state, continue from the cursor. Keep them idempotent, in
      absolute paths.
-   - **Invariants** — decisions and constraints a post-reset turn must not
-     relitigate.
+   - **Invariants** — decisions about the task that a post-reset turn must not
+     relitigate; not inviolable rules, which belong in a hook.
    - **Parallel tracks** — only when a peer run shares these trees: the other
      track's anchor path and this track's never-touch surface.
    - **In-flight work** — background or async tasks the cursor depends on: ids,
