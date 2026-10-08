@@ -60,9 +60,11 @@ importable for other harnesses' hook systems via `hooks/harness_adapters.py`.
 There is no third hook. A Stop nudge to run the data pre-shipping checklist was
 retired in 0.4.0: it was exhortation delivered through a hook, it sat behind an
 unset variable and had therefore never fired, and its path globs (`models/*`)
-would have matched ORM and ML model directories the moment it did. The four
-runnable data checks wired into this project's own pre-commit and CI gate reject
-rather than remind, which is the tier that was doing the work.
+would have matched ORM and ML model directories the moment it did. The seven
+data scripts above reject rather than remind: each exits non-zero on a finding.
+This repository's own gates run only their unit tests, not the checks on any
+data; a project wires the checks into its own CI (Recipe 10 in
+`skills/data-engineering-discipline/references/parity-recipes.md` shows a CI job).
 
 ## Freshness loop
 

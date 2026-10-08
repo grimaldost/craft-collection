@@ -131,8 +131,8 @@ default-on release waits for.
 Three hooks were retired rather than defaulted on: the toolkit-inventory session
 start inject (the harness already lists skills and descriptions in the system
 prompt), the data pre-shipping checklist Stop nudge (exhortation through a hook,
-against four runnable checks already in the gates that reject rather than
-remind), and the skill-exercise ledger (a second write path for a fact the
+against seven runnable data checks that reject rather than remind, which a
+project wires into its own CI), and the skill-exercise ledger (a second write path for a fact the
 session transcript already carried — the Stop nudge reads the transcript).
 
 ## Optional output style
