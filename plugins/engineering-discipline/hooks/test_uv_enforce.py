@@ -179,7 +179,7 @@ def test_heredoc_body_is_data_not_a_command():
         'cat > b.md << EOF\n| virtualenv | 21.3.0 |\nEOF',
         'cat > b.md <<-EOF\n\t| virtualenv | 21.3.0 |\n\tEOF',
         'cat > notes.md <<EOF\npip install x\nEOF',
-        'cat > notes.md <<EOF\n```\npip install foo\n```\nEOF',
+        "cat > notes.md <<'EOF'\n```\npip install foo\n```\nEOF",
         'cat > t.md <<EOF\n| name | virtualenv |\n| poetry add | x |\nEOF',
         'cat > t.md <<EOF\npoetry add x\nvirtualenv .venv\npython -m venv .venv\nEOF',
         # Two heredocs on one line: their bodies follow in order.
@@ -199,6 +199,12 @@ def test_heredoc_body_is_data_not_a_command():
         'cat <<-EOF\n| virtualenv |\n  EOF\npip install z',
         # A PowerShell here-string is a quoted span already.
         "$b = @'\n| virtualenv | 21.3.0 |\n'@",
+        # A PR body inside "$(...)" with an odd number of double quotes.
+        'gh pr create --title t --body "$(cat <<\'EOF\'\nBumps the 3.5" floppy driver.\n'
+        '| virtualenv | 21.3.0 |\nEOF\n)"',
+        # An unquoted body: only its command substitutions run.
+        'cat > t.md <<EOF\n| virtualenv | $(date) |\nEOF',
+        'cat > t.md <<EOF\n' + BACKSLASH + '$(pip install x)\nEOF',
     ]
     for command in allowed:
         assert _v(command) == 'allow', command
@@ -229,9 +235,12 @@ def test_lookalikes_of_a_heredoc_operator_strip_nothing():
         # Here-strings are not heredocs.
         'cat <<< x\n| virtualenv |',
         "cat <<< 'x'\npip install z",
-        # Arithmetic shifts.
+        # Arithmetic shifts, in an expansion or an arithmetic command.
         'echo $((1<<2))\npip install z',
         'echo $((x<<y))\npip install z',
+        '(( y = x << z ))\npip install z',
+        'echo $(( ((1)) << y ))\npip install z',
+        'echo $(( (x << y) ))\npip install z',
         # A quoted or commented operator.
         'echo "<<EOF"\npip install z',
         "echo '<<EOF'\npip install z",
@@ -273,6 +282,50 @@ def test_body_fed_to_a_shell_interpreter_is_still_scanned():
         'sudo bash <<EOF\npip install requests\nEOF',
         'sudo -u ci sh -s <<EOF\npip install requests\nEOF',
         'env FOO=1 /usr/bin/bash <<EOF\npip install requests\nEOF',
+        # The same behind a pipe, and a shell named on a continued line.
+        'cat <<EOF | sudo bash\npip install requests\nEOF',
+        'cat <<EOF | sudo -u ci bash\npip install requests\nEOF',
+        'cat <<EOF | env A=1 bash\npip install requests\nEOF',
+        'cat <<EOF | env bash\npip install requests\nEOF',
+        'cat <<EOF | tee log | /bin/sh\npip install requests\nEOF',
+        'bash ' + BACKSLASH + '\n<<EOF\npip install requests\nEOF',
+    ]
+    for command in blocked:
+        assert _v(command) == 'block', command
+
+
+def test_command_substitution_in_an_unquoted_body_is_scanned():
+    # An unquoted delimiter leaves `$(...)` and backticks live in the body.
+    blocked = [
+        'cat <<EOF\n$(pip install x)\nEOF',
+        'cat > t.md <<EOF\nbuilt with `pip install x`\nEOF',
+        'cat <<EOF\n$(\npip install x\n)\nEOF',
+        'cat <<EOF\n${v:-$(pip install x)}\nEOF',
+        # A markdown fence is three backticks: bash runs what sits between two.
+        'cat > notes.md <<EOF\n```\npip install foo\n```\nEOF',
+    ]
+    for command in blocked:
+        assert _v(command) == 'block', command
+    # A quoted or backslashed delimiter makes the whole body literal.
+    assert _v("cat <<'EOF'\n$(pip install x)\nEOF") == 'allow'
+    assert _v('cat <<"EOF"\n`pip install x`\nEOF') == 'allow'
+    assert _v('cat <<' + BACKSLASH + 'EOF\n$(pip install x)\nEOF') == 'allow'
+
+
+def test_body_starts_where_bash_starts_it():
+    # Each command runs `pip` under bash 5.2; the body must not swallow it.
+    blocked = [
+        # Inside a substitution, a terminator line may close it too.
+        'v=$(cat <<EOF\nhello\nEOF)\npip install foo',
+        'v=`cat <<EOF\nhello\nEOF`\npip install foo',
+        # A quote open at the end of the operator line continues that line.
+        'cat <<EOF; echo "a\n"; pip install foo\nbody\nEOF',
+        # A backslash escapes a double quote, so the operator is quoted.
+        'echo "x' + BACKSLASH + '" <<EOF ;"\npip install foo',
+        # A backslash-newline continues the operator line.
+        'cat <<EOF && ' + BACKSLASH + '\npip install foo\nEOF',
+        # An escaped `<` is a literal word; `<EOF` then reads a file.
+        'cat ' + BACKSLASH + '<<EOF\npip install foo',
     ]
     for command in blocked:
         assert _v(command) == 'block', command
