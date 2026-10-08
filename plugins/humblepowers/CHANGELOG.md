@@ -47,12 +47,19 @@ spawn-routing hint are removed.
   docs, PR or issue bodies), run at the mid tier or above whatever the score. The evidence is
   observations from the 2026-10-06/07 maintenance runs, where weak-tier fix rounds (scored 8
   to 23) left defects and a weak-tier release task wrote process narration into a public
-  CHANGELOG; the rubric labels them observations, not a calibrated threshold. The rubric does
-  not grow (1946 to 1940 words). The additions displace the paragraph on the rubric's
-  provenance in the predecessor cycle, the sentence giving the base-15 rationale, a
-  cross-shape paragraph that restated the trigger rule, the lead-in to the keyword shortcuts,
-  and example 5's closing restatement of the same rule. `SKILL.md` is unchanged (786 of 786
-  words). `scripts/test_scoring_rubric.py` pins both floors.
+  CHANGELOG. The rule that the rubric moves only on calibration evidence lived in the rubric's
+  provenance paragraph, which these floors displace; the floors are a deliberate exception to
+  it, and the rubric says so: observations, not a calibrated threshold, an exception to
+  calibration-only changes. The procedure in `SKILL.md` still says the rubric never moves
+  without calibration evidence, and does not name the exception. The keyword shortcuts no
+  longer list "update docs" as likely weak, and open with a line saying they are a first guess
+  and the role floors still apply. The rubric does not grow (1946 to 1940 words). The additions
+  displace the provenance paragraph, the sentence giving the base-15 rationale, a cross-shape
+  paragraph that restated the trigger rule, the old lead-in to the keyword shortcuts, example 5's
+  closing restatement of the same rule, the opening's "no external tool needed" clause, and
+  the "Evaluate these signals" lead-in to the scoring signals. `SKILL.md` is unchanged (786 of
+  786 words). `scripts/test_scoring_rubric.py` pins both floors, the tier and score they set,
+  and that the shortcuts defer to them.
 
 ### Removed
 
@@ -78,10 +85,12 @@ spawn-routing hint are removed.
   updates to 0.18.0.
 
 Not edited here, for another session: the legacy ids `claude-haiku-4-5` and
-`claude-sonnet-5` are still live in convoy (`src/convoy/core/governance.py`
+`claude-sonnet-5` are still live, among other places, in convoy (`src/convoy/core/governance.py`
 `DEFAULT_TIER_MODELS`, `src/convoy/interface/scaffold.py`, `skills/convoy/SKILL.md`,
-`README.md`) and in fathom (`src/fathom/smoke.py`, `src/fathom/armingprobe.py`,
-`skills/fathom-eval/reference/arming.md` and `recipe-guardrail-tiers.md`). The mirror walk
+`README.md`, `docs/design/02-formats.md`) and in fathom (`src/fathom/smoke.py`,
+`src/fathom/armingprobe.py`, `skills/fathom-eval/reference/arming.md` and
+`recipe-guardrail-tiers.md`, `examples/data-root/scenarios/*.toml`,
+`examples/data-root/README.md`, `docs/ledger-contract.md`). The mirror walk
 (`refresh-models/scripts/mirror_check.py`), run against this release's `models.toml`, reports
 one finding: convoy's `src/convoy/core/governance.py` does not carry the
 `lineup synced 2026-10-08` stamp. The family-keyed price rows for haiku and sonnet in the
