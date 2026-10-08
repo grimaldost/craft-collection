@@ -40,18 +40,25 @@ skill does by default both change for an installed copy, and a skill is removed.
   step 7 rename; that displaces the wording that had the model run the command. The three
   skills leave `evals/config.json` `plugin_of_skill`, per the harness rule that a skill
   which cannot auto-activate is not measured on triggers; their trigger sets and tasks stay
-  on disk. `scripts/test_manual_only_skills.py` checks the four flags and that no
-  `plugin_of_skill` key names a manual-only skill.
+  on disk. `evals/harness/holdout_check.py` now says a skill is not in `plugin_of_skill`
+  and exits 2, where it used to raise a `KeyError` on `feedback-triage`'s held-out set.
+  `scripts/test_manual_only_skills.py` checks the four flags and that no `plugin_of_skill`
+  key names a manual-only skill.
 - **review-panel defaults to one reviewer.** Level 1 is the default rung: one reviewer
   subagent that did not see the session, briefed to refute; Levels 2 and 3 are escalations
   for higher stakes, and the four-lens quartet becomes the Level 3 default. It displaces
   the "Default quartet" as the skill-wide default and the "quick gut-check" framing of
   Level 1. `references/running-a-panel.md` cites the evidence: arXiv:2603.12123 v2
   (2026-10-01) reports cross-context review not significantly ahead of a context-aware
-  subagent reviewer (p = 0.057). The description is unchanged, and
-  `scripts/test_review_panel_text.py` pins its hand-off trigger and draft negative verbatim
-  along with the body's default-rung sentence. The body goes from 1163 to 1183 words inside
-  its 1187 baseline, which drops to 1183.
+  subagent reviewer (p = 0.057). The design and skill persona packs call the quartet the
+  Level 3 quartet, and the correct-usage rubric in `evals/tasks/review-panel/rubric.json`
+  grades the rung chosen by stakes (its `right-lenses` item becomes `right-rung`; the
+  blind-to-one-another and side-by-side items apply only when more than one reviewer is
+  convened), displacing a rubric that required several lenses. The description is
+  unchanged, and `scripts/test_review_panel_text.py` pins its hand-off trigger and draft
+  negative verbatim along with the body's default-rung sentence, and checks the persona
+  packs and the rubric. The body goes from 1163 to 1183 words inside its 1187 baseline,
+  which drops to 1183.
 
 ### Fixed
 
