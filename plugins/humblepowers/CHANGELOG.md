@@ -44,21 +44,23 @@ spawn-routing hint are removed.
 - **choosing-models: two role floors in the scoring rubric.** A new section after the
   cross-shape floor in `references/scoring-rubric.md`: a fix round answering a review's
   findings, and a task that writes prose other people read in public (README, CHANGELOG,
-  docs, PR or issue bodies), run at the mid tier or above whatever the score. The evidence is
-  observations from the 2026-10-06/07 maintenance runs, where weak-tier fix rounds (scored 8
-  to 23) left defects and a weak-tier release task wrote process narration into a public
-  CHANGELOG. Because they are observations, not calibration, the floors sit outside the
-  score: like the context modifiers in `SKILL.md`, they act on the tier after scoring and
-  change no points, base or floor of the score, which still never moves without calibration
-  evidence. `SKILL.md` is unchanged (786 of 786 words). The keyword shortcuts no longer list
-  "update docs" as likely weak and open with a line saying they are a first guess the role
-  floors still apply to. The rubric does not grow (1946 to 1940 words): the additions
-  displace the provenance paragraph, the base-15 rationale sentence, a cross-shape paragraph
-  and example 5's closing sentence (both restated the trigger rule), the old lead-ins to the
-  shortcuts and the scoring signals, the opening's "no external tool needed" clause, and
-  part of the frontier note. `scripts/test_scoring_rubric.py` pins both floors, that they sit
-  outside the score while `SKILL.md` keeps its calibration rule, and that the likely-weak
-  shortcuts name none of the public surfaces the floor lists.
+  docs, PR or issue bodies), run at the mid tier or above whatever the score. The evidence
+  is observations from the 2026-10-06/07 maintenance runs, where weak-tier fix rounds
+  (scored 8 to 23) left defects and a weak-tier release task wrote process narration into a
+  public CHANGELOG. Because they are observations, not calibration, the floors sit outside
+  the score: like the context modifiers in `SKILL.md`, they act on the tier after scoring
+  and change no points, base or floor of the score, which still never moves without
+  calibration evidence. `SKILL.md` is unchanged (786 of 786 words), so the floors reach a
+  decider who reads the rubric; a strong-tier session routing a single task skips the rubric
+  and does not see them. The keyword shortcuts no longer list "update docs" as likely weak
+  and open with a line saying they are a first guess the role floors still apply to. The
+  rubric does not grow (1946 to 1940 words): the additions displace the provenance
+  paragraph, the base-15 rationale sentence, a cross-shape paragraph and the last sentence
+  of example 5's cross-shape bullet (both restated the trigger rule), the old lead-ins to
+  the shortcuts and the scoring signals, the opening's "no external tool needed" clause, and
+  part of the frontier note. `scripts/test_scoring_rubric.py` pins both floors, that they
+  sit outside the score while `SKILL.md` keeps its calibration rule, and that the
+  likely-weak shortcuts name none of the public surfaces the floor lists.
 
 ### Removed
 
