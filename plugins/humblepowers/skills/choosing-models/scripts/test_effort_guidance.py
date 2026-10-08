@@ -2,8 +2,9 @@
 """Pins for the effort guidance in models.toml and references/emission-and-effort.md
 (no pytest required).
 
-The weak tier's effort flag is accepted and ignored (measured on the CLI and on
-governed spawns), not rejected. Agreement work keeps the `high` default at any tier.
+The weak tier's response to effort is unmeasured on Haiku 5.5; that Haiku 4.5
+accepted the flag and ignored it survives only as dated history in the reference.
+Agreement work keeps the `high` default at any tier.
 An Agent-tool spawn's effort is counted as inherited. The effort observations behind
 the agreement qualifier sit in `[meta]` as one single-line key.
 """
@@ -29,19 +30,22 @@ def _reference() -> str:
     return ' '.join(REFERENCE.read_text(encoding='utf-8').split())
 
 
-def test_weak_tier_note_says_accepted_and_ignored():
+def test_weak_tier_note_marks_effort_unmeasured():
     data = _models()
     weak = next(m for m in data['models'] if m['tier'] == 'weak')
-    assert 'errors if set' not in weak['notes'], weak['notes']
-    assert 'accepted and ignored' in weak['notes'], weak['notes']
-    assert '2026-09-13' in weak['notes'], 'the measurement date is missing'
-    assert 'direct API' not in weak['notes'], 'the note must not assert unmeasured surfaces'
+    notes = weak['notes']
+    assert 'errors if set' not in notes, notes
+    assert 'accepted and ignored' not in notes, 'Haiku 4.5 behaviour carried over to Haiku 5.5'
+    assert 'effort behaviour' in notes and 'unmeasured' in notes, notes
+    assert 'direct API' not in notes, 'the note must not assert unmeasured surfaces'
 
 
-def test_reference_says_effort_is_accepted_and_ignored():
+def test_reference_keeps_the_haiku_4_5_reading_as_dated_history():
     text = _reference()
     assert 'no effort knob at all' not in text
-    assert 'accepted and ignored' in text
+    assert 'weak tier has no effort dimension' not in text
+    assert 'unmeasured on Haiku 5.5' in text
+    assert 'Haiku 4.5 accepted the flag and ignored it (measured 2026-09-13' in text
 
 
 def test_agreement_work_keeps_the_high_default():
@@ -87,8 +91,8 @@ def test_new_key_sits_above_the_first_model_block():
 
 
 def main() -> int:
-    test_weak_tier_note_says_accepted_and_ignored()
-    test_reference_says_effort_is_accepted_and_ignored()
+    test_weak_tier_note_marks_effort_unmeasured()
+    test_reference_keeps_the_haiku_4_5_reading_as_dated_history()
     test_agreement_work_keeps_the_high_default()
     test_agent_tool_effort_is_counted_as_inherited()
     test_effort_observations_recorded_in_meta()

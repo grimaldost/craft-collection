@@ -14,9 +14,10 @@ Defaults, not calibrated thresholds: **`high`** unless a row below applies.
 | hard agentic or coding work | `xhigh` |
 | correctness dominates cost | `max` |
 
-The lower and upper rows both apply from mid up. The weak tier has no effort
-dimension: the flag is accepted and ignored (measured 2026-09-13 on the CLI and on
-governed spawns), so a weak-tier spawn at any effort runs the same.
+Whether effort changes a weak-tier run is unmeasured on Haiku 5.5. Its predecessor
+Haiku 4.5 accepted the flag and ignored it (measured 2026-09-13 on the CLI and on
+governed spawns); emit the level anyway, and do not lean on it until a measurement
+of the current model says what it does.
 
 The "mechanical, tightly scoped" row does not cover work whose correctness is agreement
 between two independent statements of one rule: two readers of one domain rule, a pin
