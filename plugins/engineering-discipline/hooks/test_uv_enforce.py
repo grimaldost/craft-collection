@@ -269,6 +269,10 @@ def test_body_fed_to_a_shell_interpreter_is_still_scanned():
         'eval "$(cat)" <<EOF\npip install requests\nEOF',
         'FOO=1 bash <<EOF\npip install requests\nEOF',
         'cat <<EOF | bash\npip install requests\nEOF',
+        # A shell behind a wrapper command still runs the body.
+        'sudo bash <<EOF\npip install requests\nEOF',
+        'sudo -u ci sh -s <<EOF\npip install requests\nEOF',
+        'env FOO=1 /usr/bin/bash <<EOF\npip install requests\nEOF',
     ]
     for command in blocked:
         assert _v(command) == 'block', command

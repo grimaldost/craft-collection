@@ -74,8 +74,10 @@ _HEREDOC_OP = re.compile(
     r"""(?=[\s|&;()<>]|$)"""
 )
 # A body fed to a shell interpreter is executed, so it stays scannable: the
-# command word before the operator, or a pipe into a shell after it.
-_SHELLS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'source', '.', 'eval', 'ssh'})
+# command word before the operator is a shell, a shell name appears later in
+# that command (`sudo bash`, `env X=1 sh -s`), or the line pipes into a shell.
+_SHELL_PROGRAMS = frozenset({'sh', 'bash', 'zsh', 'dash', 'ksh', 'ssh'})
+_SHELLS = _SHELL_PROGRAMS | {'source', '.', 'eval'}
 _PIPE_TO_SHELL = re.compile(r'\|\s*(?:\S*/)?(?:sh|bash|zsh|dash|ksh|ssh)(?![\w.-])')
 _SEGMENT_SPLIT = re.compile(r'[;&|(`{]')
 _ASSIGNMENT = re.compile(r'[A-Za-z_]\w*=')
@@ -105,8 +107,8 @@ def _shell_state(text: str) -> str:
 
 def _feeds_a_shell(line_prefix: str, line_rest: str) -> bool:
     segment = _SEGMENT_SPLIT.split(_QUOTED.sub(' ', line_prefix))[-1]
-    words = [w for w in segment.split() if not _ASSIGNMENT.match(w)]
-    if words and words[0].rsplit('/', 1)[-1] in _SHELLS:
+    names = [w.rsplit('/', 1)[-1] for w in segment.split() if not _ASSIGNMENT.match(w)]
+    if names and (names[0] in _SHELLS or _SHELL_PROGRAMS.intersection(names)):
         return True
     return bool(_PIPE_TO_SHELL.search(_QUOTED.sub(' ', line_rest)))
 
