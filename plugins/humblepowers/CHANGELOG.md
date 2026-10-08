@@ -59,7 +59,8 @@ spawn-routing hint are removed.
   closing restatement of the same rule, the opening's "no external tool needed" clause, and
   the "Evaluate these signals" lead-in to the scoring signals. `SKILL.md` is unchanged (786 of
   786 words). `scripts/test_scoring_rubric.py` pins both floors, the tier and score they set,
-  and that the shortcuts defer to them.
+  that the shortcuts defer to them, and that the likely-weak list names none of the public
+  surfaces the floor lists.
 
 ### Removed
 
