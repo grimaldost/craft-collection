@@ -14,9 +14,10 @@ Defaults, not calibrated thresholds: **`high`** unless a row below applies.
 | hard agentic or coding work | `xhigh` |
 | correctness dominates cost | `max` |
 
-The lower and upper rows both apply from mid up. The weak tier has no effort
-dimension: the flag is accepted and ignored (measured 2026-09-13 on the CLI and on
-governed spawns), so a weak-tier spawn at any effort runs the same.
+Whether effort changes a weak-tier run is unmeasured on Haiku 5.5. Its predecessor
+Haiku 4.5 accepted the flag and ignored it (measured 2026-09-13 on the CLI and on
+governed spawns); emit the level anyway, and do not lean on it until a measurement
+of the current model says what it does.
 
 The "mechanical, tightly scoped" row does not cover work whose correctness is agreement
 between two independent statements of one rule: two readers of one domain rule, a pin
@@ -25,13 +26,13 @@ work keeps the `high` default at any tier and any diff size. Six tasks in two lo
 one programme took 2-3 fix rounds at `medium` on both tiers where the obligation
 applied, and 1 at `high` (the table is in `models.toml`, `[meta].effort_observations`).
 
-A surface with no effort knob (the Agent tool today) inherits the session's
-setting. Say so rather than pretending a value was set, and count any effort read from
-such a spawn as inherited, not chosen: in one 2026-09-26 measure, 110 of 127 Agent
-spawns inherited `xhigh` or `max`, 46 of them sonnet. An effort-sensitive batch (mappers,
-verifiers, triage) goes through workflow `agent()`, which carries effort. Where a
-request goes to the platform directly (a series file, direct API tooling), an omitted
-`effort` takes the MODEL's default, and the strong tier's model (Opus 5.5) defaults to
+Since Claude Code 2.1.292 (2026-10-06) the Agent tool takes an `effort` parameter;
+pass it with `model`. A spawn that omits it, or runs on an older harness, inherits the
+session's setting. Say so rather than pretending a value was set, and count the effort
+of such a spawn as inherited, not chosen: in one 2026-09-26 measure, before the
+parameter existed, 110 of 127 Agent spawns inherited `xhigh` or `max`, 46 of them
+sonnet. Where a request goes to the platform directly (a series file, direct API
+tooling), an omitted `effort` takes the MODEL's default, and the strong tier's model (Opus 5.5) defaults to
 `medium`, one level below its predecessor and below this table's default - emit the
 level. A workflow `agent()` that omits it inherits the session's effort instead.
 
@@ -42,18 +43,14 @@ Tier names are not shared across surfaces — emit each surface's own words:
 | Surface | Emits | Vocabulary |
 |---|---|---|
 | series-file governance (e.g. convoy) | `tier` or `model`, plus `effort` | `weak/mid/strong/frontier` or API string |
-| Agent-tool spawn | `model` | family alias (`haiku/sonnet/opus/fable`) |
+| Agent-tool spawn | `model` + `effort` | family alias (`haiku/sonnet/opus/fable`) + effort level |
 | workflow `agent()` | `model` + `effort` | family alias + effort level |
 | planning-tool per-PR tier (e.g. keel) | tier per task | family names — translate, don't assume |
 | direct API tooling | model id | undated API string |
 
 A workflow `agent()` with no `model` inherits the session model, possibly the
 frontier one; no engine-level cap exists, so under a tier cap every call carries
-an explicit `model`. The PreToolUse spawn hint fires on exactly that shape — a
-spawn with no `model` — and says nothing once one is passed: directly, through a
-const, or through a spread of a call to a helper defined in the same script that
-returns a `model` (`{ ...route(id) }`, the shape a scored batch emits). A helper it
-cannot see, or one that sets no model, keeps the hint.
+an explicit `model`.
 
 While an engine is series-global (no per-task keys): score every task anyway, set
 the series tier to the modal tier, and consider splitting at a tier boundary when
