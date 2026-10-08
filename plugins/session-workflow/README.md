@@ -14,7 +14,7 @@ tool-dogfooding feedback loop (capture + triage).
   gaps), so a single invocation produces thorough output — no need to ask for
   "multiple passes." Generic core + on-demand references (output format,
   reference-ingestion taxonomy, coverage check, writing-for-retrieval).
-- **consolidate-knowledge** (`/consolidate-knowledge`) — the downstream pass that
+- **consolidate-knowledge** (`/consolidate-knowledge`, manual-only) — the downstream pass that
   distills many `journaling-sessions` entries across sessions into durable,
   higher-level guidance: cluster related entries → synthesize one generalization
   each → a strict promotion gate (reinforced · specific · non-reconstructable ·
@@ -30,7 +30,7 @@ tool-dogfooding feedback loop (capture + triage).
   output, synthesis over averaging, a stakes-scaled ladder. Needs fresh-context
   reviewer spawning (sequential clean contexts as the fallback); shows the
   plan + cost and asks before firing.
-- **evaluate-skill** (`/evaluate-skill`) — behaviorally evaluate a skill by running
+- **evaluate-skill** (`/evaluate-skill`, manual-only) — behaviorally evaluate a skill by running
   it headless many times: triggering (recall / specificity), correct-usage (rubric
   judge), and a with/without baseline, each with Wilson 95% CIs. Ships the eval
   engine in `scripts/`. Spawn backend: headless Claude Code today; cost-gated.
@@ -54,7 +54,7 @@ tool-dogfooding feedback loop (capture + triage).
   finding IDs (`<file-stem>#<n>`). Targets come from a user-supplied
   `feedback-targets` table — the skill never hunts the filesystem. Offer-first
   when self-activated.
-- **feedback-triage** (`/feedback-triage`) — the downstream pass: cluster a
+- **feedback-triage** (`/feedback-triage`, manual-only) — the downstream pass: cluster a
   tool's accumulated feedback reports by underlying cause, reconcile what
   already shipped, assign dispositions (ATTACK / ROUTE OUT / DECLINE), apply a
   promotion gate (reinforced · specific · actionable), and emit a
@@ -71,9 +71,12 @@ tool-dogfooding feedback loop (capture + triage).
 
 ## Command
 
-- **/anchor** (`close` | `close --stale`) — snapshot the run's control anchor to
+- **/anchor** (`close` | `close --stale`; manual-only) — snapshot the run's control anchor to
   `.claude/anchors/` right now; a one-off backstop before a manual `/compact`,
   usable whether or not the `compaction-survival` protocol is armed.
+
+Entries marked manual-only set `disable-model-invocation: true`: the owner runs
+them as slash commands, and the model does not invoke them on its own.
 
 ## Output style
 

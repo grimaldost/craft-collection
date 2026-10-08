@@ -18,6 +18,7 @@ description: >
   a governed series' own reflections into durable checks — the owning method
   tool's triage skill (e.g. keel's keel-triage) does that, not this generic
   feedback pass.
+disable-model-invocation: true
 user-invocable: true
 ---
 

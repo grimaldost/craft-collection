@@ -1,6 +1,7 @@
 ---
 description: Snapshot the run's control anchor to disk now — a one-off backstop before a manual /compact, with or without the compaction-survival protocol armed
 argument-hint: "[close | close --stale]"
+disable-model-invocation: true
 ---
 
 # /anchor — one-off control-anchor snapshot
