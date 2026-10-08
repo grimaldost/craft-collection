@@ -109,6 +109,16 @@ def test_count_prints_counts_per_hook_and_skips_corrupt_lines():
             assert 'ruff_format: 1' in text, text
 
 
+def test_count_skips_a_line_that_is_not_utf8():
+    with tempfile.TemporaryDirectory() as d, _env(**{hook_log.STATE_DIR_ENV: d}):
+        (Path(d) / hook_log.LOG_NAME).write_bytes(
+            b'{"hook":"uv_enforce"}\n\xff\xfe garbage\n{"hook":"uv_enforce"}\n'
+        )
+        assert hook_log.counts() == {'uv_enforce': 2}
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert hook_log.main([]) == 0
+
+
 def test_count_with_no_log_yet():
     with tempfile.TemporaryDirectory() as d, _env(**{hook_log.STATE_DIR_ENV: d}):
         assert hook_log.counts() == {}

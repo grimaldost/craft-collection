@@ -64,7 +64,7 @@ def counts() -> dict[str, int]:
     """Firings per hook in the log; unreadable or malformed lines are skipped."""
     out: dict[str, int] = {}
     with contextlib.suppress(OSError):
-        for raw in log_path().read_text(encoding='utf-8').splitlines():
+        for raw in log_path().read_text(encoding='utf-8', errors='replace').splitlines():
             try:
                 rec = json.loads(raw)
             except ValueError:
