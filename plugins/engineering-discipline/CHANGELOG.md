@@ -15,40 +15,38 @@ refresh-stack at 484/484.
 
 ### Fixed
 
-- **`uv_enforce` no longer blocks a heredoc that writes a blocked word as data.** A PR
-  body written with `cat > b.md <<EOF` holding a markdown table was blocked: the row
-  `| virtualenv | 21.3.0 |` put `virtualenv` at a command position after the row's
-  leading pipe. A heredoc body is now skipped only when its operator line is one simple
-  command whose program is `cat` or `tee` (read as bash reads it: past assignments and
-  redirections, with quotes and escapes removed), and the body cannot run code: a quoted or
-  backslashed delimiter, or no `$(` or backtick in the body. The walk reads the command
-  line by line and stops, leaving the rest to the 0.6.0 scan, at the first line it cannot
-  follow exactly: a quote left open or a trailing backslash; a parenthesis, brace or
-  backtick outside `${...}`, or a keyword such as `do`, `then`, `case`, `function` or
-  `exec`, any of which can send a later `cat` to a shell; a `<<` whose delimiter it cannot
-  parse; a heredoc operator on a line with more than one command; or a backslash at the
-  end of a line in an unquoted body. Every other body (fed to `bash`, `python`, `git`,
-  ...) is passed to the scan whole and is not read for heredocs of its own. One case
-  0.6.0 blocked now passes: a body written to a file that a later command runs
-  (`cat > x.sh <<EOF ... EOF`, then `bash x.sh`); the hook does not follow files. A
-  differential run against 0.6.0 over 10,284 generated commands, each allow-now and
-  block-before case run in bash with stub commands, found no other command that now passes
-  and runs a blocked tool, and none that 0.6.0 allowed and this version blocks. The
-  price of failing closed: a data-only heredoc after a line the walk stops at
-  (`today=$(date)`, a loop) or of another shape (`cat <<EOF | grep x`, `sudo tee`,
-  `git commit -F - <<EOF`) is still scanned, so a table row like the one above still
-  blocks there. The block message now names the matched words (``Blocked `virtualenv`.``);
-  `verdict()` still returns `'block'` or `'allow'`, and the new `blocked_match()` returns
-  the words. Displaces: nothing (the README PreToolUse bullet; no SKILL.md body words).
-  (2026-10-07 maintenance triage.)
-- **The READMEs no longer say the data checks run in this project's gates.** The
-  plugin README said the runnable data checks were wired into this project's pre-commit
-  and CI gate, and the root README said they were already in the gates; neither
-  `.pre-commit-config.yaml` nor the validate workflow runs them, only their unit tests.
-  Both now say the seven data scripts exit non-zero on a finding and that a project
-  wires them into its own CI.
-  The 0.4.0 entry below keeps its original wording as the dated record. Displaces: the
-  false sentence, reworded in place. (2026-10-08 release review.)
+- **`uv_enforce` no longer blocks a heredoc that writes a blocked word as data.** A PR body
+  written with `cat > b.md <<EOF` holding a markdown table was blocked: the row `|
+  virtualenv | 21.3.0 |` put `virtualenv` at a command position after the row's leading
+  pipe. A heredoc body is now skipped only when its operator line is one simple command
+  whose program is `cat` or `tee` (read as bash reads it: past assignments and redirections,
+  with quotes and escapes removed), and the body cannot run code: a quoted or backslashed
+  delimiter, or no `$(` or backtick in the body. The walk reads the command line by line and
+  stops, leaving the rest to the 0.6.0 scan, at the first line it cannot follow exactly: a
+  quote left open or a trailing backslash; a parenthesis, brace or backtick outside
+  `${...}`, or a keyword such as `do`, `then`, `case`, `function` or `exec`, any of which
+  can send a later `cat` to a shell; a `<<` whose delimiter it cannot parse; a heredoc
+  operator on a line with more than one command; or a backslash at the end of a line in an
+  unquoted body. Every other body (fed to `bash`, `python`, `git`, ...) is passed to the
+  scan whole and is not read for heredocs of its own. One case 0.6.0 blocked now passes: a
+  body written to a file that a later command runs (`cat > x.sh <<EOF ... EOF`, then `bash
+  x.sh`); the hook does not follow files. Two differential runs against 0.6.0, over 10,284
+  and then 101,210 generated commands with every allow-now and block-before case run in bash
+  with stub commands, found no other command that now passes and runs a blocked tool, and
+  none that 0.6.0 allowed and this version blocks. The price of failing closed: a data-only
+  heredoc after a line the walk stops at (`today=$(date)`, a loop) or of another shape (`cat
+  <<EOF | grep x`, `sudo tee`, `git commit -F - <<EOF`) is still scanned, so a table row
+  like the one above still blocks there. The block message now names the matched words
+  (``Blocked `virtualenv`.``); `verdict()` still returns `'block'` or `'allow'`, and the new
+  `blocked_match()` returns the words. Displaces: nothing (the README PreToolUse bullet; no
+  SKILL.md body words). (2026-10-07 maintenance triage.) - **The READMEs no longer say the
+  data checks run in this project's gates.** The plugin README said the runnable data checks
+  were wired into this project's pre-commit and CI gate, and the root README said they were
+  already in the gates; neither `.pre-commit-config.yaml` nor the validate workflow runs
+  them, only their unit tests. Both now say the seven data scripts exit non-zero on a
+  finding and that a project wires them into its own CI. The 0.4.0 entry below keeps its
+  original wording as the dated record. Displaces: the false sentence, reworded in place.
+  (2026-10-08 release review.)
 
 ### Added
 
