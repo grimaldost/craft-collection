@@ -29,8 +29,9 @@ Not here, on purpose: any tier-conditional clause. The register is rigid, the
 ladder that would justify one is non-monotone and single-bank, and — the reason
 that settles it — the harness cannot condition a skill's activation on a
 subagent's model, so the sentence would name a decision nothing can act on. The
-one place a tier fact is implementable is the gate hook's activation predicate,
-where it sits inert and marked provisional. No config row either: no local bank,
+one place a tier fact was implementable was the SubagentStop gate hook's
+activation predicate, where it sat inert and marked provisional until humblepowers
+0.18.0 removed the gate. No config row either: no local bank,
 no local trials, and shipping on literature alone is the defect this whole pass
 exists to repair.
 
