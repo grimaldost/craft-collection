@@ -99,7 +99,9 @@ mechanical layer, not options. `ruff_format` formats, once at the end of the tur
 the `.py` files edited in that turn whose project declares ruff (`ruff.toml`,
 `.ruff.toml`, or a `[tool.ruff]` table); it is non-blocking and needs Claude Code
 >= 2.1.218. `uv_enforce` blocks pip/poetry/virtualenv inside uv-managed projects;
-`CLAUDE_ALLOW_PIP=1` overrides one command.
+`CLAUDE_ALLOW_PIP=1` overrides one command. Both append one line per firing to a
+local `hook-log.ndjson` with no command text; nothing is sent over the network
+(the plugin README gives the fields and where the file lives).
 
 The rule for every other hook here: **it ships on with a documented opt-out, or
 it does not ship.** A hook behind a variable nobody sets has never run, which
@@ -121,8 +123,8 @@ the `env` block of `~/.claude/settings.json` (every project) or
 Three hooks were retired rather than defaulted on: the toolkit-inventory session
 start inject (the harness already lists skills and descriptions in the system
 prompt), the data pre-shipping checklist Stop nudge (exhortation through a hook,
-against four runnable checks already in the gates that reject rather than
-remind), and the skill-exercise ledger (a second write path for a fact the
+against seven runnable data checks that reject rather than remind, which a
+project wires into its own CI), and the skill-exercise ledger (a second write path for a fact the
 session transcript already carried — the Stop nudge reads the transcript).
 humblepowers 0.18.0 removed two more, the subagent verification gate and the
 spawn-routing hint; its CHANGELOG gives the evidence.

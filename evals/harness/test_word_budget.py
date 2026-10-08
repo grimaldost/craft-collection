@@ -10,9 +10,15 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 
 from word_budget import (  # noqa: E402
+    REFERENCE_BUDGET_FILE,
     body_word_count,
     check_budgets,
+    check_reference_budgets,
+    current_reference_counts,
+    load_baselines,
     main,
+    reference_report_rows,
+    reference_word_count,
     report_rows,
     section_counts,
     section_rows,
@@ -151,6 +157,71 @@ def test_cli_report_with_an_unknown_skill_exits_2():
     assert main(['--report', 'no-such-skill-anywhere']) == 2
 
 
+def test_reference_word_count_is_recursive_and_counts_md_only():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / 'a.md').write_text('one two three', encoding='utf-8')
+        (d / 'sub').mkdir()
+        (d / 'sub' / 'b.md').write_text('four five', encoding='utf-8')
+        (d / 'c.txt').write_text('not counted at all here', encoding='utf-8')
+        assert reference_word_count(d) == (5, 2)
+
+
+def test_current_reference_counts_marks_a_missing_directory():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / 'refs').mkdir()
+        (root / 'refs' / 'a.md').write_text('w w w', encoding='utf-8')
+        counts = current_reference_counts({'refs': 9, 'gone': 9}, root)
+    assert counts == {'refs': (3, 1), 'gone': None}
+
+
+def test_check_reference_budgets_flags_over_ceiling():
+    errors = check_reference_budgets({'p/refs': (10, 2)}, {'p/refs': 9})
+    assert len(errors) == 1, errors
+    assert 'p/refs' in errors[0] and '10' in errors[0] and '9' in errors[0], errors
+    assert 'displaces' in errors[0], errors
+    errors[0].encode('ascii')
+
+
+def test_check_reference_budgets_passes_at_or_under_ceiling():
+    assert check_reference_budgets({'p/refs': (9, 2)}, {'p/refs': 9}) == []
+    assert check_reference_budgets({'p/refs': (1, 1)}, {'p/refs': 9}) == []
+
+
+def test_check_reference_budgets_flags_a_missing_directory():
+    errors = check_reference_budgets({'p/refs': None}, {'p/refs': 9})
+    assert len(errors) == 1 and 'p/refs' in errors[0] and 'missing' in errors[0], errors
+
+
+def test_check_reference_budgets_flags_a_directory_with_no_files():
+    errors = check_reference_budgets({'p/refs': (0, 0)}, {'p/refs': 9})
+    assert len(errors) == 1 and 'p/refs' in errors[0] and 'no .md files' in errors[0], errors
+
+
+def test_recorded_reference_ceilings_cover_real_files():
+    # The shipped ceiling file is not vacuous: every recorded directory exists,
+    # holds files, and is within its ceiling.
+    ceilings = load_baselines(REFERENCE_BUDGET_FILE)
+    assert ceilings, REFERENCE_BUDGET_FILE
+    counts = current_reference_counts(ceilings)
+    for path in ceilings:
+        assert counts[path] is not None and counts[path][1] > 0, (path, counts[path])
+    assert check_reference_budgets(counts, ceilings) == []
+
+
+def test_reference_report_rows_show_headroom_in_ascii():
+    rows = reference_report_rows({'p/refs': (7, 2), 'q/gone': None}, {'p/refs': 9, 'q/gone': 4})
+    assert any('7 /     9  headroom      2  p/refs' in r for r in rows), rows
+    assert any('q/gone' in r and 'missing' in r for r in rows), rows
+    for r in rows:
+        r.encode('ascii')
+
+
 if __name__ == '__main__':
     test_body_word_count_excludes_frontmatter()
     test_body_word_count_no_frontmatter_counts_all()
@@ -169,4 +240,12 @@ if __name__ == '__main__':
     test_section_report_is_ascii_for_a_non_ascii_heading()
     test_cli_report_with_a_skill_name_lists_its_sections()
     test_cli_report_with_an_unknown_skill_exits_2()
+    test_reference_word_count_is_recursive_and_counts_md_only()
+    test_current_reference_counts_marks_a_missing_directory()
+    test_check_reference_budgets_flags_over_ceiling()
+    test_check_reference_budgets_passes_at_or_under_ceiling()
+    test_check_reference_budgets_flags_a_missing_directory()
+    test_check_reference_budgets_flags_a_directory_with_no_files()
+    test_recorded_reference_ceilings_cover_real_files()
+    test_reference_report_rows_show_headroom_in_ascii()
     print('ok: all word_budget tests passed')

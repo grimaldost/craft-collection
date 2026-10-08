@@ -38,6 +38,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import hook_log
+
 RUFF_CONFIG_FILES = ('ruff.toml', '.ruff.toml')
 # A `[tool.ruff]` or `[tool.ruff.<sub>]` table header at the start of a line.
 # A line regex rather than tomllib: the hook's interpreter is not pinned (tomllib
@@ -157,10 +159,12 @@ def main(stop_at: str | None = None) -> int:
         return 0
 
     if 'tool_calls' in payload:
-        commands = batch_command(declared_ruff_files(existing_files(batch_files(payload)), stop_at))
+        paths = declared_ruff_files(existing_files(batch_files(payload)), stop_at)
+        commands = batch_command(paths)
     else:
         f = target_file(payload)
         in_scope = f and Path(f).is_file() and declares_ruff(f, stop_at)
+        paths = [f] if in_scope else []
         commands = ruff_commands(f) if in_scope else []
 
     for args in commands:
@@ -170,6 +174,15 @@ def main(stop_at: str | None = None) -> int:
             # uv/uvx not on PATH — formatting is best-effort, never fatal.
             print('ruff_format hook: uv not found; skipping', file=sys.stderr)
             return 0
+    if commands:
+        session = payload.get('session_id')
+        hook_log.append(
+            {
+                'hook': 'ruff_format',
+                'files': len(paths),
+                'session': session if isinstance(session, str) else None,
+            }
+        )
     return 0
 
 

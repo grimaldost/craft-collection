@@ -56,13 +56,34 @@ importable for other harnesses' hook systems via `hooks/harness_adapters.py`.
   instead, where the file is complete; `test_ruff_format.py` guards the exclusion.
 - **PreToolUse** — blocks `pip install` / `poetry` / `virtualenv` / `venv` inside
   a uv project (`uv.lock` or `[tool.uv]`/`uv_build`). Override one command with
-  `CLAUDE_ALLOW_PIP=1`; never fires outside a uv project.
+  `CLAUDE_ALLOW_PIP=1`; never fires outside a uv project. Quoted text and
+  comments are data and are not scanned. So is a heredoc body when its line is
+  one simple command into `cat` or `tee` (`cat > b.md <<'EOF'`) and the body
+  cannot run code (a quoted delimiter, or no `$(` or backtick in it). The walk is
+  fail-closed: from the first line it cannot follow exactly (a subshell, group,
+  loop or other compound, an open quote, a continued line), the rest of the
+  command is scanned. The block message names the matched words.
+
+Both hooks append one JSON line per firing to a local log, `hook-log.ndjson`:
+`uv_enforce` on each block (`ts`, `hook`, `verdict`, `matched` for the blocked
+words, `session`), `ruff_format` on each format run it starts (`ts`, `hook`,
+`files` for the file count, `session`). No command text, file path or file
+content is written, and nothing is sent over the network. The directory is
+`ENGINEERING_DISCIPLINE_STATE_DIR` when set, else `CLAUDE_PLUGIN_DATA` (the
+per-plugin data directory Claude Code gives a plugin's hooks), else
+`engineering-discipline` under the system temp directory. Appending stops at
+1,000,000 bytes, and a failed write never changes a hook's verdict or exit code.
+To read it, run `uv run --no-project -- python hooks/hook_log.py` with the same
+values of those two variables that the hooks saw (neither set reads the temp
+directory fallback); it prints the path it read and the firings per hook.
+
 There is no third hook. A Stop nudge to run the data pre-shipping checklist was
 retired in 0.4.0: it was exhortation delivered through a hook, it sat behind an
 unset variable and had therefore never fired, and its path globs (`models/*`)
-would have matched ORM and ML model directories the moment it did. The four
-runnable data checks wired into this project's own pre-commit and CI gate reject
-rather than remind, which is the tier that was doing the work.
+would have matched ORM and ML model directories the moment it did. The seven
+data scripts above reject rather than remind: each exits non-zero on a finding.
+This repository's own gates run only their unit tests, not the checks on any
+data; a project that wants them as a gate wires them into its own CI.
 
 ## Freshness loop
 

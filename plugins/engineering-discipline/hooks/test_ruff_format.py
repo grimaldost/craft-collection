@@ -114,13 +114,31 @@ def test_batch_command_empty_when_no_paths():
     assert batch_command([]) == []
 
 
-def _run_main_capturing(payload, stop_at=None):
+STATE_DIR_ENV = 'ENGINEERING_DISCIPLINE_STATE_DIR'
+
+
+def _run_main_capturing(payload, stop_at=None, state_dir=None):
     """Run ruff_format.main() with a fake stdin, a captured stderr and a recording
     subprocess.run stub.
 
     Returns (return_code, calls, stderr) where calls is the list of argv lists
-    that subprocess.run would have been invoked with.
+    that subprocess.run would have been invoked with. The firing log goes to
+    `state_dir`, or to a throwaway directory, so a test never writes to a real
+    plugin data directory.
     """
+    with tempfile.TemporaryDirectory() as scratch:
+        old_state = os.environ.get(STATE_DIR_ENV)
+        os.environ[STATE_DIR_ENV] = state_dir or scratch
+        try:
+            return _run_main_capturing_unlogged(payload, stop_at)
+        finally:
+            if old_state is None:
+                os.environ.pop(STATE_DIR_ENV, None)
+            else:
+                os.environ[STATE_DIR_ENV] = old_state
+
+
+def _run_main_capturing_unlogged(payload, stop_at=None):
     calls = []
 
     def fake_run(args, **kwargs):
@@ -443,13 +461,62 @@ def test_mixed_batch_formats_only_the_declared_project():
 
 
 def test_main_malformed_payload_exits_0():
-    old_stdin = sys.stdin
-    sys.stdin = io.StringIO('not json{{{')
-    try:
-        rc = ruff_format.main()
-    finally:
-        sys.stdin = old_stdin
+    with tempfile.TemporaryDirectory() as d:
+        old_stdin, old_state = sys.stdin, os.environ.get(STATE_DIR_ENV)
+        sys.stdin = io.StringIO('not json{{{')
+        os.environ[STATE_DIR_ENV] = d
+        try:
+            rc = ruff_format.main()
+        finally:
+            sys.stdin = old_stdin
+            if old_state is None:
+                os.environ.pop(STATE_DIR_ENV, None)
+            else:
+                os.environ[STATE_DIR_ENV] = old_state
+        assert rc == 0
+        assert os.listdir(d) == []
+
+
+def _log_records(d):
+    path = os.path.join(d, 'hook-log.ndjson')
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding='utf-8') as fh:
+        return [json.loads(x) for x in fh.read().splitlines() if x.strip()]
+
+
+def test_main_dispatch_logs_one_line_with_the_file_count():
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as state:
+        _declare_ruff(d)
+        a = _write(os.path.join(d, 'a.py'))
+        b = _write(os.path.join(d, 'b.py'))
+        payload = {**_batch(a, b), 'session_id': 's1'}
+        rc, calls, _ = _run_main_capturing(payload, stop_at=d, state_dir=state)
+        records = _log_records(state)
     assert rc == 0
+    assert calls == [['uvx', 'ruff', 'format', a, b]]
+    assert len(records) == 1, records
+    assert set(records[0]) == {'ts', 'hook', 'files', 'session'}, records[0]
+    assert records[0]['hook'] == 'ruff_format'
+    assert records[0]['files'] == 2
+    assert records[0]['session'] == 's1'
+
+
+def test_main_without_dispatch_logs_nothing():
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as state:
+        a = _write(os.path.join(d, 'a.py'))
+        rc, calls, _ = _run_main_capturing(_batch(a), stop_at=d, state_dir=state)
+        assert (rc, calls) == (0, [])
+        assert _log_records(state) == []
+
+
+def test_main_still_exits_0_when_the_log_cannot_be_written():
+    with tempfile.TemporaryDirectory() as d:
+        _declare_ruff(d)
+        a = _write(os.path.join(d, 'a.py'))
+        blocker = _write(os.path.join(d, 'a-file'), '')
+        rc, calls, err = _run_main_capturing(_batch(a), stop_at=d, state_dir=blocker)
+    assert (rc, calls, err) == (0, [['uvx', 'ruff', 'format', a]], '')
 
 
 if __name__ == '__main__':
@@ -485,4 +552,7 @@ if __name__ == '__main__':
     test_unreadable_or_garbage_pyproject_fails_open()
     test_legacy_payload_is_scoped_too()
     test_mixed_batch_formats_only_the_declared_project()
+    test_main_dispatch_logs_one_line_with_the_file_count()
+    test_main_without_dispatch_logs_nothing()
+    test_main_still_exits_0_when_the_log_cannot_be_written()
     print('ok: all ruff_format tests passed')

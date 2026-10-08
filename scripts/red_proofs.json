@@ -109,7 +109,8 @@
       "evals/harness/test_validate_plugins.py::test_invalid_hooks_json_is_flagged"
     ],
     "scripts/word_budget.py": [
-      "evals/harness/test_word_budget.py::test_check_budgets_flags_over_baseline"
+      "evals/harness/test_word_budget.py::test_check_budgets_flags_over_baseline",
+      "evals/harness/test_word_budget.py::test_check_reference_budgets_flags_over_ceiling"
     ]
   },
   "gaps": {
@@ -126,6 +127,7 @@
     "evals/harness/run_triggers.py": "Scoring and spawn driver. Its pure core (score_skill, validate_queries) is covered by several harness tests; the module itself reports rates rather than rejecting, and gate thresholds are applied by callers.",
     "evals/harness/stats.py": "Pure statistics library with no CLI and no verdict. Its one refusal (no normal method below n=30) is proved at the validator level in experiment-rigor's test_validate.py.",
     "plugins/engineering-discipline/hooks/harness_adapters.py": "A seam that forwards payloads to the two hook cores; the rejection it carries belongs to uv_enforce, which has its own proof.",
+    "plugins/engineering-discipline/hooks/hook_log.py": "A best-effort firing log the two hooks append to, not a reject check: every write error is swallowed so it can never change a verdict or an exit code. test_hook_log.py, test_uv_enforce.py and test_ruff_format.py pin that property.",
     "plugins/engineering-discipline/hooks/ruff_format.py": "Formatter hook, deliberately incapable of rejecting: every path returns 0 so a format failure can never block a session. test_ruff_format.py pins that property, including that the destructive autofix is never added.",
     "plugins/experiment-discipline/skills/experiment-rigor/scripts/from_fathom.py": "A reader that summarises a fathom ledger into record fields. Single `return 0`; the validation of what it produces is validate.py's job.",
     "plugins/experiment-discipline/skills/experiment-rigor/scripts/stats.py": "Pure statistics library, no CLI, no verdict - same reading as the harness copy above.",
