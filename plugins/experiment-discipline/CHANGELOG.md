@@ -19,11 +19,13 @@ A cluster cell with zero units is now named together with the rule for handling 
   cluster, arm or rule. `validate.py` did not raise on the same cell: ER-SCHEMA rejected it,
   and ER-STATS gave the message it uses for an absent or malformed cell. Now
   `stats.cluster_deltas`, and `paired_difference` through it, names the cluster index, the
-  arm and the size in its `ValueError`. ER-STATS tells a zero-unit cell apart and names the
-  cluster, the arm and the rule: leave the cluster out of the clusters block and report how
-  many were left out; with an `arms` block present that also fails ER-RECON, because the
-  clusters must sum to the arms. ER-SCHEMA still rejects the 0/0 cell, and no gate checks
-  that the count left out is reported. The rule is stated in `templates/SCHEMA.md` (The
+  arm and the size in its `ValueError`. ER-STATS tells a zero-unit (0/0) cell apart and names
+  the cluster, the arm and the rule: leave the cluster out of the clusters block and report
+  how many were left out; with an `arms` block present that also fails ER-RECON, because the
+  clusters must sum to the arms. Any other cell with denominator 0, such as 3 successes over
+  0 units, keeps the malformed-cell message, since dropping it would hide a data-entry
+  error. ER-SCHEMA still rejects the 0/0 cell, and no gate checks that the count left out is
+  reported. The rule is stated in `templates/SCHEMA.md` (The
   paired contrast) and in `references/small-n-stats.md`.
 - **ER-STATS computes the sign test's per-cluster deltas inside its guarded recompute.** The
   second `stats.cluster_deltas` call in `check_contrasts` sat outside any `try`. It could not
