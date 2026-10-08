@@ -21,31 +21,36 @@ refresh-stack at 484/484.
   leading pipe. Heredoc bodies (`<<WORD`, `<<'WORD'`, `<<"WORD"`, `<<\WORD`, and
   `<<-WORD` with a tab-stripped terminator) are now blanked before matching, by a
   line-based walk that queues the pending terminators in order and tracks quotes,
-  backslash escapes, comments and `$(...)` the way bash reads them. The body starts
-  after the line that ends the command, so a line continued by an open quote or a
-  trailing backslash is still scanned, and the operator line and everything after the
-  terminator are scanned too. Inside `$(...)` or backticks, a line that starts with the
-  terminator and closes the substitution (`EOF)`) ends the body, as in bash. An operator
-  inside `"$(...)"` counts, so the PR-body form `--body "$(cat <<'EOF' ... EOF\n)"` is
-  stripped even when the body holds a stray double quote. Here-strings (`<<<`), a `<<`
-  in arithmetic (`$((1<<2))`, `(( x << y ))`), an escaped `\<<`, and an operator inside
-  quotes or a comment are not heredocs. What runs stays scannable. A body fed to a shell:
-  the command before `<<` starts with `sh`, `bash`, `zsh`, `dash`, `ksh`, `source`, `.`,
-  `eval` or `ssh` or names one of those shell programs later (`sudo bash`,
-  `env X=1 sh -s`), or the operator line pipes into such a command
-  (`cat <<EOF | sudo bash`). And the `$(...)` and backtick spans in the body of an
-  unquoted heredoc (`<<EOF`); a markdown code fence there is three backticks, which
-  bash runs as a substitution, so a fenced `pip install` in an unquoted body still
-  blocks, while the same body under `<<'EOF'` does not. Where the stripper does not
-  recognise an operator, nothing is stripped and the old behaviour holds: a delimiter of
-  another shape (`<<EO$F`), or an apostrophe earlier on the line
-  (`echo it's; cat <<EOF`). A PowerShell here-string whose body holds an apostrophe
-  still blocks, as before. A body run by a non-shell interpreter (`python <<EOF`) is new
-  ground: 0.6.0 scanned it, and it is now treated as data. The block message now names
-  the matched words (``Blocked `virtualenv`.``); `verdict()` still returns `'block'` or
-  `'allow'`, and the new `blocked_match()` returns the words. Displaces: nothing (the
-  README PreToolUse bullet; no SKILL.md body words). (2026-10-07 maintenance triage;
-  the bash cases from the 2026-10-08 release review.)
+  backslash escapes, `#`-comments (which start after whitespace or a metacharacter, as
+  in `true;#`) and `$(...)`. The body starts after the line that ends the command, so a
+  line continued by an open quote or a trailing backslash is still scanned, and the
+  operator line and everything after the terminator are scanned too. Inside `$(...)` or
+  backticks, a line that starts with the terminator and closes the substitution (`EOF)`)
+  ends the body, as in bash. An operator inside `"$(...)"` counts, so the PR-body form
+  `--body "$(cat <<'EOF' ... EOF\n)"` is stripped even when the body holds a stray
+  double quote. Here-strings (`<<<`), a `<<` in arithmetic (`$((1<<2))`, `(( x << y ))`,
+  `$[ x << y ]`), an escaped `\<<`, and an operator inside quotes or a comment are not
+  heredocs. What runs stays scannable. A body fed to a shell: the simple command holding
+  `<<` starts with `sh`, `bash`, `zsh`, `dash`, `ksh`, `source`, `.`, `eval` or `ssh` or
+  names one of those shell programs later (`sudo bash`, `env X=1 sh -s`, `<<EOF bash`, a
+  quoted `"bash"`), the operator redirects a group, subshell, loop or `if` that runs one
+  (`{ bash; } <<EOF`, `while read l; do eval "$l"; done <<EOF`), or the operator line
+  pipes into one (`cat <<EOF | sudo bash`, `| (bash)`, `| { bash; }`). And the `$(...)`
+  and backtick spans in the body of an unquoted heredoc (`<<EOF`); a `$(...)` span is
+  read as code, so a quoted or escaped `)` inside it does not end it. A markdown code
+  fence there is three backticks, which bash runs as a substitution, so a fenced
+  `pip install` in an unquoted body still blocks, while the same body under `<<'EOF'`
+  does not. Where the stripper does not recognise an operator, nothing is stripped and
+  the old behaviour holds: a delimiter of another shape (`<<EO$F`), or an apostrophe
+  earlier on the line (`echo it's; cat <<EOF`). A PowerShell here-string whose body
+  holds an apostrophe still blocks, as before. A body run by a non-shell interpreter
+  (`python <<EOF`), and a body written to a file that a later command runs
+  (`cat > s.sh <<EOF` then `bash s.sh`), are new ground: 0.6.0 scanned them, and they
+  are now treated as data, because the hook does not follow files or other interpreters.
+  The block message now names the matched words (``Blocked `virtualenv`.``); `verdict()`
+  still returns `'block'` or `'allow'`, and the new `blocked_match()` returns the words.
+  Displaces: nothing (the README PreToolUse bullet; no SKILL.md body words). (2026-10-07
+  maintenance triage; the bash cases from the 2026-10-08 release review.)
 - **The READMEs no longer say the data checks run in this project's gates.** The
   plugin README said the runnable data checks were wired into this project's pre-commit
   and CI gate, and the root README said they were already in the gates; neither
