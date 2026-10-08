@@ -4,7 +4,8 @@
 Each `### <axis> (+a to +b)` heading states the range its table can produce;
 recompute that range from the table and compare. The rubric also states that an
 additive total is clamped to 0-100, with the largest and smallest totals the
-tables allow, so those figures are recomputed too.
+tables allow, so those figures are recomputed too. The two role floors are pinned by
+their rule text and their place between the cross-shape floor and the axes.
 """
 
 from __future__ import annotations
@@ -83,10 +84,28 @@ def test_clamp_sentence_is_present_and_its_totals_are_true():
     assert f'minimum is {bottom}' in flat, f'stated minimum is not {bottom}'
 
 
+def test_role_floors_hold_whatever_the_score():
+    """Two floors added in humblepowers 0.18.0 from maintenance-run observations: a
+    fix round answering review findings, and prose other people read in public, run
+    at mid or above. Both sit after the cross-shape floor and before the axes."""
+    text = _text()
+    flat = ' '.join(text.split())
+    assert 'fix round answering a review' in flat, 'fix-round floor missing'
+    assert 'prose other people read in public' in flat, 'public-prose floor missing'
+    for surface in ('README', 'CHANGELOG', 'PR or issue bod'):
+        assert surface in flat.split('## Role floors', 1)[-1].split('## Scoring Signals')[0]
+    assert 'not a calibrated threshold' in flat
+    order = [
+        text.index(h) for h in ('## Cross-shape floor', '## Role floors', '## Scoring Signals')
+    ]
+    assert order == sorted(order), order
+
+
 def main() -> int:
     test_found_the_axes()
     test_each_heading_range_matches_its_table()
     test_clamp_sentence_is_present_and_its_totals_are_true()
+    test_role_floors_hold_whatever_the_score()
     print('ok: scoring_rubric')
     return 0
 

@@ -4,11 +4,6 @@ This rubric defines how to score a development task for model routing. The
 score is 0-100, mapping to three tiers. Apply it mentally as you write or
 read each task -- no external tool needed.
 
-Ported near-verbatim from the predecessor cycle's calibrated rubric; the
-worked calibration (trivial-task override, cross-shape floor, verification
-discount) carries observed-run evidence and moves only on new calibration
-evidence.
-
 ---
 
 ## Score Ranges and Tier Mapping
@@ -41,9 +36,6 @@ logic at all?** If the task is purely text substitution, config edits,
 version bumps, typo fixes, or boilerplate documentation with no
 conditional logic, start from a **base of 15** instead of 30.
 
-This unlocks the 0-14 score range for truly mechanical work and prevents
-simple tasks from clustering near the weak/mid boundary.
-
 | Task type                                    | Base |
 |----------------------------------------------|------|
 | Has any logic, reasoning, or design decision | 30   |
@@ -74,15 +66,26 @@ prompt is a reason to fire the floor, not to bump past mid).
 | **Uncovered shared-helper fan-out** -- the change is to shared / common / helper / base code, AND the prompt does not enumerate every caller that must stay correct (you need not know the exact count; if you cannot name all consumers from the prompt, treat it as fired) |
 | **Uncovered backend / parity** -- two or more implementations (backends, dialects, code paths, an ETL-vs-serving pair) must produce equivalent results, AND at least one is not named in the prompt as an edit site (if the prompt names every implementation to change, that is breadth, not cross-shape -- do not fire) |
 
-Every trigger keys on a site the prompt does NOT point at -- the *relationship*
-between symptom and fix, not how many files or modules the task spans; raw
-breadth or repo size never fires this floor.
-
 Coverage governs in both directions, and the axes below read the same brief:
 score the task **as briefed**, not the problem behind it. Where the prompt
 already enumerates the edit sites, the decomposition, or the acceptance cases,
 the structure and reasoning axes fall with it -- that thinking is done and
 handed over. Every recorded mis-score ran the other way.
+
+---
+
+## Role floors
+
+Two floors hold whatever the score, raising a lower score to 26 (the bottom of
+`mid`):
+
+- **A fix round answering a review's findings** runs at `mid` or above.
+- **A task that writes prose other people read in public** -- a README, a
+  CHANGELOG, docs, a PR or issue body -- runs at `mid` or above.
+
+Evidence from the 2026-10-06/07 maintenance runs: weak-tier fix rounds (scored 8
+to 23) left defects, and a weak-tier release task wrote process narration into a
+public CHANGELOG. Observations, not a calibrated threshold.
 
 ---
 
@@ -165,8 +168,6 @@ boilerplate -- length does not imply cognitive complexity.
 ---
 
 ## Quick Heuristic Shortcuts
-
-For speed, you can also pattern-match on keywords:
 
 **Likely weak (0-25):**
 - add field/column, rename, format, fix typo, bump version, add test for
@@ -269,7 +270,7 @@ tiers.
 - Additive total: 15 + 10 + 3 - 5 = 23 -> weak
 - **Cross-shape floor: does NOT fire.** The change fans out across 6 files, but the
   prompt *enumerates every file and reference* -- coverage is complete, so this is
-  breadth, not cross-shape. Raw file count never fires the floor.
+  breadth, not cross-shape.
 - **Final: weak, confidence: high.** Contrast with Example 4: there the fix site was
   *uncovered* -> mid; here the brief names every one -> weak. Coverage, not breadth --
   and that same coverage is why reasoning scored +0 on a six-file change.
