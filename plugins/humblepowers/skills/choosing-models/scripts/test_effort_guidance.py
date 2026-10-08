@@ -4,9 +4,9 @@
 
 The weak tier's response to effort is unmeasured on Haiku 5.5; that Haiku 4.5
 accepted the flag and ignored it survives only as dated history in the reference.
-Agreement work keeps the `high` default at any tier.
-An Agent-tool spawn's effort is counted as inherited. The effort observations behind
-the agreement qualifier sit in `[meta]` as one single-line key.
+Agreement work keeps the `high` default at any tier. The Agent tool takes effort
+since Claude Code 2.1.292; an omitted one is counted as inherited. The effort
+observations behind the agreement qualifier sit in `[meta]` as one single-line key.
 """
 
 from __future__ import annotations
@@ -61,11 +61,18 @@ def test_agreement_work_keeps_the_high_default():
         assert example in text, example
 
 
-def test_agent_tool_effort_is_counted_as_inherited():
+def test_agent_tool_takes_effort_and_an_omitted_one_is_inherited():
     text = _reference()
+    assert 'the Agent tool today' not in text, 'stale since Claude Code 2.1.292'
+    assert 'Claude Code 2.1.292 (2026-10-06)' in text
+    assert '| Agent-tool spawn | `model` + `effort` |' in text
     assert 'inherited, not chosen' in text
     assert '110 of 127' in text
-    assert 'effort-sensitive batch' in text
+
+
+def test_reference_names_no_spawn_hint():
+    text = _reference()
+    assert 'spawn hint' not in text, 'the PreToolUse spawn hint was removed in 0.18.0'
 
 
 def test_effort_observations_recorded_in_meta():
@@ -94,7 +101,8 @@ def main() -> int:
     test_weak_tier_note_marks_effort_unmeasured()
     test_reference_keeps_the_haiku_4_5_reading_as_dated_history()
     test_agreement_work_keeps_the_high_default()
-    test_agent_tool_effort_is_counted_as_inherited()
+    test_agent_tool_takes_effort_and_an_omitted_one_is_inherited()
+    test_reference_names_no_spawn_hint()
     test_effort_observations_recorded_in_meta()
     test_new_key_sits_above_the_first_model_block()
     print('ok: effort_guidance')
