@@ -53,4 +53,7 @@ workflow; or insecure handling of credentials. Guidance and documentation conten
 These plugins run locally with the same privileges as your shell — review any hook
 or script before installing or enabling it, exactly as you would any third-party
 tooling. Note that engineering-discipline's ruff-format and uv-enforce hooks are
-active as soon as that plugin is installed (the rest are env-gated, off by default).
+active as soon as that plugin is installed, with no env gate, and append a line
+per firing to a local log (no command text, no network; see that plugin's
+README). Every other hook has an env variable; the Hooks table in the README
+gives each one's default and control.

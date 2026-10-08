@@ -56,7 +56,24 @@ importable for other harnesses' hook systems via `hooks/harness_adapters.py`.
   instead, where the file is complete; `test_ruff_format.py` guards the exclusion.
 - **PreToolUse** — blocks `pip install` / `poetry` / `virtualenv` / `venv` inside
   a uv project (`uv.lock` or `[tool.uv]`/`uv_build`). Override one command with
-  `CLAUDE_ALLOW_PIP=1`; never fires outside a uv project.
+  `CLAUDE_ALLOW_PIP=1`; never fires outside a uv project. Quoted text, comments
+  and heredoc bodies are data and are not scanned, except a heredoc body fed to a
+  shell (`bash <<EOF`, `ssh host <<EOF`), which runs. The block message names the
+  matched words.
+
+Both hooks append one JSON line per firing to a local log, `hook-log.ndjson`:
+`uv_enforce` on each block (`ts`, `hook`, `verdict`, `matched` for the blocked
+words, `session`), `ruff_format` on each format run it starts (`ts`, `hook`,
+`files` for the file count, `session`). No command text, file path or file
+content is written, and nothing is sent over the network. The directory is
+`ENGINEERING_DISCIPLINE_STATE_DIR` when set, else `CLAUDE_PLUGIN_DATA` (the
+per-plugin data directory Claude Code gives a plugin's hooks), else
+`engineering-discipline` under the system temp directory. Appending stops at
+1,000,000 bytes, and a failed write never changes a hook's verdict or exit code.
+To read it, run `uv run --no-project -- python hooks/hook_log.py` with one of
+those two variables set to the directory the hooks write to; it prints the path
+it read and the firings per hook.
+
 There is no third hook. A Stop nudge to run the data pre-shipping checklist was
 retired in 0.4.0: it was exhortation delivered through a hook, it sat behind an
 unset variable and had therefore never fired, and its path globs (`models/*`)

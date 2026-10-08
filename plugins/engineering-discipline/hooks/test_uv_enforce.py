@@ -270,8 +270,12 @@ def test_blocked_match_names_the_matched_word():
     assert blocked_match('uv add requests') is None
 
 
-def _run_main(command, uv_project=True):
-    """Run uv_enforce.main() on a hook JSON payload: (return code, stderr)."""
+def _run_main(command, uv_project=True, state_dir=None):
+    """Run uv_enforce.main() on a hook JSON payload: (return code, stderr).
+
+    The firing log goes to `state_dir`, or to a throwaway directory, so a test
+    never writes to a real plugin data directory.
+    """
     import io
     import json
     import os
@@ -280,13 +284,15 @@ def _run_main(command, uv_project=True):
 
     import uv_enforce
 
-    with tempfile.TemporaryDirectory() as d:
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as scratch:
         if uv_project:
             with open(os.path.join(d, 'uv.lock'), 'w', encoding='utf-8') as fh:
                 fh.write('')
         payload = {'tool_input': {'command': command}, 'cwd': d, 'session_id': 's1'}
         old_stdin, old_stderr = sys.stdin, sys.stderr
         old_allow = os.environ.pop('CLAUDE_ALLOW_PIP', None)
+        old_state = os.environ.get(STATE_DIR_ENV)
+        os.environ[STATE_DIR_ENV] = state_dir or scratch
         sys.stdin = io.StringIO(json.dumps(payload))
         sys.stderr = io.StringIO()
         try:
@@ -296,7 +302,64 @@ def _run_main(command, uv_project=True):
             sys.stdin, sys.stderr = old_stdin, old_stderr
             if old_allow is not None:
                 os.environ['CLAUDE_ALLOW_PIP'] = old_allow
+            if old_state is None:
+                os.environ.pop(STATE_DIR_ENV, None)
+            else:
+                os.environ[STATE_DIR_ENV] = old_state
     return rc, err
+
+
+STATE_DIR_ENV = 'ENGINEERING_DISCIPLINE_STATE_DIR'
+
+
+def _log_records(d):
+    import json
+    import os
+
+    path = os.path.join(d, 'hook-log.ndjson')
+    if not os.path.exists(path):
+        return None, []
+    with open(path, encoding='utf-8') as fh:
+        raw = fh.read()
+    return raw, [json.loads(x) for x in raw.splitlines() if x.strip()]
+
+
+def test_main_block_logs_one_line_without_the_command_text():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        rc, _ = _run_main('cd secret-token-123 && virtualenv .venv', state_dir=d)
+        raw, records = _log_records(d)
+    assert rc == 2
+    assert len(records) == 1, records
+    assert set(records[0]) == {'ts', 'hook', 'verdict', 'matched', 'session'}, records[0]
+    assert records[0]['hook'] == 'uv_enforce'
+    assert records[0]['verdict'] == 'block'
+    assert records[0]['matched'] == 'virtualenv'
+    assert records[0]['session'] == 's1'
+    assert 'secret-token-123' not in raw
+
+
+def test_main_allow_logs_nothing():
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        assert _run_main(REPORTED_HEREDOC, state_dir=d) == (0, '')
+        assert _run_main('pip install x', uv_project=False, state_dir=d) == (0, '')
+        assert _log_records(d) == (None, [])
+
+
+def test_main_block_still_exits_2_when_the_log_cannot_be_written():
+    import os
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        blocker = os.path.join(d, 'a-file')
+        with open(blocker, 'w', encoding='utf-8') as fh:
+            fh.write('')
+        rc, err = _run_main('pip install requests', state_dir=blocker)
+    assert rc == 2
+    assert '`pip install`' in err, err
 
 
 def test_main_allows_the_reported_heredoc():

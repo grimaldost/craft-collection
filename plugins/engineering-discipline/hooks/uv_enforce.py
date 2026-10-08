@@ -18,6 +18,8 @@ import re
 import sys
 from pathlib import Path
 
+import hook_log
+
 # Commands redirected to uv when inside a uv project. Word boundaries keep
 # `pip`/`conda`/`pipenv` from matching as substrings of unrelated words. Each
 # alternative is anchored at a *command position* (start of string, or right
@@ -194,8 +196,18 @@ def main() -> int:
     command = (payload.get('tool_input') or {}).get('command', '')
     allow = os.environ.get('CLAUDE_ALLOW_PIP') == '1'
     if verdict(command, cwd_is_uv_project(payload.get('cwd')), allow) == 'block':
+        matched = blocked_match(command)
+        session = payload.get('session_id')
+        hook_log.append(
+            {
+                'hook': 'uv_enforce',
+                'verdict': 'block',
+                'matched': matched,
+                'session': session if isinstance(session, str) else None,
+            }
+        )
         print(
-            f'Blocked `{blocked_match(command)}`. '
+            f'Blocked `{matched}`. '
             'This is a uv-managed project. Use `uv add <pkg>` for dependencies '
             'or `uv venv` / `uv sync` for environments, instead of '
             'pip/poetry/virtualenv. Set CLAUDE_ALLOW_PIP=1 to override.',
