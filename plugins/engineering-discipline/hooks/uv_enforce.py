@@ -65,10 +65,13 @@ _QUOTED = re.compile(r""""[^"]*"|'[^']*'""")
 # Heredoc bodies are data too (a markdown table written with `cat <<EOF` put
 # `| virtualenv |` at a command position after the row's leading pipe). The
 # operator is `<<` or `<<-` followed by a bare, 'quoted', "quoted" or
-# backslashed word; `<<<` (a here-string) and a digit after `<<` (an arithmetic
-# shift such as `$((1<<2))`) are not heredocs.
+# backslashed word, which ends at a shell metacharacter; any other word shape
+# is left unstripped. `<<<` (a here-string) and a digit after `<<` (an
+# arithmetic shift such as `$((1<<2))`) are not heredocs.
 _HEREDOC_OP = re.compile(
-    r"""(?<!<)<<(?!<)(-?)[ \t]*(?:'([A-Za-z_]\w*)'|"([A-Za-z_]\w*)"|\\?([A-Za-z_]\w*))"""
+    r"""(?<!<)<<(?!<)(-?)[ \t]*"""
+    r"""(?:'([^'\n]+)'|"([^"\n]+)"|\\?([A-Za-z_][\w.-]*))"""
+    r"""(?=[\s|&;()<>]|$)"""
 )
 # A body fed to a shell interpreter is executed, so it stays scannable: the
 # command word before the operator, or a pipe into a shell after it.

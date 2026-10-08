@@ -242,6 +242,19 @@ def test_lookalikes_of_a_heredoc_operator_strip_nothing():
         assert _v(command) == 'block', command
 
 
+def test_delimiter_is_the_whole_shell_word():
+    # bash takes the whole word as the delimiter: `END-OF-FILE`, not `END`. A
+    # partial word would never meet its terminator and swallow what follows.
+    assert _v('cat <<END-OF-FILE\n| virtualenv |\nEND-OF-FILE') == 'allow'
+    assert _v('cat <<END-OF-FILE\nx\nEND-OF-FILE\npip install z') == 'block'
+    assert _v("cat <<'END OF'\n| virtualenv |\nEND OF") == 'allow'
+    assert _v("cat <<'END OF'\nx\nEND OF\npip install z") == 'block'
+    assert _v('cat <<EOF>out.md\n| virtualenv |\nEOF') == 'allow'
+    assert _v('cat <<EOF>out.md\nx\nEOF\npip install z') == 'block'
+    # A word shape the stripper does not model is left scanned, never half-read.
+    assert _v('cat <<EO$F\nx\nEO$F\npip install z') == 'block'
+
+
 def test_body_fed_to_a_shell_interpreter_is_still_scanned():
     blocked = [
         'bash <<EOF\npip install requests\nEOF',
