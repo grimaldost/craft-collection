@@ -6,6 +6,37 @@ with each release.
 Tags start at 0.3.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.3.5] - 2026-10-08
+
+A cluster cell with zero units is now named together with the rule for handling it, and a
+0.3.4 note that over-stated a lint's coverage is corrected.
+
+### Fixed
+
+- **(T143b) A cluster cell with zero units is named, with the rule.** A downstream
+  experiment's own analysis script (reported 2026-09-27) called `stats.py` directly with a
+  cluster of size 0 and got a bare `ValueError: cluster sizes must be positive`, naming no
+  cluster, arm or rule. `validate.py` did not raise on the same cell: ER-SCHEMA rejected it,
+  and ER-STATS gave the message it uses for an absent or malformed cell. Now
+  `stats.cluster_deltas`, and `paired_difference` through it, names the cluster index, the
+  arm and the size in its `ValueError`. ER-STATS tells a zero-unit (0/0) cell apart and names
+  the cluster, the arm and the rule: leave the cluster out of the clusters block and report
+  how many were left out; with an `arms` block present that also fails ER-RECON, because the
+  clusters must sum to the arms. Any other cell with denominator 0, such as 3 successes over
+  0 units, keeps the malformed-cell message, since dropping it would hide a data-entry
+  error. ER-SCHEMA still rejects the 0/0 cell, and no gate checks that the count left out is
+  reported. The rule is stated in `templates/SCHEMA.md` (The
+  paired contrast) and in `references/small-n-stats.md`.
+- **ER-STATS computes the sign test's per-cluster deltas inside its guarded recompute.** The
+  second `stats.cluster_deltas` call in `check_contrasts` sat outside any `try`. It could not
+  raise, because the same inputs had already passed `paired_difference`, but it now shares
+  that guard.
+- **The 0.3.4 note over-stated the encoding lint's coverage.** It said the lint flags the
+  text-mode subprocess pattern "in every bundled script". The lint covers the plugin's
+  non-test scripts (`validate.py`, `render.py`, `stats.py`, `from_fathom.py` and the
+  example's `finalize.py`), leaves `test_*.py` modules out by design, and checks only
+  subprocess calls that open text mode. The 0.3.4 entry is corrected in place.
+
 ## [0.3.4] - 2026-10-07
 
 ### Fixed
@@ -18,7 +49,9 @@ tagged.
   the locale codec, the same pattern that produced the 0.3.2 ER-PREREG false drift. It
   now decodes git's output as UTF-8, which is what git emits. The SHA it reads is ASCII,
   so the finalized record does not change; a repository lint now flags this pattern in
-  every bundled script.
+  the plugin's non-test scripts (`validate.py`, `render.py`, `stats.py`, `from_fathom.py`
+  and the example's `finalize.py`). It checks only subprocess calls that open text mode,
+  and leaves `test_*.py` modules out by design.
 
 ## [0.3.3] - 2026-09-05
 

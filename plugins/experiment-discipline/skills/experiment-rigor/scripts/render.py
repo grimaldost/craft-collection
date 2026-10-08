@@ -1067,7 +1067,11 @@ def schema_markdown(schema: dict[str, Any]) -> str:
         'to reconcile to N_expected, and its per-arm Wilson interval stays -- DESCRIPTIVE, '
         'an upper bound on precision, with the headline precision quoted from the contrast. '
         'An outcome scored over a subset of the cells carries no `arms` block at all; it '
-        'states its clusters and its contrasts, and no full-cell-set rule is applied to it.'
+        'states its clusters and its contrasts, and no full-cell-set rule is applied to it. '
+        'A cluster cell with zero units (`numerator: 0`, `denominator: 0`) has no rate, so leave '
+        'that cluster out of the clusters block and report how many were left out (`ER-STATS` '
+        'names such a cell; with an `arms` block present, leaving it out also fails '
+        '`ER-RECON`, because the clusters must sum to the arms).'
     )
     lines.append('')
 
