@@ -54,14 +54,10 @@ tag_prefix = [
     { prefix = "plugins/session-workflow/", tag = "session-workflow--v" },
 ]
 
-[private_refs]
-# The home paths in tracked files are placeholders: `me` (the tool-feedback skill's example
-# registry), `x` (an anchor-inject test), `someone` (the feedback-nudge tests) and `user`
-# (two pre-mortem records). All four are in railform's default list, restated here whole
-# because arrays replace.
-placeholders = [
-    "me", "x", "someone", "alice", "user", "runner", "public", "default", "shared", "runneradmin",
-]
+# Note on private references: the home paths in tracked files are placeholders, namely `me`
+# (the tool-feedback skill's example registry), `x` (an anchor-inject test), `someone` (the
+# feedback-nudge tests) and `user` (two pre-mortem records). All four are in railform's default
+# `private_refs.placeholders`, so this file sets no `[private_refs]` table.
 
 [[exceptions]]
 key = "python.test_command"
