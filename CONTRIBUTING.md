@@ -26,8 +26,17 @@ older interpreters.
 ```bash
 git clone https://github.com/grimaldost/craft-collection
 cd craft-collection
-uv tool run pre-commit install   # installs the pre-commit + pre-push gates
+uvx --from "git+https://github.com/grimaldost/railform@<pin>" railform arm   # once per clone
 ```
+
+The git hooks are tracked wrappers in `.githooks/`, written by
+[railform](https://github.com/grimaldost/railform) (`railform adopt`), that run
+`.pre-commit-config.yaml` through a pinned `uvx pre-commit`. `railform arm` points
+the clone's `core.hooksPath` at that directory; `<pin>` is the commit named in
+`.github/workflows/ci.yml` (`git config core.hooksPath .githooks` does the same).
+Worktrees share the clone's configuration, so arming the clone arms them too.
+`pre-commit install` refuses to run once `core.hooksPath` is set, and is no
+longer needed.
 
 To try the plugins locally without publishing a marketplace:
 
@@ -46,18 +55,30 @@ The same gates run in pre-commit, pre-push, and CI — running them before you p
 avoids round-trips:
 
 ```bash
-uv tool run pre-commit run --all-files   # ruff lint + format, JSON/YAML, validator
+uvx pre-commit==4.6.2 run --all-files   # ruff lint + format, hygiene, railform hooks, validator
 uv run --no-project --with pyyaml -- python scripts/run_tests.py    # every test_*.py (no pytest needed)
 uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # structural marketplace checks (PyYAML catches the frontmatter colon-space trap)
 ```
 
-The `validate` workflow re-runs the register linter, the plugin validator, the
-`AGENTS.md` freshness check, the env-gate claims check, the release-discipline
-gate (PRs only), ruff, and the test suite on every PR; it must be green to
-merge. It does **not** run the pre-commit-only hooks — `check-json`,
-`check-yaml`, `check-merge-conflict`, `check-added-large-files`, the ASCII runtime
-ratchet, or the two `experiment-rigor` record gates. Those exist at commit time
-only, which is what makes the exemptions below worth writing down.
+The `ci` workflow (`.github/workflows/ci.yml`) runs on every PR and every push
+to `main`, and its `gate` job is the one status that must be green to merge.
+`gate` needs every other job in the file:
+
+- `railform`, the reusable workflow of
+  [railform](https://github.com/grimaldost/railform) at the pinned commit: the
+  frame check (`railform.toml`), the private-reference check, the
+  `plugin-marketplace` pipeline (ruff format and lint at the pinned version, then
+  the test suite), the commit lane (every commit subject, the PR title and body,
+  and the branch name), the hook-wrapper and adoption checks, the hygiene hooks
+  replayed over the PR's changed files, and zizmor;
+- `plugins`, this repository's own gates: the register linter, the plugin
+  validator, the `AGENTS.md` freshness check and the env-gate claims check;
+- `release-discipline`, the release-discipline gate (PRs only; skipped on a
+  push, which `gate` counts as passing).
+
+CI does **not** run the ASCII runtime ratchet, the subprocess-encoding ratchet
+or the two `experiment-rigor` record gates. Those exist at commit time only,
+which is what makes the exemptions below worth writing down.
 
 ## Gate exemptions on a Windows application-control machine
 
@@ -103,6 +124,11 @@ not merely present, it blocks. Sibling repositories adding commit-time gates
 should reach for it only if the plain `uv tool run pre-commit install` path is
 actually refused; installing it pre-emptively buys a config that looks present and
 is harder to debug.
+
+The tracked `.githooks/` wrappers are now railform's (`uvx pre-commit==4.6.2
+hook-impl`), so the recipe above is history. If application control returns, the
+`uvx` shim and the `language: python` hook shims are in the refused class, and
+editing a wrapper fails `railform hooks-check`.
 
 **A second, live constraint on the same machine class: exported `language: script`
 hooks are unusable.** pre-commit resolves such a hook through its entry's shebang,
@@ -236,7 +262,10 @@ where a frozen record cannot name its own commit sha before that commit exists.
 ## Commits & pull requests
 
 - **Branch off `main`.** Direct pushes to `main` are blocked — all changes land via
-  pull request with the `validate` check passing.
+  pull request with the `gate` check passing. Name the branch
+  `<category>/<slug>` in lowercase (`feat/review-panel-personas`,
+  `ci/adopt-railform`): the pre-push hook and CI's commit lane refuse other
+  names (`railform branch-name`).
 - **Use [Conventional Commits](https://www.conventionalcommits.org/).** This repo's
   history uses them, e.g.:
   - `feat(session-workflow): add review-panel personas`
@@ -244,13 +273,15 @@ where a frozen record cannot name its own commit sha before that commit exists.
   - `docs(evals): clarify scorecard columns`
   - `build:` / `ci:` / `chore:` for tooling, CI, and housekeeping.
 
-  The format is mechanical, not just convention: a `commit-msg` lane rejects a
-  subject that is not a Conventional Commit, and rejects AI attribution in
-  either shape — a `Co-Authored-By: Claude/GPT/...` trailer or a
-  `Generated with ...` badge line — this repo does not stamp tools onto
-  authorship (`scripts/check_commit_msg.py`, red-proof registered like any
-  other gate). `uv tool run pre-commit install` installs the lane with the
-  other stages.
+  The format is mechanical, not just convention: the `commit-msg` hook rejects a
+  subject that is not a Conventional Commit (`railform commit-msg`, with the
+  types of railform's frame) and rejects AI attribution in either shape — a
+  `Co-Authored-By: Claude/GPT/...` trailer or a `Generated with ...` badge
+  line — this repo does not stamp tools onto authorship (`railform commit-msg`
+  and `scripts/check_commit_msg.py`, which also catches a badge naming GPT or
+  Anthropic). CI repeats the subject and attribution rules over every commit
+  of the PR, and the attribution rule over its title and body. `railform arm`
+  installs the lane with the other stages.
 - **Open a PR** and fill in the template. Keep changes focused; unrelated cleanups
   belong in their own PR.
 - PRs land via a **merge commit**, so your branch's own commits are preserved on
@@ -299,8 +330,11 @@ that touches `plugins/<p>/` (that plugin's `CHANGELOG.md`/`README.md` aside)
 unless the version is bumped **and** sits as the changelog's top heading. A
 change that genuinely ships nothing an installed copy could notice — a
 comment-only edit, a test-only refactor — declares itself instead with a
-commit-message trailer: `Release-note: none (<reason>)`. The reviewer judges
-the reason; the gate only checks that the decision was made.
+commit-message trailer: `Changelog: none (<reason>)`. The reviewer judges
+the reason; the gate only checks that the decision was made. The key is
+railform's `changelog.trailer`, so the same trailer will also waive railform's
+changelog gate once that gate runs. It was `Release-note:` until the railform
+adoption; that key no longer waives anything.
 
 Tag each release with the grammar `claude plugin tag` produces — an annotated
 `<plugin>--v<X.Y.Z>`:

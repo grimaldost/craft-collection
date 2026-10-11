@@ -1,0 +1,75 @@
+# This repository's frame for railform: `railform frame` prints the effective frame and
+# `railform frame --check` judges this file.
+
+# A Claude Code session also loads a plugin's output styles (plugins/session-workflow/
+# output-styles/), which the default globs do not name. Arrays replace, so the defaults are
+# restated before the addition.
+session_loaded = [
+    "**/skills/**",
+    "**/agents/**",
+    "**/commands/**",
+    "**/hooks/**",
+    "**/.claude-plugin/**",
+    ".claude/**",
+    "**/CLAUDE.md",
+    "**/AGENTS.md",
+    ".mcp.json",
+    "**/output-styles/**",
+]
+
+[project]
+type = "plugin-marketplace"
+
+[python]
+# The CI and uv baseline CONTRIBUTING names.
+versions = ["3.13"]
+# The suite is plain `python` scripts discovered by scripts/run_tests.py, not pytest; the
+# experiment-rigor record suites need PyYAML.
+test_command = "uv run --no-project --with pyyaml python scripts/run_tests.py"
+
+[ci]
+# The ruff that .pre-commit-config.yaml pins (ruff-pre-commit v0.16.8).
+ruff_version = "0.16.8"
+
+[ci.setup]
+# Full history: the experiment-rigor freeze gates rebuild a frozen pre-registration with
+# `git show <freeze commit>:<path>` and fail when that object is absent.
+fetch_depth = 0
+
+# Every plugin keeps its own changelog and its own tags (`<plugin>--vX.Y.Z`); there is no
+# root changelog.
+[changelog]
+records = [
+    { prefix = "plugins/engineering-discipline/", file = "plugins/engineering-discipline/CHANGELOG.md" },
+    { prefix = "plugins/experiment-discipline/", file = "plugins/experiment-discipline/CHANGELOG.md" },
+    { prefix = "plugins/humblepowers/", file = "plugins/humblepowers/CHANGELOG.md" },
+    { prefix = "plugins/session-workflow/", file = "plugins/session-workflow/CHANGELOG.md" },
+]
+
+[release]
+tag_prefix = [
+    { prefix = "plugins/engineering-discipline/", tag = "engineering-discipline--v" },
+    { prefix = "plugins/experiment-discipline/", tag = "experiment-discipline--v" },
+    { prefix = "plugins/humblepowers/", tag = "humblepowers--v" },
+    { prefix = "plugins/session-workflow/", tag = "session-workflow--v" },
+]
+
+# Note on private references: the home paths in tracked files are placeholders, namely `me`
+# (the tool-feedback skill's example registry), `x` (an anchor-inject test), `someone` (the
+# feedback-nudge tests) and `user` (two pre-mortem records). All four are in railform's default
+# `private_refs.placeholders`, so this file sets no `[private_refs]` table.
+
+[[exceptions]]
+key = "python.test_command"
+value = "uv run --no-project --with pyyaml python scripts/run_tests.py"
+reason = "the suite is plain python test scripts run by scripts/run_tests.py, not pytest, and needs PyYAML"
+
+[[exceptions]]
+key = "ci.ruff_version"
+value = "0.16.8"
+reason = "the ruff pinned in .pre-commit-config.yaml; moving to 0.17 is its own change"
+
+[[exceptions]]
+key = "ci.setup.fetch_depth"
+value = 0
+reason = "the experiment-rigor freeze gates read frozen commits with git show and need full history"

@@ -24,7 +24,7 @@ defect, not a release decision.
 
 OR the range must carry, in some commit, the git trailer
 
-    Release-note: none (<reason>)
+    Changelog: none (<reason>)
 
 parsed as a trailer (`%(trailers:...)`), so prose QUOTING the convention --
 this file does, CONTRIBUTING does -- cannot waive anything.
@@ -61,9 +61,9 @@ DECLARATION = re.compile(r'^none \(.+\)$')
 
 
 def declared(trailer_values: str) -> bool:
-    """Whether any `Release-note:` trailer value in the range reads
+    """Whether any `Changelog:` trailer value in the range reads
     `none (<reason>)`. Takes the output of
-    `git log --format=%(trailers:key=Release-note,valueonly)` -- git's own
+    `git log --format=%(trailers:key=Changelog,valueonly)` -- git's own
     trailer parser -- so a commit body merely quoting the convention is not a
     declaration. Pure."""
     return any(DECLARATION.match(line.strip()) for line in trailer_values.splitlines())
@@ -144,7 +144,7 @@ def audit(plugins: dict[str, dict]) -> list[str]:
                 findings.append(
                     f'{name}: plugins/{name}/{MANIFEST} is gone at HEAD (was {base}) -- '
                     'retiring a plugin is a release decision; declare '
-                    '"Release-note: none (<reason>)" to say so'
+                    '"Changelog: none (<reason>)" to say so'
                 )
             else:
                 findings.append(
@@ -154,7 +154,7 @@ def audit(plugins: dict[str, dict]) -> list[str]:
         if base is not None and head == base:
             findings.append(
                 f'{name}: files changed but the version is still {head} -- bump '
-                f'plugins/{name}/{MANIFEST} (or declare "Release-note: none (<reason>)" '
+                f'plugins/{name}/{MANIFEST} (or declare "Changelog: none (<reason>)" '
                 'in a commit trailer)'
             )
         elif base is not None:
@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         # a file moved OUT of a plugin would read as not touching it.
         changed = _git(repo, 'diff', '--name-only', '--no-renames', merge_base, 'HEAD').splitlines()
         trailer_values = _git(
-            repo, 'log', '--format=%(trailers:key=Release-note,valueonly)', f'{merge_base}..HEAD'
+            repo, 'log', '--format=%(trailers:key=Changelog,valueonly)', f'{merge_base}..HEAD'
         )
     except (RuntimeError, OSError, subprocess.SubprocessError) as err:
         print(f'release discipline: cannot read the diff: {err}')
@@ -272,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if declared(trailer_values):
         print(
-            'release discipline: "Release-note: none (...)" declared for '
+            'release discipline: "Changelog: none (...)" declared for '
             + ', '.join(plugins)
             + ' -- the reviewer judges the reason'
         )

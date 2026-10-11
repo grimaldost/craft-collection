@@ -1,0 +1,69 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  # Kept jobs: the repository's own gates that railform's pipeline does not run. They moved
+  # here from the former validate.yml so that `gate` needs them. Ruff, the test suite and
+  # zizmor run in the `railform` job (the plugin-marketplace pipeline and its audit job).
+  plugins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Install tooling
+        run: pip install pyyaml
+      - name: Register linter (humblepowers doctrine)
+        run: python scripts/lint_register.py
+      - name: Validate plugins (structural)
+        run: python scripts/validate_plugins.py
+      - name: AGENTS.md freshness (derived-artifact integrity, ADR-0001)
+        run: python scripts/gen_agents_md.py --check
+      - name: Env-gate claims match their guards
+        run: python scripts/check_gate_claims.py
+
+  release-discipline:
+    # PR-only: the check reads the merge-base diff against the PR's base branch; a push to
+    # main has no base to diff against. Skipped on a push, which `gate` counts as passing.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Release discipline (a plugin-touching PR bumps and logs, or declares)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python scripts/check_release_discipline.py --base "origin/${BASE_REF}"
+
+  # >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
+  railform:
+    uses: grimaldost/railform/.github/workflows/python-ci.yml@c850db5b8989a2b8152a3b2e918c32d8c20f7197
+    permissions:
+      contents: read
+    with:
+      railform-sha: c850db5b8989a2b8152a3b2e918c32d8c20f7197
+  gate:
+    if: always()
+    needs: [railform, plugins, release-discipline]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Fail when a needed job failed or was cancelled
+        if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+        shell: bash
+        run: exit 1
+  # <<< railform

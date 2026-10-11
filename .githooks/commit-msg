@@ -1,0 +1,5 @@
+#!/bin/sh
+# Written by railform adopt: runs the commit-msg stage of .pre-commit-config.yaml.
+# `railform hooks-check` fails if this file is edited; arm a clone with `railform arm`.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+exec uvx pre-commit==4.6.2 hook-impl --config=.pre-commit-config.yaml --hook-type=commit-msg --hook-dir "$HERE" -- "$@"

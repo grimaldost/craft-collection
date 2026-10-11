@@ -14,3 +14,7 @@ updates:
       prefix: ci
     labels:
       - dependencies
+    # >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
+    ignore:
+      - dependency-name: grimaldost/railform
+    # <<< railform
