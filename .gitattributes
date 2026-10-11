@@ -5,3 +5,7 @@
 *.md text eol=lf
 *.py text eol=lf
 *.json text eol=lf
+
+# The hook wrappers railform adopt writes run under sh: a CRLF checkout would hand git an
+# argument ending in a carriage return, and `railform adopt --check` judges their LF bytes.
+.githooks/* text eol=lf
