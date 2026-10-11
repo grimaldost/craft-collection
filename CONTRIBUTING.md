@@ -125,6 +125,11 @@ should reach for it only if the plain `uv tool run pre-commit install` path is
 actually refused; installing it pre-emptively buys a config that looks present and
 is harder to debug.
 
+The tracked `.githooks/` wrappers are now railform's (`uvx pre-commit==4.6.2
+hook-impl`), so the recipe above is history. If application control returns, the
+`uvx` shim and the `language: python` hook shims are in the refused class, and
+editing a wrapper fails `railform hooks-check`.
+
 **A second, live constraint on the same machine class: exported `language: script`
 hooks are unusable.** pre-commit resolves such a hook through its entry's shebang,
 and `#!/usr/bin/env python3` resolves to the Windows Store app-execution alias,
