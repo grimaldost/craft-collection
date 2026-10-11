@@ -3,7 +3,7 @@
   <img alt="craft" src="assets/craft-hero-light.svg" width="100%">
 </picture>
 
-[![validate](https://img.shields.io/github/actions/workflow/status/grimaldost/craft-collection/validate.yml?branch=main&style=flat-square&labelColor=2A3238&label=validate)](https://github.com/grimaldost/craft-collection/actions/workflows/validate.yml)
+[![ci](https://img.shields.io/github/actions/workflow/status/grimaldost/craft-collection/ci.yml?branch=main&style=flat-square&labelColor=2A3238&label=ci)](https://github.com/grimaldost/craft-collection/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-39621C?style=flat-square&labelColor=2A3238)](LICENSE)
 
 craft-collection is a Claude Code plugin marketplace with four plugins:
@@ -147,8 +147,8 @@ release** — Claude Code only pulls an update when the version changes. Do not 
 ## Development
 
 ```text
-uv tool run pre-commit install         # enable commit gates: ruff, validator, hygiene
-uv tool run pre-commit run --all-files # run every gate now
+git config core.hooksPath .githooks   # arm the tracked hook wrappers (or: railform arm)
+uvx pre-commit==4.6.2 run --all-files  # run every commit gate now
 uv run --no-project --with pyyaml -- python scripts/run_tests.py    # run every test_*.py (no pytest needed)
 uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # structural marketplace checks (PyYAML catches the frontmatter colon-space trap)
 ```
@@ -159,9 +159,14 @@ hand-edit it; change the frontmatter and re-run
 `uv run --no-project -- python scripts/gen_agents_md.py`.
 
 Formatting and lint are governed by `ruff.toml` (100-column, single quotes). CI
-(`.github/workflows/validate.yml`) enforces ruff lint + format, the register
-linter, the structural validator, the `AGENTS.md` freshness gate, and the full
-test suite on push/PR; `currency.yml` runs a monthly toolchain drift check.
+(`.github/workflows/ci.yml`) calls [railform](https://github.com/grimaldost/railform)'s
+reusable workflow at a pinned commit (ruff lint + format, the full test suite,
+the commit lane, hook and adoption checks, zizmor) beside this repository's own
+jobs (the register linter, the structural validator, the `AGENTS.md` freshness
+gate, the env-gate claims check and the release-discipline gate), and its `gate`
+job is the one required status. `railform.toml` holds this repository's
+railform settings. `tag-watch.yml` checks daily that every released version is
+tagged; `currency.yml` runs a monthly toolchain drift check.
 
 ## Layout
 
