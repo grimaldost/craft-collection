@@ -51,11 +51,11 @@ jobs:
 
   # >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
   railform:
-    uses: grimaldost/railform/.github/workflows/python-ci.yml@c850db5b8989a2b8152a3b2e918c32d8c20f7197
+    uses: grimaldost/railform/.github/workflows/python-ci.yml@65bf54ae6f4ed7bd027fee9e0806d9dfa2df3c48
     permissions:
       contents: read
     with:
-      railform-sha: c850db5b8989a2b8152a3b2e918c32d8c20f7197
+      railform-sha: 65bf54ae6f4ed7bd027fee9e0806d9dfa2df3c48
   gate:
     if: always()
     needs: [railform, plugins, release-discipline]

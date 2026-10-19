@@ -1,0 +1,19 @@
+# Written by railform adopt: runs railform release-check on every tag push, every day and on
+# demand. railform adopt --check fails on any edit; railform adopt --pin moves the pin.
+name: railform-tag-watch
+on:
+  push:
+    tags: ['**']
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release-check:
+    uses: grimaldost/railform/.github/workflows/tag-watch.yml@65bf54ae6f4ed7bd027fee9e0806d9dfa2df3c48
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      railform-sha: 65bf54ae6f4ed7bd027fee9e0806d9dfa2df3c48
