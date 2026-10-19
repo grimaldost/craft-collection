@@ -31,7 +31,8 @@ uvx --from "git+https://github.com/grimaldost/railform@<pin>" railform arm   # o
 
 The git hooks are tracked wrappers in `.githooks/`, written by
 [railform](https://github.com/grimaldost/railform) (`railform adopt`), that run
-`.pre-commit-config.yaml` through a pinned `uvx pre-commit`. `railform arm` points
+`.pre-commit-config.yaml` through a pinned pre-commit that they launch as an
+interpreter (`uvx --from pre-commit==4.6.2 python -m pre_commit hook-impl`). `railform arm` points
 the clone's `core.hooksPath` at that directory; `<pin>` is the commit named in
 `.github/workflows/ci.yml` (`git config core.hooksPath .githooks` does the same).
 Worktrees share the clone's configuration, so arming the clone arms them too.
@@ -55,7 +56,7 @@ The same gates run in pre-commit, pre-push, and CI — running them before you p
 avoids round-trips:
 
 ```bash
-uvx pre-commit==4.6.2 run --all-files   # ruff lint + format, hygiene, railform hooks, validator
+uvx --from pre-commit==4.6.2 python -m pre_commit run --all-files   # ruff lint + format, hygiene, railform hooks, validator
 uv run --no-project --with pyyaml -- python scripts/run_tests.py    # every test_*.py (no pytest needed)
 uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # structural marketplace checks (PyYAML catches the frontmatter colon-space trap)
 ```
@@ -69,7 +70,9 @@ to `main`, and its `gate` job is the one status that must be green to merge.
   frame check (`railform.toml`), the private-reference check, the
   `plugin-marketplace` pipeline (ruff format and lint at the pinned version, then
   the test suite), the commit lane (every commit subject, the PR title and body,
-  and the branch name), the hook-wrapper and adoption checks, the hygiene hooks
+  and the branch name), the changelog gate (a change under `plugins/<plugin>/`
+  adds a line to that plugin's `CHANGELOG.md` or declares itself; see
+  "Releasing"), the hook-wrapper and adoption checks, the hygiene hooks
   replayed over the PR's changed files, and zizmor;
 - `plugins`, this repository's own gates: the register linter, the plugin
   validator, the `AGENTS.md` freshness check and the env-gate claims check;
@@ -125,10 +128,11 @@ should reach for it only if the plain `uv tool run pre-commit install` path is
 actually refused; installing it pre-emptively buys a config that looks present and
 is harder to debug.
 
-The tracked `.githooks/` wrappers are now railform's (`uvx pre-commit==4.6.2
-hook-impl`), so the recipe above is history. If application control returns, the
-`uvx` shim and the `language: python` hook shims are in the refused class, and
-editing a wrapper fails `railform hooks-check`.
+The tracked `.githooks/` wrappers are now railform's. They run
+`uvx --from pre-commit==4.6.2 python -m pre_commit hook-impl`, the same
+interpreter-launch form as the recipe above, so the recipe is history. If
+application control returns, the `language: python` hook shims are in the
+refused class, and editing a wrapper fails `railform hooks-check`.
 
 **A second, live constraint on the same machine class: exported `language: script`
 hooks are unusable.** pre-commit resolves such a hook through its entry's shebang,
@@ -265,7 +269,10 @@ where a frozen record cannot name its own commit sha before that commit exists.
   pull request with the `gate` check passing. Name the branch
   `<category>/<slug>` in lowercase (`feat/review-panel-personas`,
   `ci/adopt-railform`): the pre-push hook and CI's commit lane refuse other
-  names (`railform branch-name`).
+  names (`railform branch-name`). A release branch is
+  `release/<plugin>-<version>` (`release/humblepowers-0.18.1`): the release
+  check identifies a tag's release pull request by that head branch (or by a
+  `release: ...` title), the plugin's name and the version.
 - **Use [Conventional Commits](https://www.conventionalcommits.org/).** This repo's
   history uses them, e.g.:
   - `feat(session-workflow): add review-panel personas`
@@ -332,9 +339,16 @@ change that genuinely ships nothing an installed copy could notice — a
 comment-only edit, a test-only refactor — declares itself instead with a
 commit-message trailer: `Changelog: none (<reason>)`. The reviewer judges
 the reason; the gate only checks that the decision was made. The key is
-railform's `changelog.trailer`, so the same trailer will also waive railform's
-changelog gate once that gate runs. It was `Release-note:` until the railform
-adoption; that key no longer waives anything.
+railform's `changelog.trailer`, so the same trailer also waives railform's
+changelog gate (`railform changelog-gate`, the `changelog` job of the `railform`
+caller). The gate is the weaker of the two: it asks that a change under
+`plugins/<plugin>/` add a line to that plugin's `CHANGELOG.md` (the plugin's
+own `CHANGELOG.md` and `README.md` are charged to it like any other file), where
+`check_release_discipline.py` also asks for the version bump and the top
+heading, so the script stays and the two run side by side. The trailer was
+`Release-note:` until the railform adoption; that key no longer waives
+anything. `.github/` is outside every changelog record, so a Dependabot pull
+request needs no trailer.
 
 Tag each release with the grammar `claude plugin tag` produces — an annotated
 `<plugin>--v<X.Y.Z>`:
@@ -343,10 +357,19 @@ Tag each release with the grammar `claude plugin tag` produces — an annotated
 claude plugin tag plugins/<plugin> --push   # tags HEAD after validating plugin.json
 ```
 
-Tag the release PR's **merge commit**, on `main`, right after the merge — one
-placement, never two, so a gate can enforce it and a tag always names exactly
-what `main` shipped (`claude plugin tag` tags HEAD: check out `main` at the
-merge before running it). Annotated tags only: a lightweight tag records no tagger date, so
+Open the release PR from `release/<plugin>-<version>`. Tag its **merge commit**,
+on `main`, right after the merge — one placement, never two, so a gate can
+enforce it and a tag always names exactly what `main` shipped (`claude plugin
+tag` tags HEAD: check out `main` at the merge before running it). Two
+workflows watch the tags daily and on a tag push: `tag-watch.yml` (this
+repository's own: every released version has a tag) and
+`railform-tag-watch.yml` (railform's `release-check`: the tag is annotated and
+sits on the merge commit of its release PR, and a `release:` commit touches
+only release metadata). The release check judges a plugin's tags from the
+`since` of its row in `railform.toml` on, the plugin's next patch version at
+adoption, so the tags laid before the `release/` convention are not judged; a
+new plugin adds its own `release.tag_prefix` row with `since` at its first
+version. Annotated tags only: a lightweight tag records no tagger date, so
 release timing becomes unrecoverable after the fact. Two older tag families
 are not releases under this convention: the single-dash `<plugin>-v0.1.1` tags
 (2026-06, kept as history — per-plugin tagging then went dormant while

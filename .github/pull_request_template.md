@@ -16,7 +16,7 @@
 
 ## Checklist
 
-- [ ] `uvx pre-commit==4.6.2 run --all-files` passes (ruff lint + format, hygiene, railform hooks, register linter, structural validator)
+- [ ] `uvx --from pre-commit==4.6.2 python -m pre_commit run --all-files` passes (ruff lint + format, hygiene, railform hooks, register linter, structural validator)
 - [ ] `uv run --no-project --with pyyaml -- python scripts/run_tests.py` passes
 - [ ] New or changed scripts ship a `test_<name>.py` beside them
 - [ ] README / docs updated if commands or behavior changed

@@ -148,7 +148,7 @@ release** — Claude Code only pulls an update when the version changes. Do not 
 
 ```text
 git config core.hooksPath .githooks   # arm the tracked hook wrappers (or: railform arm)
-uvx pre-commit==4.6.2 run --all-files  # run every commit gate now
+uvx --from pre-commit==4.6.2 python -m pre_commit run --all-files  # run every commit gate now
 uv run --no-project --with pyyaml -- python scripts/run_tests.py    # run every test_*.py (no pytest needed)
 uv run --no-project --with pyyaml -- python scripts/validate_plugins.py  # structural marketplace checks (PyYAML catches the frontmatter colon-space trap)
 ```
@@ -161,12 +161,15 @@ hand-edit it; change the frontmatter and re-run
 Formatting and lint are governed by `ruff.toml` (100-column, single quotes). CI
 (`.github/workflows/ci.yml`) calls [railform](https://github.com/grimaldost/railform)'s
 reusable workflow at a pinned commit (ruff lint + format, the full test suite,
-the commit lane, hook and adoption checks, zizmor) beside this repository's own
+the commit lane, the changelog gate over each plugin's `CHANGELOG.md`, hook and
+adoption checks, zizmor) beside this repository's own
 jobs (the register linter, the structural validator, the `AGENTS.md` freshness
 gate, the env-gate claims check and the release-discipline gate), and its `gate`
 job is the one required status. `railform.toml` holds this repository's
 railform settings. `tag-watch.yml` checks daily that every released version is
-tagged; `currency.yml` runs a monthly toolchain drift check.
+tagged and `railform-tag-watch.yml` runs railform's release check (annotated
+tags on the release pull request's merge commit) on every tag push and daily;
+`currency.yml` runs a monthly toolchain drift check.
 
 ## Layout
 
