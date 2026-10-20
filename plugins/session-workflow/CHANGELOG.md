@@ -6,6 +6,27 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [Unreleased]
+
+### Fixed
+
+- **`triage_audit.py open-rows` says what it did not read.** A triage doc whose table rows
+  use other id prefixes (`SW26`, `E3`, ...) contributed nothing and the T-only count was
+  printed as the whole open set. It now writes one stderr line per such doc with the number of
+  non-T table rows it skipped; stdout and the exit code are unchanged, and those prefixes are
+  still not read as rows (2026-10-19 triage: T309a).
+- **A successorless `superseded` restatement no longer closes an open row.** In id-keyed mode
+  (craft-collection, T67 on) a later statement whose status begins `superseded` and names no
+  successor id leaves the earlier lineage's status alone; `superseded by T263a` still closes
+  it (2026-10-19 triage: T309b).
+- **feedback-triage no longer points at `keel-triage`.** keel 0.22.0 deleted it; the
+  description and the trigger-set note now name the `reflection-triage` template, and a test
+  keeps retired skill names out of shipped skills, trigger files and `AGENTS.md`
+  (2026-10-19 triage: T309c).
+- **review-panel names who persists raw output.** Under a Workflow the producing stage is the
+  reviewer subagent, and the harness refuses report-file writes from subagents; the reference
+  now has the orchestrator write each reviewer's returned output (2026-10-19 triage: T304a).
+
 ## [0.26.0] - 2026-10-08
 
 The anchor's authority is limited to task position, new anchor features are frozen, three
