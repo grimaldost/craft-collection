@@ -39,6 +39,11 @@ notes = ''
 """
 
 
+# No walk may depend on the lineup that happens to be installed beside the script:
+# every test starts with an absent sibling unless it names one.
+mc.SIBLING_MODELS = Path(tempfile.mkdtemp(prefix='mirror-check-sibling-')) / 'absent.toml'
+
+
 def _run(argv: list[str]) -> tuple[int, str]:
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -487,6 +492,58 @@ def test_a_retired_roots_string_or_relative_entry_cannot_answer():
         assert 'CANNOT ANSWER' in out and '[[retired]] roots must be a list' in out, out
 
 
+def _with_sibling(s: Stack, text: str | None) -> tuple[int, str]:
+    """Walk ``s`` with a sibling models.toml holding ``text`` (None: no such file)."""
+    saved = mc.SIBLING_MODELS
+    mc.SIBLING_MODELS = s.dir / 'sibling' / 'models.toml'
+    if text is not None:
+        mc.SIBLING_MODELS.parent.mkdir(parents=True, exist_ok=True)
+        mc.SIBLING_MODELS.write_text(text, encoding='utf-8')
+    try:
+        return s.check()
+    finally:
+        mc.SIBLING_MODELS = saved
+
+
+def _meta(date: str) -> str:
+    return f'[meta]\nlast_reviewed = "{date}"\n'
+
+
+def test_a_canonical_older_than_the_shipped_lineup_cannot_answer():
+    """Measured: canonical 2026-09-26 against an installed lineup of 2026-10-08
+    printed '0 finding(s)'. A canonical that lags the lineup shipped with the
+    script makes every stamp pass against a stale date."""
+    s = Stack()
+    s.bind('')
+    rc, out = _with_sibling(s, _meta('2026-10-08'))
+    assert rc == 2, out
+    assert 'mirror walk CANNOT ANSWER: canonical' in out, out
+    assert '2026-09-05' in out and '2026-10-08' in out, out
+    assert 'is older than the lineup this script shipped with' in out, out
+    assert 'update that checkout or point canonical at a current copy' in out, out
+    assert 'finding(s)' not in out, out
+
+
+def test_an_equal_or_newer_canonical_walks_and_names_both_dates():
+    """A working tree ahead of the install is the normal state during /refresh-models."""
+    for shipped in ('2026-09-05', '2026-08-01'):
+        s = Stack()
+        s.bind('')
+        rc, out = _with_sibling(s, _meta(shipped))
+        assert rc == 0, out
+        assert 'Canonical last_reviewed: 2026-09-05;' in out, out
+        assert f'lineup shipped with this script: {shipped}.' in out, out
+
+
+def test_an_unreadable_sibling_walks_as_before():
+    for text in (None, 'this is not = = toml\n', '[meta]\nreview_by = "2026-12-05"\n'):
+        s = Stack()
+        s.bind('')
+        rc, out = _with_sibling(s, text)
+        assert rc == 0, out
+        assert 'lineup shipped with this script: unreadable.' in out, out
+
+
 def main() -> int:
     test_absent_bindings_file_says_so_and_does_not_fail()
     test_a_clean_stack_reports_every_site_walked()
@@ -510,6 +567,9 @@ def main() -> int:
     test_a_sweep_roots_string_cannot_answer_instead_of_walking_a_drive()
     test_a_relative_sweep_root_cannot_answer()
     test_a_retired_roots_string_or_relative_entry_cannot_answer()
+    test_a_canonical_older_than_the_shipped_lineup_cannot_answer()
+    test_an_equal_or_newer_canonical_walks_and_names_both_dates()
+    test_an_unreadable_sibling_walks_as_before()
     print('ok: mirror_check')
     return 0
 

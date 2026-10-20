@@ -8,6 +8,27 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [Unreleased]
+
+### Fixed
+
+- **choosing-models: the emission reference no longer says an unrouted `agent()` inherits the
+  session model with no engine-level cap** (2026-10-19 triage: T290a). It states the harness
+  order a spawn's model follows (the call's `model`, the agent definition's `model` field,
+  `CLAUDE_CODE_SUBAGENT_MODEL`, the session model) and that
+  `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` is the engine-level cap, and keeps the rule that every
+  routed call carries an explicit `model`.
+- **refresh-models: `mirror_check.py` refuses a canonical older than the lineup shipped with
+  it** (2026-10-19 triage: T291a). A canonical `models.toml` whose `last_reviewed` is older
+  than the sibling `choosing-models/models.toml` prints `mirror walk CANNOT ANSWER` and exits
+  2, where it used to hold every stamp to the stale date and report no findings. An equal or
+  newer canonical, or an unreadable sibling, walks as before; the closing line names both dates.
+- **choosing-tools: the dispatch hook skips wrapped subagent hand-backs and cross-session
+  messages** (2026-10-19 triage: T292a). The synthetic-turn guard tested only two prefixes;
+  it now also matches the hand-back, agent-message and cross-session markers in the first 500
+  characters of the prompt, so these turns draw no hint and write no telemetry record. Records
+  written before this release cannot be separated from human prompts.
+
 ## [0.18.0] - 2026-10-08
 
 Minor bump: the weak and mid tiers move to Haiku 5.5 and Sonnet 5.5, the scoring rubric

@@ -76,7 +76,7 @@ reason = "byte-preserved eval fixture, not a live mirror"
 
 | field | required | meaning |
 |---|---|---|
-| `canonical` (top level) | for stamps | Absolute path to `models.toml`. Its `[meta].last_reviewed` is the one date every stamp is held against. |
+| `canonical` (top level) | for stamps | Absolute path to `models.toml`. Its `[meta].last_reviewed` is the one date every stamp is held against; it may not be older than the `models.toml` beside the script. |
 | `sweep_roots` (top level) | no | Absolute directories every `[[retired]]` pattern is searched across, besides its own `roots`. Absent: the repository root of every registered site. `[]`: no extra roots. See below. |
 | `path` | yes | Absolute path to the file holding the copy. |
 | `mirrors` | yes | What the copy holds, in one phrase. |

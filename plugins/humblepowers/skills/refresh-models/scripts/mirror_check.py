@@ -25,9 +25,15 @@ Two independent arms, because they catch different failures:
   to look. The closing line names the sweep roots, so a narrow walk reads as
   narrow.
 
+A third check precedes both: the canonical may not be older than the
+``choosing-models/models.toml`` shipped beside this script, because a canonical
+working tree that lags the installed lineup makes every stamp pass against a
+stale date. An equal or newer canonical (a working tree ahead of the install) and
+an unreadable sibling walk as usual.
+
 Exit 0 clean (an absent registry included -- that is the correct state for a
 fresh environment, and it is REPORTED, never silent), 1 on findings, 2 when the
-registry cannot be read at all. A gate that cannot answer must say so rather
+registry cannot be read at all or the canonical is older than the shipped lineup. A gate that cannot answer must say so rather
 than pass.
 
 Stdlib only, ASCII output. Unlike the sibling ``lineup_check.py``, which reads
@@ -50,6 +56,8 @@ import tomllib
 
 BINDINGS_ENV = 'MODEL_MIRRORS_FILE'
 DEFAULT_BINDINGS = Path.home() / '.claude' / 'model-mirrors.toml'
+# The lineup published with this copy of the script; a seam for the tests, not a flag.
+SIBLING_MODELS = Path(__file__).resolve().parents[2] / 'choosing-models' / 'models.toml'
 ROLES = ('resolution-path', 'fallback', 'example', 'prose')
 _SKIP_DIRS = {'.git', '__pycache__', '.venv', 'node_modules', '.ruff_cache', '.mypy_cache'}
 _TEXT_SUFFIXES = {
@@ -327,6 +335,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f'mirror walk CANNOT ANSWER: {bindings}: {problem}')
         return 2
 
+    shipped = canonical_last_reviewed(SIBLING_MODELS)
+    if canonical and reviewed and shipped and reviewed < shipped:
+        print(
+            f'mirror walk CANNOT ANSWER: canonical {canonical} last_reviewed {reviewed} '
+            f'is older than the lineup this script shipped with ({shipped}, '
+            f'{SIBLING_MODELS.as_posix()}); update that checkout or point canonical '
+            'at a current copy'
+        )
+        return 2
+
     roots, source = sweep_roots(registry)
 
     findings: list[str] = []
@@ -340,7 +358,9 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f'mirror walk: {len(sites)} site(s) walked, {len(retired)} retired pattern(s) searched, '
         f'{excluded} file(s) excluded by glob, {len(findings)} finding(s). '
-        f'Canonical last_reviewed: {reviewed or "unreadable"}. {describe_sweep(roots, source)}'
+        f'Canonical last_reviewed: {reviewed or "unreadable"}; '
+        f'lineup shipped with this script: {shipped or "unreadable"}. '
+        f'{describe_sweep(roots, source)}'
     )
     return 1 if findings else 0
 
