@@ -9,7 +9,7 @@ Contract under test:
   finding, as is a bumped version the changelog top heading does not carry;
 - a leading `## [Unreleased]` section is skipped, never satisfying;
 - a rename out of a plugin still counts as touching it (--no-renames);
-- a `Release-note: none (<reason>)` GIT TRAILER waives the PR; prose that
+- a `Changelog: none (<reason>)` GIT TRAILER waives the PR; prose that
   merely quotes the convention does not;
 - an unreadable diff (unknown base ref) is exit 2, never a quiet pass.
 
@@ -197,7 +197,23 @@ def test_a_bump_the_changelog_does_not_carry_exits_1():
     assert 'top heading' in proc.stdout
 
 
-def test_a_release_note_none_trailer_waives_the_pr():
+def test_a_changelog_none_trailer_waives_the_pr():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _seed_repo(root)
+        (root / 'plugins' / 'x' / 'skills' / 's' / 'SKILL.md').write_text(
+            'comment-only edit\n', encoding='utf-8'
+        )
+        _commit(root, 'docs(x): typo\n\nChangelog: none (comment-only, nothing ships)')
+        proc = run_cli(root)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert '"Changelog: none (...)" declared' in proc.stdout
+
+
+def test_the_retired_release_note_trailer_no_longer_waives():
+    """The waiver key is the frame's `Changelog:` (railform's changelog.trailer),
+    so one trailer waives both obligations; the old `Release-note:` key is
+    ignored and the unbumped plugin edit is a finding."""
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         _seed_repo(root)
@@ -206,8 +222,8 @@ def test_a_release_note_none_trailer_waives_the_pr():
         )
         _commit(root, 'docs(x): typo\n\nRelease-note: none (comment-only, nothing ships)')
         proc = run_cli(root)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert 'Release-note' in proc.stdout
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert 'still 0.1.0' in proc.stdout
 
 
 def test_changelog_and_readme_only_changes_need_no_bump():
@@ -259,7 +275,7 @@ def test_a_prose_mention_of_the_trailer_does_not_waive():
         _commit(
             root,
             'fix(x): behavior change, version untouched\n\n'
-            'The gate accepts a Release-note: none (reason) trailer, which this\n'
+            'The gate accepts a Changelog: none (reason) trailer, which this\n'
             'commit discusses without declaring.\n\n'
             'A closing paragraph, so the mention is not the trailer block.',
         )
@@ -372,14 +388,14 @@ def test_a_changelog_only_change_with_a_buried_unreleased_exits_1():
     assert '[Unreleased]' in proc.stdout
 
 
-def test_a_release_note_none_trailer_does_not_waive_a_buried_unreleased():
+def test_a_changelog_none_trailer_does_not_waive_a_buried_unreleased():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         _seed_repo(root)
         plugin = root / 'plugins' / 'x'
         (plugin / 'skills' / 's' / 'SKILL.md').write_text('comment edit\n', encoding='utf-8')
         (plugin / 'CHANGELOG.md').write_text(_buried_changelog('0.1.0'), encoding='utf-8')
-        _commit(root, 'docs(x): typo\n\nRelease-note: none (comment-only, nothing ships)')
+        _commit(root, 'docs(x): typo\n\nChangelog: none (comment-only, nothing ships)')
         proc = run_cli(root)
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert '[Unreleased]' in proc.stdout

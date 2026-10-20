@@ -1,6 +1,9 @@
 # Pre-commit quality gates for craft-collection.
-#   Enable:   uv tool run pre-commit install
-#   Run now:  uv tool run pre-commit run --all-files
+#   Enable:   railform arm (or: git config core.hooksPath .githooks), once per clone; the
+#             tracked wrappers in .githooks/ run this file through a pinned pre-commit
+#   Run now:  uvx --from pre-commit==4.6.2 python -m pre_commit run --all-files
+# The two entries between the railform markers are written by `railform adopt` and checked
+# by `railform adopt --check`; everything else here is this repository's own.
 # Versions are pinned to match the python-engineering skill's house standard.
 minimum_pre_commit_version: '3.5.0'
 default_install_hook_types: [pre-commit, pre-push, commit-msg]
@@ -8,24 +11,40 @@ default_install_hook_types: [pre-commit, pre-push, commit-msg]
 # installing the commit-msg lane re-fires every always_run repo gate a second
 # time per commit, at the commit-msg stage.
 default_stages: [pre-commit, pre-push]
-# Pin the hook interpreter to the 3.13 baseline CONTRIBUTING names for CI and uv.
-# Without this the local interpreter floats to whatever `python` resolves to, which
-# silently drifted these hooks onto 3.14 and rebuilt their venv shims.
-default_language_version:
-  python: python3.13
+# No default_language_version: railform's CI replays the hygiene hooks with a pre-commit
+# running on the runner's own Python and sets up no 3.13, so a `python3.13` pin would leave
+# those hooks without an interpreter. Hook environments use the Python pre-commit runs on.
 
 repos:
+  # >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
+  - repo: https://github.com/grimaldost/railform
+    rev: 65bf54ae6f4ed7bd027fee9e0806d9dfa2df3c48
+    hooks:
+      - id: railform-commit-msg
+      - id: railform-branch-name
+      - id: railform-hooks-check
+        files: '^\.githooks/'
+      - id: railform-private-refs
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # frozen: v5.0.0
     hooks:
       - id: trailing-whitespace
-        args: [--markdown-linebreak-ext=md]   # keep intentional Markdown line breaks
+        args: [--markdown-linebreak-ext=md]
+        stages: [pre-commit]
       - id: end-of-file-fixer
-      - id: check-json                          # marketplace.json, plugin.json, hooks.json, eval data
-      - id: check-yaml                          # workflows + this config
+        stages: [pre-commit]
       - id: check-merge-conflict
+        args: [--assume-in-merge]
+        stages: [pre-commit]
       - id: check-added-large-files
-
+        stages: [pre-commit]
+      - id: check-yaml
+        stages: [pre-commit]
+      - id: check-toml
+        stages: [pre-commit]
+      - id: check-json
+        stages: [pre-commit]
+  # <<< railform
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.8
     hooks:
@@ -33,26 +52,10 @@ repos:
         args: [--fix]
       - id: ruff-format                         # format to ruff.toml (100-col, single quotes)
 
-  # Commit-msg lane, mirrored from the estate's canonical floor (sealore): the
-  # Conventional Commits rule and the no-AI-attribution rule both lived only in
-  # CONTRIBUTING prose; these make them mechanical at the commit boundary.
-  - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.6.0
-    hooks:
-      - id: conventional-pre-commit
-        stages: [commit-msg]
-        args:
-          - feat
-          - fix
-          - docs
-          - style
-          - refactor
-          - perf
-          - test
-          - chore
-          - build
-          - ci
-
+  # Commit-msg lane: railform-commit-msg (above) holds the Conventional Commits subject rule
+  # and the attribution patterns. At the release pin its stamp arm also names GPT and Anthropic
+  # anywhere later on the line, so no-ai-attribution below no longer catches anything the
+  # railform hook misses; it is kept until its retirement is decided (see the pull request).
   - repo: local
     hooks:
       - id: no-ai-attribution

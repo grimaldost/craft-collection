@@ -5,3 +5,8 @@
 *.md text eol=lf
 *.py text eol=lf
 *.json text eol=lf
+
+# Keep the hook wrappers in every checkout byte for byte as `railform adopt` stages them (LF).
+# Git for Windows' sh tolerates CRLF, but a shell that does not would read a stray carriage
+# return at the end of each line.
+.githooks/* text eol=lf
