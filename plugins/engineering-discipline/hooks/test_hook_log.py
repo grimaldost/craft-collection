@@ -11,26 +11,40 @@ from pathlib import Path
 
 import hook_log
 
-ENV_KEYS = (hook_log.STATE_DIR_ENV, 'CLAUDE_PLUGIN_DATA')
+STATE_KEYS = (hook_log.STATE_DIR_ENV, 'CLAUDE_PLUGIN_DATA')
+HOME_KEYS = ('HOME', 'USERPROFILE')
+ENV_KEYS = (*STATE_KEYS, *HOME_KEYS, 'CLAUDE_CONFIG_DIR')
 
 
 @contextlib.contextmanager
-def _env(**values):
-    """Set (or, with None, unset) the state-dir variables; restore them after."""
+def _env(home=None, **values):
+    """Set (or, with None, unset) the state-dir variables; restore them after.
+
+    HOME and USERPROFILE point at `home`, or at a fresh empty directory, so a
+    test can never read the real machine's plugin data; CLAUDE_CONFIG_DIR is
+    unset unless given.
+    """
     saved = {k: os.environ.get(k) for k in ENV_KEYS}
-    try:
-        for k in ENV_KEYS:
-            os.environ.pop(k, None)
-        for k, v in values.items():
-            if v is not None:
-                os.environ[k] = v
-        yield
-    finally:
-        for k, v in saved.items():
-            if v is None:
+    with tempfile.TemporaryDirectory() as empty_home:
+        try:
+            for k in ENV_KEYS:
                 os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
+            for k in HOME_KEYS:
+                os.environ[k] = str(home or empty_home)
+            for k, v in values.items():
+                if v is not None:
+                    os.environ[k] = v
+            yield
+        finally:
+            _restore(saved)
+
+
+def _restore(saved):
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
 
 
 def _lines(d):
@@ -126,6 +140,99 @@ def test_count_with_no_log_yet():
         with contextlib.redirect_stdout(out):
             assert hook_log.main(['--count']) == 0
         assert 'no firings' in out.getvalue()
+
+
+def _write_log(config_dir, marketplace, *hooks):
+    """Create <config_dir>/plugins/data/engineering-discipline-<marketplace>/hook-log.ndjson."""
+    path = (
+        Path(config_dir)
+        / 'plugins'
+        / 'data'
+        / f'engineering-discipline-{marketplace}'
+        / hook_log.LOG_NAME
+    )
+    path.parent.mkdir(parents=True)
+    path.write_text(''.join(json.dumps({'hook': h}) + chr(10) for h in hooks), encoding='utf-8')
+    return path
+
+
+def _run_cli(argv=()):
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert hook_log.main(list(argv)) == 0
+    return out.getvalue()
+
+
+def test_cli_reads_plugin_data_under_home_when_no_variable_is_set():
+    with tempfile.TemporaryDirectory() as home:
+        log = _write_log(Path(home) / '.claude', 'x', 'uv_enforce', 'ruff_format')
+        with _env(home=home):
+            text = _run_cli()
+        assert str(log) in text, text
+        assert 'uv_enforce: 1' in text, text
+        assert 'ruff_format: 1' in text, text
+        assert 'no firings' not in text, text
+
+
+def test_cli_reads_every_marketplace_directory():
+    with tempfile.TemporaryDirectory() as home:
+        first = _write_log(Path(home) / '.claude', 'a', 'uv_enforce', 'uv_enforce')
+        second = _write_log(Path(home) / '.claude', 'b', 'ruff_format')
+        with _env(home=home):
+            text = _run_cli(['--count'])
+        assert str(first) in text and str(second) in text, text
+        assert text.index(str(first)) < text.index('uv_enforce: 2') < text.index(str(second)), text
+        assert 'ruff_format: 1' in text, text
+
+
+def test_cli_says_so_for_an_empty_plugin_data_log():
+    with tempfile.TemporaryDirectory() as home:
+        empty = _write_log(Path(home) / '.claude', 'a')
+        full = _write_log(Path(home) / '.claude', 'b', 'uv_enforce')
+        with _env(home=home):
+            text = _run_cli()
+        assert str(empty) in text and str(full) in text, text
+        assert text.index('no firings logged yet') < text.index('uv_enforce: 1'), text
+
+
+def test_claude_config_dir_overrides_home():
+    with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as config:
+        _write_log(Path(home) / '.claude', 'home', 'ruff_format')
+        log = _write_log(config, 'cfg', 'uv_enforce')
+        with _env(home=home, CLAUDE_CONFIG_DIR=config):
+            text = _run_cli()
+        assert str(log) in text, text
+        assert 'uv_enforce: 1' in text, text
+        assert 'ruff_format' not in text, text
+
+
+def test_cli_falls_back_to_the_temp_directory_without_plugin_data():
+    with tempfile.TemporaryDirectory() as home:
+        (Path(home) / '.claude' / 'plugins' / 'data').mkdir(parents=True)
+        with _env(home=home):
+            text = _run_cli()
+        expected = Path(tempfile.gettempdir()) / 'engineering-discipline' / hook_log.LOG_NAME
+        assert f'log: {expected}' in text, text
+
+
+def test_a_set_variable_ignores_plugin_data_under_home():
+    with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as data:
+        _write_log(Path(home) / '.claude', 'x', 'ruff_format')
+        for key in (hook_log.STATE_DIR_ENV, 'CLAUDE_PLUGIN_DATA'):
+            with _env(home=home, **{key: data}):
+                text = _run_cli()
+            assert f'log: {Path(data) / hook_log.LOG_NAME}' in text, text
+            assert 'ruff_format' not in text, text
+            assert 'no firings logged yet' in text, text
+
+
+def test_cli_output_stays_ascii_for_a_non_ascii_path():
+    with tempfile.TemporaryDirectory() as home:
+        _write_log(Path(home) / '.claude', 'caf\u00e9', 'uv_enforce')
+        with _env(home=home):
+            text = _run_cli()
+        text.encode('ascii')
+        assert '\\xe9' in text, text
 
 
 if __name__ == '__main__':
