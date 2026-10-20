@@ -18,6 +18,11 @@ tagged.
   `CLAUDE_CODE_SUBAGENT_MODEL`, the session model) and that
   `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` is the engine-level cap, and keeps the rule that every
   routed call carries an explicit `model`.
+- **refresh-models: `mirror_check.py` refuses a canonical older than the lineup shipped with
+  it** (2026-10-19 triage: T291a). A canonical `models.toml` whose `last_reviewed` is older
+  than the sibling `choosing-models/models.toml` prints `mirror walk CANNOT ANSWER` and exits
+  2, where it used to hold every stamp to the stale date and report no findings. An equal or
+  newer canonical, or an unreadable sibling, walks as before; the closing line names both dates.
 
 ## [0.18.0] - 2026-10-08
 
