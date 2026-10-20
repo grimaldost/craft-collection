@@ -2027,7 +2027,7 @@ def test_post_write_never_offers_the_next_action_of_a_done_in_progress_next_curs
         assert 'Done: ported' not in ctx, (
             'only Step N bullets are offered; position is not evidence'
         )
-        assert 'Fold candidates: none in the Cursor' in ctx
+        assert 'the Cursor has no `Step N` bullets to rank' in ctx
 
 
 def test_post_write_orders_step_bullets_by_number_not_by_position():
@@ -2146,6 +2146,164 @@ def test_post_write_templates_are_ascii_even_for_a_non_ascii_cursor():
         ctx = _post_write_context(_post_write(_write_payload(anchor)))
         assert '→' in ctx, 'anchor content passes through unchanged'
         assert [c for c in ctx.replace('→', '') if ord(c) > 127] == []
+
+
+# -- 2026-10-19 triage corrections: T307a, T305b, T301b ---------------------------
+
+
+def _sweep(arm: str, *args: str):
+    env = dict(os.environ)
+    env['PYTHONIOENCODING'] = 'utf-8'
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(SCRIPT), arm, *args],
+        capture_output=True,
+        encoding='utf-8',
+        env=env,
+        timeout=30,
+    )
+
+
+def test_sweeps_refuse_a_directory_that_is_not_there_rather_than_printing_a_clean_sweep():
+    # A mistyped path, an empty directory and a clean directory must not look alike:
+    # the arming sweep is the one moment a human reads this output.
+    with tempfile.TemporaryDirectory() as d:
+        missing = str(Path(d) / 'nope' / 'anchors')
+        for arm in ('--list-dormant', '--list-stale'):
+            proc = _sweep(arm, missing)
+            assert proc.returncode == 2, (arm, proc.returncode, proc.stderr)
+            assert 'no anchors directory at' in proc.stderr, (arm, proc.stderr)
+            assert proc.stdout == '', f'{arm}: stdout is the list and nothing else'
+
+
+def test_sweeps_say_so_on_an_empty_list_and_keep_stdout_empty():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        empty = tmp / 'empty'
+        empty.mkdir()
+        closed_only = tmp / 'closed_only'
+        closed_only.mkdir()
+        (closed_only / 'x.closed.md').write_text('# Cursor\ndone\n', encoding='utf-8')
+        make_anchor(tmp, name='fresh.md', body='# Cursor\ngoing\n')
+        fresh = tmp / '.claude' / 'anchors'
+        cases = {
+            'dormant': ('--list-dormant', 'no dormant anchors in'),
+            'stale': ('--list-stale', 'no stale anchors in'),
+        }
+        for kind, (arm, lead) in cases.items():
+            for target, counts in ((empty, '0 closed, 0 open'), (closed_only, '1 closed, 0 open')):
+                proc = _sweep(arm, str(target))
+                assert proc.returncode == 0, (kind, proc.stderr)
+                assert proc.stdout == '', (kind, proc.stdout)
+                assert f'{lead} {target} ({counts})' in proc.stderr, (kind, proc.stderr)
+            proc = _sweep(arm, str(fresh))
+            assert proc.returncode == 0
+            assert proc.stdout == ''
+            assert f'{lead} {fresh} (0 closed, 1 open)' in proc.stderr, (kind, proc.stderr)
+
+
+def test_sweeps_stay_silent_on_stderr_when_they_have_something_to_list():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='old.md', body='# Wave\n# Cursor\nPhase 1\n', age_s=96 * 3600)
+        make_anchor(tmp, name='done.md', body='**Status:** CLOSED\nfinished\n')
+        anchors = str(tmp / '.claude' / 'anchors')
+        for arm, expected in (('--list-dormant', 'old.md'), ('--list-stale', 'done.md')):
+            proc = _sweep(arm, anchors)
+            assert proc.returncode == 0
+            assert expected in proc.stdout
+            assert proc.stderr == '', (arm, proc.stderr)
+
+
+def test_find_open_anchors_still_tolerates_a_missing_directory():
+    # The hook paths must never error on a missing directory; only the CLI arms refuse.
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        assert ai.find_open_anchors(Path(d) / 'nope') == []
+
+
+_CHRONOLOGICAL_CURSOR = (
+    '# Mission\nm\n# Cursor\n'
+    '- Step 32: opened the migration\n'
+    '- Step 33: ported the loader\n'
+    '- Step 34: wired the gate\n'
+    '- Step 35: ran the gate\n'
+    '- Step 36: pushed the branch\n'
+)
+
+
+def test_anchor_cursor_returns_the_highest_step_not_the_first_line():
+    import anchor_inject as ai
+
+    assert ai.anchor_cursor(_CHRONOLOGICAL_CURSOR) == 'Step 36: pushed the branch'
+    newest_first = '# Cursor\n- Step 36: pushed the branch\n- Step 35: ran the gate\n'
+    assert ai.anchor_cursor(newest_first) == 'Step 36: pushed the branch'
+    long_line = '# Cursor\n- Step 2: ' + 'y' * 400 + '\n- Step 1: old\n'
+    assert len(ai.anchor_cursor(long_line)) == 160
+
+
+def test_anchor_cursor_without_step_bullets_still_returns_the_first_content_line():
+    import anchor_inject as ai
+
+    unnumbered = '# Cursor\n\n- Done: ported the loader\n- Next: run the gate\n'
+    assert ai.anchor_cursor(unnumbered) == 'Done: ported the loader'
+    assert ai.anchor_cursor('# Cursor\nPhase 1 IN PROGRESS\n') == 'Phase 1 IN PROGRESS'
+    assert ai.anchor_cursor('# Mission\nonly a mission\n') == ''
+
+
+def test_list_dormant_shows_the_newest_step_of_a_chronological_cursor():
+    import anchor_inject as ai
+
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='long.md', body=_CHRONOLOGICAL_CURSOR, age_s=96 * 3600)
+        lines = ai.list_dormant(tmp / '.claude' / 'anchors')
+        assert len(lines) == 1
+        assert 'cursor: Step 36: pushed the branch' in lines[0], lines[0]
+        assert 'Step 32' not in lines[0]
+
+
+def test_stale_pointer_shows_the_newest_step_of_a_chronological_cursor():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp, name='long.md', body=_CHRONOLOGICAL_CURSOR, age_s=96 * 3600)
+        ctx = json.loads(run_hook(tmp).stdout)['hookSpecificOutput']['additionalContext']
+        assert 'Step 36: pushed the branch' in ctx
+        assert 'Step 32' not in ctx
+
+
+def test_post_write_does_not_claim_there_is_nothing_to_rank_in_a_cursor_of_unnumbered_bullets():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_cursor(
+            Path(d), '- Done: ported the loader\n- In progress: wiring the gate\n- Next: push\n'
+        )
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert (
+            'Fold candidates: the Cursor has no `Step N` bullets to rank; '
+            'move its finished entries below <!-- anchor:tail -->.'
+        ) in ctx
+        assert 'none in the Cursor' not in ctx
+
+
+def test_post_write_keeps_the_old_line_for_a_cursor_with_no_bullets_at_all():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_cursor(Path(d), 'Phase 2 in progress, wiring the gate\n')
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert (
+            'Fold candidates: none in the Cursor; move resolved history below <!-- anchor:tail -->.'
+        ) in ctx
+        assert 'no `Step N` bullets' not in ctx
+
+
+def test_post_write_a_numbered_cursor_still_gets_its_candidates():
+    with tempfile.TemporaryDirectory() as d:
+        anchor = _anchor_with_cursor(
+            Path(d), '- Step 1: first entry\n- Step 2: second entry\n- Step 3: third entry\n'
+        )
+        ctx = _post_write_context(_post_write(_write_payload(anchor)))
+        assert 'Fold candidates, oldest first' in ctx
+        assert 'Step 1: first entry' in ctx
+        assert 'no `Step N` bullets' not in ctx
 
 
 if __name__ == '__main__':
@@ -2271,4 +2429,15 @@ if __name__ == '__main__':
     test_post_write_exits_zero_when_the_measurement_itself_raises()
     test_post_write_creates_the_gitignore_when_missing_and_never_rewrites_one()
     test_post_write_templates_are_ascii_even_for_a_non_ascii_cursor()
+    test_sweeps_refuse_a_directory_that_is_not_there_rather_than_printing_a_clean_sweep()
+    test_sweeps_say_so_on_an_empty_list_and_keep_stdout_empty()
+    test_sweeps_stay_silent_on_stderr_when_they_have_something_to_list()
+    test_find_open_anchors_still_tolerates_a_missing_directory()
+    test_anchor_cursor_returns_the_highest_step_not_the_first_line()
+    test_anchor_cursor_without_step_bullets_still_returns_the_first_content_line()
+    test_list_dormant_shows_the_newest_step_of_a_chronological_cursor()
+    test_stale_pointer_shows_the_newest_step_of_a_chronological_cursor()
+    test_post_write_does_not_claim_there_is_nothing_to_rank_in_a_cursor_of_unnumbered_bullets()
+    test_post_write_keeps_the_old_line_for_a_cursor_with_no_bullets_at_all()
+    test_post_write_a_numbered_cursor_still_gets_its_candidates()
     print('ok: all anchor_inject tests passed')
