@@ -11,8 +11,9 @@ output, so a default-on hook costs a subprocess and nothing else.
                     (router.py) over a substantive human prompt and injects a
                     short <toolkit-dispatch> block naming at most two candidate
                     skills, with each one's activation test. Silent on no match.
-                    Slash-commands, short follow-ups, and subagent-completion
-                    notices (SYNTHETIC_PREFIXES) get nothing. Opt out with
+                    Slash-commands, short follow-ups, and synthetic turns
+                    (subagent hand-backs, cross-session messages, task
+                    notices) get nothing. Opt out with
                     HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0; disabling the router
                     alone (HUMBLEPOWERS_DISPATCH_ROUTER=0) has the same effect,
                     since there is nothing else to inject.
@@ -58,10 +59,28 @@ MIN_CHARS = 15
 TELEMETRY_CAP_BYTES = 1_000_000
 LOG_NAME = 'dispatch-log.ndjson'
 
-# Subagent completion is delivered to the parent session as a synthetic prompt
-# that passes through UserPromptSubmit like a real one. No human authored it, so
-# it must never trigger injection or telemetry.
+# A subagent completion, a cross-session message and a task notification reach the
+# parent session as synthetic prompts that pass through UserPromptSubmit like a
+# real one. No human authored them, so they must never trigger injection or
+# telemetry. A bare notice starts with a prefix; the desktop app wraps a hand-back
+# (an <agent-message> element opening with a literal hand-back line, itself
+# possibly inside a system-reminder) and a cross-session message (a leading
+# sentence, then a <cross-session-message> element), so the markers are searched
+# in the head of the prompt, not only at its start.
 SYNTHETIC_PREFIXES = ('[SYSTEM NOTIFICATION', '<task-notification>')
+SYNTHETIC_MARKERS = (
+    '[Subagent hand-back]',
+    '<agent-message',
+    '<cross-session-message',
+    'Another Claude session sent a message',
+)
+SYNTHETIC_HEAD_CHARS = 500
+
+
+def _is_synthetic(prompt: str) -> bool:
+    return prompt.startswith(SYNTHETIC_PREFIXES) or any(
+        marker in prompt[:SYNTHETIC_HEAD_CHARS] for marker in SYNTHETIC_MARKERS
+    )
 
 
 def _state_dir() -> Path:
@@ -108,8 +127,8 @@ def _prompt_submit() -> int:
     payload = _load_stdin_json()
     prompt = payload.get('prompt')
     prompt = prompt.strip() if isinstance(prompt, str) else ''
-    if prompt.startswith(SYNTHETIC_PREFIXES):
-        return 0  # subagent completion pass-through: no human turn occurred
+    if _is_synthetic(prompt):
+        return 0  # hand-back, cross-session message or notice: no human turn occurred
     session_id = payload.get('session_id')
     session_id = session_id if isinstance(session_id, str) and session_id else 'unknown'
 
