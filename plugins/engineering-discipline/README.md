@@ -73,9 +73,12 @@ content is written, and nothing is sent over the network. The directory is
 per-plugin data directory Claude Code gives a plugin's hooks), else
 `engineering-discipline` under the system temp directory. Appending stops at
 1,000,000 bytes, and a failed write never changes a hook's verdict or exit code.
-To read it, run `uv run --no-project -- python hooks/hook_log.py` with the same
-values of those two variables that the hooks saw (neither set reads the temp
-directory fallback); it prints the path it read and the firings per hook.
+To read it, run `uv run --no-project -- python hooks/hook_log.py`. With either
+variable set it reads that directory; with neither set (a plain terminal) it
+reads every `engineering-discipline-*` log under `plugins/data` in the Claude
+config directory (`CLAUDE_CONFIG_DIR`, else `~/.claude`), one per marketplace
+the plugin was installed from, and only when there is none the temp directory
+fallback. It prints each path it read and the firings per hook.
 
 There is no third hook. A Stop nudge to run the data pre-shipping checklist was
 retired in 0.4.0: it was exhortation delivered through a hook, it sat behind an

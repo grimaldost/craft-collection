@@ -6,6 +6,21 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.5.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [Unreleased]
+
+### Fixed
+
+- **The hook-log reader finds the log Claude Code's hooks write.** Under Claude Code the
+  hooks see `CLAUDE_PLUGIN_DATA` and log to
+  `<claude config dir>/plugins/data/engineering-discipline-<marketplace>/hook-log.ndjson`,
+  but the README's reading command, run in a terminal where neither state-dir variable is
+  set, read the system temp directory and printed `no firings logged yet` whatever the
+  hooks had logged. With neither variable set, `hook_log.py` now reads every such log that
+  exists (the config dir is `CLAUDE_CONFIG_DIR`, else `~/.claude`), printing each path and
+  its per-hook counts, and falls back to the temp directory only when there is none. With
+  either variable set it behaves as before; no hook writes anywhere new
+  (2026-10-19 triage: T181a).
+
 ## [0.6.1] - 2026-10-08
 
 A false block in the uv hook, a README claim no gate backed, a local firing counter for
