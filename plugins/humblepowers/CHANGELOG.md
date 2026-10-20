@@ -8,6 +8,17 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [Unreleased]
+
+### Fixed
+
+- **choosing-models: the emission reference no longer says an unrouted `agent()` inherits the
+  session model with no engine-level cap** (2026-10-19 triage: T290a). It states the harness
+  order a spawn's model follows (the call's `model`, the agent definition's `model` field,
+  `CLAUDE_CODE_SUBAGENT_MODEL`, the session model) and that
+  `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` is the engine-level cap, and keeps the rule that every
+  routed call carries an explicit `model`.
+
 ## [0.18.0] - 2026-10-08
 
 Minor bump: the weak and mid tiers move to Haiku 5.5 and Sonnet 5.5, the scoring rubric
