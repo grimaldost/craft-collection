@@ -16,7 +16,7 @@ description: >
   (nothing to cluster yet — a 1-report delta over an existing baseline IS a valid
   later pass), not for triaging GitHub issues or a PR queue, and not for triaging
   a governed series' own reflections into durable checks — the owning method
-  tool's triage skill (e.g. keel's keel-triage) does that, not this generic
+  tool's triage procedure (e.g. keel's `reflection-triage`) does that, not this generic
   feedback pass.
 disable-model-invocation: true
 user-invocable: true
