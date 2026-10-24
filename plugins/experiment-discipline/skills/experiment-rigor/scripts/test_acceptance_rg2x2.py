@@ -50,6 +50,10 @@ FREEZE_DATE = '2026-07-24T00:00:00Z'
 # The six defects and the code each must fire (the section-5 map).
 EXPECTED_DEFECT_CODES = {'ER-RECON', 'ER-SCHEMA', 'ER-STATS', 'ER-PREREG'}
 
+# The warnings the finalized example carries: its verifiers are not shipped, so ER-PREREG
+# cannot verify their hashes (one WARN per outcome) and ER-XCHECK keeps its source:hand WARN.
+EXPECTED_WARN_CODES = {'ER-XCHECK', 'ER-PREREG'}
+
 
 # --- git helpers (mirroring test_validate.py) -------------------------------
 
@@ -113,6 +117,15 @@ def _fail_codes(report: validate.Report) -> set[str]:
 
 def _warn_codes(report: validate.Report) -> set[str]:
     return {f.code for f in report.warnings}
+
+
+def _unverified_outcomes(report: validate.Report) -> set[str]:
+    """The outcomes ER-PREREG's verifier check warned about (their names are quoted)."""
+    return {
+        m.group(1)
+        for f in report.warnings
+        if f.code == 'ER-PREREG' and (m := re.search(r"outcome '([^']+)'", f.message))
+    }
 
 
 def _run_cli(path: Path, *args: str) -> subprocess.CompletedProcess:
@@ -188,14 +201,52 @@ def test_delivered_record_is_finalized_with_reconstructible_freeze():
     assert 'posterior' not in (frozen.get('updates') or {}), frozen.get('updates')
     assert frozen['disposition'] == {'total': 96}, frozen['disposition']
 
-    # (c) full validate on the delivered (finalized) record exits 0 with exactly the one
-    # source:hand WARN (the honest measurement-tier state), no failures.
+    # (c) full validate on the delivered (finalized) record exits 0 with no failures and
+    # exactly the honest measurement-tier warnings: source:hand (ER-XCHECK), and ER-PREREG
+    # naming each outcome whose verifier is not in the freeze commit. The example's
+    # verifiers are not shipped, so their hashes are placeholders (T262a/T262b).
     report = validate.run_checks(record, DELIVERED_RECORD)
     assert report.failures == [], report.failures
-    assert _warn_codes(report) == {'ER-XCHECK'}, _warn_codes(report)
+    assert _warn_codes(report) == EXPECTED_WARN_CODES, _warn_codes(report)
+    assert _unverified_outcomes(report) == {'activation', 'footprint'}, report.warnings
 
     # (d) the committed report.md is in sync with the delivered record.
     assert render.check_drift(DELIVERED_RECORD) is None
+
+
+# --- T262a: the example does not present placeholder digests as real --------
+
+
+def _verifier_lines(text: str) -> list[tuple[str, str]]:
+    """(the line before, the verifier line) for every `verifier:` key in a record text."""
+    lines = text.splitlines()
+    return [(lines[i - 1], line) for i, line in enumerate(lines) if line.strip() == 'verifier:']
+
+
+def _assert_placeholder_comments(text: str) -> None:
+    pairs = _verifier_lines(text)
+    assert len(pairs) == 2, pairs
+    for before, _ in pairs:
+        assert before.lstrip().startswith('#'), f'no comment beside a verifier: {before!r}'
+        assert 'placeholder' in before and 'not shipped' in before, before
+
+
+def test_the_example_marks_its_verifier_hashes_as_placeholders():
+    _assert_placeholder_comments(DELIVERED_RECORD.read_text(encoding='utf-8'))
+    freeze_md = (EXAMPLE_DIR / 'FREEZE.md').read_text(encoding='utf-8')
+    assert 'illustrative placeholders' in freeze_md, (
+        'FREEZE.md does not say the hashes are placeholders'
+    )
+    assert 'ER-PREREG' in freeze_md and '3 warning' in freeze_md, (
+        'FREEZE.md states a stale warning count'
+    )
+
+
+def test_finalize_keeps_the_placeholder_comments_when_it_regenerates_the_record():
+    finalized = finalize.finalize_record(_load_frozen(), 'a' * 40)
+    text = finalize.render_record_yaml(finalized)
+    _assert_placeholder_comments(text)
+    assert yaml.safe_load(text) == finalized  # comments only; the data is unchanged
 
 
 # --- the corrected record exits 0 against a real freeze ----------------------
@@ -212,8 +263,10 @@ def test_corrected_record_validates_and_has_no_drift():
 
         report = validate.run_checks(finalized, path)
         assert report.failures == [], report.failures
-        # source: hand at measurement is the honest state -- a WARN, not a failure.
-        assert _warn_codes(report) == {'ER-XCHECK'}, _warn_codes(report)
+        # source: hand at measurement is the honest state -- a WARN, not a failure; so is
+        # a verifier hash that no file at the freeze commit backs (T262b).
+        assert _warn_codes(report) == EXPECTED_WARN_CODES, _warn_codes(report)
+        assert _unverified_outcomes(report) == {'activation', 'footprint'}, report.warnings
         assert render.check_drift(path) is None
         # The activation outcome is the confirmatory one that FAILED (confirmatory_null);
         # the footprint is the quarantined exploratory one carrying the posterior.

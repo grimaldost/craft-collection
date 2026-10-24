@@ -96,8 +96,11 @@ The `tier` field selects the required-field set and which context gates apply: p
 - **outcome**: `name`, `role`, `operationalization`, `verifier.path`, `verifier.hash`, `added_after_freeze`
 - **plan_frozen_at**: `commit`, `path`, `timestamp`
 - **rate**: `numerator`, `denominator`, `ci`
+- **result_entry**: `verdict`, `paired`, `clustered_se`, `unclustered_reason`, `arms`, `clusters`, `contrasts`
 - **run**: `source`, `ledger_path`, `n`, `cost_usd_est`, `first_run_at`, `hand_reason`, `attestation`
 - **update**: `certainty`, `downgrade_reasons`, `prior.source_id`
+
+`outcome.verifier.hash` is the SHA-256 of the verifier file's bytes at the freeze commit (`git show <plan_frozen_at.commit>:<path>`), with `outcome.verifier.path` relative to the record file, the base `run.ledger_path` uses. `ER-PREREG` warns, naming the outcome, when the path does not resolve at that commit or the digest differs.
 
 ## The paired contrast (schema v1.1)
 

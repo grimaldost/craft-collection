@@ -120,6 +120,36 @@ def test_schema_md_is_in_sync_with_schema_json():
     )
 
 
+def test_the_schema_declares_the_result_entry_shape_er_stats_enforces():
+    # T261a. check_stats requires `paired` on a between-arm comparison and `clustered_se`
+    # or `unclustered_reason` when it is unpaired on a shared-task design; the canonical
+    # schema declared none of them. The field guide must list a results entry's fields.
+    shapes = _schema_json()['field_shapes']
+    assert shapes['result_entry'] == [
+        'verdict',
+        'paired',
+        'clustered_se',
+        'unclustered_reason',
+        'arms',
+        'clusters',
+        'contrasts',
+    ]
+    guide = SCHEMA_MD.read_text(encoding='utf-8')
+    for field in shapes['result_entry']:
+        assert f'`{field}`' in guide, field
+    assert '**result_entry**' in guide
+
+
+def test_the_schema_guide_states_the_verifier_hash_convention():
+    # T262b. The hash ER-PREREG checks is a SHA-256 of the file's bytes at the freeze
+    # commit, with the path relative to the record file; the field guide says so.
+    guide = SCHEMA_MD.read_text(encoding='utf-8')
+    assert 'SHA-256' in guide
+    assert 'verifier.hash' in guide
+    assert 'freeze commit' in guide
+    assert 'relative to the record file' in guide
+
+
 # --- template acceptance ----------------------------------------------------
 
 

@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - exercised only on a broken toolchain
     raise SystemExit(1) from None
 
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -703,6 +704,40 @@ def test_er_parity_no_report_is_fine():
         assert 'ER-PARITY' not in fail_codes(check(rec, path))
 
 
+def _loop_step(n: int) -> str:
+    """Step `n` of SKILL.md's "The loop" (the numbered list, one step per item)."""
+    import re
+
+    text = (HERE.parent / 'SKILL.md').read_text(encoding='utf-8')
+    loop = text.split('## The loop', 1)[1].split('\n## ', 1)[0]
+    steps = re.split(r'^(?=\d+\. )', loop, flags=re.MULTILINE)
+    (step,) = [s for s in steps if s.startswith(f'{n}. ')]
+    return ' '.join(step.split())
+
+
+def test_the_loop_renders_before_it_validates_an_edited_record():
+    # T260a. The record is edited after its last render, so the committed report.md is
+    # stale: the full gate run FIRST fails ER-PARITY, and rendering first clears it. The
+    # loop's last step must therefore name render.py before validate.py.
+    import render
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        rec = base_probe()
+        path = write_record(d, rec)
+        (d / 'report.md').write_text(render.render_report(rec, path), encoding='utf-8')
+        assert 'ER-PARITY' not in fail_codes(check(rec, path))
+        rec['disposition'] = {'completed': 20, 'excluded': 4, 'total': 24}  # an edit
+        write_record(d, rec)
+        assert 'ER-PARITY' in fail_codes(check(rec, path))  # validate first: red
+        (d / 'report.md').write_text(render.render_report(rec, path), encoding='utf-8')
+        assert 'ER-PARITY' not in fail_codes(check(rec, path))  # render, then validate: green
+
+    step = _loop_step(5)
+    assert 'render.py <record>' in step and 'validate.py <record>' in step, step
+    assert step.index('render.py <record>') < step.index('validate.py <record>'), step
+
+
 # --- ER-ANCHOR (temporal chronology via git) --------------------------------
 
 
@@ -891,6 +926,140 @@ def test_er_prereg_reads_the_frozen_record_as_utf8():
         assert 'ER-PREREG' not in fail_codes(check(rec, path))
 
 
+# --- T262b / T143c: the frozen verifier.hash is checked against the verifier ----------
+
+_VERIFIER_PATHS = {'activation': 'verify_activation.py', 'footprint': 'checks/verify_footprint.py'}
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _verifier_repo(
+    d: Path, files: dict[str, bytes], hashes: dict[str, str]
+) -> tuple[dict, Path, str]:
+    """Freeze a measurement record, kept in `d/exp/`, whose outcomes name verifier files.
+
+    `files` maps a path relative to the record file to its bytes (written before the
+    freeze commit); `hashes` maps an outcome name to the verifier.hash it freezes.
+    Returns (record with the freeze SHA filled, record path, freeze SHA)."""
+    _git_init(d)
+    rec = _measurement_record()
+    rec['outcomes'] = [
+        {
+            'name': name,
+            'role': 'exploratory',
+            'operationalization': f'{name} measured by its verifier on the run output',
+            'verifier': {'path': _VERIFIER_PATHS[name], 'hash': digest},
+        }
+        for name, digest in hashes.items()
+    ]
+    (d / 'exp').mkdir()
+    for rel, data in files.items():
+        target = d / 'exp' / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    path = write_record(d / 'exp', rec)
+    sha = _git_commit(d, '2026-01-01T00:00:00')
+    rec['plan_frozen_at']['commit'] = sha
+    write_record(d / 'exp', rec)
+    return rec, path, sha
+
+
+def _prereg_warnings(report: validate.Report) -> list[str]:
+    return [f.message for f in report.warnings if f.code == 'ER-PREREG']
+
+
+def _reconstruction_warnings(report: validate.Report) -> list[str]:
+    """ER-PREREG warnings about reconstructing the frozen record, not about its verifiers
+    (the fixtures that exercise reconstruction name a verify.py they do not commit)."""
+    return [m for m in _prereg_warnings(report) if 'verifier' not in m]
+
+
+def test_er_prereg_warns_when_the_verifier_hash_is_not_the_frozen_files_digest():
+    with tempfile.TemporaryDirectory() as td:
+        good, bad = b'print("activation")\r\n', b'print("footprint")\n'
+        rec, path, _ = _verifier_repo(
+            Path(td),
+            {'verify_activation.py': good, 'checks/verify_footprint.py': bad},
+            {'activation': _sha256(good), 'footprint': 'TO_BE_COMPUTED_AT_FREEZE'},
+        )
+        report = check(rec, path)
+        warns = _prereg_warnings(report)
+        # one WARN, naming the outcome whose hash is not the digest; the matching one
+        # (a CRLF file, so the bytes are hashed unchanged) is silent
+        assert len(warns) == 1 and 'footprint' in warns[0], warns
+        assert 'activation' not in warns[0], warns
+        # a WARN, never a failure: a record that hashed by another convention stays green
+        assert 'ER-PREREG' not in fail_codes(report), fail_codes(report)
+
+
+def test_er_prereg_verifier_is_read_at_the_freeze_commit_not_the_working_tree():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        frozen = b'print("frozen")\n'
+        rec, path, _ = _verifier_repo(
+            d, {'verify_activation.py': frozen}, {'activation': _sha256(frozen)}
+        )
+        # the working tree now holds a different verifier; the hash still matches the freeze
+        (d / 'exp' / 'verify_activation.py').write_bytes(b'print("edited after the freeze")\n')
+        report = check(rec, path)
+        assert _prereg_warnings(report) == []
+        assert 'ER-XCHECK' not in warn_codes(report), report.warnings
+
+
+def test_er_prereg_warns_when_the_verifier_is_absent_at_the_freeze_commit():
+    with tempfile.TemporaryDirectory() as td:
+        rec, path, _ = _verifier_repo(Path(td), {}, {'activation': _sha256(b'never committed')})
+        report = check(rec, path)
+        warns = _prereg_warnings(report)
+        assert len(warns) == 1 and 'activation' in warns[0], warns
+        assert 'verify_activation.py' in warns[0], warns
+        assert 'ER-PREREG' not in fail_codes(report), fail_codes(report)
+
+
+def test_er_xcheck_clears_when_every_verifier_is_verified_at_the_freeze_commit():
+    with tempfile.TemporaryDirectory() as td:
+        a, f = b'print("a")\n', b'print("f")\n'
+        rec, path, _ = _verifier_repo(
+            Path(td),
+            {'verify_activation.py': a, 'checks/verify_footprint.py': f},
+            {'activation': _sha256(a), 'footprint': _sha256(f)},
+        )
+        report = check(rec, path)
+        assert warn_codes(report) == set(), report.warnings
+        assert fail_codes(report) == set(), report.failures
+
+
+def test_er_xcheck_warns_unless_every_outcome_verifier_is_verified():
+    a, f = b'print("a")\n', b'print("f")\n'
+    with tempfile.TemporaryDirectory() as td:
+        # one of two verifiers does not match: the warning stays
+        rec, path, _ = _verifier_repo(
+            Path(td),
+            {'verify_activation.py': a, 'checks/verify_footprint.py': f},
+            {'activation': _sha256(a), 'footprint': _sha256(b'something else')},
+        )
+        assert 'ER-XCHECK' in warn_codes(check(rec, path))
+    with tempfile.TemporaryDirectory() as td:
+        # a verified outcome beside one that names no verifier at all: the warning stays
+        rec, path, _ = _verifier_repo(
+            Path(td), {'verify_activation.py': a}, {'activation': _sha256(a)}
+        )
+        rec['outcomes'].append(
+            {
+                'name': 'tone',
+                'role': 'exploratory',
+                'operationalization': 'a human read of the transcripts',
+                'added_after_freeze': True,
+            }
+        )
+        write_record(path.parent, rec)
+        assert 'ER-XCHECK' in warn_codes(check(rec, path))
+    # a record with no freeze verifies nothing: the warning stays
+    assert 'ER-XCHECK' in warn_codes(check(_measurement_record()))
+
+
 def test_er_prereg_not_in_history_downgrades_by_tier():
     # measurement: WARN; decision: FAIL (Q5 hand ladder).
     with tempfile.TemporaryDirectory() as td:
@@ -945,7 +1114,7 @@ def test_er_prereg_pinned_path_reconstructs_after_a_rename():
         new_path = _relocate(rec, old_path, d / 'plugins' / 'new-home' / 'skills' / 'sk' / 'ex')
         report = check(rec, new_path)
         assert 'ER-PREREG' not in fail_codes(report), report.failures
-        assert 'ER-PREREG' not in warn_codes(report), report.warnings
+        assert _reconstruction_warnings(report) == [], report.warnings
 
         # Without the pin the same relocated record cannot be reconstructed at all.
         unpinned = copy.deepcopy(rec)
@@ -967,7 +1136,7 @@ def test_er_prereg_without_a_pin_reconstructs_from_the_current_path():
         report = check(rec, path)
         assert 'path' not in rec['plan_frozen_at']
         assert 'ER-PREREG' not in fail_codes(report), report.failures
-        assert 'ER-PREREG' not in warn_codes(report), report.warnings
+        assert _reconstruction_warnings(report) == [], report.warnings
 
 
 def test_er_prereg_falls_back_when_the_pinned_lookup_fails():
@@ -990,7 +1159,7 @@ def test_er_prereg_falls_back_when_the_pinned_lookup_fails():
         write_record(d, rec)
         report = check(rec, path)
         assert 'ER-PREREG' not in fail_codes(report), report.failures
-        assert 'ER-PREREG' not in warn_codes(report), report.warnings
+        assert _reconstruction_warnings(report) == [], report.warnings
 
 
 def test_er_prereg_names_both_coordinates_when_neither_resolves():

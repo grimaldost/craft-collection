@@ -58,9 +58,8 @@ as a `tier:` value.
    `plan_frozen_at.commit` before the first run.
 4. Run the experiment; fill results. `from_fathom.py` maps a fathom ledger into
    the run-derived fields.
-5. `validate.py <record>` runs the full gate. `render.py <record>` derives
-   `report.md`; `render.py --check` is the drift gate over a committed pair. Never
-   hand-edit `report.md`.
+5. `render.py <record>` derives `report.md`, then `validate.py <record>` runs the
+   full gate; `render.py --check` is the drift gate over a committed pair.
 
 ## The activation line
 

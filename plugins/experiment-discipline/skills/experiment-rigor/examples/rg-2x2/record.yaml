@@ -33,6 +33,7 @@ outcomes:
   operationalization: the model invoked the Skill tool to LOAD the target skill (ingest its body), measured
     from the raw event stream -- not the 'Skill check:' ritual declaration line, which is a separate,
     weaker signal.
+  # Illustrative placeholder hash; the verifier is not shipped with this example.
   verifier:
     path: verify_activation.py
     hash: 1f0a9c7b2d4e6f8a0c1e3d5f709182a3b4c5d6e7f80912a3b4c5d6e7f8091a2b3
@@ -42,6 +43,7 @@ outcomes:
     artifact -- a root-cause fix that also corrects a second latent point never named in the prompt; the
     subtle data-output error caught; a regression test left that goes red if the bug returns. Measures
     the named discipline, not generic care.
+  # Illustrative placeholder hash; the verifier is not shipped with this example.
   verifier:
     path: verify_footprint.py
     hash: 2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2

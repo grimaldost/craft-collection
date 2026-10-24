@@ -6,6 +6,49 @@ with each release.
 Tags start at 0.3.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.3.6] - 2026-10-24
+
+The frozen verifier hash is now checked against the verifier, and four statements that
+ran ahead of the code are corrected: the loop's order, the canonical schema's results
+shape, the RG-2x2 example's verifier hashes, and a warning that could not clear.
+
+### Fixed
+
+- **(T262b) ER-PREREG checks each frozen `verifier.hash` against the verifier.** The hash
+  was frozen as a string and compared only with the frozen record's own copy, so a
+  placeholder frozen as a placeholder passed the full gate forever. For every outcome
+  with a `verifier.path`, the gate now reads the file's bytes with
+  `git show <plan_frozen_at.commit>:<path>` (the path relative to the record file, the base
+  `run.ledger_path` uses) and compares their SHA-256 with the hash. A path that does not
+  resolve at the freeze commit, or a digest that differs, is a WARN naming the outcome, not
+  a failure, so a record that hashed by another convention is not turned red; a later
+  release may escalate a mismatch once records in use have been checked against it. The
+  convention is stated in the generated `templates/SCHEMA.md` (Field shapes).
+- **(T143c) The measurement-tier `source: hand` warning from ER-XCHECK can clear.** It was
+  emitted unconditionally, telling the author the frozen plan must carry the verifier
+  fixtures while nothing checked that. It now clears when the freeze commit carries a
+  verifier for every outcome of the record and each hash matches (T262b's check), and is
+  kept otherwise, including when an outcome names no verifier.
+- **(T262a) The RG-2x2 example no longer presents placeholder digests as real.** Its two
+  verifier hashes are 65 characters (a SHA-256 digest has 64) and `verify_activation.py` and
+  `verify_footprint.py` are not shipped. A comment above each `verifier` in `record.yaml`
+  and a paragraph in `FREEZE.md` now say so, `finalize.py` keeps the comments when it
+  regenerates the record, and the values are unchanged, so the frozen plan does not drift.
+  With T262b the example validates with three warnings, not one: ER-XCHECK, and ER-PREREG
+  for each unverifiable verifier; `FREEZE.md` and the acceptance test state the new set.
+- **(T261a) The canonical schema declares the results-entry shape ER-STATS enforces.**
+  `templates/schema.json` had no field shape for one `results.<outcome>` entry, so the
+  field guide omitted `paired`, `clustered_se` and `unclustered_reason`, which a gate
+  requires. A `result_entry` shape (`verdict`, `paired`, `clustered_se`, `unclustered_reason`,
+  `arms`, `clusters`, `contrasts`) is added and `templates/SCHEMA.md` regenerated. No rule
+  changes.
+- **(T260a) The loop renders, then validates.** Step 5 of the experiment-rigor loop named
+  `validate.py` before `render.py`, an order that fails ER-PARITY on any record edited since
+  its last render. It now reads "`render.py <record>` derives `report.md`, then
+  `validate.py <record>` runs the full gate", and drops the sentence "Never hand-edit
+  `report.md`", which the Correct-usage check already states. The skill body goes from 1122
+  to 1120 words.
+
 ## [0.3.5] - 2026-10-08
 
 A cluster cell with zero units is now named together with the rule for handling it, and a

@@ -1023,6 +1023,14 @@ def schema_markdown(schema: dict[str, Any]) -> str:
         fields = ', '.join(f'`{f}`' for f in schema['field_shapes'][name])
         lines.append(f'- **{name}**: {fields}')
     lines.append('')
+    lines.append(
+        "`outcome.verifier.hash` is the SHA-256 of the verifier file's bytes at the freeze "
+        'commit (`git show <plan_frozen_at.commit>:<path>`), with `outcome.verifier.path` '
+        'relative to the record file, the base `run.ledger_path` uses. `ER-PREREG` warns, '
+        'naming the outcome, when the path does not resolve at that commit or the digest '
+        'differs.'
+    )
+    lines.append('')
 
     lines.append('## The paired contrast (schema v1.1)')
     lines.append('')
