@@ -120,6 +120,26 @@ def test_schema_md_is_in_sync_with_schema_json():
     )
 
 
+def test_the_schema_declares_the_result_entry_shape_er_stats_enforces():
+    # T261a. check_stats requires `paired` on a between-arm comparison and `clustered_se`
+    # or `unclustered_reason` when it is unpaired on a shared-task design; the canonical
+    # schema declared none of them. The field guide must list a results entry's fields.
+    shapes = _schema_json()['field_shapes']
+    assert shapes['result_entry'] == [
+        'verdict',
+        'paired',
+        'clustered_se',
+        'unclustered_reason',
+        'arms',
+        'clusters',
+        'contrasts',
+    ]
+    guide = SCHEMA_MD.read_text(encoding='utf-8')
+    for field in shapes['result_entry']:
+        assert f'`{field}`' in guide, field
+    assert '**result_entry**' in guide
+
+
 # --- template acceptance ----------------------------------------------------
 
 

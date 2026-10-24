@@ -116,6 +116,15 @@
       "verifier.hash",
       "added_after_freeze"
     ],
+    "result_entry": [
+      "verdict",
+      "paired",
+      "clustered_se",
+      "unclustered_reason",
+      "arms",
+      "clusters",
+      "contrasts"
+    ],
     "rate": [
       "numerator",
       "denominator",

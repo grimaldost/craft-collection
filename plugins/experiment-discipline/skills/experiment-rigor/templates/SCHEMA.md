@@ -96,6 +96,7 @@ The `tier` field selects the required-field set and which context gates apply: p
 - **outcome**: `name`, `role`, `operationalization`, `verifier.path`, `verifier.hash`, `added_after_freeze`
 - **plan_frozen_at**: `commit`, `path`, `timestamp`
 - **rate**: `numerator`, `denominator`, `ci`
+- **result_entry**: `verdict`, `paired`, `clustered_se`, `unclustered_reason`, `arms`, `clusters`, `contrasts`
 - **run**: `source`, `ledger_path`, `n`, `cost_usd_est`, `first_run_at`, `hand_reason`, `attestation`
 - **update**: `certainty`, `downgrade_reasons`, `prior.source_id`
 
