@@ -100,6 +100,8 @@ The `tier` field selects the required-field set and which context gates apply: p
 - **run**: `source`, `ledger_path`, `n`, `cost_usd_est`, `first_run_at`, `hand_reason`, `attestation`
 - **update**: `certainty`, `downgrade_reasons`, `prior.source_id`
 
+`outcome.verifier.hash` is the SHA-256 of the verifier file's bytes at the freeze commit (`git show <plan_frozen_at.commit>:<path>`), with `outcome.verifier.path` relative to the record file, the base `run.ledger_path` uses. `ER-PREREG` warns, naming the outcome, when the path does not resolve at that commit or the digest differs.
+
 ## The paired contrast (schema v1.1)
 
 A per-arm interval prices independent trials. When the randomization unit is the prompt cluster -- the same prompts scored in every arm -- that is the wrong unit, and recomputing each arm from raw counts forces an independent-trials interval onto a clustered design. Two additive blocks fix it, and a v1.0 record that carries neither is unaffected.

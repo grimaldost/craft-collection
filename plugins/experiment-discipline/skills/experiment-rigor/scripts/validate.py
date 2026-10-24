@@ -29,7 +29,9 @@ Error-code catalog (ERROR_CODES):
   ER-THREAT      threat coverage over the closed enum (a silent core key fails)
   ER-PROBE       probe refusal: a confirmatory_* verdict or a posterior on a probe
   ER-PREREG      pre-registration consistency: the frozen prereg subset, reconstructed
-                 via `git show <plan_frozen_at.commit>:<path>`, has not drifted
+                 via `git show <plan_frozen_at.commit>:<path>`, has not drifted; a frozen
+                 verifier.hash that is not the SHA-256 of the verifier file at that commit
+                 (or whose file is absent there) is a WARN naming the outcome
   ER-COMPREHEND  decision-tier comprehension block present, resolvable, unanimous
                  (R3-1: reserved and emitted here; §5 extends the fixture side)
 
@@ -47,9 +49,11 @@ Stdlib + PyYAML only; Python 3.13+.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
+import posixpath
 import re
 import subprocess
 import sys
@@ -362,6 +366,17 @@ def _repo_relpath(toplevel: Path, path: Path) -> str | None:
         return path.resolve().relative_to(toplevel).as_posix()
     except ValueError:
         return None
+
+
+def _show_bytes(cwd: Path, commit: str, relpath: str) -> bytes | None:
+    """The file's bytes at `commit`, unchanged (no text decoding, no newline translation:
+    a digest of the file is a digest of these bytes), or None if it does not resolve."""
+    proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ['git', '-C', str(cwd), 'show', f'{commit}:{relpath}'],  # noqa: S607 - git from PATH
+        capture_output=True,
+        env=_git_env(),
+    )
+    return proc.stdout if proc.returncode == 0 else None
 
 
 def _show_at(cwd: Path, commit: str, relpath: str) -> dict | None:
@@ -1462,6 +1477,61 @@ def _reconstruct_frozen(
     return None, coords
 
 
+def _check_verifiers(
+    record: dict, frozen: dict, cwd: Path, commit: str, coordinates: list[str]
+) -> tuple[list[Finding], bool]:
+    """Check each frozen `verifier.hash` against the verifier at the freeze commit.
+
+    The convention: the hash is the SHA-256 of the verifier file's bytes at the freeze
+    commit (`git show <commit>:<path>`), the path relative to the record file -- the base
+    `run.ledger_path` uses. A path that does not resolve at that commit, or a digest that
+    differs, is a WARN naming the outcome: a record whose hash follows another convention
+    is not turned red by it. Returns (the WARNs, whether EVERY outcome of the record has a
+    verifier that resolved and matched), the second value being what clears ER-XCHECK's
+    source:hand warning."""
+    out: list[Finding] = []
+    verified: set[str] = set()
+    # The record's directory at the freeze is the directory of the coordinate that resolved.
+    bases = [posixpath.dirname(c) for c in coordinates]
+    for name, outcome in _outcomes_by_name(frozen).items():
+        verifier = outcome.get('verifier') if isinstance(outcome.get('verifier'), dict) else {}
+        vpath = verifier.get('path')
+        if not vpath:
+            continue
+        tried: list[str] = []
+        digest = None
+        for base in bases:
+            rel = posixpath.normpath(posixpath.join(base, str(vpath)))
+            if rel.startswith('..') or posixpath.isabs(rel):
+                continue
+            tried.append(rel)
+            data = _show_bytes(cwd, commit, rel)
+            if data is not None:
+                digest = hashlib.sha256(data).hexdigest()
+                break
+        if digest is None:
+            where = ' / '.join(f'{commit}:{p}' for p in tried) or str(vpath)
+            out.append(
+                _warn(
+                    'ER-PREREG',
+                    f'outcome {name!r} verifier {str(vpath)!r} does not resolve at {where}; its '
+                    'frozen hash cannot be checked against the verifier',
+                )
+            )
+        elif str(verifier.get('hash')).strip().lower() != digest:
+            out.append(
+                _warn(
+                    'ER-PREREG',
+                    f'outcome {name!r} verifier.hash {verifier.get("hash")!r} is not the SHA-256 '
+                    f'digest of {tried[-1]} at the freeze commit ({digest}); the freeze pins nothing',
+                )
+            )
+        else:
+            verified.add(name)
+    current = _outcomes_by_name(record)
+    return out, bool(current) and all(name in verified for name in current)
+
+
 def check_prereg(record: dict, record_path: Path | None) -> list[Finding]:
     tier = record.get('tier')
     if tier not in ('measurement', 'decision') or record_path is None:
@@ -1528,6 +1598,9 @@ def check_prereg(record: dict, record_path: Path | None) -> list[Finding]:
             out.append(
                 _fail('ER-PREREG', f'outcome {name!r} verifier.hash drifted from the frozen plan')
             )
+
+    # T262b: the frozen verifier.hash must be the digest of the verifier at the freeze.
+    out += _check_verifiers(record, frozen, cwd, str(commit), tried)[0]
 
     # F7: any outcome added after the freeze must be quarantined — added_after_freeze:
     # true AND role: exploratory — regardless of what verdict it carries.

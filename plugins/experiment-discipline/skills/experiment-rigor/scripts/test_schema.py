@@ -140,6 +140,16 @@ def test_the_schema_declares_the_result_entry_shape_er_stats_enforces():
     assert '**result_entry**' in guide
 
 
+def test_the_schema_guide_states_the_verifier_hash_convention():
+    # T262b. The hash ER-PREREG checks is a SHA-256 of the file's bytes at the freeze
+    # commit, with the path relative to the record file; the field guide says so.
+    guide = SCHEMA_MD.read_text(encoding='utf-8')
+    assert 'SHA-256' in guide
+    assert 'verifier.hash' in guide
+    assert 'freeze commit' in guide
+    assert 'relative to the record file' in guide
+
+
 # --- template acceptance ----------------------------------------------------
 
 

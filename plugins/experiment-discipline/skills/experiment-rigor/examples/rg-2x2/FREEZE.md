@@ -75,14 +75,12 @@ prior -> posterior update; regenerates `report.md`; and re-validates.
     uv run --no-project --with pyyaml -- \
       python "$DIR/finalize.py" --freeze-sha "$FREEZE_SHA" --record "$DIR/record.yaml"
 
-Expected tail: `finalized ... (1 warning(s), 0 failures, no drift)`. The one warning is
+Expected tail: `finalized ... (3 warning(s), 0 failures, no drift)`. One warning is
 `ER-XCHECK` — `source: hand` at the measurement tier is the honest state (the original
 RG-2x2 was hand-orchestrated in PR #15 of the fathom data repository (private);
-no ledger travels with it). A WARN does not fail the gate.
-
-The verifier hashes in `record.yaml` are illustrative placeholders, and the verifiers
-(`verify_activation.py`, `verify_footprint.py`) are not shipped with the example: it
-shows the shape of a pinned verifier, not one that can be re-hashed.
+no ledger travels with it). The other two are `ER-PREREG`, one per outcome: the verifier
+hashes in `record.yaml` are illustrative placeholders and the verifiers are not shipped
+with the example, so no file at the freeze commit backs them. A WARN does not fail the gate.
 
 Then commit the finalized pair with all hooks running:
 
@@ -95,10 +93,10 @@ flow against a temp-repo freeze commit.
 
 ## Post-commit verification (what to check, and the expected output)
 
-    # 1. The finalized record passes the full gate (ER-XCHECK is a WARN, not a failure):
+    # 1. The finalized record passes the full gate (the warnings above are not failures):
     uv run --no-project --with pyyaml -- \
       python "$DIR/../../scripts/validate.py" "$DIR/record.yaml"
-    #   -> "OK (1 warning(s))", exit 0
+    #   -> "OK (3 warning(s))", exit 0
 
     # 2. The committed report.md is in sync with the record (no drift):
     uv run --no-project --with pyyaml -- \
