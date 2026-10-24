@@ -55,6 +55,13 @@ from build_feedback_index import (
 _ROW = re.compile(r'^\|\s*(T\d+[a-z]?)\s*\|(.+)\|\s*([A-Za-z][^|]*?)\s*\|\s*$')
 _OPEN_STATUSES = ('proposed', 'watch', 'accepted')
 
+# A table row keyed by another prefix (`SW26`, `E3`, `Q6b`, ...). open-rows does not
+# read these -- that waits for the ledger (T48a) -- but it counts them, so a doc
+# that keeps its rows under other ids is reported as partly unread, not as empty
+# (T309a).
+_OTHER_ROW = re.compile(r'^\|\s*(?!T\d)[A-Z]{1,4}\d+[a-z]?\s*\|')
+_SUCCESSOR = re.compile(r'T\d+[a-z]?')
+
 
 def report_stems(feedback_dir: Path) -> list[str]:
     return sorted(p.stem for p in feedback_dir.glob('*.md') if _is_report(p))
@@ -133,7 +140,10 @@ def open_rows(feedback_dir: Path) -> list[tuple[str, str, str]]:
     in a table below takes the status given here"). Keyed by description there,
     every rewording was a separate lineage and the older, open one never closed
     (T94c; measured: 426 open lineages in a corpus whose real open set is far
-    smaller).
+    smaller). One exception, id-keyed mode only: a later statement whose status
+    begins `superseded` and names no successor id (no `T<n>` in the cell) does not
+    overwrite an existing lineage, because a row superseded for an old wording
+    only is not closed; `superseded by T263a` closes it (T309b).
 
     Below that cut, and in every other feedback dir, each triage pass re-minted
     its own local `T1a`, `T2a`, ... -- so the same bare id can name two unrelated
@@ -151,12 +161,32 @@ def open_rows(feedback_dir: Path) -> list[tuple[str, str, str]]:
     for doc in sorted(p for p in feedback_dir.glob('*.md') if _is_triage_doc(p)):
         for row_id, description, status in rows_in(doc):
             unique = unique_from is not None and _row_number(row_id) >= unique_from
-            lineages[(row_id, '' if unique else description)] = {'status': status, 'doc': doc.stem}
+            key = (row_id, '' if unique else description)
+            if (
+                unique
+                and key in lineages
+                and status.lower().startswith('superseded')
+                and not _SUCCESSOR.search(status)
+            ):
+                continue
+            lineages[key] = {'status': status, 'doc': doc.stem}
     return sorted(
         (row_id, lineage['status'], lineage['doc'])
         for (row_id, _), lineage in lineages.items()
         if lineage['status'].lower().startswith(_OPEN_STATUSES)
     )
+
+
+def unread_row_counts(feedback_dir: Path) -> list[tuple[str, int]]:
+    """(doc stem, count) for each triage doc holding table rows keyed by a
+    non-T prefix, which `rows_in` does not read."""
+    out = []
+    for doc in sorted(p for p in feedback_dir.glob('*.md') if _is_triage_doc(p)):
+        lines = doc.read_text(encoding='utf-8', errors='replace').splitlines()
+        count = sum(1 for line in lines if _OTHER_ROW.match(line.strip()))
+        if count:
+            out.append((doc.stem, count))
+    return out
 
 
 def _row_sort_key(row: tuple[str, str, str]) -> tuple[int, str]:
@@ -201,6 +231,11 @@ def cmd_coverage(doc: Path, feedback_dir: Path) -> int:
 
 
 def cmd_open_rows(feedback_dir: Path) -> int:
+    for stem, count in unread_row_counts(feedback_dir):
+        print(
+            f'{stem}: {count} table row(s) with non-T ids not read (open-rows reads T ids only)',
+            file=sys.stderr,
+        )
     rows = sorted(open_rows(feedback_dir), key=_row_sort_key)
     if not rows:
         print('no open rows')

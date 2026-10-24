@@ -16,4 +16,4 @@ When a verify stage follows the lenses, collect the findings in a barrier before
 
 ## Persisting raw output (step 6)
 
-**When the panel is a script, persisting raw output before synthesis is a stage in the harness, not a step for its operator** — write inside the stage that produces the output. Read as an operator's step it gets implemented as nothing: one panel script persisted no verdicts, and a dead synthesis would have taken a seven-agent corpus with it.
+**When the panel is a script, persisting raw output before synthesis is a stage in the harness, not a step for its operator.** The orchestrator writes it: the convener, or the Workflow script after each `agent()` returns, writes each reviewer's returned output to the plan's destination. A reviewer subagent returns its output as text and is not asked to write a report file, because the harness may refuse that write. Read as an operator's step it gets implemented as nothing: one panel script persisted no verdicts, and a dead synthesis would have taken a seven-agent corpus with it.
