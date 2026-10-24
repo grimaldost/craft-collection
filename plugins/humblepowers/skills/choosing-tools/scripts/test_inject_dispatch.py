@@ -204,6 +204,73 @@ def test_synthetic_prompts_are_silent(tmp_path):
         assert not log_file.exists(), f'{prefix!r} prompt must not append telemetry'
 
 
+# Sanitized fixtures: only the wrapper structure and markers of a desktop-app
+# hand-back and cross-session turn are kept; the body is neutral placeholder text
+# plus the routing sentence, so an unguarded hook would inject on every one.
+HANDBACK = (
+    '<agent-message from="agent-0001">\n[Subagent hand-back] Placeholder report text. '
+    + ROUTING
+    + '\n</agent-message>'
+)
+WRAPPED_HANDBACK = '<system-reminder id="placeholder">\n' + HANDBACK + '\n</system-reminder>'
+CROSS_SESSION = (
+    'Another Claude session sent a message:\n'
+    '<cross-session-message from="peer-0001" from-session="session-0001" '
+    'from-name="Placeholder" from-mode="prompting">\n' + ROUTING + '\n</cross-session-message>'
+)
+
+MARKERS = (
+    '[Subagent hand-back]',
+    '<agent-message',
+    '<cross-session-message',
+    'Another Claude session sent a message',
+)
+
+
+def test_wrapped_handback_and_cross_session_turns_are_silent(tmp_path):
+    for i, prompt in enumerate((HANDBACK, WRAPPED_HANDBACK, CROSS_SESSION)):
+        with _Env(tmp_path):
+            code, out = _submit(prompt, session=f'wrapped{i}')
+            log_file = inject_dispatch._log_path()
+        assert code == 0 and out == '', f'fixture {i} must draw no hint'
+        assert not log_file.exists(), f'fixture {i} must append no telemetry'
+
+
+def test_each_marker_alone_silences_a_prompt_within_the_head(tmp_path):
+    for i, marker in enumerate(MARKERS):
+        with _Env(tmp_path):
+            code, out = _submit(
+                'Placeholder wrapper line. ' + marker + ' ' + ROUTING, session=f'm{i}'
+            )
+            log_file = inject_dispatch._log_path()
+        assert code == 0 and out == '', f'{marker!r} must silence the prompt'
+        assert not log_file.exists(), f'{marker!r} must append no telemetry'
+
+
+def test_a_marker_past_the_head_does_not_silence_a_human_prompt(tmp_path):
+    padding = 'Placeholder filler sentence. ' * 20
+    assert len(padding) > 500
+    with _Env(tmp_path):
+        _code, out = _submit(ROUTING + '. ' + padding + HANDBACK)
+        records = _log_records(tmp_path)
+    assert '<toolkit-dispatch>' in out, 'markers are read in the head of the prompt only'
+    assert len(records) == 1
+
+
+def test_a_human_prompt_mentioning_subagents_still_gets_hint_and_telemetry(tmp_path):
+    prompts = (
+        'Did the subagent hand-back arrive yet? ' + ROUTING,
+        ROUTING + ' and then summarize what each subagent reported in its hand-back',
+    )
+    for i, prompt in enumerate(prompts):
+        with _Env(tmp_path):
+            code, out = _submit(prompt, session=f'human{i}')
+            records = _log_records(tmp_path)
+        assert code == 0
+        assert '<toolkit-dispatch>' in out, f'human prompt {i} must still get its hint'
+        assert len(records) == i + 1 and records[-1]['injected'] is True
+
+
 def test_telemetry_records_hit_and_miss(tmp_path):
     with _Env(tmp_path):
         _submit(ROUTING)

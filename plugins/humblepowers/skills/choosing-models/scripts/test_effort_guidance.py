@@ -48,6 +48,22 @@ def test_reference_keeps_the_haiku_4_5_reading_as_dated_history():
     assert 'Haiku 4.5 accepted the flag and ignored it (measured 2026-09-13' in text
 
 
+def test_spawn_model_precedence_replaces_the_no_cap_claim():
+    """The harness orders a spawn's model: call, definition, variable, session; the
+    FORCE variable is an engine-level cap. Two sessions measured it."""
+    text = _reference()
+    assert 'no engine-level cap exists' not in text
+    assert 'inherits the session model, possibly the frontier one' not in text
+    assert (
+        "the call's `model`; the agent definition's `model` field (`inherit` selects the "
+        'session model); the `CLAUDE_CODE_SUBAGENT_MODEL` environment variable; '
+        'the session model' in text
+    )
+    assert '`CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`' in text
+    assert 'is the engine-level cap' in text
+    assert 'every routed call still carries an explicit `model`' in text
+
+
 def test_agreement_work_keeps_the_high_default():
     text = _reference()
     assert 'agreement between two independent statements of one rule' in text
@@ -103,6 +119,7 @@ def main() -> int:
     test_agreement_work_keeps_the_high_default()
     test_agent_tool_takes_effort_and_an_omitted_one_is_inherited()
     test_reference_names_no_spawn_hint()
+    test_spawn_model_precedence_replaces_the_no_cap_claim()
     test_effort_observations_recorded_in_meta()
     test_new_key_sits_above_the_first_model_block()
     print('ok: effort_guidance')

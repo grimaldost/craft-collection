@@ -48,9 +48,16 @@ Tier names are not shared across surfaces — emit each surface's own words:
 | planning-tool per-PR tier (e.g. keel) | tier per task | family names — translate, don't assume |
 | direct API tooling | model id | undated API string |
 
-A workflow `agent()` with no `model` inherits the session model, possibly the
-frontier one; no engine-level cap exists, so under a tier cap every call carries
-an explicit `model`.
+A spawn's model, a workflow `agent()` included, comes from the first of these
+that is set (Claude Code docs, read 2026-10-19): the call's `model`; the agent
+definition's `model` field (`inherit` selects the session model); the
+`CLAUDE_CODE_SUBAGENT_MODEL` environment variable; the session model, possibly
+the frontier one. `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` (Claude Code 2.1.257 and
+later) is the engine-level cap: while it is on, a call's `model` and a
+definition's `model` are ignored, and every spawn runs on the variable's model,
+or on the session model when the variable is unset. An unrouted spawn's tier
+therefore depends on the machine's environment, which a series file or a brief
+cannot see, so every routed call still carries an explicit `model`.
 
 While an engine is series-global (no per-task keys): score every task anyway, set
 the series tier to the modal tier, and consider splitting at a tier boundary when
