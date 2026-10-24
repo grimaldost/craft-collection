@@ -6,7 +6,7 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
-## [Unreleased]
+## [0.26.1] - 2026-10-24
 
 ### Fixed
 
