@@ -429,17 +429,26 @@ def _spend_budget(head: str, sections: list[tuple[str, str]], cursor_idx: int | 
 
 
 def anchor_cursor(text: str) -> str:
-    """The cursor section's first content line — what a reader needs to judge
-    whether a dormant anchor's claim is still true. A pointer that shows only
+    """The cursor entry a reader needs to judge whether a dormant anchor's claim is
+    still true: the bullet with the highest `Step N` when the cursor carries
+    numbered bullets (a chronological cursor ends with the newest, so its first line
+    is the oldest step), else the first content line. A pointer that shows only
     path, title and age cannot be acted on; one that shows "Phase 1 IN PROGRESS"
     against a four-day-old file can. '' when the HEAD names no cursor."""
     head, _ = split_head(text)
     for name, block in split_sections(head):
-        if 'cursor' in name.lower():
-            for line in block.splitlines()[1:]:
-                stripped = line.strip().lstrip('-*').strip()
-                if stripped:
-                    return stripped[:160]
+        if not _is_cursor_section(name):
+            continue
+        lines = block.splitlines()[1:]
+        best_n, best_line = None, ''
+        for line in lines:
+            m = _CURSOR_STEP.match(line)
+            if m and (best_n is None or int(m.group(1)) > best_n):
+                best_n, best_line = int(m.group(1)), line
+        for line in [best_line] if best_n is not None else lines:
+            stripped = line.strip().lstrip('-*').strip()
+            if stripped:
+                return stripped[:160]
     return ''
 
 
@@ -922,6 +931,20 @@ def fold_candidates(head: str) -> list[str]:
     return []
 
 
+def _cursor_has_unnumbered_bullets(head: str) -> bool:
+    """True when the cursor section holds bullets and none opens with `Step N`: the
+    one case where "nothing to fold" would be a claim about entries the ranking
+    could not read."""
+    bullets = steps = 0
+    for name, block in split_sections(head):
+        if _is_cursor_section(name):
+            for ln in block.splitlines()[1:]:
+                if _BULLET.match(ln):
+                    bullets += 1
+                    steps += bool(_CURSOR_STEP.match(ln))
+    return bullets > 0 and steps == 0
+
+
 def build_post_write_warning(anchor: Path, text: str) -> str:
     """The additionalContext for an anchor write whose HEAD is over budget or inside
     the last 10% of it: the head-fit lines, then the entries to fold below the tail
@@ -933,6 +956,11 @@ def build_post_write_warning(anchor: Path, text: str) -> str:
     if candidates:
         lines.append(f'Fold candidates, oldest first (move below {TAIL_MARKER}):')
         lines.extend(candidates)
+    elif _cursor_has_unnumbered_bullets(head):
+        lines.append(
+            'Fold candidates: the Cursor has no `Step N` bullets to rank; '
+            f'move its finished entries below {TAIL_MARKER}.'
+        )
     else:
         lines.append(
             f'Fold candidates: none in the Cursor; move resolved history below {TAIL_MARKER}.'
@@ -1118,6 +1146,23 @@ def main() -> int:
     return 0
 
 
+def _require_anchors_dir(base: Path) -> None:
+    """CLI sweeps only: a path that is not a directory exits 2, so a typo cannot
+    render as a clean sweep. The hook paths never call this; they must not error on
+    a missing directory."""
+    if not base.is_dir():
+        print(f'no anchors directory at {base}', file=sys.stderr)
+        sys.exit(2)
+
+
+def _say_empty_sweep(kind: str, base: Path) -> None:
+    """One stderr line for a sweep that listed nothing, with what it looked at, so an
+    empty directory and a clean one read differently. Stdout stays the list."""
+    closed = sum(1 for f in base.glob('*.closed.md'))
+    opened = len(find_open_anchors(base))
+    print(f'no {kind} anchors in {base} ({closed} closed, {opened} open)', file=sys.stderr)
+
+
 if __name__ == '__main__':
     # Before any CLI arm prints: both sweeps emit anchor CONTENT (titles, cursors),
     # and campaign anchors essentially always carry non-ASCII. On a cp1252 console
@@ -1128,16 +1173,24 @@ if __name__ == '__main__':
     # the rename commands for the cycle-end /anchor close --stale sweep and exits.
     if len(sys.argv) > 1 and sys.argv[1] == '--list-stale':
         base = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.cwd() / '.claude' / 'anchors'
-        for cmd in list_stale(base):
+        _require_anchors_dir(base)
+        out = list_stale(base)
+        for cmd in out:
             print(cmd)
+        if not out:
+            _say_empty_sweep('stale', base)
         sys.exit(0)
     # Arm-time sweep entry: `python anchor_inject.py --list-dormant [anchors_dir]`
     # prints the still-ACTIVE anchors nobody has touched in DORMANT_AFTER_S, with
     # the cursor each still asserts, so arming a new track can offer close-or-adopt.
     if len(sys.argv) > 1 and sys.argv[1] == '--list-dormant':
         base = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.cwd() / '.claude' / 'anchors'
-        for line in list_dormant(base):
+        _require_anchors_dir(base)
+        out = list_dormant(base)
+        for line in out:
             print(line)
+        if not out:
+            _say_empty_sweep('dormant', base)
         sys.exit(0)
     # Authoring entry: `python anchor_inject.py --head-fit <anchor>` prints the fit
     # the hook would compute, so a head is measured before it ships rather than
