@@ -703,6 +703,40 @@ def test_er_parity_no_report_is_fine():
         assert 'ER-PARITY' not in fail_codes(check(rec, path))
 
 
+def _loop_step(n: int) -> str:
+    """Step `n` of SKILL.md's "The loop" (the numbered list, one step per item)."""
+    import re
+
+    text = (HERE.parent / 'SKILL.md').read_text(encoding='utf-8')
+    loop = text.split('## The loop', 1)[1].split('\n## ', 1)[0]
+    steps = re.split(r'^(?=\d+\. )', loop, flags=re.MULTILINE)
+    (step,) = [s for s in steps if s.startswith(f'{n}. ')]
+    return ' '.join(step.split())
+
+
+def test_the_loop_renders_before_it_validates_an_edited_record():
+    # T260a. The record is edited after its last render, so the committed report.md is
+    # stale: the full gate run FIRST fails ER-PARITY, and rendering first clears it. The
+    # loop's last step must therefore name render.py before validate.py.
+    import render
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        rec = base_probe()
+        path = write_record(d, rec)
+        (d / 'report.md').write_text(render.render_report(rec, path), encoding='utf-8')
+        assert 'ER-PARITY' not in fail_codes(check(rec, path))
+        rec['disposition'] = {'completed': 20, 'excluded': 4, 'total': 24}  # an edit
+        write_record(d, rec)
+        assert 'ER-PARITY' in fail_codes(check(rec, path))  # validate first: red
+        (d / 'report.md').write_text(render.render_report(rec, path), encoding='utf-8')
+        assert 'ER-PARITY' not in fail_codes(check(rec, path))  # render, then validate: green
+
+    step = _loop_step(5)
+    assert 'render.py <record>' in step and 'validate.py <record>' in step, step
+    assert step.index('render.py <record>') < step.index('validate.py <record>'), step
+
+
 # --- ER-ANCHOR (temporal chronology via git) --------------------------------
 
 
