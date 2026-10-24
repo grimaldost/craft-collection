@@ -13,7 +13,10 @@ Contract under test:
 - open-rows reports the newest status per row and names the doc that set it;
 - a row later restated as shipped/declined leaves the open set;
 - from T67 on, in the craft-collection namespace only, a row is keyed by its id
-  alone: a reworded restatement or a same-doc repeat is one row (T94c).
+  alone: a reworded restatement or a same-doc repeat is one row (T94c);
+- open-rows says on stderr how many non-T table rows it did not read (T309a);
+- in id-keyed mode a `superseded` restatement naming no successor id leaves an
+  open row open (T309b).
 
 The red proof is `test_an_undispositioned_finding_reddens_coverage`: it seeds the
 observed defect -- a report named under Inputs whose findings the doc never
@@ -345,6 +348,91 @@ def test_a_qualified_status_is_still_an_open_row():
         assert 'T9d' not in rows, 'a qualified shipped status is still closed'
 
 
+# T309a: a keel-shaped doc keys its rows `SW26`, `E3`, ... and `_ROW` reads T ids
+# only, so open-rows printed a T-only count as if it were the whole open set.
+KEEL_SHAPED_DOC = """# Triage - keel-shaped
+
+| # | proposed promotion | fix shape | home | status |
+|---|---|---|---|---|
+| SW26 | a row under another prefix | prose | here | proposed |
+| E3 | another one | prose | here | watch |
+| T5a | the one open T row | prose | here | proposed |
+"""
+
+
+def test_non_t_table_rows_are_counted_on_stderr_not_silently_dropped():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / '2026-01-01-triage-keel-shaped.md').write_text(KEEL_SHAPED_DOC, encoding='utf-8')
+        proc = run_cli('open-rows', str(root))
+        assert proc.returncode == 0
+        assert (
+            '2026-01-01-triage-keel-shaped: 2 table row(s) with non-T ids not read '
+            '(open-rows reads T ids only)'
+        ) in proc.stderr
+        assert '1 open row(s)' in proc.stdout
+        assert 'T5a' in proc.stdout
+        assert 'SW26' not in proc.stdout
+
+
+def test_a_doc_with_only_t_rows_prints_no_unread_note():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / '2026-01-01-triage-old.md').write_text(OLD_DOC, encoding='utf-8')
+        proc = run_cli('open-rows', str(root))
+        assert 'not read' not in proc.stderr
+
+
+def test_the_unread_note_is_printed_when_no_t_row_is_open():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        only_other = KEEL_SHAPED_DOC.replace(
+            '| T5a | the one open T row | prose | here | proposed |\n', ''
+        )
+        (root / '2026-01-01-triage-keel-shaped.md').write_text(only_other, encoding='utf-8')
+        proc = run_cli('open-rows', str(root))
+        assert 'no open rows' in proc.stdout
+        assert '2 table row(s) with non-T ids not read' in proc.stderr
+
+
+# T309b: in id-keyed mode a later row restating an id as `superseded` with no
+# successor (superseded only for an old wording) must not close the open row.
+def _ck_corpus(root: Path, later_status: str) -> Path:
+    return _namespace_corpus(
+        root,
+        'craft-collection',
+        '| T80a | the original wording | mechanize | x | proposed |\n',
+        f'| T80a | a reworded restatement | mechanize | x | {later_status} |\n',
+    )
+
+
+def test_a_successorless_superseded_restatement_does_not_close_an_open_row():
+    with tempfile.TemporaryDirectory() as d:
+        corpus = _ck_corpus(Path(d), 'superseded (old wording)')
+        assert [r for r in ta.open_rows(corpus) if r[0] == 'T80a'] == [
+            ('T80a', 'proposed', '2026-09-13-triage-a')
+        ]
+
+
+def test_a_superseded_status_naming_a_successor_still_closes_the_row():
+    with tempfile.TemporaryDirectory() as d:
+        corpus = _ck_corpus(Path(d), 'superseded by T263a')
+        assert [r for r in ta.open_rows(corpus) if r[0] == 'T80a'] == []
+
+
+def test_description_keyed_mode_keeps_a_successorless_superseded_closing_its_row():
+    # Below the cut or outside the namespace the same text is a distinct row, so
+    # the superseded row simply is not open; the rule is id-keyed mode only.
+    with tempfile.TemporaryDirectory() as d:
+        corpus = _namespace_corpus(
+            Path(d),
+            'other-tool',
+            '| T80a | same wording | mechanize | x | proposed |\n',
+            '| T80a | same wording | mechanize | x | superseded (old wording) |\n',
+        )
+        assert [r for r in ta.open_rows(corpus) if r[0] == 'T80a'] == []
+
+
 if __name__ == '__main__':
     test_covered_doc_passes()
     test_an_undispositioned_finding_reddens_coverage()
@@ -362,4 +450,10 @@ if __name__ == '__main__':
     test_open_rows_on_a_corpus_with_no_triage_docs()
     test_usage_error_without_a_mode()
     test_a_qualified_status_is_still_an_open_row()
+    test_non_t_table_rows_are_counted_on_stderr_not_silently_dropped()
+    test_a_doc_with_only_t_rows_prints_no_unread_note()
+    test_the_unread_note_is_printed_when_no_t_row_is_open()
+    test_a_successorless_superseded_restatement_does_not_close_an_open_row()
+    test_a_superseded_status_naming_a_successor_still_closes_the_row()
+    test_description_keyed_mode_keeps_a_successorless_superseded_closing_its_row()
     print('ok: all triage_audit tests passed')

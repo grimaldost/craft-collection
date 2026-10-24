@@ -12,7 +12,7 @@
   { "query": "What patterns emerged across these sessions?", "should_trigger": false, "note": "near-miss: journal-corpus consolidation, not tool feedback" },
   { "query": "Triage the GitHub issues in this repo.", "should_trigger": false, "note": "near-miss: 'triage' on an issue tracker" },
   { "query": "Prioritize my task backlog for the sprint.", "should_trigger": false, "note": "near-miss: task management" },
-  { "query": "Triage this series' reflections and promote the recurring traps into checks.", "should_trigger": false, "note": "near-miss: keel-triage's job (series reflections)" },
+  { "query": "Triage this series' reflections and promote the recurring traps into checks.", "should_trigger": false, "note": "near-miss: reflection-triage's job (series reflections)" },
   { "query": "Write the feedback report for today's session.", "should_trigger": false, "note": "near-miss: capture side (tool-feedback), not triage" },
   { "query": "Which of these support tickets should we answer first?", "should_trigger": false, "note": "ticket queue, not a feedback corpus" },
   { "query": "Dedupe these log lines and tell me the top recurring errors.", "should_trigger": false, "note": "clustering homonym on logs" }

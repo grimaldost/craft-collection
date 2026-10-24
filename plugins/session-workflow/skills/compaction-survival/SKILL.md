@@ -57,8 +57,8 @@ everything except the cursor, and putting one above another demotes that other.
    *mechanism* as dated, literal quotes with a stable id: a record of what the
    owner said and when, never a grant the anchor makes itself.
 2. **Cursor** — done / in progress / **next action on resume**, rewritten in
-   place. The newest two steps; older ones fold into the TAIL at each boundary.
-   This is the part that earns the anchor.
+   place. The newest two steps, newest first; older ones fold into the TAIL at
+   each boundary.
 3. **Resume steps** — how a cold reader re-orients, in absolute paths.
 4. **Invariants** — decisions about the task that a post-compaction turn must
    not relitigate.
@@ -77,11 +77,12 @@ injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
 
 ## The protocol
 
-1. **Create the anchor at the start of the run**, before the first irreversible
-   step, so there is something to resume from immediately. Arming is also the
-   sweep moment — read `anchor_inject.py --list-dormant <anchors dir>` and close,
-   adopt or park any track it names. A subagent anchors in its own work folder, never in
-   `<cwd>/.claude/anchors/`; see failure-modes.
+1. **Create the anchor at the start of the run**, in `.claude/anchors/` under the
+   directory the session started in, before the first irreversible step, so there
+   is something to resume from immediately. Arming is also the sweep moment — read
+   `scripts/anchor_inject.py --list-dormant <anchors dir>` and close, adopt or park
+   any track it names. A subagent anchors in its own work folder, never there; see
+   failure-modes.
 2. **Update the cursor whenever durable state moves** — a commit, push, deploy step,
    background launch, or write outside the repo. State only in the context window is
    one compaction from gone.
@@ -91,13 +92,12 @@ injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
    cursor is an Edit, so during tool outages it can lag reality by a phase; when
    it disagrees with durable state (the version-control log, run ledgers), trust
    the durable state.
-4. **Write atomically and keep one anchor.** Overwrite the single file rather
-   than scattering state across several; a half-written or duplicated anchor is
-   worse than a terse one.
+4. **Write atomically and keep one anchor.** Overwrite the single file; a half-written or
+   duplicated anchor is worse than a terse one.
 5. **Keep the HEAD bounded.** As a phase closes, fold its detail into a
    one-line outcome in the TAIL, below the marker. Measure rather than estimate:
-   `anchor_inject.py --head-fit <anchor>` prints the head's characters against
-   the budget and the sections a cut would take.
+   `scripts/anchor_inject.py --head-fit <anchor>` prints the head's characters
+   against the budget and the sections a cut would take.
 6. **Make resume idempotent.** The resume steps let a fresh context recover the
    run from the anchor and the real on-disk state alone; re-entering a
    half-finished step checks the artifact before redoing it, so re-reading is
