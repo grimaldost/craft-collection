@@ -8,7 +8,7 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
-## [Unreleased]
+## [0.18.1] - 2026-10-24
 
 ### Fixed
 
