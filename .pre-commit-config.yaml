@@ -18,7 +18,7 @@ default_stages: [pre-commit, pre-push]
 repos:
   # >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
   - repo: https://github.com/grimaldost/railform
-    rev: 65bf54ae6f4ed7bd027fee9e0806d9dfa2df3c48
+    rev: 77784b9f8d7951117e351258c857b8c64e634716
     hooks:
       - id: railform-commit-msg
       - id: railform-branch-name
