@@ -150,6 +150,31 @@ def finalize_record(record: dict[str, Any], freeze_sha: str) -> dict[str, Any]:
     return out
 
 
+_HEADER = (
+    '# Finalized by finalize.py -- the frozen pre-registration plus results,\n'
+    '# the wave-2 amendment, and the prior -> posterior update. Do not hand-edit;\n'
+    '# re-run finalize.py to regenerate. See FREEZE.md for the choreography.\n'
+)
+
+# Above each `verifier:` key. The two hashes are 65 characters (a SHA-256 digest has 64)
+# and the verifier files are not shipped with this example, so nothing checks them.
+_VERIFIER_NOTE = '# Illustrative placeholder hash; the verifier is not shipped with this example.'
+
+
+def render_record_yaml(finalized: dict[str, Any]) -> str:
+    """The record as written to disk: the header, then the YAML with a comment above each
+    `verifier:` saying its hash is an illustrative placeholder. Comments are not data, so
+    ER-PREREG's frozen-plan comparison ignores them, and regenerating the record keeps them."""
+    body = yaml.safe_dump(finalized, sort_keys=False, allow_unicode=False, width=100)
+    lines: list[str] = []
+    for line in body.splitlines(keepends=True):
+        if line.strip() == 'verifier:':
+            indent = line[: len(line) - len(line.lstrip())]
+            lines.append(f'{indent}{_VERIFIER_NOTE}\n')
+        lines.append(line)
+    return _HEADER + ''.join(lines)
+
+
 def _git_env() -> dict[str, str]:
     """The environment minus every GIT_* variable, so `-C` is authoritative.
 
@@ -202,10 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     finalized = finalize_record(frozen, freeze_sha)
 
     with open(record_path, 'w', encoding='utf-8', newline='\n') as fh:
-        fh.write('# Finalized by finalize.py -- the frozen pre-registration plus results,\n')
-        fh.write('# the wave-2 amendment, and the prior -> posterior update. Do not hand-edit;\n')
-        fh.write('# re-run finalize.py to regenerate. See FREEZE.md for the choreography.\n')
-        yaml.safe_dump(finalized, fh, sort_keys=False, allow_unicode=False, width=100)
+        fh.write(render_record_yaml(finalized))
 
     report_path = record_path.parent / 'report.md'
     # The record path goes in: it is what the leading activation line is generated from,

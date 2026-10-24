@@ -198,6 +198,38 @@ def test_delivered_record_is_finalized_with_reconstructible_freeze():
     assert render.check_drift(DELIVERED_RECORD) is None
 
 
+# --- T262a: the example does not present placeholder digests as real --------
+
+
+def _verifier_lines(text: str) -> list[tuple[str, str]]:
+    """(the line before, the verifier line) for every `verifier:` key in a record text."""
+    lines = text.splitlines()
+    return [(lines[i - 1], line) for i, line in enumerate(lines) if line.strip() == 'verifier:']
+
+
+def _assert_placeholder_comments(text: str) -> None:
+    pairs = _verifier_lines(text)
+    assert len(pairs) == 2, pairs
+    for before, _ in pairs:
+        assert before.lstrip().startswith('#'), f'no comment beside a verifier: {before!r}'
+        assert 'placeholder' in before and 'not shipped' in before, before
+
+
+def test_the_example_marks_its_verifier_hashes_as_placeholders():
+    _assert_placeholder_comments(DELIVERED_RECORD.read_text(encoding='utf-8'))
+    freeze_md = (EXAMPLE_DIR / 'FREEZE.md').read_text(encoding='utf-8')
+    assert 'illustrative placeholders' in freeze_md, (
+        'FREEZE.md does not say the hashes are placeholders'
+    )
+
+
+def test_finalize_keeps_the_placeholder_comments_when_it_regenerates_the_record():
+    finalized = finalize.finalize_record(_load_frozen(), 'a' * 40)
+    text = finalize.render_record_yaml(finalized)
+    _assert_placeholder_comments(text)
+    assert yaml.safe_load(text) == finalized  # comments only; the data is unchanged
+
+
 # --- the corrected record exits 0 against a real freeze ----------------------
 
 

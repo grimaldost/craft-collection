@@ -80,6 +80,10 @@ Expected tail: `finalized ... (1 warning(s), 0 failures, no drift)`. The one war
 RG-2x2 was hand-orchestrated in PR #15 of the fathom data repository (private);
 no ledger travels with it). A WARN does not fail the gate.
 
+The verifier hashes in `record.yaml` are illustrative placeholders, and the verifiers
+(`verify_activation.py`, `verify_footprint.py`) are not shipped with the example: it
+shows the shape of a pinned verifier, not one that can be re-hashed.
+
 Then commit the finalized pair with all hooks running:
 
     git add "$DIR/record.yaml" "$DIR/report.md"
