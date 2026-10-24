@@ -27,6 +27,30 @@ tagged.
   reviewer subagent, and the harness refuses report-file writes from subagents; the reference
   now has the orchestrator write each reviewer's returned output (2026-10-19 triage: T304a).
 
+## [0.26.1] - 2026-10-24
+
+### Fixed
+
+- **The arming sweep no longer passes vacuously** (2026-10-19 triage: T307a).
+  `anchor_inject.py --list-dormant` and `--list-stale` exit 2 with `no anchors directory at
+  <path>` on stderr when the path is not a directory, as `--head-fit` already did, and print
+  one stderr summary line (`no dormant anchors in <dir> (N closed, M open)`) when the
+  directory exists and the list is empty. Stdout stays exactly the list. The hook paths still
+  tolerate a missing directory.
+- **A dormant anchor's pointer shows its newest step** (2026-10-19 triage: T305b).
+  `anchor_cursor()` returns the cursor bullet with the highest `Step N` when the cursor has
+  numbered bullets, instead of the first line, which is the oldest step in a chronological
+  cursor. It feeds the stale pointer and `--list-dormant`.
+- **`SKILL.md` states the cursor order and where the anchor lives** (2026-10-19 triage:
+  T305a, T310a). The Cursor item says "newest first", as `references/anchor-spec.md` does and
+  `--step` writes; protocol step 1 names `.claude/anchors/` under the directory the session
+  started in, and the `anchor_inject.py` mentions carry their `scripts/` path. The body
+  stays within its word budget (1225 to 1221).
+- **The fold-candidate line no longer claims "none" for a cursor it could not read**
+  (2026-10-19 triage: T301b). When the Cursor has bullets and none opens with `Step N`, the
+  post-write warning says the Cursor has no `Step N` bullets to rank; the old line stays for
+  a cursor with no bullets.
+
 ## [0.26.0] - 2026-10-08
 
 The anchor's authority is limited to task position, new anchor features are frozen, three
