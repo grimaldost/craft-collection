@@ -1005,6 +1005,7 @@ def test_er_prereg_verifier_is_read_at_the_freeze_commit_not_the_working_tree():
         (d / 'exp' / 'verify_activation.py').write_bytes(b'print("edited after the freeze")\n')
         report = check(rec, path)
         assert _prereg_warnings(report) == []
+        assert 'ER-XCHECK' not in warn_codes(report), report.warnings
 
 
 def test_er_prereg_warns_when_the_verifier_is_absent_at_the_freeze_commit():
@@ -1015,6 +1016,48 @@ def test_er_prereg_warns_when_the_verifier_is_absent_at_the_freeze_commit():
         assert len(warns) == 1 and 'activation' in warns[0], warns
         assert 'verify_activation.py' in warns[0], warns
         assert 'ER-PREREG' not in fail_codes(report), fail_codes(report)
+
+
+def test_er_xcheck_clears_when_every_verifier_is_verified_at_the_freeze_commit():
+    with tempfile.TemporaryDirectory() as td:
+        a, f = b'print("a")\n', b'print("f")\n'
+        rec, path, _ = _verifier_repo(
+            Path(td),
+            {'verify_activation.py': a, 'checks/verify_footprint.py': f},
+            {'activation': _sha256(a), 'footprint': _sha256(f)},
+        )
+        report = check(rec, path)
+        assert warn_codes(report) == set(), report.warnings
+        assert fail_codes(report) == set(), report.failures
+
+
+def test_er_xcheck_warns_unless_every_outcome_verifier_is_verified():
+    a, f = b'print("a")\n', b'print("f")\n'
+    with tempfile.TemporaryDirectory() as td:
+        # one of two verifiers does not match: the warning stays
+        rec, path, _ = _verifier_repo(
+            Path(td),
+            {'verify_activation.py': a, 'checks/verify_footprint.py': f},
+            {'activation': _sha256(a), 'footprint': _sha256(b'something else')},
+        )
+        assert 'ER-XCHECK' in warn_codes(check(rec, path))
+    with tempfile.TemporaryDirectory() as td:
+        # a verified outcome beside one that names no verifier at all: the warning stays
+        rec, path, _ = _verifier_repo(
+            Path(td), {'verify_activation.py': a}, {'activation': _sha256(a)}
+        )
+        rec['outcomes'].append(
+            {
+                'name': 'tone',
+                'role': 'exploratory',
+                'operationalization': 'a human read of the transcripts',
+                'added_after_freeze': True,
+            }
+        )
+        write_record(path.parent, rec)
+        assert 'ER-XCHECK' in warn_codes(check(rec, path))
+    # a record with no freeze verifies nothing: the warning stays
+    assert 'ER-XCHECK' in warn_codes(check(_measurement_record()))
 
 
 def test_er_prereg_not_in_history_downgrades_by_tier():

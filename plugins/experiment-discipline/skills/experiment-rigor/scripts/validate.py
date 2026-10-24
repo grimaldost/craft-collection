@@ -16,6 +16,8 @@ Error-code catalog (ERROR_CODES):
   ER-ANCHOR      temporal anchor: plan_frozen_at.commit exists in git history and
                  predates the earliest run (chronology, not proof of no backdating)
   ER-XCHECK      run cross-check vs the fathom ledger, with the Q5 per-tier hand policy
+                 (the measurement-tier source:hand warning clears when the freeze commit
+                 carries every outcome's verifier and each frozen hash matches it)
   ER-STATS       stats integrity: every stated CI recomputes via stats.py within
                  ATOL/RTOL; no CLT/normal below a cell denominator of 30; paired rules;
                  and (schema v1.1) every stated `contrasts[]` entry -- estimate, se,
@@ -1288,6 +1290,8 @@ def check_xcheck(record: dict, record_path: Path | None) -> list[Finding]:
     if tier == 'probe':
         return []
     if tier == 'measurement':
+        if _verifiers_all_verified(record, record_path):
+            return []  # T143c: the frozen commit carries the verifiers, so the run reconstructs
         reason = '' if run.get('hand_reason') else ' (declare run.hand_reason)'
         return [
             _warn(
@@ -1530,6 +1534,24 @@ def _check_verifiers(
             verified.add(name)
     current = _outcomes_by_name(record)
     return out, bool(current) and all(name in verified for name in current)
+
+
+def _verifiers_all_verified(record: dict, record_path: Path | None) -> bool:
+    """True when the frozen commit carries every outcome's verifier and each hash matches.
+    Any step that cannot be taken (no freeze, not in history) is False: ER-PREREG says why."""
+    if record_path is None:
+        return False
+    commit = (record.get('plan_frozen_at') or {}).get('commit')
+    if not commit or str(commit) in ('TBD', 'PENDING', 'tbd', 'pending'):
+        return False
+    cwd = _repo_toplevel(record_path.parent)
+    relpath = _repo_relpath(cwd, record_path) if cwd is not None else None
+    if cwd is None or relpath is None:
+        return False
+    frozen, tried = _reconstruct_frozen(cwd, str(commit), record, relpath)
+    if frozen is None:
+        return False
+    return _check_verifiers(record, frozen, cwd, str(commit), tried)[1]
 
 
 def check_prereg(record: dict, record_path: Path | None) -> list[Finding]:
