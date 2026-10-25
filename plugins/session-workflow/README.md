@@ -161,3 +161,17 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   plugin-MCP call so this nudge had something to read; the transcript already
   carried that, so the nudge reads it directly and the second write path is
   gone.
+- **UserPromptSubmit / PostToolUse (`mcp__ccd_turn__wrap_up`) / Stop** — pending-asks
+  gate: the asks a turn raised reach its final block. At every stop the hook reads
+  `last_assistant_message` (never the transcript, which may lag) and records the
+  sentences that ask the operator for a decision, approval, answer or action in a
+  per-session ledger under `CLAUDE_PLUGIN_DATA/final-block-gate/`; a new human prompt
+  empties it; the desktop next-step box's question counts as carried. At a stop with
+  nothing in flight (`background_tasks` empty or absent) whose message does not restate
+  an earlier ask of the same turn, it returns `additionalContext` naming the dropped asks
+  verbatim, once per ask, so the model restates each with its options and a
+  recommendation or says it is resolved; it never blocks. Measured cause (2026-10-25,
+  499 turns): 36% of the asks first raised before the final block were absent from it.
+  **On by default**; opt out with `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0`;
+  `SESSION_WORKFLOW_FINAL_BLOCK_GATE=observe` records the would-be advice in the ledger
+  and prints nothing; `python hooks/final_block_gate.py --health` prints the counts.

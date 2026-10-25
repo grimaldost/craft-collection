@@ -6,6 +6,41 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.28.0] - 2026-10-25
+
+A mechanism for the final block, after the 0.27.0 specification: a Stop-hook gate that
+names the asks a turn dropped. Minor bump: three new hook entry points ship on.
+
+### Added
+
+- **Pending-asks gate** (`hooks/final_block_gate.py`, three entry points on one switch).
+  At every Stop the hook records, from `last_assistant_message`, the sentences that ask the
+  operator for a decision, approval, answer or action (question-mark sentences with a
+  second-person or permission marker, explicit requests, pending-list markers; Portuguese
+  and English) in a per-session ledger under `CLAUDE_PLUGIN_DATA/final-block-gate/`.
+  `UserPromptSubmit` empties the ledger (a new turn); `PostToolUse` on the desktop
+  next-step box tool (`mcp__ccd_turn__wrap_up`) records the box's question as a carried
+  ask. At a stop with nothing in flight (`background_tasks` empty or absent) whose message
+  does not restate an earlier ask of the same turn by token overlap, the hook returns
+  `hookSpecificOutput.additionalContext` naming the dropped asks verbatim, once per ask,
+  so the model restates each with its options and a recommendation or says it is
+  resolved. It never returns `decision: block`, reads no transcript (which may lag at
+  Stop), does not skip on `stop_hook_active` (each ask is advised once instead), and
+  defers while background work is in flight so the ledger survives to the real final
+  stop. Every path exits 0. Measured cause (2026-10-25; 30 sessions, 499 turns, every
+  turn labeled): 36% of the asks first raised before the final block were absent from it,
+  and the author of the 0.27.0 specification dropped the shape in its own closing
+  messages the same day; prose does not hold at the sixth stop of a long turn.
+  **On by default**; `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0` opts out and `=observe`
+  records the would-be advice without output, the paired null for an always-on mechanism;
+  `python hooks/final_block_gate.py --health` prints per-session counts.
+  `hooks/test_final_block_gate.py` covers the switch, recording, one-time advice,
+  restatement, the box channel, background deferral, the missing-key case, the ledger
+  reset, observe mode, the empty final message, non-asks (waits on subagents and CI) and
+  the CLI. Out-of-sample caveat from the measurement's holdout: the lexical detector
+  caught about half of the lost asks there, so the gate is a floor, not the ceiling;
+  the model does the judging when it reads the advice.
+
 ## [0.27.0] - 2026-10-25
 
 The `step-digest` output style becomes the final-block specification: the digest's fields

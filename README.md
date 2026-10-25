@@ -118,6 +118,9 @@ the `env` block of `~/.claude/settings.json` (every project) or
 | session-workflow | Stale skill-body check on resume and compact (SessionStart) | on | `SESSION_WORKFLOW_STALE_BODY_CHECK=0` |
 | session-workflow | Anchor size warning after a write to an open anchor (PostToolUse) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0`, the same switch as re-injection |
 | session-workflow | Feedback-debt nudge (Stop; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
+| session-workflow | Pending-asks gate: ledger reset on a new prompt (UserPromptSubmit) | on | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0`; `=observe` records without output |
+| session-workflow | Pending-asks gate: records the desktop next-step box's question (PostToolUse) | on | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0`, the same switch |
+| session-workflow | Pending-asks gate: names earlier asks the final message dropped, as additionalContext (Stop) | on | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0`, the same switch |
 | humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
 
 Three hooks were retired rather than defaulted on: the toolkit-inventory session
