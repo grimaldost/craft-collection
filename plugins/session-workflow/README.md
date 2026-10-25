@@ -76,9 +76,11 @@ them as slash commands, and the model does not invoke them on its own.
 
 ## Output style
 
-- **step-digest** — lean narration while working, then a fixed-field digest at
-  the end of each substantive turn. Off by default; select it under `/config` or
-  set `"outputStyle": "session-workflow:step-digest"`.
+- **step-digest** — lean narration while working, then a final block the reader
+  can act on alone: outcome, every decision the reader owes with its options and
+  a recommendation, next step, one question last. Off by default; select it
+  under `/config` or set `"outputStyle": "session-workflow:step-digest"` in your
+  user or project settings.
 
 ## Hooks
 

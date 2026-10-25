@@ -70,4 +70,4 @@ Capture session knowledge into structured entries and consolidate them into dura
 - **anchor** — Snapshot the run's control anchor to disk now — a one-off backstop before a manual /compact, with or without the compaction-survival protocol armed (`plugins/session-workflow/commands/anchor.md`)
 
 ### Output styles
-- **step-digest** — Lean narration while working, then a fixed-field digest at the end of each substantive turn (`plugins/session-workflow/output-styles/step-digest.md`)
+- **step-digest** — Lean narration while working, then a final block the reader can act on alone - outcome, every decision the reader owes with its options and a recommendation, next step, one question last (`plugins/session-workflow/output-styles/step-digest.md`)
