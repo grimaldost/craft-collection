@@ -6,6 +6,15 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.27.1] - 2026-10-25
+
+### Changed
+
+- **Two private tool names removed from shipped text.** A feedback-triage reference
+  (`references/mechanics.md`) and a test fixture named a retired private tool; both now use a
+  neutral phrase. The private-refs gate rejects the name in any touched file, so these were the
+  last two occurrences in this plugin standing in the way of future edits. No behaviour change.
+
 ## [0.27.0] - 2026-10-25
 
 The `step-digest` output style becomes the final-block specification: the digest's fields
