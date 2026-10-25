@@ -10,7 +10,7 @@
 
   { "query": "Implement exactly this spec — the function signature, behavior, and tests are written out below.", "should_trigger": false, "note": "already specified to execution level" },
   { "query": "What do you think of imperative skill descriptions?", "should_trigger": false, "note": "thinking aloud — assessment, not artifacts" },
-  { "query": "Plan the PR series for the spec we approved yesterday.", "should_trigger": false, "note": "near-miss: planning owner (keel/pr-pilot)" },
+  { "query": "Plan the PR series for the spec we approved yesterday.", "should_trigger": false, "note": "near-miss: planning owner (keel/convoy)" },
   { "query": "Fix the failing login test.", "should_trigger": false, "note": "bugfix, not an idea" },
   { "query": "Rename this variable across the repo.", "should_trigger": false, "note": "mechanical change" },
   { "query": "Journal what we decided this session.", "should_trigger": false, "note": "knowledge capture — journaling-sessions" },

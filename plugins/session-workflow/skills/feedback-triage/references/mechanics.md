@@ -70,8 +70,8 @@ When a multi-tool corpus is digested by per-tool subagents, the brief's owner
 taxonomy must enumerate **each registered tool's own skills/components**, not
 just describe the tools. A finding about tool X's own skill is otherwise
 misrouted to whichever tool the brief described in most detail (observed: a
-pr-pilot skill finding mistagged as craft-collection's because the brief
-detailed craft and only named pr-pilot).
+retired-engine skill finding mistagged as craft-collection's because the brief
+detailed craft and only named the retired engine).
 
 ## A corpus split across several passes in one round
 

@@ -746,7 +746,7 @@ def render_chain(record_path: str | Path) -> str:
 # project's ingestion pipeline can compost it into the long-term store. That project
 # is SEALORE: it owns the parser (sealore/src/sealore/ingestion/journal_v2.py) and the
 # written contract (sealore/src/sealore/ingestion/ENVELOPE.md). It is not mantis, which
-# held the role earlier in the chain cognitive-memory -> cogmem -> mantis -> sealore.
+# held the role earlier in the chain (two retired predecessors) -> mantis -> sealore.
 # Two shapes:
 #
 #   PRIMARY (default) -- the full envelope carrying the update and its provenance as

@@ -8,7 +8,7 @@
   { "query": "Break the approved spec into bite-sized implementation tasks and start executing them.", "should_trigger": true, "note": "decompose-and-execute" },
   { "query": "Take yesterday's agreed design for the cache layer and drive it to done with review checkpoints.", "should_trigger": true, "note": "design to done with checkpoints" },
 
-  { "query": "Plan the PR series for this quarter's migration — dependencies, waves, the works.", "should_trigger": false, "note": "near-miss: governed series — pr-pilot" },
+  { "query": "Plan the PR series for this quarter's migration — dependencies, waves, the works.", "should_trigger": false, "note": "near-miss: governed series — convoy" },
   { "query": "Apply the method to this repo and set up the Definition-of-Ready gate.", "should_trigger": false, "note": "near-miss: governed method — keel" },
   { "query": "Let's figure out what the notification feature should even be.", "should_trigger": false, "note": "near-miss: design not agreed — brainstorming" },
   { "query": "Fix the off-by-one in the pagination helper.", "should_trigger": false, "note": "single-loop fix — TDD directly" },

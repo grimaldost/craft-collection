@@ -1184,8 +1184,8 @@ in a real `claude -p` process; these close the failure modes the attacks found.
 
 The capacity-dispatch pair: choosing-models + /refresh-models, per the accepted
 design `docs/design/2026-07-14-choosing-models-skill.md` (successor to
-pr-pilot's model-tiers + pr-prompt-scorer, whose doctrine was orphaned by the
-pr-pilot → convoy migration; design revised once after a blind review). Minor
+the retired engine's tier-table skill + its prompt-scorer skill, whose doctrine was orphaned by the
+retired engine → convoy migration; design revised once after a blind review). Minor
 bump: two new skills.
 
 ### Added
@@ -1223,8 +1223,8 @@ bump: two new skills.
 - **skill-authoring:** the cross-tool-reference rule's worked example
   re-pointed to a live cross-plugin instance (a capacity-dispatch policy, e.g.
   humblepowers' choosing-models — as now cited from session-workflow's
-  review-panel), replacing "convoy's model-tiers", whose referent existed
-  nowhere after the pr-pilot retirement. Net 0 words.
+  review-panel), replacing "convoy's tier table", whose referent existed
+  nowhere after the engine was retired. Net 0 words.
 - **choosing-tools trigger eval:** the model-choice near-miss note now names
   its owner (`— choosing-models`); the case stays a negative for
   choosing-tools and is the new skill's first positive.
@@ -1256,7 +1256,7 @@ collided with an honest red).
 
 ## [0.4.9] - 2026-07-05
 
-pr-pilot → convoy rename completion (PRs #75, #81 from the 2026-07-05 polish
+The retired engine → convoy rename completion (PRs #75, #81 from the 2026-07-05 polish
 session's corpus review) plus a marketplace-description sync.
 
 ### Changed
@@ -1264,11 +1264,11 @@ session's corpus review) plus a marketplace-description sync.
 - **Body sweep (#75):** planned-execution (the below/above-lane pointer, the
   model-tier example, the Boundaries owner line), skill-authoring (the rule-2
   role-generic cross-tool example), and the README dedup table now name convoy —
-  pr-pilot's replacement as the governed multi-PR engine. Form unchanged; only
+  the retired engine's replacement as the governed multi-PR engine. Form unchanged; only
   the stale example name swapped.
 - **Description completion (#81) — reseal note:** planned-execution's
-  frontmatter `description` named pr-pilot twice ("doesn't warrant keel or
-  pr-pilot", "keel and pr-pilot own that") — now convoy. This is a `description`
+  frontmatter `description` named the retired engine twice (once beside keel in
+  the not-warranted clause, once in the ownership clause) — now convoy. This is a `description`
   edit made with maintainer sign-off: the skill's sealed trigger holdout
   predates it and should be re-baselined before the next description-tuning
   round (the edit is a factual example-name swap, not trigger tuning, so a
