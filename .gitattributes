@@ -10,3 +10,6 @@
 # Git for Windows' sh tolerates CRLF, but a shell that does not would read a stray carriage
 # return at the end of each line.
 .githooks/* text eol=lf
+# >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
+.githooks/** text eol=lf
+# <<< railform
