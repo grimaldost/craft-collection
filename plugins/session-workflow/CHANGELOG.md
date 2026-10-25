@@ -6,6 +6,35 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.27.0] - 2026-10-25
+
+The `step-digest` output style becomes the final-block specification: the digest's fields
+now carry every decision the reader owes, with its options and a recommendation, and one
+question last. Minor bump: an installed copy that selected the style gets a different block
+shape.
+
+### Changed
+
+- **step-digest: the digest is a final block the reader can act on alone.** The fields are
+  Outcome, Decisions, Next and Ask. Decisions holds one line per decision, approval or action
+  the reader must take: the question, the options for a decision, the recommendation with its
+  reason or "no recommendation", and what happens if an approval or an action waits; every
+  ask raised anywhere in the turn is repeated there in full, and the block never points to an
+  earlier message. Outcome and Next stay within three sentences; Decisions has no cap on items;
+  the block has no total word cap. Text between tool calls is named as narration, not a
+  channel. A report the reader asked for is an artifact whose first screen holds Outcome and
+  Decisions; in a host that draws a next-step box, the Ask also goes there. Measured cause
+  (2026-10-25; 30 sessions, 499 turns, every turn labeled with a fixed rubric): in the 341
+  turns that asked the operator for a decision, the final block stated the ask in 76% and gave
+  its options and a recommendation in 43%; a third of the asks were first raised before the
+  final block and 36% of those were absent from it; the loss rose from 2% with no agent stop in
+  the turn to 35% with five or more. A fresh reader given only the final block passed 4 of 10
+  sampled blocks as written and 7 of 10 after the specification was applied to the same turns.
+  Acceptance: the same measurement re-run on the next 30 sessions at least two weeks after the
+  style is enabled, with lost early asks at most 10% of early asks, the ask stated in at least
+  90% and full context in at least 70% of request turns. `scripts/test_step_digest_text.py`
+  pins the field order and the rules an edit could lose.
+
 ## [0.26.2] - 2026-10-24
 
 ### Fixed
@@ -1526,7 +1555,7 @@ the bundled eval-engine scripts gained capability.
 ### Changed
 
 - **Description edit (#81) — reseal note:** tool-feedback's `description`
-  trigger example "keel / pr-pilot" → "keel / convoy" (with the matching body
+  trigger example "keel / <a retired tool>" → "keel / convoy" (with the matching body
   offer-prompt example). Made with maintainer sign-off; the skill's sealed
   holdout predates the edit and should be re-baselined before the next
   description-tuning round.
