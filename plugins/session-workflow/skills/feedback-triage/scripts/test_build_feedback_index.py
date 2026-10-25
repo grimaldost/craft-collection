@@ -95,7 +95,7 @@ def test_build_index_excludes_consolidated_backlog():
             encoding='utf-8',
         )
         (dd / 'BACKLOG.md').write_text(
-            '# pr-pilot backlog -- consolidated status\n## SHIPPED\n', encoding='utf-8'
+            '# example-tool backlog -- consolidated status\n## SHIPPED\n', encoding='utf-8'
         )
         idx = build_index(dd)
     assert '## 2026-01-09-real' in idx  # the one real report is indexed

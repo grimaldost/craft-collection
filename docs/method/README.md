@@ -36,6 +36,6 @@ The method (§7) needs five slots filled in any project. Each maps to a template
 4. The `apply-method` skill (in the keel plugin) walks an agent through this.
 
 Source of truth for orchestration (`series.toml`, hooks, scoring) stays with
-your series orchestrator (e.g. pr-pilot) — these templates link to it, they
+your series orchestrator (e.g. convoy) — these templates link to it, they
 don't restate it. Without an orchestrator, the templates still work as manual
 checklists.
