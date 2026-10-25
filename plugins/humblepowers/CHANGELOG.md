@@ -8,6 +8,36 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.18.2] - 2026-10-25
+
+The `choosing-models` calibration record covers the 5.5 lineup. Patch bump: data and
+documentation in `models.toml`, no change to the rubric or any threshold.
+
+### Changed
+
+- **choosing-models: `models.toml` records the 2026-10-25 calibration run on the 5.5
+  lineup.** The run was 450 scored trials of Haiku 5.5, Sonnet 5.5 and Opus 5.5 at effort
+  `high` as single-session ungated implementers, over the fathom banks `model-tier-v2` (Opus
+  on it too) and `model-tier-v1`, under a plan frozen before it. No threshold moves. The cut
+  verdict is inconclusive: the deciding rung, `fix-strip-unicode` (score 40), reads I for
+  Haiku at 17/30, with Sonnet 1/15 and Opus 0/5 there. The floor verdict (whether a session-wide
+  Sonnet floor on subagents, `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`, is needed for these
+  implementers) is LIFT: Haiku 5.5 read A (15/15) on every routed rung at the cut of 25 and
+  on the near rungs. The plan limits it to Haiku 5.5 at effort `high` on that shape; it
+  changes no setting by itself, the rubric's cross-shape and role floors are unaffected,
+  gated PR implementers, gate runners and exploration agents stay unmeasured, and verifier
+  and challenger roles stay strong. The bank is saturated (13 of 15 tasks at 100% on every arm
+  that ran them) and its positive control no longer separates (Haiku 5.5 10/10 against Opus 5.5
+  10/10, where Haiku 4.5 scored 1/10 in August), so it cannot move a cut.
+- **choosing-models: the note that all recorded calibration predates the 5.5 lineup, and the
+  "unmeasured" marks on the 5.5 rows' per-task cost, are replaced by this run's record.**
+  `[meta].calibration` now says the three earlier runs predate the lineup and records the
+  new one; the weak and mid rows' notes drop "per-task cost" from what is unmeasured (effort
+  behaviour and context window stay unmeasured); `[typical_cost]` for the weak, mid and strong
+  tiers becomes the per-trial list-equivalent cost measured on the model-tier banks, about
+  $0.010, $0.095 and $0.21. `test_shipped_lineup.py` pins the new record in place of the old
+  note.
+
 ## [0.18.1] - 2026-10-24
 
 ### Fixed
