@@ -58,6 +58,9 @@
     "plugins/humblepowers/skills/test-driven-development/scripts/check_red_exception.py": [
       "plugins/humblepowers/skills/test-driven-development/scripts/test_check_red_exception.py::test_a_body_with_no_exception_reddens_the_check"
     ],
+    "plugins/session-workflow/hooks/final_block_gate.py": [
+      "plugins/session-workflow/hooks/test_final_block_gate.py::test_later_stop_without_the_ask_advises_once"
+    ],
     "plugins/session-workflow/skills/feedback-triage/scripts/build_feedback_index.py": [
       "plugins/session-workflow/skills/feedback-triage/scripts/test_build_feedback_index.py::test_refuses_to_overwrite_an_index_built_by_a_newer_builder"
     ],
