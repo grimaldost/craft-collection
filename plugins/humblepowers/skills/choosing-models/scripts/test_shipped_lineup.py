@@ -3,8 +3,10 @@
 
 The tier rows are what a direct-API or series-file author reads, so the shipped
 model per tier is pinned here and changed only together with this test. The
-calibration note has to say that the recorded calibration predates the 5.5
-lineup: the weak and mid rows name models no bank has measured.
+calibration note has to say that the three earlier runs predate the 5.5 lineup and
+record the 2026-10-25 run on it: no threshold moves, the cut verdict is inconclusive,
+the floor verdict is LIFT, and the bank is saturated. The cost rows no longer call
+the 5.5 tiers unmeasured.
 """
 
 from __future__ import annotations
@@ -49,10 +51,30 @@ def test_new_rows_mark_unmeasured_what_is_unmeasured():
     assert '200K' not in _row('weak')['notes'], 'Haiku 4.5 context window carried over'
 
 
-def test_calibration_note_predates_the_5_5_lineup():
-    calibration = _data()['meta']['calibration']
+def test_calibration_note_records_the_5_5_run():
+    data = _data()
+    calibration = data['meta']['calibration']
     assert '\n' not in calibration
-    assert 'predates the 5.5 lineup' in calibration, 'calibration note missing'
+    assert 'predate the 5.5 lineup' in calibration, 'calibration note missing'
+    for needle in (
+        'run of 2026-10-25',
+        '450 scored trials',
+        'moves no threshold',
+        'Cut verdict inconclusive',
+        'LIFT: Haiku 5.5 read A',
+        'effort high only',
+        'gated PR implementers, gate runners and exploration agents are unmeasured',
+        'verifier and challenger roles stay strong',
+        "the rubric's cross-shape and role floors are unaffected",
+        'CLAUDE_CODE_SUBAGENT_MODEL=sonnet',
+        'saturated',
+        'one-sided Fisher p = 1.0',
+    ):
+        assert needle in calibration, needle
+    assert data['thresholds']['weak'] == '0-25', 'LIFT moves no threshold'
+    for tier in ('weak', 'mid', 'strong'):
+        assert 'unmeasured' not in data['typical_cost'][tier], f'{tier} cost still unmeasured'
+        assert '2026-10-25' in data['typical_cost'][tier], f'{tier} cost not dated'
 
 
 def test_review_stamp():
@@ -65,7 +87,7 @@ def test_review_stamp():
 def main() -> int:
     test_shipped_lineup_per_tier()
     test_new_rows_mark_unmeasured_what_is_unmeasured()
-    test_calibration_note_predates_the_5_5_lineup()
+    test_calibration_note_records_the_5_5_run()
     test_review_stamp()
     print('ok: shipped_lineup')
     return 0
