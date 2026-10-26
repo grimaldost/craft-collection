@@ -12,6 +12,18 @@ by luck: once by a step-7 rebuild written to catch the opposite failure, once by
 a reader noticing an unrelated line. The most recent pass asserted coverage by
 hand across seventeen reports against 1,238 indexed findings.
 
+coverage also fails a ROUTE OUT that was never delivered. A routed finding leaves
+this tool's loop, so it is closed only when a report exists in the target's
+feedback dir: each routed row names that report's path, absolute or relative to
+the registered `feedback_dir` of a target the row names (every registered dir
+when it names none; `$FEEDBACK_TARGETS_FILE`, else
+`~/.claude/feedback-targets.toml`), and a row none of whose paths exists fails.
+A routed row is a bullet or table row under `## Routed out` (a bullet that opens
+"Nothing" or "None" routes nothing), a cluster heading whose disposition says
+ROUTE OUT (with the body up to the next heading), or a `T<n>` row whose status
+opens "routed" or "route out". Route-outs used to be recorded in the triage doc
+only, where the target's own loop never reads them.
+
 **open-rows** -- every promotion row any triage doc has ever proposed, with the
 status the newest doc gives it. Rows orphan: a whole document's rows were never
 carried into the next doc and four sat unbuilt for five weeks, and a later pass
@@ -28,6 +40,7 @@ unless the corpus cannot be read. Stdlib only.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -210,6 +223,117 @@ def cmd_emit(doc: Path, feedback_dir: Path) -> int:
     return 0
 
 
+_TARGET_HEADER = re.compile(r'^\s*\[targets\.([^\]]+)\]\s*$')
+_FEEDBACK_DIR = re.compile(r'^\s*feedback_dir\s*=\s*[\'"](.+?)[\'"]\s*$')
+_FENCE = re.compile(r'^\s*(```|~~~)')
+_ROUTED_SECTION = re.compile(r'^##\s+routed\s+out\b', re.IGNORECASE)
+_ROUTE_OUT_HEADING = re.compile(r'^#{3,4}\s.*\broute[ds]?[\s-]+out\b', re.IGNORECASE)
+_ROUTED_STATUS = re.compile(r'^rout(?:ed|e)[\s-]+out\b|^routed\b', re.IGNORECASE)
+_NOTHING_ROUTED = re.compile(r'^[-*\s]*(?:nothing|none)\b', re.IGNORECASE)
+_TABLE_RULE = re.compile(r'^\|[\s:|-]+\|$')
+# Path candidates in a row: a backticked span, a markdown link target, or a bare
+# token ending in `.md`. A finding id or a prose word is never a path (no `.md`,
+# no separator), so it is never tried.
+_CANDIDATE = re.compile(r'`([^`\n]+)`|\]\(([^)\s]+)\)|(\S+\.md)\b')
+
+
+def registered_feedback_dirs(targets: Path | None = None) -> dict[str, Path]:
+    """{target name: feedback dir} from the feedback-targets file, line-parsed as
+    the tool-feedback nudge parses it (no TOML library needed)."""
+    if targets is None:
+        override = os.environ.get('FEEDBACK_TARGETS_FILE')
+        targets = Path(override) if override else Path.home() / '.claude' / 'feedback-targets.toml'
+    out: dict[str, Path] = {}
+    name = None
+    try:
+        lines = targets.read_text(encoding='utf-8').splitlines()
+    except OSError:
+        return {}
+    for line in lines:
+        header = _TARGET_HEADER.match(line)
+        if header:
+            name = header.group(1).strip()
+            continue
+        found = _FEEDBACK_DIR.match(line) if name else None
+        if found:
+            out[name] = Path(found.group(1))
+    return out
+
+
+def routed_rows(text: str) -> list[str]:
+    """The ROUTE OUT rows of a triage doc, each as its own text (see the module
+    docstring for the three shapes). Fence-aware."""
+    rows: list[list[str]] = []
+    block: list[str] | None = None  # a ROUTE OUT cluster: every line to the next heading
+    item: list[str] | None = None  # a Routed-out bullet and its indented continuation
+    header: str | None = None
+    in_routed = in_fence = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        fence = bool(_FENCE.match(line))
+        in_fence = in_fence != fence
+        if in_fence or fence:
+            for target in (block, item):
+                if target is not None:
+                    target.append(stripped)
+            continue
+        if stripped.startswith('#'):
+            block = item = None
+            in_routed = bool(_ROUTED_SECTION.match(stripped))
+            if _ROUTE_OUT_HEADING.match(stripped):
+                block = [stripped]
+                rows.append(block)
+            continue
+        if block is not None:
+            block.append(stripped)
+        row = _ROW.match(stripped)
+        if row and _ROUTED_STATUS.match(row.group(3)) and block is None:
+            rows.append([stripped])
+            continue
+        if not in_routed:
+            continue
+        if _TABLE_RULE.match(stripped):
+            if rows and rows[-1] == [header]:
+                rows.pop()  # the row above a table rule is the table's header
+            continue
+        if stripped.startswith(('- ', '|')):
+            header = stripped
+            item = None if _NOTHING_ROUTED.match(stripped[1:]) else [stripped]
+            if item is not None:
+                rows.append(item)
+        elif item is not None and stripped and line[:1].isspace():
+            item.append(stripped)
+        else:
+            item = None
+    return ['\n'.join(r) for r in rows]
+
+
+def _delivered(row: str, dirs: dict[str, Path]) -> bool:
+    named = [d for name, d in dirs.items() if re.search(rf'\b{re.escape(name)}\b', row)]
+    bases = named or list(dirs.values())
+    for m in _CANDIDATE.finditer(row):
+        raw = (m.group(1) or m.group(2) or m.group(3) or '').strip()
+        if not raw or not (raw.endswith('.md') or '/' in raw or '\\' in raw):
+            continue
+        path = Path(raw).expanduser()
+        try:
+            if path.is_absolute():
+                if path.is_file():
+                    return True
+                continue
+            if any((base / path).is_file() for base in bases):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def undelivered_route_outs(doc_text: str, dirs: dict[str, Path] | None = None) -> list[str]:
+    """The routed rows of a triage doc none of whose paths names an existing report."""
+    dirs = registered_feedback_dirs() if dirs is None else dirs
+    return [row for row in routed_rows(doc_text) if not _delivered(row, dirs)]
+
+
 def cmd_coverage(doc: Path, feedback_dir: Path) -> int:
     if not _is_triage_doc(doc):
         print(f'error: {doc.name} has no `# Triage` H1 - not a triage doc', file=sys.stderr)
@@ -220,11 +344,21 @@ def cmd_coverage(doc: Path, feedback_dir: Path) -> int:
         return 1
     for ref in missing:
         print(f'  uncovered: {ref}')
+    undelivered = undelivered_route_outs(doc.read_text(encoding='utf-8', errors='replace'))
+    for row in undelivered:
+        print(f'  undelivered route-out: {row.splitlines()[0][:160]}')
     if missing:
         print(
             f'FAIL: {len(missing)} finding(s) across {len(stems)} claimed report(s) have no '
             'disposition in the doc. Name each one, or move its report out of `## Inputs`.'
         )
+    if undelivered:
+        print(
+            f'FAIL: {len(undelivered)} route-out(s) name no delivered report. Write a short '
+            "report into the target's feedback dir and name its path in the row (absolute, "
+            "or relative to the target's registered feedback_dir)."
+        )
+    if missing or undelivered:
         return 1
     print(f'ok: every finding of the {len(stems)} report(s) claimed under `## Inputs` is named')
     return 0

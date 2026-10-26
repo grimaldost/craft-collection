@@ -17,6 +17,26 @@ applies. A filename test misclassifies in both directions:
 - house variants that ARE triage docs without the standard slug: keel's
   `<date>-backlog-triage.md` still counts because its H1 opens `# Triage —`.
 
+A digest-for-handoff (step 8) is another loop OUTPUT and is detected the same way:
+its H1 opens `# Digest` or `# New-findings digest` (at most two words before
+`digest`). The filename test it replaced dropped every report whose slug contained
+`digest`, a real report whose slug ended `-structural-digestion` among them.
+
+## Route-outs are delivered, not recorded
+
+A ROUTE OUT used to be a line in this tool's triage doc, which the target tool's
+own loop never reads, so a routed finding left one loop without entering the
+other. A route-out now ships with its report: a short tool-feedback-format file
+written into the target's registered feedback dir (the finding, its evidence ids,
+and the triage doc it came from), and the routed row names that file's path,
+absolute or relative to the target's `feedback_dir`. `triage_audit.py coverage`
+reads three shapes as routed rows: a bullet or table row under `## Routed out`
+(a bullet opening "Nothing" or "None" routes nothing), a cluster heading whose
+disposition says ROUTE OUT, with its body to the next heading, and a `T<n>` row
+whose status opens "routed". A relative path is tried against the feedback dir of
+each registered target the row names, or of every registered target when it names
+none. A row none of whose paths exists fails coverage.
+
 ## Later passes — the delta form
 
 A pass over a corpus that already has a baseline triage doc emits a NEW doc,

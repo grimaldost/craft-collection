@@ -7,6 +7,14 @@ template's "## Proposed promotions" section. The output (INDEX.md) is a generate
 artifact — regenerate it, do not hand-edit.
 
     uv run --no-project python build_feedback_index.py <feedback-dir> [--force]
+    uv run --no-project python build_feedback_index.py <feedback-dir> --grep TERM [TERM ...]
+
+`--grep` writes nothing. It reads the report files themselves (the ones the index
+covers) and prints every numbered proposal and every Misses/Friction bullet whose
+text contains any TERM (case-insensitive), whole, with its indented body, each
+prefixed by its finding id (`<stem>#<n>`, or `<stem> §Misses`). The index caps a
+title at 140 characters, so a recurrence check that reads only the index judges a
+finding by a clipped line; this is the read that does not.
 
 Use `uv run --no-project python` (not a bare `python` / `python3`): on Windows
 without Python on PATH, both resolve to the Microsoft-Store app-execution stub
@@ -188,19 +196,104 @@ def _is_triage_doc(p: Path) -> bool:
     return False  # no H1 found -> not a triage doc
 
 
+# A digest output's H1: `# Digest — ...` or `# New-findings digest — ...` (the
+# digest-for-handoff of feedback-triage step 8), at most two words before `digest`.
+_DIGEST_H1 = re.compile(r'^(?:[\w-]+\s+){0,2}digest\b', re.IGNORECASE)
+
+
+def _is_digest_doc(p: Path) -> bool:
+    """A digest (a loop OUTPUT handed to another tool's flow) declares itself in
+    its H1, as a triage doc does. The filename test it replaces dropped a real
+    report whose slug said `digestion`. On a read error returns False."""
+    try:
+        with p.open(encoding='utf-8', errors='replace') as fh:
+            head = fh.read(512)
+    except OSError:
+        return False
+    for line in head.splitlines():
+        s = line.strip()
+        if s.startswith('# '):
+            return bool(_DIGEST_H1.match(s[2:].lstrip()))
+    return False
+
+
 def _is_report(p: Path) -> bool:
     """A source report — not the index/readme/backlog, not a digest, and not a triage
     doc (those are OUTPUTS of the loop, not inputs to index). The index, readme, and a
-    consolidated `BACKLOG.md` status doc are excluded by exact name; triage docs are
-    detected by their `# Triage` H1 (see `_is_triage_doc`), so a legitimate report whose
-    slug contains 'triage' is still indexed."""
+    consolidated `BACKLOG.md` status doc are excluded by exact name; triage docs and
+    digests are detected by their H1 (`_is_triage_doc`, `_is_digest_doc`), so a
+    legitimate report whose slug contains 'triage' or 'digest' is still indexed."""
     name = p.name.lower()
     return (
         p.suffix == '.md'
         and name not in ('index.md', 'readme.md', 'backlog.md')
-        and 'digest' not in name
+        and not _is_digest_doc(p)
         and not _is_triage_doc(p)
     )
+
+
+_SECTION_SIGN = ' §'  # ascii-ok: the finding-id format; stdout is forced to UTF-8
+
+
+def finding_blocks(text: str) -> list[tuple[str, list[str]]]:
+    """(id suffix, lines) for each finding of a report, whole: a flush-left numbered
+    proposal under `## Proposed ...` (suffix `#<n>`) or a flush-left bullet under
+    `## Misses` / `## Friction` (suffix ` §<Section>`), with the lines after it that
+    are indented or blank, up to the next flush-left line. The first line drops its
+    `<n>. ` or `- ` marker; nothing is capped. Fence-aware, like the extractors."""
+    out: list[tuple[str, list[str]]] = []
+    current: list[str] | None = None
+    section: str | None = None  # 'proposed', or the stub section's name
+    in_fence = False
+    for line in text.splitlines():
+        if current is not None and (not line.strip() or line[:1].isspace()):
+            current.append(line)
+            continue
+        current = None
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        stripped = line.strip()
+        if stripped.startswith('## '):
+            low = stripped[3:].strip().lower()
+            section = 'proposed' if low.startswith('proposed') else None
+            section = section or next(
+                (s.capitalize() for s in _STUB_SECTIONS if low.startswith(s)), None
+            )
+            continue
+        m = (
+            _PROPOSAL.match(line)
+            if section == 'proposed'
+            else _BULLET.match(line)
+            if section
+            else None
+        )
+        if m:
+            suffix = f'#{m.group(1)}' if section == 'proposed' else f'{_SECTION_SIGN}{section}'
+            current = [m.group(2) if section == 'proposed' else m.group(1)]
+            out.append((suffix, current))
+    for _, lines in out:
+        while len(lines) > 1 and not lines[-1].strip():
+            lines.pop()
+    return out
+
+
+def grep_findings(feedback_dir: Path, terms: list[str]) -> list[str]:
+    """Each finding of the dir's reports whose text contains any term
+    (case-insensitive), rendered whole: `<id>: <first line>` then its body."""
+    wanted = [t.lower() for t in terms if t]
+    out: list[str] = []
+    for p in sorted(q for q in feedback_dir.glob('*.md') if _is_report(q)):
+        try:
+            text = p.read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            continue
+        for suffix, lines in finding_blocks(text):
+            if any(t in '\n'.join(lines).lower() for t in wanted):
+                out.append('\n'.join([f'{p.stem}{suffix}: {lines[0]}', *lines[1:]]))
+    return out
 
 
 _COVERAGE_HEADING = re.compile(r'^#{2,4}\s+(?:inputs\b|addendum\b)', re.IGNORECASE)
@@ -500,13 +593,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     force = '--force' in argv
     argv = [a for a in argv if a != '--force']
-    if not argv:
-        print('usage: build_feedback_index.py <feedback-dir> [--force]')
+    terms: list[str] | None = None
+    if '--grep' in argv:
+        at = argv.index('--grep')
+        argv, terms = argv[:at], argv[at + 1 :]
+    if not argv or terms == []:
+        print('usage: build_feedback_index.py <feedback-dir> [--force | --grep TERM [TERM ...]]')
         return 2
     d = Path(argv[0])
     if not d.is_dir():
         print(f'not a directory: {d}')
         return 1
+    if terms is not None:
+        found = grep_findings(d, terms)
+        for block in found:
+            print(block + '\n')
+        print(f'{len(found)} finding(s) match {" | ".join(terms)}')
+        return 0
     out = d / 'INDEX.md'
     try:
         old = out.read_text(encoding='utf-8', errors='replace') if out.is_file() else ''

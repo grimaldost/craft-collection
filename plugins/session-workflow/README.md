@@ -155,12 +155,19 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   renamed to `*.closed.md` is dropped. It costs one Python start per
   Write, Edit or MultiEdit, with the path filter first. **On by default**; opt out with
   `SESSION_WORKFLOW_ANCHOR_HOOKS=0` (the same switch as the SessionStart hook).
-- **Stop** — feedback-debt nudge: once per session, when the transcript shows
-  plugin tools were exercised, no tool-feedback invocation is on record, and
-  the session has at least `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) real
-  user turns, a Stop block asks the model to apply the tool-feedback skill (or
-  finish if nothing is worth recording). **On by default**; opt out with
-  `SESSION_WORKFLOW_FEEDBACK_NUDGE=0`.
+- **UserPromptSubmit** — feedback-debt nudge: once per session, when the
+  transcript shows registered plugin tools were exercised, no tool-feedback
+  invocation is on record, and it holds at least
+  `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) owner turns, the next
+  owner-typed prompt carries one line of additional context asking the model to
+  apply the tool-feedback skill at a natural stopping point (or carry on if
+  nothing is worth recording). It never blocks: it used to be a Stop block, which
+  forced one more turn out of every session that owed a report. A hand-back,
+  task notification or peer message gets nothing and does not use up the
+  session's one nudge (`hooks/prompt_kind.py` is the rule), and skill bodies and
+  compaction summaries are not owner turns. The cheap exits come before the
+  transcript is opened, and the read resumes from where the previous prompt
+  stopped. **On by default**; opt out with `SESSION_WORKFLOW_FEEDBACK_NUDGE=0`.
   What makes default-on safe is the binding check: it stays silent unless a
   feedback-targets file resolves (`$FEEDBACK_TARGETS_FILE`, else
   `~/.claude/feedback-targets.toml`), so an install with no registered tools

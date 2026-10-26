@@ -664,6 +664,133 @@ def test_help_emits_utf8_bytes_under_cp1252():
     assert '—'.encode() in proc.stdout
 
 
+def test_a_digest_is_told_by_its_h1_not_its_filename():
+    # A real report whose slug says "digestion" was dropped by the filename test
+    # (2026-07-05-feedback-loop-structural-digestion, a craft-collection report);
+    # a digest OUTPUT declares itself in its H1, as a triage doc does.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        report = '# craft-collection feedback — the digest step\n## Proposed promotions\n1. x.\n'
+        (dd / '2026-07-05-feedback-loop-structural-digestion.md').write_text(
+            report, encoding='utf-8'
+        )
+        (dd / '2026-07-06-digest-review.md').write_text(report, encoding='utf-8')
+        (dd / '2026-06-14-new-findings-digest.md').write_text(
+            '# New-findings digest — keel feedback (5 reports)\n## Proposed\n1. y.\n',
+            encoding='utf-8',
+        )
+        (dd / '2026-07-08-keel-handoff.md').write_text(
+            '# Digest — keel new-findings handoff (2 reports)\n## Proposed\n1. z.\n',
+            encoding='utf-8',
+        )
+        (dd / 'README.md').write_text('# readme\n', encoding='utf-8')
+        (dd / 'BACKLOG.md').write_text('# backlog\n', encoding='utf-8')
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert main([str(dd)]) == 0
+        idx = (dd / 'INDEX.md').read_text(encoding='utf-8')
+    assert '## 2026-07-05-feedback-loop-structural-digestion' in idx
+    assert '## 2026-07-06-digest-review' in idx
+    assert '2026-06-14-new-findings-digest' not in idx, 'a digest output was indexed'
+    assert '2026-07-08-keel-handoff' not in idx, 'a digest output was indexed'
+    assert 'README' not in idx and 'BACKLOG' not in idx
+    untriaged = idx.split('### Untriaged', 1)[1]
+    assert '2026-07-06-digest-review' in untriaged and 'README' not in untriaged
+
+
+LONG_TITLE = (
+    '**[HIGH]** A docs-only subagent wrote "no swap" and the claim reached a merged backlog '
+    'line unmeasured, while the host has 8 GiB of swap -> relayed facts are measured '
+    'before they are merged, with the command named'
+)
+
+
+def _grep_corpus(dd: Path) -> None:
+    (dd / '2026-10-24-homelab-docs.md').write_text(
+        '# homelab feedback — docs wave\n'
+        '## Misses\n'
+        '- **[MED]** The SWAP figure went unchecked (phase: review)\n'
+        '  and the reviewer read only the diff.\n'
+        '- **[LOW]** An unrelated miss.\n'
+        '## Proposed promotions / changes\n'
+        f'1. {LONG_TITLE}\n'
+        '   - the body: `free -h` showed Swap: 8.0Gi\n'
+        '\n'
+        '   - a second body paragraph after a blank line\n'
+        '2. **[LOW]** Nothing to do with memory pressure.\n'
+        '   - body of the second one\n'
+        '## Cost\n'
+        '1. swap in a later section is not a finding\n',
+        encoding='utf-8',
+    )
+    (dd / '2026-10-25-other.md').write_text(
+        '# other feedback\n## Proposed promotions\n1. **[MED]** A memory leak in the runner.\n',
+        encoding='utf-8',
+    )
+    (dd / '2026-10-26-triage-x.md').write_text(
+        '# Triage — homelab\n## Proposed promotions\n1. swap row in a triage doc.\n',
+        encoding='utf-8',
+    )
+
+
+def _grep(dd: Path, *terms: str) -> tuple[int, str]:
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = main([str(dd), '--grep', *terms])
+    return rc, buf.getvalue()
+
+
+def test_grep_prints_matching_findings_whole_with_their_bodies():
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        _grep_corpus(dd)
+        rc, out = _grep(dd, 'swap')
+        assert not (dd / 'INDEX.md').exists(), '--grep reads the reports and writes nothing'
+    assert rc == 0, out
+    assert len(LONG_TITLE) > 140
+    assert f'2026-10-24-homelab-docs#1: {LONG_TITLE}' in out, out
+    assert '   - the body: `free -h` showed Swap: 8.0Gi' in out
+    assert '   - a second body paragraph after a blank line' in out
+    assert '2026-10-24-homelab-docs §Misses: **[MED]** The SWAP figure' in out  # ascii-ok
+    assert '  and the reviewer read only the diff.' in out
+    for absent in ('homelab-docs#2', 'An unrelated miss', 'later section', 'triage doc', 'leak'):
+        assert absent not in out, (absent, out)
+
+
+def test_grep_matches_any_of_several_terms():
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        _grep_corpus(dd)
+        rc, out = _grep(dd, 'leak', 'free -h')
+    assert rc == 0
+    assert '2026-10-25-other#1: **[MED]** A memory leak in the runner.' in out
+    assert '2026-10-24-homelab-docs#1:' in out, 'a term found only in the body matches'
+    assert 'homelab-docs#2' not in out
+
+
+def test_grep_writes_utf8_under_cp1252():
+    import os
+    import subprocess
+    import sys
+
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-10-26-r.md').write_text(
+            '# r feedback\n## Proposed promotions\n1. **[LOW]** swap → measured\n',
+            encoding='utf-8',
+        )
+        script = Path(__file__).resolve().parent / 'build_feedback_index.py'
+        env = dict(os.environ, PYTHONIOENCODING='cp1252')
+        env.pop('PYTHONUTF8', None)
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, str(script), str(dd), '--grep', 'swap'],
+            capture_output=True,
+            env=env,
+            timeout=60,
+        )
+    assert proc.returncode == 0, proc.stderr
+    assert '2026-10-26-r#1: **[LOW]** swap → measured'.encode() in proc.stdout, proc.stdout
+
+
 if __name__ == '__main__':
     test_extract_proposals_pulls_numbered_titles()
     test_extract_proposals_empty_when_no_section()
@@ -697,4 +824,8 @@ if __name__ == '__main__':
     test_coverage_credits_a_labeled_inputs_bullet()
     test_help_flag_returns_zero_not_swallowed_as_dir()
     test_help_emits_utf8_bytes_under_cp1252()
+    test_a_digest_is_told_by_its_h1_not_its_filename()
+    test_grep_prints_matching_findings_whole_with_their_bodies()
+    test_grep_matches_any_of_several_terms()
+    test_grep_writes_utf8_under_cp1252()
     print('ok: all build_feedback_index tests passed')

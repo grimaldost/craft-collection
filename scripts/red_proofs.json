@@ -68,7 +68,8 @@
       "plugins/session-workflow/skills/feedback-triage/scripts/test_build_feedback_index.py::test_refuses_to_overwrite_an_index_built_by_a_newer_builder"
     ],
     "plugins/session-workflow/skills/feedback-triage/scripts/triage_audit.py": [
-      "plugins/session-workflow/skills/feedback-triage/scripts/test_triage_audit.py::test_an_undispositioned_finding_reddens_coverage"
+      "plugins/session-workflow/skills/feedback-triage/scripts/test_triage_audit.py::test_an_undispositioned_finding_reddens_coverage",
+      "plugins/session-workflow/skills/feedback-triage/scripts/test_triage_audit.py::test_an_undelivered_route_out_reddens_coverage"
     ],
     "plugins/session-workflow/skills/llm-signature/scripts/render_signature.py": [
       "plugins/session-workflow/skills/llm-signature/scripts/test_render_signature.py::test_cli_unresolvable_model_fails_loud"
@@ -150,7 +151,7 @@
     "plugins/session-workflow/skills/evaluate-skill/scripts/run_all.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
     "plugins/session-workflow/skills/evaluate-skill/scripts/run_triggers.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
     "plugins/session-workflow/skills/evaluate-skill/scripts/stats.py": "Mirrored copy of the harness statistics library; byte-identity enforced by test_scripts_in_sync.py.",
-    "plugins/session-workflow/skills/tool-feedback/scripts/feedback_nudge.py": "Stop hook that must fail open; test_feedback_nudge.py pins that an unknown mode and garbage stdin both exit 0, because a nudge that blocks Stop is worse than a missed nudge.",
+    "plugins/session-workflow/skills/tool-feedback/scripts/feedback_nudge.py": "UserPromptSubmit and SessionStart hook that must fail open, never a reject check: test_feedback_nudge.py pins that an unknown mode, garbage stdin and a partial install all exit 0 with no output, because a hook that blocks the prompt is worse than a missed nudge.",
     "plugins/session-workflow/skills/toolkit-awareness/scripts/scan_toolkit.py": "Diagnostic reporter: it prints caveats and always exits 0 by design, so the operator sees skew without the scan itself becoming a gate. Its findings-level negatives are covered in test_scan_toolkit.py."
   }
 }
