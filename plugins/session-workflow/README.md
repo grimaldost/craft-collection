@@ -232,3 +232,34 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   touch that leaves the content alone does not. Baselines live under
   `CLAUDE_PLUGIN_DATA/governance-notice/`. **On by default** (an exact trigger: a
   resolved path and its hash); opt out with `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0`.
+- **UserPromptSubmit / PreToolUse (Bash/PowerShell/Edit/Write/MultiEdit/NotebookEdit)** —
+  owner-acts gate: an act only the owner may authorize needs a sentence of the owner
+  that names it. The UserPromptSubmit arm records, per session, the text of the latest
+  owner-typed prompt (`hooks/prompt_kind.py`; a task notification, subagent hand-back or
+  peer message leaves it). The PreToolUse arm finds four families of act: (1) a write to
+  the governed `CLAUDE.md`, `settings.json` or `settings.local.json` (the governed home is
+  `$SESSION_WORKFLOW_GOVERNED_HOME`, else `$CLAUDE_CONFIG_DIR`, else `~/.claude`;
+  `hooks/governed_home.py`); (2) `claude plugin` install, update, uninstall, enable,
+  disable, or marketplace add, remove or update; (3) setting a user or machine
+  environment variable (`setx`, `[Environment]::SetEnvironmentVariable` with a User or
+  Machine target); (4) `git config --global` with a value. A program counts only at
+  program position, outside quotes, heredoc bodies and comments, and read-only forms
+  (`--get`, `--list`, `marketplace list`, `cat`, `type`, `Get-Content`) are not acts; a
+  `bash -c`, `powershell`/`pwsh -Command` or `cmd /c` wrapper is read as the command it
+  runs. The act is allowed only when one sentence of the recorded prompt names its
+  object (the file's name; `claude plugin` or the `plugin@marketplace` id; "variavel de
+  ambiente", "environment variable", "env var" or the variable's name; `git config`)
+  with an act verb from that family's closed list (edit, update, install, set, editar,
+  atualizar, instalar, definir and their kin), with no negation and no conditional or
+  purpose marker before the verb, and the sentence not a question: "pode seguir com as
+  recomendacoes" allows none of them, "pode editar o CLAUDE.md" allows that edit.
+  Otherwise it denies, and the reason tells the agent to put the act to the owner in
+  the final block, framed, with its side effects. A shell command that writes a
+  governed file (a redirect, `Set-Content`, `sed -i`) is logged as `observe` and never
+  denied: telling a write from a read in arbitrary shell text is a guess. Every
+  decision appends one line (family, key, decision; never a value) to
+  `CLAUDE_PLUGIN_DATA/owner-acts-gate/log.ndjson`. **On by default** (an exact
+  trigger); `SESSION_WORKFLOW_OWNER_ACTS_GATE=0` turns it off, and
+  `SESSION_WORKFLOW_OWNER_ACTS_GATE=observe` logs without denying. Measured cause
+  (2026-10-25): the global CLAUDE.md and settings.json were edited, `claude plugin
+  update` run and a user environment variable set on a generic go-on.

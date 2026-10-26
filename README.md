@@ -130,6 +130,8 @@ Opt-outs (and `=on` for an observe-mode hook) go in the `env` block of `~/.claud
 | session-workflow | Series guard: denies a second `gh pr create` in one repository and session unless it carries `KEEL_SERIES=<series file or spec>` or `KEEL_SERIES=none:<reason>` (PreToolUse on Bash/PowerShell) | on | `SESSION_WORKFLOW_SERIES_GUARD=0`, the same switch |
 | session-workflow | Governance-change notice: records the hash of the governed `CLAUDE.md` once per session, so a compact or resume keeps the old baseline (SessionStart) | on | `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0` |
 | session-workflow | Governance-change notice: one line of context naming the changed governed `CLAUDE.md` and to re-read it, once per change, on owner-typed and synthetic prompts (UserPromptSubmit) | on | `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0`, the same switch |
+| session-workflow | Owner-acts gate: records the latest owner-typed prompt per session (UserPromptSubmit) | on | `SESSION_WORKFLOW_OWNER_ACTS_GATE=0`; `=observe` logs without denying |
+| session-workflow | Owner-acts gate: denies a governed CLAUDE.md or settings write, a `claude plugin` change, a user or machine environment variable, or a `git config --global` write unless an owner sentence names it (PreToolUse) | on | `SESSION_WORKFLOW_OWNER_ACTS_GATE=0`, the same switch; `=observe` logs without denying |
 | humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
 
 Three hooks were retired rather than defaulted on: the toolkit-inventory session

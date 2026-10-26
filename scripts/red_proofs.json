@@ -61,6 +61,9 @@
     "plugins/session-workflow/hooks/final_block_gate.py": [
       "plugins/session-workflow/hooks/test_final_block_gate.py::test_later_stop_without_the_ask_advises_once"
     ],
+    "plugins/session-workflow/hooks/owner_acts_gate.py": [
+      "plugins/session-workflow/hooks/test_owner_acts_gate.py::test_a_generic_go_on_denies_each_family_and_logs_each"
+    ],
     "plugins/session-workflow/hooks/series_guard.py": [
       "plugins/session-workflow/hooks/test_series_guard.py::test_second_create_in_the_same_repo_is_denied"
     ],
