@@ -433,6 +433,88 @@ def test_description_keyed_mode_keeps_a_successorless_superseded_closing_its_row
         assert [r for r in ta.open_rows(corpus) if r[0] == 'T80a'] == []
 
 
+def _coverage(doc: Path, root: Path, registry: Path) -> subprocess.CompletedProcess:
+    import os
+
+    env = dict(os.environ, FEEDBACK_TARGETS_FILE=str(registry))
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(SCRIPT), 'coverage', str(doc), str(root)],
+        capture_output=True,
+        encoding='utf-8',
+        env=env,
+        timeout=60,
+    )
+
+
+def _registry(root: Path) -> tuple[Path, Path]:
+    """A feedback-targets file registering `keel` with its own feedback dir."""
+    keel_dir = root / 'keel-feedback'
+    keel_dir.mkdir()
+    registry = root / 'targets.toml'
+    registry.write_text(
+        f'[targets.keel]\nrepo = "{root.as_posix()}"\nfeedback_dir = "{keel_dir.as_posix()}"\n',
+        encoding='utf-8',
+    )
+    return registry, keel_dir
+
+
+def _routed(section: str) -> str:
+    return COVERED + '\n## Routed out\n\n' + section
+
+
+def test_an_undelivered_route_out_reddens_coverage():
+    """The red proof of the route-out check: a ROUTE OUT row whose report was never
+    written to the target's feedback dir fails coverage, though every finding is named."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        registry, _ = _registry(root)
+        for row in (
+            f'- **T2 -> keel.** Delivered: `{(root / "keel-feedback" / "missing.md").as_posix()}`\n',
+            '- **T2 -> keel.** The gate belongs to keel; recorded for its dir.\n',
+            '- **T2 -> keel.** Delivered: `2026-01-02-from-demo.md`\n',
+        ):
+            doc, _ = _corpus(root, _routed(row))
+            proc = _coverage(doc, root, registry)
+            assert proc.returncode == 1, (row, proc.stdout, proc.stderr)
+            assert 'undelivered route-out' in proc.stdout, proc.stdout
+            assert 'T2 -> keel' in proc.stdout, proc.stdout
+
+
+def test_a_delivered_route_out_passes():
+    """Absolute, or relative to the registered feedback_dir of the target the row names."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        registry, keel_dir = _registry(root)
+        delivered = keel_dir / '2026-01-02-from-demo.md'
+        delivered.write_text('# keel feedback - routed from demo\n', encoding='utf-8')
+        for row in (
+            f'- **T2 -> keel.** Delivered: `{delivered.as_posix()}`\n',
+            '- **T2 -> keel.** Delivered: `2026-01-02-from-demo.md`\n  (a short report).\n',
+            '- Nothing routed this pass.\n',
+        ):
+            doc, _ = _corpus(root, _routed(row))
+            proc = _coverage(doc, root, registry)
+            assert proc.returncode == 0, (row, proc.stdout, proc.stderr)
+
+
+def test_a_route_out_cluster_or_status_row_needs_its_delivered_path():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        registry, keel_dir = _registry(root)
+        (keel_dir / 'routed.md').write_text('# keel feedback - routed\n', encoding='utf-8')
+        cluster = COVERED + '\n### T4 - the cause (ROUTE OUT -> keel; 1 report)\n\nEvidence.\n'
+        row = COVERED + '\n| T3a | the change | gate | keel | routed out to keel |\n'
+        for body, want in (
+            (cluster, 1),
+            (cluster + 'Delivered: `routed.md`\n', 0),
+            (row, 1),
+            (row.replace('to keel |', 'to keel, `routed.md` |'), 0),
+        ):
+            doc, _ = _corpus(root, body)
+            proc = _coverage(doc, root, registry)
+            assert proc.returncode == want, (body, proc.stdout, proc.stderr)
+
+
 if __name__ == '__main__':
     test_covered_doc_passes()
     test_an_undispositioned_finding_reddens_coverage()
@@ -456,4 +538,7 @@ if __name__ == '__main__':
     test_a_successorless_superseded_restatement_does_not_close_an_open_row()
     test_a_superseded_status_naming_a_successor_still_closes_the_row()
     test_description_keyed_mode_keeps_a_successorless_superseded_closing_its_row()
-    print('ok: all triage_audit tests passed')
+    test_an_undelivered_route_out_reddens_coverage()
+    test_a_delivered_route_out_passes()
+    test_a_route_out_cluster_or_status_row_needs_its_delivered_path()
+    print('ok: all build_feedback_index tests passed')

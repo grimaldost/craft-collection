@@ -76,16 +76,16 @@ filesystem.** Either shape carries the same fields:
    precedence: a dir the user named *this session* → the registered feedback dir
    → the tool's own repo — **named or registered only, never inferred**. A
    redirected destination moves the *write* only; the recurrence check (step 2)
-   still reads the registered dir's index — state which baseline you used (fine
+   still reads the registered dir — state which baseline you used (fine
    print: `references/mechanics.md`).
 2. **Check recurrence before drafting.** **Rebuild** the recurrence dir's
    `INDEX.md` first (the registered dir — step 1, even when the write is
    redirected)
    (`uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`),
-   then scan it for a finding your candidate repeats. An existing index may
-   predate recent reports or have been built by an older rule — rebuilding is
-   cheap, idempotent, and the only staleness check that cannot false-positive;
-   never degrade to a grep. A repeat is written as **"extends
+   then run the same command with `--grep <term> [<term> ...]` on each
+   candidate's key terms (its cause, component, symptom): it prints every matching
+   finding whole, body included, with its `<stem>#<n>`, read from the reports
+   themselves, where the index clips titles. A repeat is written as **"extends
    `<prior-file-stem>#<n>`"** (or "extends `<prior-file-stem>` §Misses" for a
    narrative finding) plus only the *new* evidence — never restated fresh.
 3. **Route by ownership.** Engine/execution findings go to the engine tool's
@@ -102,7 +102,7 @@ filesystem.** Either shape carries the same fields:
    `<resolved destination>/<YYYY-MM-DD>-<source-slug>.md` (step 1), slug distinct
    per wave/phase so reports never clobber earlier ones. Then **rebuild that
    destination's `INDEX.md`** (step 2's command, pointed at the destination) so
-   the next session's recurrence check is one Read.
+   the next session's recurrence check sees this report.
 
 ## Report template
 
