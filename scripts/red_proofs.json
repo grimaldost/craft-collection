@@ -146,7 +146,7 @@
     "plugins/session-workflow/skills/evaluate-skill/scripts/run_all.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
     "plugins/session-workflow/skills/evaluate-skill/scripts/run_triggers.py": "Mirrored copy of the harness driver; byte-identity enforced by test_scripts_in_sync.py.",
     "plugins/session-workflow/skills/evaluate-skill/scripts/stats.py": "Mirrored copy of the harness statistics library; byte-identity enforced by test_scripts_in_sync.py.",
-    "plugins/session-workflow/skills/tool-feedback/scripts/feedback_nudge.py": "Stop hook that must fail open; test_feedback_nudge.py pins that an unknown mode and garbage stdin both exit 0, because a nudge that blocks Stop is worse than a missed nudge.",
+    "plugins/session-workflow/skills/tool-feedback/scripts/feedback_nudge.py": "UserPromptSubmit and SessionStart hook that must fail open, never a reject check: test_feedback_nudge.py pins that an unknown mode, garbage stdin and a partial install all exit 0 with no output, because a hook that blocks the prompt is worse than a missed nudge.",
     "plugins/session-workflow/skills/toolkit-awareness/scripts/scan_toolkit.py": "Diagnostic reporter: it prints caveats and always exits 0 by design, so the operator sees skew without the scan itself becoming a gate. Its findings-level negatives are covered in test_scan_toolkit.py."
   }
 }

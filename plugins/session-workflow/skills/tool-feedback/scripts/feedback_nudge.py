@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Feedback-debt Stop nudge and stale skill-body check, both read from the transcript.
+"""Feedback-debt prompt nudge and stale skill-body check, both read from the transcript.
 
-    python feedback_nudge.py --stop-nudge     # Stop: at most one nudge per session
+    python feedback_nudge.py --prompt-nudge   # UserPromptSubmit: at most one nudge per session
     python feedback_nudge.py --stale-bodies   # SessionStart resume|compact
+    python feedback_nudge.py --stop-nudge     # inert: exits 0 with no output
 
 `--stale-bodies` names each plugin whose last-served skill body came from an older
 cached version than the install registry lists; see `stale_body_lines`. It ships
 ON; `SESSION_WORKFLOW_STALE_BODY_CHECK=0` is its opt-out. The rest of this
-docstring is about the Stop nudge.
+docstring is about the nudge.
 
 It ships ON; `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` is the documented opt-out. What
 makes default-on safe is the binding check: the nudge stays silent unless a
@@ -15,22 +16,36 @@ feedback-targets file resolves, so an install with no registered tools never see
 it. Registered targets come from `$FEEDBACK_TARGETS_FILE`, else
 `~/.claude/feedback-targets.toml` -- the same file the tool-feedback skill reads.
 
-It fires when all of these hold, and then only once per session:
-  - a feedback-targets file exists (there is somewhere to report to);
-  - the transcript shows a `Skill` or plugin-MCP tool call;
-  - none of those calls was `tool-feedback` (invoking it is what clears the debt);
-  - the session has at least SESSION_WORKFLOW_NUDGE_MIN_TURNS (default 8) real
-    human turns.
+The nudge used to be a Stop `decision: block`, which forced one more turn out of
+the model at the moment it had finished, in every session that owed a report. It
+now never blocks: it rides the next owner-typed prompt as one line of additional
+context, which the model reads with the owner's next request. `--stop-nudge` is
+kept, inert, so a hooks.json from an older copy still exits clean.
 
-The transcript is the native record and the single input. A PostToolUse hook used
-to append one JSONL entry per skill call so this nudge had something to read; that
-was a second write path for a fact the transcript already carried, and it is gone
--- one fewer hook, one fewer state directory. A report written WITHOUT the skill
-is still not detected (accepted imprecision, unchanged).
+It speaks when all of these hold, and then only once per session:
+  - a feedback-targets file exists (there is somewhere to report to);
+  - the prompt is owner-typed (`hooks/prompt_kind.py`, the rule every hook of
+    this plugin shares): a hand-back, a notification or a peer message gets
+    nothing and leaves the once-per-session slot unspent;
+  - the transcript shows a `Skill` or plugin-MCP tool call of a registered tool;
+  - none of those calls was `tool-feedback` (invoking it is what clears the debt);
+  - the transcript holds at least SESSION_WORKFLOW_NUDGE_MIN_TURNS (default 8)
+    owner turns: owner-typed user records, not skill bodies (`isMeta`),
+    compaction summaries, tool results or synthetic prompts.
+
+The cheap exits (gate, targets file, prompt kind, the once-per-session marker)
+come before the transcript is opened, and a prompt reads it at most once. The
+read resumes from the byte offset the previous prompt reached (state beside the
+marker), so a long session without debt does not re-read tens of MB at every
+prompt; the first read of a 65 MB transcript parses only the lines that can hold
+an owner prompt or a plugin tool call.
+
+The transcript is the native record and the single input. A report written
+WITHOUT the skill is still not detected (accepted imprecision, unchanged).
 
 House rules: stdlib only; ASCII-only runtime output (json.dumps escapes non-ASCII);
-every failure path exits 0; the block is printed before the marker persists so a
-delivery failure never burns the once-per-session slot.
+every failure path exits 0; the nudge is printed and flushed before the marker
+persists, so a delivery failure never burns the once-per-session slot.
 """
 
 from __future__ import annotations
@@ -41,6 +56,7 @@ import os
 import re
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
@@ -53,10 +69,9 @@ DEFAULT_MIN_TURNS = 8
 # A tool call that counts as exercising a plugin tool: the Skill tool, or any
 # plugin-provided MCP tool.
 TOOL_PATTERN = re.compile(r'^Skill$|^mcp__plugin_.*')
-# Subagent-completion prompts pass through as user records (verified 2026-07-23);
-# they are not human turns and must not count toward the nudge gate.
-SYNTHETIC_PREFIXES = ('[SYSTEM NOTIFICATION', '<task-notification>')
 DEBT_CLEARING_MARK = 'tool-feedback'
+# The plugin's hooks/ directory, where the shared owner-typed rule lives.
+HOOKS_DIR = Path(__file__).resolve().parents[3] / 'hooks'
 STALE_BODY_GATE = 'SESSION_WORKFLOW_STALE_BODY_CHECK'
 # The line the harness puts before every skill body it serves.
 SKILL_BASE_MARK = 'Base directory for this skill:'
@@ -205,43 +220,119 @@ def _tool_names(msg: dict) -> list[str]:
     return out
 
 
-def read_transcript(transcript_path: object) -> tuple[int, list[str]]:
-    """One pass over the transcript -> (human turns, plugin tools exercised in
-    order, deduplicated). Any error yields (0, []), which HOLDS the nudge:
-    fail-silent, never fail-noisy."""
-    turns = 0
-    skills: list[str] = []
-    if not isinstance(transcript_path, str) or not transcript_path:
-        return 0, []
+def _owner_rule() -> Callable[[object], bool] | None:
+    """`prompt_kind.is_owner_typed` from the plugin's hooks/ directory, or None
+    when it does not import. Without it the nudge cannot tell the owner from a
+    hand-back, so the caller stays silent: a partial install fails open."""
+    if str(HOOKS_DIR) not in sys.path:
+        sys.path.append(str(HOOKS_DIR))
+    try:
+        from prompt_kind import is_owner_typed
+    except Exception:
+        return None
+    return is_owner_typed
+
+
+# Byte tests that decide, before any JSON parse, whether a line can matter. A
+# line is parsed only when it can carry a plugin tool call, or a user record that
+# is neither a tool result (`"tool_use_id"` appears only as a key, since a quote
+# inside a JSON string is escaped) nor marked as a skill body or a compaction
+# summary. Both serializations are covered: the harness writes no spaces, the
+# tests' json.dumps writes one after each colon.
+_TOOL_USE = b'"tool_use"'
+_TOOL_NAMES = (b'Skill', b'mcp__plugin_')
+_TOOL_RESULT = b'"tool_use_id"'
+_NOT_OWNER = (
+    b'"isMeta":true',
+    b'"isMeta": true',
+    b'"isCompactSummary":true',
+    b'"isCompactSummary": true',
+)
+_BOM = b'\xef\xbb\xbf'
+
+
+def _scan_line(raw: bytes, is_owner: Callable[[object], bool], state: dict) -> None:
+    tool_line = _TOOL_USE in raw and any(t in raw for t in _TOOL_NAMES)
+    user_line = (
+        b'"user"' in raw and _TOOL_RESULT not in raw and not any(m in raw for m in _NOT_OWNER)
+    )
+    if not (tool_line or user_line):
+        return
+    try:
+        rec = json.loads(raw.decode('utf-8', errors='replace'))
+    except ValueError:
+        return
+    msg = rec.get('message') if isinstance(rec, dict) else None
+    if not isinstance(msg, dict):
+        return
+    kind = rec.get('type')
+    if kind == 'user' and user_line and not rec.get('isMeta') and not rec.get('isCompactSummary'):
+        text = _user_text(msg)
+        if text is not None and is_owner(text):
+            state['turns'] += 1
+    elif kind == 'assistant' and tool_line:
+        for name in _tool_names(msg):
+            if name not in state['tools']:
+                state['tools'].append(name)
+
+
+def _resumable(state: object, path: str, size: int) -> dict | None:
+    """A copy of a previous prompt's scan state when it still describes this
+    file: the same path, an offset inside it, well-formed counts."""
+    if not isinstance(state, dict) or state.get('path') != path:
+        return None
+    offset, turns, tools = state.get('offset'), state.get('turns'), state.get('tools')
+    if not (isinstance(offset, int) and 0 <= offset <= size and isinstance(turns, int)):
+        return None
+    if not (isinstance(tools, list) and all(isinstance(t, str) for t in tools)):
+        return None
+    return {'path': path, 'offset': offset, 'turns': turns, 'tools': list(tools)}
+
+
+def scan_transcript(
+    transcript_path: object, state: object, is_owner: Callable[[object], bool] | None = None
+) -> dict | None:
+    """{path, offset, turns, tools} after reading the transcript once, from the
+    offset `state` reached when it still describes this file, else from the start.
+
+    `turns` counts owner turns and `tools` lists the plugin tools exercised, in
+    order, deduplicated. Only complete lines are read, so a record the harness is
+    still writing is read whole by the next prompt. None on any error, which HOLDS
+    the nudge: fail-silent, never fail-noisy."""
+    is_owner = is_owner or _owner_rule()
+    if is_owner is None or not isinstance(transcript_path, str) or not transcript_path:
+        return None
     try:
         p = Path(transcript_path)
         if not p.is_file():
-            return 0, []
-        for line in p.read_text(encoding='utf-8-sig', errors='replace').splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            if not isinstance(rec, dict):
-                continue
-            msg = rec.get('message')
-            if not isinstance(msg, dict):
-                continue
-            kind = rec.get('type')
-            if kind == 'user':
-                text = _user_text(msg)
-                if text is not None and not text.lstrip().startswith(SYNTHETIC_PREFIXES):
-                    turns += 1
-            elif kind == 'assistant':
-                for name in _tool_names(msg):
-                    if name not in skills:
-                        skills.append(name)
+            return None
+        size = p.stat().st_size
+        out = _resumable(state, transcript_path, size)
+        out = out or {'path': transcript_path, 'offset': 0, 'turns': 0, 'tools': []}
+        # Streamed line by line, not read whole: on a machine short of memory a
+        # 65 MB buffer and its split copy are what page out first.
+        with open(p, 'rb') as fh:
+            fh.seek(out['offset'])
+            for raw in fh:
+                if not raw.endswith(b'\n'):
+                    break  # still being written: the next prompt reads it whole
+                start = out['offset']
+                out['offset'] += len(raw)
+                if start == 0 and raw.startswith(_BOM):
+                    raw = raw[len(_BOM) :]
+                raw = raw.strip()
+                if raw:
+                    _scan_line(raw, is_owner, out)
     except Exception:
-        return 0, []
-    return turns, skills
+        return None
+    return out
+
+
+def read_transcript(transcript_path: object) -> tuple[int, list[str]]:
+    """(owner turns, plugin tools exercised) from one full read of the transcript;
+    (0, []) on any error."""
+    state = scan_transcript(transcript_path, None)
+    return (state['turns'], state['tools']) if state else (0, [])
 
 
 def _min_turns() -> int:
@@ -252,42 +343,68 @@ def _min_turns() -> int:
     return v if v >= 1 else DEFAULT_MIN_TURNS
 
 
-def nudge_reason(skills: list[str]) -> str:
+def nudge_line(skills: list[str]) -> str:
+    """The nudge: one line, read by the model with the owner's next request."""
     shown = ', '.join(skills[:3]) + (' and more' if len(skills) > 3 else '')
     return (
-        f'feedback debt: this session exercised registered tools ({shown}) and no '
-        'tool-feedback invocation is on record. Apply the tool-feedback skill '
-        'now (write directly under a standing directive; otherwise emit its '
-        'one-line offer), or finish if nothing is worth recording. This nudge '
-        'fires once per session.'
+        f'Feedback debt: this session exercised registered tools ({shown}) and no '
+        'tool-feedback invocation is on record. Apply the tool-feedback skill when '
+        'the work reaches a natural stopping point (write directly under a standing '
+        'directive; otherwise offer it in one line), or carry on if nothing is worth '
+        'recording. This note appears once per session.'
     )
 
 
-def _stop_nudge() -> int:
+def _read_state(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return None
+
+
+def _write_state(path: Path, state: dict) -> None:
+    """Best effort, atomic: a torn state file would only cost a full re-read."""
+    with contextlib.suppress(Exception):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f'{path.name}.{os.getpid()}.tmp')
+        tmp.write_text(json.dumps(state), encoding='utf-8')
+        os.replace(tmp, path)
+
+
+def _prompt_nudge() -> int:
     if os.environ.get(NUDGE_GATE) == '0':
         return 0
     targets = targets_file()
     if targets is None:
         return 0  # no registered tools: nothing to report to, so nothing to ask
     payload = _load_stdin_json()
-    if payload.get('stop_hook_active'):
-        return 0
+    is_owner = _owner_rule()
+    if is_owner is None or not is_owner(payload.get('prompt')):
+        return 0  # a hand-back or a notification: no owner reads what is injected here
     safe = _safe_session(payload.get('session_id'))
     marker = _state_dir() / f'{safe}.nudged'
     with contextlib.suppress(Exception):
         if marker.exists():
             return 0
-    turns, skills = read_transcript(payload.get('transcript_path'))
-    if not skills:
+    state_file = _state_dir() / f'{safe}.scan.json'
+    state = scan_transcript(payload.get('transcript_path'), _read_state(state_file), is_owner)
+    if state is None:
         return 0
-    if any(DEBT_CLEARING_MARK in s for s in skills):
+    _write_state(state_file, state)
+    skills = state['tools']
+    if not skills or any(DEBT_CLEARING_MARK in s for s in skills):
         return 0
     skills = registered_only(skills, targets)
     if not skills:
         return 0  # only unregistered skills ran: there is no debt to owe
-    if turns < _min_turns():
+    if state['turns'] < _min_turns():
         return 0
-    print(json.dumps({'decision': 'block', 'reason': nudge_reason(skills)}))
+    context = nudge_line(skills)
+    out = {
+        'hookSpecificOutput': {'hookEventName': 'UserPromptSubmit', 'additionalContext': context}
+    }
+    print(json.dumps(out))
+    sys.stdout.flush()
     with contextlib.suppress(Exception):
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text('1', encoding='utf-8')
@@ -448,8 +565,10 @@ def _stale_bodies() -> int:
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     try:
+        if '--prompt-nudge' in argv:
+            return _prompt_nudge()
         if '--stop-nudge' in argv:
-            return _stop_nudge()
+            return 0  # the nudge no longer blocks a Stop; see the module docstring
         if '--stale-bodies' in argv:
             return _stale_bodies()
         return 0

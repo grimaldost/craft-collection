@@ -123,7 +123,7 @@ Opt-outs (and `=on` for an observe-mode hook) go in the `env` block of `~/.claud
 | session-workflow | Control-anchor re-injection on compact, resume, clear and startup (SessionStart) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0` |
 | session-workflow | Stale skill-body check on resume and compact (SessionStart) | on | `SESSION_WORKFLOW_STALE_BODY_CHECK=0` |
 | session-workflow | Anchor size warning after a write to an open anchor (PostToolUse) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0`, the same switch as re-injection |
-| session-workflow | Feedback-debt nudge (Stop; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
+| session-workflow | Feedback-debt nudge: one line of context on the next owner-typed prompt, never a block (UserPromptSubmit; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
 | session-workflow | Pending-asks gate: ledger reset on an owner-typed prompt (UserPromptSubmit) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off |
 | session-workflow | Pending-asks gate: records earlier asks the final message dropped; with `=on`, names them as additionalContext (Stop) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off, the same switch |
 | humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
@@ -133,7 +133,7 @@ start inject (the harness already lists skills and descriptions in the system
 prompt), the data pre-shipping checklist Stop nudge (exhortation through a hook,
 against seven runnable data checks that reject rather than remind, which a
 project wires into its own CI), and the skill-exercise ledger (a second write path for a fact the
-session transcript already carried — the Stop nudge reads the transcript).
+session transcript already carried — the feedback-debt nudge reads the transcript).
 humblepowers 0.18.0 removed two more, the subagent verification gate and the
 spawn-routing hint; its CHANGELOG gives the evidence.
 
