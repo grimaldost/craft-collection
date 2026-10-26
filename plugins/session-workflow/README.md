@@ -111,7 +111,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   in both the directory the session started in (the first `cwd` in its
   transcript) and the current one, uses the better-ranked anchor (a live track
   beats a stale, parked, finished or non-anchor file; the start directory wins a
-  tie), and names both when they differ. When it
+  tie), and names both when they differ. Among live anchors, one the starting
+  session last wrote (`.claude/anchors/.owners.json`, kept by the PostToolUse arm
+  below) ranks first even when another is newer; a session that wrote none of them
+  gets the usual injection plus one line naming the session that did. When it
   finds open anchors it creates `.claude/anchors/.gitignore` (content `*`) if that
   file is missing, so the anchors and the hook's log never show as untracked; an
   existing `.gitignore` is never touched.
@@ -146,7 +149,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   `<!-- anchor:tail -->`, so the overrun is seen at the write rather than at the next
   injection. It is silent for every other path and for a HEAD with room, and it
   creates `.claude/anchors/.gitignore` (content `*`) when that file is missing, the
-  write-time half of the SessionStart behaviour above. It costs one Python start per
+  write-time half of the SessionStart behaviour above. Every write to an open anchor
+  also records the writing session as its owner in `.claude/anchors/.owners.json`,
+  replaced atomically; `--step` leaves the record alone, and an entry whose anchor was
+  renamed to `*.closed.md` is dropped. It costs one Python start per
   Write, Edit or MultiEdit, with the path filter first. **On by default**; opt out with
   `SESSION_WORKFLOW_ANCHOR_HOOKS=0` (the same switch as the SessionStart hook).
 - **Stop** — feedback-debt nudge: once per session, when the transcript shows
