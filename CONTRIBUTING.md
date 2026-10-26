@@ -353,6 +353,15 @@ heading, so the script stays and the two run side by side. The trailer was
 anything. `.github/` is outside every changelog record, so a Dependabot pull
 request needs no trailer.
 
+The READMEs are held to the same releases by `scripts/test_release_docs_agree.py`
+in the suite: each plugin's manifest version is its CHANGELOG's top heading, a
+README that dates a change to a release (`since 0.29.0`, `retired in 0.21.0`,
+`session-workflow 0.29.0 removed`) names a released version no higher than the
+manifest and registers the dating in the test's `DATED_CLAIMS` with a phrase of
+that release's CHANGELOG section, and the hook counts in a `hooks.json`
+description and in the root README's plugin summaries equal the file's command
+hooks.
+
 Tag each release with the grammar `claude plugin tag` produces — an annotated
 `<plugin>--v<X.Y.Z>`:
 
