@@ -1,9 +1,17 @@
 """Fail when a plugin's prose claims an env-gate default the gate does not have.
 
 Every hook in this collection is controlled by one environment variable, and the
-polarity of that control is readable from the guard itself: a hook that returns
+default of that control is readable from the guard itself: a hook that returns
 early on `== '0'` ships ON and `=0` is its opt-out; one that proceeds only on
-`== '1'` ships OFF and `=1` is its opt-in. The documentation is the copy that
+`== '1'` ships OFF and `=1` is its opt-in. A three-valued gate (`0`, `observe`,
+`on`) is classified by its unset value -- the `get()` default, else the value the
+guard falls through to -- never by whether `observe` appears in it: a gate whose
+unset value is `observe` ships in observe mode (it records and prints nothing),
+while one with `'0'` off, `'observe'` logging and an unset on still ships on. The
+fall-through is the guard function's closing `return 'on' | 'off' | 'observe'` when
+it has one, else the one mode the compared values leave unnamed (`'0'` and `'on'`
+compared: unset is observe), else the two-valued reading above. The documentation
+is the copy that
 drifts, and it drifted silently for a full release: `compaction-survival`'s body
 and its cold-start recipe both described the re-injection hook as "off by
 default, with SESSION_WORKFLOW_ANCHOR_HOOKS=1" for three weeks after 0.21.0
@@ -24,7 +32,9 @@ What counts as a claim, and what deliberately does not:
   release, and rewriting history to match the present is the opposite of the
   point.
 - Paragraph scope, not line scope. Markdown wraps, and the observed defect had
-  "off by default" and the gate name on different lines of one bullet.
+  "off by default" and the gate name on different lines of one bullet. A table
+  row is its own unit: a Hooks table lists gates with different defaults, and a
+  row is one claim.
 
 One structural claim rides along: the root README's Hooks table lists one row per
 hook entry point in the plugins' `hooks.json` files. The table had three rows for
@@ -43,16 +53,32 @@ import re
 import sys
 from pathlib import Path
 
-# A gate is a boolean switch only when it is compared against '0' or '1'. An
-# env var read for a path or a truthy presence check is a value, not a gate, and
-# is deliberately out of scope.
+# A gate is a switch only when it is compared against one of these values. An env
+# var read for a path or a truthy presence check is a value, not a gate, and is
+# deliberately out of scope.
+MODE_OF = {'0': 'off', 'off': 'off', '1': 'on', 'on': 'on', 'observe': 'observe'}
 CONTROL_VALUES = ('0', '1')
+# What gates_in_source reports per default: the value a reader is told to set
+# (the opt-out of an on gate, the opt-in of an off gate), or 'observe'.
+CONTROL_OF = {'on': '0', 'off': '1', 'observe': 'observe'}
 EXEMPT_MD = {'CHANGELOG.md'}
 FENCE = re.compile(r'^\s*```')
 ON_PHRASE = re.compile(r'\bon by default\b|\bships on\b|\benabled by default\b', re.I)
 OFF_PHRASE = re.compile(
     r'\boff by default\b|\bships off\b|\bdisabled by default\b|\bopt in\b', re.I
 )
+OBSERVE_PHRASE = re.compile(
+    r'\bobserve(?:s|d)? (?:mode )?by default\b|\bin observe mode by default\b'
+    r'|\bships in observe\b',
+    re.I,
+)
+NOT_OBSERVE_PHRASE = re.compile(
+    r'\bon by default\b|\bships on\b|\benabled by default\b|\boff by default\b'
+    r'|\bships off\b|\bdisabled by default\b',
+    re.I,
+)
+_UNWRAP = ('strip', 'lower', 'casefold')
+LIST_ITEM = re.compile(r'^\s*(?:[-*+]|\d+[.)])\s+')
 
 
 def module_constants(tree: ast.Module) -> dict[str, str]:
@@ -72,7 +98,13 @@ def _env_read_name(node: ast.AST, consts: dict[str, str]) -> str | None:
     """The env var name in `os.environ.get(X)` / `os.getenv(X)`, else None."""
     if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
         return None
-    if node.func.attr not in ('get', 'getenv') or not node.args:
+    owner = node.func.value
+    is_environ_get = node.func.attr == 'get' and (
+        (isinstance(owner, ast.Attribute) and owner.attr == 'environ')
+        or (isinstance(owner, ast.Name) and owner.id == 'environ')
+    )
+    is_getenv = node.func.attr == 'getenv' and isinstance(owner, ast.Name) and owner.id == 'os'
+    if not (is_environ_get or is_getenv) or not node.args:
         return None
     arg = node.args[0]
     if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
@@ -82,33 +114,141 @@ def _env_read_name(node: ast.AST, consts: dict[str, str]) -> str | None:
     return None
 
 
-def gates_in_source(text: str) -> dict[str, str]:
-    """{gate name: control value} for one module.
+def _str_const(node: ast.AST | None) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
 
-    The control value is the one a reader is told to SET -- the opt-out of an
-    on-by-default gate, the opt-in of an off-by-default one. `get(X) == '0'`
-    guards an early return, so '0' turns it off and the gate ships on; `== '1'`
-    guards the proceed path, so '1' turns it on and the gate ships off. `!=` is
-    the same statement inverted."""
+
+def _env_read(node: ast.AST, consts: dict[str, str]) -> tuple[str, str | None] | None:
+    """(gate name, default) for an env read, through `.strip()`/`.lower()` and `or 'x'`."""
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or) and len(node.values) == 2:
+        inner = _env_read(node.values[0], consts)
+        fallback = _str_const(node.values[1])
+        if inner is not None and inner[1] is None and fallback is not None:
+            return inner[0], fallback
+        return inner
+    while (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in _UNWRAP
+        and not node.args
+    ):
+        node = node.func.value
+    name = _env_read_name(node, consts)
+    if name is None or not isinstance(node, ast.Call):
+        return None
+    default = _str_const(node.args[1]) if len(node.args) >= 2 else None
+    return name, default
+
+
+def _scope_nodes(scope: ast.AST):
+    """Every node of one scope, not descending into nested functions or classes."""
+    stack = list(ast.iter_child_nodes(scope))
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _compared_values(node: ast.AST) -> list[str]:
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        return [v for v in (_str_const(e) for e in node.elts) if v is not None]
+    value = _str_const(node)
+    return [] if value is None else [value]
+
+
+def _tail_mode(scope: ast.AST) -> str | None:
+    """The mode a guard function falls through to: its closing `return 'on'|'off'|'observe'`."""
+    if not isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)) or not scope.body:
+        return None
+    last = scope.body[-1]
+    value = _str_const(last.value) if isinstance(last, ast.Return) else None
+    return value if value in ('on', 'off', 'observe') else None
+
+
+def _unset_mode(default: str | None, compared: set[str], tail: str | None) -> str:
+    """on | off | observe: what the gate does when the variable is unset."""
+    if default in MODE_OF:
+        return MODE_OF[default]
+    if tail is not None:
+        return tail
+    named = {MODE_OF[v] for v in compared if v in MODE_OF}
+    remaining = {'on', 'off', 'observe'} - named
+    if len(remaining) == 1:
+        return remaining.pop()
+    if 'off' in named:
+        return 'on'
+    if 'on' in named:
+        return 'off'
+    return 'on'
+
+
+def _bindings(nodes: list[ast.AST], consts: dict[str, str]) -> dict[str, tuple[str, str | None]]:
+    """Local names bound to an env read in one scope: `value = os.environ.get(X, 'd')`."""
+    bound: dict[str, tuple[str, str | None]] = {}
+    for node in nodes:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, value = node.targets[0], node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            target, value = node.target, node.value
+        else:
+            continue
+        read = _env_read(value, consts)
+        if read is not None and isinstance(target, ast.Name):
+            bound[target.id] = read
+    return bound
+
+
+def classify_gates(text: str) -> dict[str, str]:
+    """{gate name: 'on' | 'off' | 'observe'}: each gate's default, read from its guard."""
     try:
         tree = ast.parse(text)
     except SyntaxError:
         return {}
     consts = module_constants(tree)
+    scopes = [tree] + [
+        n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
     found: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Compare) or len(node.ops) != 1:
-            continue
-        if not isinstance(node.ops[0], (ast.Eq, ast.NotEq)):
-            continue
-        name = _env_read_name(node.left, consts)
-        comparator = node.comparators[0]
-        if name is None or not isinstance(comparator, ast.Constant):
-            continue
-        if comparator.value not in CONTROL_VALUES:
-            continue
-        found[name] = comparator.value
+    for scope in scopes:
+        nodes = list(_scope_nodes(scope))
+        bound = _bindings(nodes, consts)
+        compared: dict[str, set[str]] = {}
+        defaults: dict[str, str | None] = {}
+        for node in nodes:
+            if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+                continue
+            if not isinstance(node.ops[0], (ast.Eq, ast.NotEq, ast.In, ast.NotIn)):
+                continue
+            left = node.left
+            read = bound.get(left.id) if isinstance(left, ast.Name) else _env_read(left, consts)
+            if read is None:
+                continue
+            name, default = read
+            compared.setdefault(name, set()).update(_compared_values(node.comparators[0]))
+            if defaults.get(name) is None:
+                defaults[name] = default
+        tail = _tail_mode(scope)
+        for name, values in compared.items():
+            if values & set(MODE_OF):
+                found[name] = _unset_mode(defaults.get(name), values, tail)
     return found
+
+
+def gates_in_source(text: str) -> dict[str, str]:
+    """{gate name: control value} for one module.
+
+    The control value is the one a reader is told to SET -- the opt-out of an
+    on-by-default gate, the opt-in of an off-by-default one -- or `'observe'` for
+    a gate that ships in observe mode (documented with `=on` and `=0`).
+    `get(X) == '0'` guards an early return, so '0' turns it off and the gate
+    ships on; `== '1'` guards the proceed path, so '1' turns it on and the gate
+    ships off. `!=` is the same statement inverted. A three-valued gate is read
+    by its unset value (see the module docstring)."""
+    return {name: CONTROL_OF[mode] for name, mode in classify_gates(text).items()}
 
 
 def collect_gates(root: Path) -> tuple[dict[str, str], list[str]]:
@@ -145,7 +285,16 @@ def prose_paragraphs(text: str) -> list[tuple[int, str]]:
             continue
         if in_fence:
             continue
+        if line.lstrip().startswith('|'):
+            if buf:
+                paragraphs.append((start, '\n'.join(buf)))
+                buf = []
+            paragraphs.append((lineno, line))
+            continue
         if line.strip():
+            if buf and LIST_ITEM.match(line):
+                paragraphs.append((start, '\n'.join(buf)))
+                buf = []
             if not buf:
                 start = lineno
             buf.append(line)
@@ -157,12 +306,32 @@ def prose_paragraphs(text: str) -> list[tuple[int, str]]:
     return paragraphs
 
 
+def _check_observe_gate(para: str, gate: str, rel: str, start: int) -> list[str]:
+    """An observe-default gate takes `=on` and `=0`; prose calling it on or off by default is stale."""
+    findings = []
+    for match in re.finditer(rf'{re.escape(gate)}\s*=\s*[\'"`]?(\d)', para):
+        if match.group(1) == '1':
+            findings.append(
+                f'{rel}:{start}: {gate}=1 but the gate ships in observe mode; '
+                f'its controls are {gate}=on (advice) and {gate}=0 (off)'
+            )
+    if NOT_OBSERVE_PHRASE.search(para):
+        findings.append(
+            f'{rel}:{start}: paragraph mentions {gate} and describes another default; '
+            'the gate ships in observe mode (observe by default)'
+        )
+    return findings
+
+
 def check_markdown(path: Path, gates: dict[str, str], rel: str) -> list[str]:
     findings = []
     text = path.read_text(encoding='utf-8')
     for start, para in prose_paragraphs(text):
         for gate, control in sorted(gates.items()):
             if gate not in para:
+                continue
+            if control == 'observe':
+                findings.extend(_check_observe_gate(para, gate, rel, start))
                 continue
             wrong = '1' if control == '0' else '0'
             ships = 'on' if control == '0' else 'off'
@@ -173,7 +342,7 @@ def check_markdown(path: Path, gates: dict[str, str], rel: str) -> list[str]:
                         f'the documented control is {gate}={control}'
                     )
             contradiction = OFF_PHRASE if control == '0' else ON_PHRASE
-            if contradiction.search(para):
+            if contradiction.search(para) or OBSERVE_PHRASE.search(para):
                 findings.append(
                     f'{rel}:{start}: paragraph mentions {gate} and describes the '
                     f'opposite default; the gate ships {ships}'

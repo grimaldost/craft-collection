@@ -85,9 +85,11 @@ them as slash commands, and the model does not invoke them on its own.
 ## Hooks
 
 The rule across this collection: **a hook ships on with a documented opt-out, or
-it does not ship.** A hook whose gate nobody sets has never run, which is worse
-than an honest line of prose — it looks like enforcement in the manifest and is
-absent in the session. Opt-outs go in the `env` block of your settings file
+in observe mode, or it does not ship.** A hook whose gate nobody sets has never
+run, which is worse than an honest line of prose — it looks like enforcement in
+the manifest and is absent in the session. Observe mode is for a heuristic
+trigger: by default it records what it would have done and prints nothing (the
+pending-asks gate below). Opt-outs, and `=on` for an observe-mode hook, go in the `env` block of your settings file
 (`~/.claude/settings.json` for every project, `<repo>/.claude/settings.json` for
 one):
 
@@ -109,7 +111,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   in both the directory the session started in (the first `cwd` in its
   transcript) and the current one, uses the better-ranked anchor (a live track
   beats a stale, parked, finished or non-anchor file; the start directory wins a
-  tie), and names both when they differ. When it
+  tie), and names both when they differ. Among live anchors, one the starting
+  session last wrote (`.claude/anchors/.owners.json`, kept by the PostToolUse arm
+  below) ranks first even when another is newer; a session that wrote none of them
+  gets the usual injection plus one line naming the session that did. When it
   finds open anchors it creates `.claude/anchors/.gitignore` (content `*`) if that
   file is missing, so the anchors and the hook's log never show as untracked; an
   existing `.gitignore` is never touched.
@@ -144,7 +149,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   `<!-- anchor:tail -->`, so the overrun is seen at the write rather than at the next
   injection. It is silent for every other path and for a HEAD with room, and it
   creates `.claude/anchors/.gitignore` (content `*`) when that file is missing, the
-  write-time half of the SessionStart behaviour above. It costs one Python start per
+  write-time half of the SessionStart behaviour above. Every write to an open anchor
+  also records the writing session as its owner in `.claude/anchors/.owners.json`,
+  replaced atomically; `--step` leaves the record alone, and an entry whose anchor was
+  renamed to `*.closed.md` is dropped. It costs one Python start per
   Write, Edit or MultiEdit, with the path filter first. **On by default**; opt out with
   `SESSION_WORKFLOW_ANCHOR_HOOKS=0` (the same switch as the SessionStart hook).
 - **Stop** — feedback-debt nudge: once per session, when the transcript shows
@@ -161,20 +169,28 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   plugin-MCP call so this nudge had something to read; the transcript already
   carried that, so the nudge reads it directly and the second write path is
   gone.
-- **UserPromptSubmit / PostToolUse (`mcp__ccd_turn__wrap_up`) / Stop** — pending-asks
-  gate: the asks a turn raised reach its final block. At every stop the hook reads
-  `last_assistant_message` (never the transcript, which may lag) and records the
-  sentences that ask the operator for a decision, approval, answer or action in a
-  per-session ledger under `CLAUDE_PLUGIN_DATA/final-block-gate/`; a new human prompt
-  empties it; the desktop next-step box's question counts as carried. At a stop with
+- **UserPromptSubmit / Stop** — pending-asks gate: the asks a turn raised reach its
+  final block. At every stop the hook reads `last_assistant_message` (never the
+  transcript, which may lag) and records the sentences that ask the operator for a
+  decision, approval, answer or action in a per-session ledger under
+  `CLAUDE_PLUGIN_DATA/final-block-gate/`. An owner-typed prompt empties it; a task
+  notification, a subagent hand-back or a peer message does not, because it wakes the
+  session inside the same turn (`hooks/prompt_kind.py` is the rule). At a stop with
   nothing in flight (`background_tasks` empty or absent) whose message does not restate
-  an earlier ask of the same turn, it returns `additionalContext` naming the dropped asks
-  verbatim, once per ask, so the model restates each with its options and a
-  recommendation or says it is resolved; it never blocks. Measured cause (2026-10-25,
-  499 turns): 36% of the asks first raised before the final block were absent from it.
-  **On by default**; opt out with `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0`;
-  `SESSION_WORKFLOW_FINAL_BLOCK_GATE=observe` records the would-be advice in the ledger
-  and prints nothing; `python hooks/final_block_gate.py --health` prints the counts.
+  an earlier ask of the same turn, it records the dropped asks, once per ask, as an
+  `observed` event; with `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` it also returns them as
+  `additionalContext` (UTF-8, whatever the console codepage), so the model restates
+  each with its options and a recommendation or says it is resolved, and an ask counts
+  as advised only once that advice was written; it never blocks. Measured cause
+  (2026-10-25, 499 turns): 36% of the asks first raised before the final block were
+  absent from it. **Observe by default** (it records and prints nothing): the ask
+  detector is a heuristic, and a heuristic trigger ships in observe mode.
+  `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` turns the advice on and
+  `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0` turns the hook off;
+  `python hooks/final_block_gate.py --health` prints the counts. There is no hook on
+  the desktop next-step box (`mcp__ccd_turn__wrap_up`): the collection hooks none of
+  the desktop app's own tools, and the final block's Decisions field carries every
+  ask in text, so a question shown only in the box does not count as carried.
 - **PostToolUse / PreToolUse (Bash/PowerShell)** — series guard: the owner's rule that a
   series of two or more PR-sized changes goes through keel's Definition of Ready and runs
   with convoy's gate as the judge of each change, enforced at the moment a session turns
