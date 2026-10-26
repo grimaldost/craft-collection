@@ -16,7 +16,13 @@ measurement found missing, not the prose around it:
   reader most often could not recover from the actual final blocks;
 - there is no total word cap, because the shortest final blocks in the data
   were the ones that dropped the most asks;
-- text between tool calls is named as narration, not a channel.
+- text between tool calls is named as narration, not a channel;
+- in a host that draws a next-step box (the Claude desktop app), the box
+  carries the question and the final block's Ask line is omitted when the box
+  shows the same one, while Decisions still carries every decision in full.
+  The earlier wording put the same question in both places (diagnosis of
+  2026-10-25, spec section 4); Decisions is the copy in the message text, which
+  is what the pending-asks gate reads.
 
 Stdlib-runnable: `python scripts/test_step_digest_text.py` prints `ok:`.
 """
@@ -36,6 +42,16 @@ OPTIONS_AND_RECOMMENDATION = 'the options; the recommendation with its reason'
 NO_TOTAL_CAP = 'no total word cap'
 NOT_A_CHANNEL = 'not a channel'
 ONE_QUESTION_LAST = 'as the last line'
+BOX_CARRIES_THE_QUESTION = 'the box carries the question'
+ASK_LINE_OMITTED_UNDER_A_BOX = (
+    "the final block's Ask line is omitted when the box shows the same question"
+)
+DECISIONS_STILL_IN_FULL = 'Decisions field still carries every decision in full'
+# A sentence that names the box and the Ask (or the question) and says "also",
+# "both" or "too" places the same question in the box and in the final block.
+BOX = re.compile(r'\bbox\b', re.I)
+ASK_OR_QUESTION = re.compile(r'\b(Ask|question)\b')
+DOUBLING_WORD = re.compile(r'\b(also|both|too)\b', re.I)
 
 
 def _parts() -> tuple[str, str]:
@@ -89,6 +105,31 @@ def test_interim_text_is_named_as_narration():
     assert NOT_A_CHANNEL in flat
 
 
+def _flat_sentences() -> list[str]:
+    _, body = _parts()
+    flat = re.sub(r'\s+', ' ', body)
+    return re.split(r'(?<=[.!?])\s+', flat)
+
+
+def test_a_next_step_box_carries_the_question_and_decisions_stay_full():
+    _, body = _parts()
+    flat = re.sub(r'\s+', ' ', body)
+    assert BOX_CARRIES_THE_QUESTION in flat, 'the box rule does not give the question to the box'
+    assert ASK_LINE_OMITTED_UNDER_A_BOX in flat, 'the Ask line is not omitted when a box shows it'
+    assert DECISIONS_STILL_IN_FULL in flat, 'Decisions no longer carries every decision under a box'
+
+
+def test_no_sentence_places_the_question_in_both_the_box_and_the_block():
+    doubled = [
+        s
+        for s in _flat_sentences()
+        if BOX.search(s) and ASK_OR_QUESTION.search(s) and DOUBLING_WORD.search(s)
+    ]
+    assert not doubled, (
+        f'the style puts the same question in the box and the final block: {doubled}'
+    )
+
+
 if __name__ == '__main__':
     test_frontmatter_keeps_the_coding_instructions()
     test_the_four_fields_appear_in_order()
@@ -96,4 +137,8 @@ if __name__ == '__main__':
     test_a_decision_carries_options_and_a_recommendation()
     test_no_total_word_cap_and_one_question_last()
     test_interim_text_is_named_as_narration()
-    print('ok: step-digest keeps its four fields, the repeat-every-ask rule and no total cap')
+    test_a_next_step_box_carries_the_question_and_decisions_stay_full()
+    test_no_sentence_places_the_question_in_both_the_box_and_the_block()
+    print(
+        'ok: step-digest keeps its four fields, the repeat-every-ask rule, no total cap and one question under a box'
+    )
