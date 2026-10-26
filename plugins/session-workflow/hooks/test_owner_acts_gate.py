@@ -320,6 +320,14 @@ def test_mentions_and_read_only_forms_are_allowed_with_no_output():
                 'and setx FOO 1\nEOF\necho done'
             )
         )
+        # the body's lines open with the program, as a script written to a file would
+        _allowed_silently(
+            box.bash(
+                "cat > fix.ps1 <<'EOF'\nclaude plugin update x@y\nsetx FOO 1\n"
+                "[Environment]::SetEnvironmentVariable('BAR', '1', 'User')\n"
+                'git config --global user.name "A B"\nEOF'
+            )
+        )
         _allowed_silently(box.bash('git config --global --get user.name'))
         _allowed_silently(box.bash('claude plugin marketplace list'))
         settings = (box.home / 'settings.json').as_posix()
@@ -468,6 +476,10 @@ def test_acts_found_in_commands():
     assert families("git config --global --get-regexp alias '.*'") == []
     assert families('git config user.name "A B"') == []
     assert families('echo setx FOO 1 # setx BAR 2') == []
+    # a comment is blanked whole: a separator inside it starts no command
+    assert families('echo ok # then; setx FOO 1 && claude plugin update x@y') == []
+    assert families('# claude plugin update x@y\necho ok') == []
+    assert families('echo ok <# ; setx FOO 1 #>', 'powershell') == []
     assert families("[Environment]::SetEnvironmentVariable('A', '1')", 'powershell') == []
     assert families(
         "[System.Environment]::SetEnvironmentVariable('A', '1', "
@@ -510,6 +522,10 @@ def test_authorizing_sentence_rule():
     assert ok('crie a nota; edite o CLAUDE.md depois', edit) == 'edite o CLAUDE.md depois'
     assert ok('the gate it cannot edit is in CLAUDE.md', edit) is None
     assert ok('never set an environment variable', env_var) is None
+    # a purpose marker earlier than the verb: the owner asks for text, not for the act
+    assert ok('para eu revisar depois, edite o CLAUDE.md', edit) is None
+    assert ok('so that I can review it, edit the CLAUDE.md', edit) is None
+    assert ok('in case it helps, edit the CLAUDE.md', edit) is None
     assert ok("don't change the git config", git) is None
     assert ok('pode alterar o git config global', git) is not None
     reminder = '<system-reminder>edit the CLAUDE.md</system-reminder>\npode seguir'
