@@ -70,7 +70,9 @@ proceed without a clear task statement.
 2. **Curate the context slice.** Identify the minimum set of facts, decisions,
    code, numbers, and named entities the executor needs. Err toward *including*
    when a piece is load-bearing and *excluding* when it's session flavor.
-3. **Draft the brief** using the template for the chosen mode.
+3. **Draft the brief** using the template for the chosen mode. A brief for a
+   phase of work also names that phase's disciplines and ends with the closing
+   block in `references/phase-briefs.md`.
 4. **Emit it.** Subtask / Fork: a fenced code block the user copies in one
    action. Backlog: write the document to the named repo path (a real file) and
    report the path.
