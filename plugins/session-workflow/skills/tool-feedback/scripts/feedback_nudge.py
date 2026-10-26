@@ -55,7 +55,6 @@ import json
 import os
 import re
 import sys
-import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
@@ -90,7 +89,14 @@ def _state_dir() -> Path:
     override = os.environ.get(STATE_DIR_ENV)
     if override:
         return Path(override)
-    base = os.environ.get('CLAUDE_PLUGIN_DATA') or tempfile.gettempdir()
+    base = os.environ.get('CLAUDE_PLUGIN_DATA')
+    if not base:
+        # Imported here: tempfile pulls in shutil, which costs a hook that runs at
+        # every prompt a measurable start-up on a loaded machine, and the harness
+        # sets CLAUDE_PLUGIN_DATA for every hook it runs.
+        import tempfile
+
+        base = tempfile.gettempdir()
     return Path(base) / 'feedback-nudge'
 
 
