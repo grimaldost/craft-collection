@@ -79,6 +79,10 @@ older entries). `--head-fit` prints a line when `step:` is behind the cursor's n
 How a cold reader re-orients: read this file, check the real state (version
 control log, the artifact on disk), continue from the cursor.
 
+Then load each skill that the Invariants' **Disciplines in force** line names,
+before the first action. The cursor says where the run is; those skills say how
+it works there, and a compaction dropped their bodies with the rest of the context.
+
 They run somewhere they were not authored, so write them in **absolute paths**:
 a relative command does not fail after a restart, it succeeds in the wrong
 place. Record the anchor's own absolute path where the environment surfaces it
@@ -90,6 +94,13 @@ Decisions about the task that a post-compaction turn must not relitigate: the
 approach chosen, an alternative rejected and why, a scope cut. They are not
 inviolable rules; a rule that has to hold whatever a later turn believes goes in
 a hook (see Mission).
+
+The section ends with a **Disciplines in force** line: each skill that governs the
+work and the phase it governs, for example
+`Disciplines in force: humblepowers:test-driven-development (implementation),
+humblepowers:verification-before-completion (before any completion claim)`. A run
+whose anchor names only its position resumes without the disciplines it was
+working under, because nothing else on disk records which ones were loaded.
 
 ### Parallel tracks
 
@@ -130,6 +141,15 @@ the rename to `*.closed.md` is the only signal that stops injection entirely. An
 anchor untouched for 24h injects as a short pointer: path, title, age, close
 command, and the cursor it still asserts, which is the part a reader can check
 against reality. Anchor-less sessions pay nothing.
+
+Each write of an open anchor through Write, Edit or MultiEdit records the writing
+session in `.claude/anchors/.owners.json` (filename to session id; `--step` leaves
+the record as it is, and a rename to `*.closed.md` drops the entry). Among anchors
+that are anchor-shaped, not done and not parked, one the starting session wrote
+last ranks first, ahead of a newer one, so two tracks sharing a directory each get
+their own back. A session that wrote none of the open anchors, such as a restart
+after a crash, gets the usual injection plus one line naming the session that last
+wrote it.
 
 Over budget, the hook reserves the cursor section and then spends what is left
 top-down on whole sections, naming what it dropped. So a section's position is

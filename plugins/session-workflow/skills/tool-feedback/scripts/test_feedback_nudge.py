@@ -95,9 +95,41 @@ def _nudge_env(td: str, targets: str, min_turns: str = '2'):
     )
 
 
+HOOKS_JSON = Path(__file__).resolve().parents[3] / 'hooks' / 'hooks.json'
+HANDBACK = '[Subagent hand-back] the worker finished; its report is at out/report.md'
+NOTIFICATION = '<task-notification><task-id>b1</task-id><status>completed</status>'
+
+
+def _prompt_args() -> list[str]:
+    """The arm's argv, read from the UserPromptSubmit entry hooks.json ships, so
+    the tests drive the hook exactly as it is wired."""
+    data = json.loads(HOOKS_JSON.read_text(encoding='utf-8'))
+    for group in data['hooks'].get('UserPromptSubmit', []):
+        for hook in group['hooks']:
+            args = hook.get('args', [])
+            for i, arg in enumerate(args):
+                if arg.endswith('/skills/tool-feedback/scripts/feedback_nudge.py'):
+                    return args[i + 1 :]
+    raise AssertionError('no UserPromptSubmit entry runs feedback_nudge.py')
+
+
+def _prompt_run(payload: dict, prompt: object = 'carry on with the next step') -> tuple[int, str]:
+    full = {'hook_event_name': 'UserPromptSubmit', 'prompt': prompt, **payload}
+    return _run(_prompt_args(), full)
+
+
+def _nudge_text(out: str) -> str:
+    block = json.loads(out)
+    assert 'decision' not in block, f'the nudge must never block: {block}'
+    specific = block['hookSpecificOutput']
+    assert specific['hookEventName'] == 'UserPromptSubmit', block
+    return specific['additionalContext']
+
+
 def test_fires_once_with_no_env_set():
     """The hook ships ON: an unset gate is not a default, and this one had never
-    fired anywhere. The binding check below is what makes that safe."""
+    fired anywhere. The binding check below is what makes that safe. It speaks on
+    an owner-typed prompt, as one line of additional context, once per session."""
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
         transcript = tdp / 't.jsonl'
@@ -111,16 +143,129 @@ def test_fires_once_with_no_env_set():
         )
         payload = {'session_id': 'sid', 'transcript_path': str(transcript)}
         with _nudge_env(td, str(_targets(tdp))):
-            rc, out = _run(['--stop-nudge'], payload)
+            rc, out = _prompt_run(payload)
             assert rc == 0, out
-            block = json.loads(out)
-            assert block['decision'] == 'block'
-            assert 'humblepowers:choosing-tools' in block['reason']
-            assert 'mcp__plugin_fathom_fathom__plan' in block['reason']
+            text = _nudge_text(out)
+            assert 'humblepowers:choosing-tools' in text
+            assert 'mcp__plugin_fathom_fathom__plan' in text
+            assert '\n' not in text, 'one line of additional context'
             assert out == out.encode('ascii', errors='replace').decode('ascii'), 'non-ASCII output'
             assert (tdp / 'sid.nudged').is_file()
-            rc2, out2 = _run(['--stop-nudge'], payload)
-            assert rc2 == 0 and out2 == '', 'second stop must be silent (marker)'
+            rc2, out2 = _prompt_run(payload)
+            assert rc2 == 0 and out2 == '', 'second prompt must be silent (marker)'
+
+
+def test_stop_with_feedback_debt_prints_nothing():
+    """The nudge no longer blocks a Stop: the old arm is inert, whatever the debt."""
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        transcript = tdp / 't.jsonl'
+        _write_transcript(transcript, ['one', 'two'], [_skill_call('humblepowers:choosing-tools')])
+        payload = {
+            'session_id': 'sid',
+            'transcript_path': str(transcript),
+            'hook_event_name': 'Stop',
+            'stop_hook_active': False,
+        }
+        with _nudge_env(td, str(_targets(tdp))):
+            assert _run(['--stop-nudge'], payload) == (0, '')
+            assert not (tdp / 'sid.nudged').exists(), 'an inert Stop must not burn the slot'
+            assert _nudge_text(_prompt_run(payload)[1]), 'the debt is still owed at the next prompt'
+
+
+def test_synthetic_prompts_neither_receive_nor_burn_the_nudge():
+    """A hand-back or a task notification reaches UserPromptSubmit like a typed
+    prompt; no owner reads what is injected there, so it waits for the owner."""
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        transcript = tdp / 't.jsonl'
+        _write_transcript(transcript, ['one', 'two'], [_skill_call('humblepowers:choosing-tools')])
+        payload = {'session_id': 'sid', 'transcript_path': str(transcript)}
+        with _nudge_env(td, str(_targets(tdp))):
+            for prompt in (HANDBACK, NOTIFICATION, None):
+                assert _prompt_run(payload, prompt) == (0, ''), prompt
+            assert not (tdp / 'sid.nudged').exists(), 'a synthetic prompt burned the slot'
+            assert _nudge_text(_prompt_run(payload)[1])
+            assert _prompt_run(payload, HANDBACK) == (0, ''), 'once per session'
+
+
+def test_meta_and_compact_summary_records_are_not_owner_turns():
+    """Skill bodies (isMeta) and compaction summaries are user records no owner
+    typed. Counted, a two-prompt session crosses a three-turn threshold."""
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        transcript = tdp / 't.jsonl'
+        meta = {
+            'type': 'user',
+            'isMeta': True,
+            'message': {'role': 'user', 'content': [{'type': 'text', 'text': 'Base directory'}]},
+        }
+        summary = {'type': 'user', 'isCompactSummary': True, 'message': {'content': 'Summary'}}
+        _write_transcript(
+            transcript,
+            ['one', 'two'],
+            [meta, meta, summary, _skill_call('humblepowers:choosing-tools')],
+        )
+        assert fn.read_transcript(str(transcript))[0] == 2
+        payload = {'session_id': 'sid', 'transcript_path': str(transcript)}
+        with _nudge_env(td, str(_targets(tdp)), min_turns='3'):
+            assert _prompt_run(payload) == (0, ''), 'meta records counted as owner turns'
+
+
+def test_cheap_exits_come_before_the_transcript_read():
+    """Targets file absent, already nudged, synthetic prompt: each returns before
+    the transcript is opened. A full run opens it exactly once."""
+    calls: list[object] = []
+    real = fn.scan_transcript
+
+    def spy(*args, **kwargs):
+        calls.append(args[0])
+        return real(*args, **kwargs)
+
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        transcript = tdp / 't.jsonl'
+        _write_transcript(transcript, ['one', 'two'], [_skill_call('humblepowers:choosing-tools')])
+        payload = {'session_id': 'sid', 'transcript_path': str(transcript)}
+        fn.scan_transcript = spy
+        try:
+            with _nudge_env(td, str(tdp / 'absent.toml')):
+                assert _prompt_run(payload) == (0, '')
+            with _nudge_env(td, str(_targets(tdp))):
+                assert _prompt_run(payload, HANDBACK) == (0, '')
+            assert calls == [], f'an early exit read the transcript: {calls}'
+            with _nudge_env(td, str(_targets(tdp))):
+                assert _nudge_text(_prompt_run(payload)[1])
+                assert len(calls) == 1, f'read {len(calls)} times for one prompt'
+                assert _prompt_run(payload) == (0, '')
+            assert len(calls) == 1, 'an already-nudged session read the transcript'
+        finally:
+            fn.scan_transcript = real
+
+
+def test_the_scan_resumes_where_the_last_prompt_stopped():
+    """A session with no debt is checked at every owner prompt. The scan state
+    carries its offset, so a later prompt reads only what the transcript gained."""
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        transcript = tdp / 't.jsonl'
+        _write_transcript(transcript, ['one'], [])
+        payload = {'session_id': 'sid', 'transcript_path': str(transcript)}
+        with _nudge_env(td, str(_targets(tdp))):
+            assert _prompt_run(payload) == (0, ''), 'no tool exercised yet'
+            first = transcript.stat().st_size
+            with transcript.open('a', encoding='utf-8') as fh:
+                fh.write(json.dumps({'type': 'user', 'message': {'content': 'two'}}) + '\n')
+                fh.write(json.dumps(_skill_call('humblepowers:choosing-tools')) + '\n')
+            state = json.loads((tdp / 'sid.scan.json').read_text(encoding='utf-8'))
+            assert state['offset'] == first, state
+            assert _nudge_text(_prompt_run(payload)[1]), 'the appended records were not read'
+        state = fn.scan_transcript(str(transcript), None)
+        assert (state['turns'], state['tools']) == (2, ['humblepowers:choosing-tools'])
+        stale = {**state, 'offset': state['offset'] + 10}
+        assert fn.scan_transcript(str(transcript), stale) == state, 'a shrunk file rescans'
+        other = {**state, 'path': str(tdp / 'other.jsonl'), 'turns': 99}
+        assert fn.scan_transcript(str(transcript), other) == state, 'another path rescans'
 
 
 def test_silent_without_a_registered_targets_file():
@@ -137,12 +282,7 @@ def test_silent_without_a_registered_targets_file():
             FEEDBACK_TARGETS_FILE=str(tdp / 'does-not-exist.toml'),
             SESSION_WORKFLOW_NUDGE_MIN_TURNS='2',
         ):
-            assert _run(
-                ['--stop-nudge'], {'session_id': 's', 'transcript_path': str(transcript)}
-            ) == (
-                0,
-                '',
-            )
+            assert _prompt_run({'session_id': 's', 'transcript_path': str(transcript)}) == (0, '')
         assert not (tdp / 's.nudged').exists()
 
 
@@ -158,19 +298,15 @@ def test_silent_paths():
             SESSION_WORKFLOW_NUDGE_STATE_DIR=td,
             FEEDBACK_TARGETS_FILE=targets,
         ):
-            assert _run(['--stop-nudge'], base) == (0, ''), 'opt-out'
-        with _nudge_env(td, targets):
-            assert _run(['--stop-nudge'], {**base, 'stop_hook_active': True}) == (0, ''), (
-                'stop_hook_active'
-            )
+            assert _prompt_run(base) == (0, ''), 'opt-out'
         with _nudge_env(td, targets, min_turns='3'):
-            assert _run(['--stop-nudge'], base) == (0, ''), 'below turn threshold'
+            assert _prompt_run(base) == (0, ''), 'below turn threshold'
         with _nudge_env(td, targets):
-            assert _run(['--stop-nudge'], {'session_id': 'sid'}) == (0, ''), 'no transcript path'
+            assert _prompt_run({'session_id': 'sid'}) == (0, ''), 'no transcript path'
         with _nudge_env(td, targets):
             bare = tdp / 'bare.jsonl'
             _write_transcript(bare, ['one', 'two'])
-            assert _run(['--stop-nudge'], {**base, 'transcript_path': str(bare)}) == (0, ''), (
+            assert _prompt_run({'session_id': 'bare', 'transcript_path': str(bare)}) == (0, ''), (
                 'no plugin tool exercised'
             )
         assert not (tdp / 'sid.nudged').exists(), 'no silent path may burn the marker'
@@ -189,9 +325,7 @@ def test_debt_cleared_by_tool_feedback():
             ],
         )
         with _nudge_env(td, str(_targets(tdp))):
-            rc, out = _run(
-                ['--stop-nudge'], {'session_id': 'sid', 'transcript_path': str(transcript)}
-            )
+            rc, out = _prompt_run({'session_id': 'sid', 'transcript_path': str(transcript)})
     assert (rc, out) == (0, ''), 'tool-feedback invocation must clear the debt'
 
 
@@ -201,13 +335,16 @@ def test_synthetic_user_records_do_not_count_as_turns():
         transcript = tdp / 't.jsonl'
         _write_transcript(
             transcript,
-            ['real prompt', '[SYSTEM NOTIFICATION - NOT USER INPUT] done', '<task-notification>x'],
+            [
+                'real prompt',
+                '[SYSTEM NOTIFICATION - NOT USER INPUT] done',
+                '<task-notification>x',
+                HANDBACK,
+            ],
             [_skill_call('humblepowers:choosing-tools')],
         )
         with _nudge_env(td, str(_targets(tdp))):
-            rc, out = _run(
-                ['--stop-nudge'], {'session_id': 'sid', 'transcript_path': str(transcript)}
-            )
+            rc, out = _prompt_run({'session_id': 'sid', 'transcript_path': str(transcript)})
     assert (rc, out) == (0, ''), 'synthetic records counted toward the turn gate'
 
 
@@ -280,9 +417,7 @@ def test_output_ascii_with_non_ascii_skill_name():
         transcript = tdp / 't.jsonl'
         _write_transcript(transcript, ['one', 'two'], [_skill_call('plugin:habilitação-中文')])
         with _nudge_env(td, str(_targets(tdp))):
-            rc, out = _run(
-                ['--stop-nudge'], {'session_id': 'sid', 'transcript_path': str(transcript)}
-            )
+            rc, out = _prompt_run({'session_id': 'sid', 'transcript_path': str(transcript)})
     assert rc == 0 and out, 'nudge must fire'
     out.encode('ascii')  # raises -> non-ASCII leaked to stdout (cp1252 hazard)
 
@@ -303,14 +438,15 @@ def test_failed_print_does_not_burn_the_marker():
         with _nudge_env(td, str(_targets(tdp))):
             old_stdin = sys.stdin
             try:
-                sys.stdin = _FakeStdin(json.dumps(payload).encode('utf-8'))
+                full = {'hook_event_name': 'UserPromptSubmit', 'prompt': 'next', **payload}
+                sys.stdin = _FakeStdin(json.dumps(full).encode('utf-8'))
                 with contextlib.redirect_stdout(_Boom()):
-                    rc = fn.main(['--stop-nudge'])
+                    rc = fn.main(_prompt_args())
             finally:
                 sys.stdin = old_stdin
             assert rc == 0, 'a delivery failure must still exit 0'
             assert not (tdp / 'sid.nudged').exists(), 'failed delivery burned the slot'
-            rc2, out2 = _run(['--stop-nudge'], payload)
+            rc2, out2 = _prompt_run(payload)
             assert rc2 == 0 and out2, 'retry after failed delivery must re-fire'
 
 
@@ -322,7 +458,9 @@ def test_min_turns_garbage_falls_back():
 
 def test_main_unknown_mode_and_garbage_stdin_exit_0():
     assert _run([], {}) == (0, '')
-    assert _run(['--stop-nudge'], b'\xff\xfe garbage')[0] == 0
+    for argv in (['--stop-nudge'], _prompt_args()):
+        assert _run(argv, b'\xff\xfe garbage') == (0, ''), argv
+        assert _run(argv, [1, 2]) == (0, ''), argv
 
 
 def _real_registry(td: Path) -> Path:
@@ -404,9 +542,7 @@ def test_a_session_of_only_unregistered_skills_owes_nothing():
             transcript, ['first prompt', 'second prompt'], [_skill_call('mantis-wisdom')]
         )
         with _nudge_env(td, str(targets)):
-            rc, out = _run(
-                ['--stop-nudge'], {'session_id': 'unreg', 'transcript_path': str(transcript)}
-            )
+            rc, out = _prompt_run({'session_id': 'unreg', 'transcript_path': str(transcript)})
         assert rc == 0
         assert out.strip() == '', 'no registered tool ran, so there is no debt to nudge about'
 
@@ -422,9 +558,7 @@ def test_a_registered_skill_beside_an_unregistered_one_still_nudges():
             [_skill_call('mantis-wisdom'), _skill_call('session-workflow:compaction-survival')],
         )
         with _nudge_env(td, str(targets)):
-            rc, out = _run(
-                ['--stop-nudge'], {'session_id': 'mixed', 'transcript_path': str(transcript)}
-            )
+            rc, out = _prompt_run({'session_id': 'mixed', 'transcript_path': str(transcript)})
         assert rc == 0
         assert 'compaction-survival' in out
         assert 'mantis-wisdom' not in out, 'a non-target must not be named as a registered tool'
@@ -696,19 +830,44 @@ def _child_env(**extra: str) -> dict[str, str]:
     return env
 
 
-def test_stale_body_import_failure_cannot_touch_the_stop_nudge():
-    """The arm's helper module is imported inside the arm. Run a copy of this
-    script with no plugin_version.py beside it: the Stop nudge still fires and
-    the stale-body arm stays silent, exit 0 both times."""
+def _plugin_copy(root: Path, *, with_prompt_kind: bool = True) -> Path:
+    """The two files the prompt arm needs, laid out as the plugin ships them
+    (`skills/tool-feedback/scripts/` and `hooks/`), and nothing else: no
+    plugin_version.py, so the stale-body arm's import fails."""
     import shutil
+
+    scripts = root / 'skills' / 'tool-feedback' / 'scripts'
+    scripts.mkdir(parents=True)
+    script = scripts / 'feedback_nudge.py'
+    shutil.copyfile(Path(fn.__file__), script)
+    if with_prompt_kind:
+        (root / 'hooks').mkdir()
+        shutil.copyfile(HOOKS_JSON.parent / 'prompt_kind.py', root / 'hooks' / 'prompt_kind.py')
+    return script
+
+
+def _child(script: Path, args: list[str], payload: object, env: dict[str, str]):
     import subprocess
 
+    raw = payload if isinstance(payload, bytes) else json.dumps(payload).encode('utf-8')
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(script), *args],
+        input=raw,
+        capture_output=True,
+        env=env,
+        cwd=script.parent,
+        timeout=60,
+    )
+
+
+def test_stale_body_import_failure_cannot_touch_the_prompt_nudge():
+    """The stale-body arm's helper module is imported inside the arm. Run a copy
+    of this script with no plugin_version.py beside it: the prompt nudge still
+    fires and the stale-body arm stays silent, exit 0 both times. Without
+    prompt_kind.py the prompt arm cannot tell an owner from a hand-back, so it
+    stays silent too: a partial install fails open."""
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
-        alone = tdp / 'alone'
-        alone.mkdir()
-        script = alone / 'feedback_nudge.py'
-        shutil.copyfile(Path(fn.__file__), script)
         transcript = tdp / 't.jsonl'
         _write_transcript(transcript, ['one', 'two'], [_skill_call('humblepowers:choosing-tools')])
         env = _child_env(
@@ -716,19 +875,110 @@ def test_stale_body_import_failure_cannot_touch_the_stop_nudge():
             FEEDBACK_TARGETS_FILE=str(_targets(tdp)),
             SESSION_WORKFLOW_NUDGE_MIN_TURNS='2',
         )
-        payload = json.dumps({'session_id': 'sid', 'transcript_path': str(transcript)})
-        for arm, fires in (('--stop-nudge', True), ('--stale-bodies', False)):
-            done = subprocess.run(  # noqa: S603 - fixed argv, no shell
-                [sys.executable, str(script), arm],
-                input=payload,
-                capture_output=True,
-                text=True,
-                env=env,
-                cwd=alone,
-                timeout=60,
-            )
-            assert done.returncode == 0, (arm, done.stderr)
-            assert bool(done.stdout.strip()) is fires, (arm, done.stdout, done.stderr)
+        payload = {
+            'session_id': 'sid',
+            'transcript_path': str(transcript),
+            'hook_event_name': 'UserPromptSubmit',
+            'prompt': 'next',
+        }
+        script = _plugin_copy(tdp / 'plugin')
+        for args, fires in ((_prompt_args(), True), (['--stale-bodies'], False)):
+            done = _child(script, args, payload, env)
+            assert done.returncode == 0, (args, done.stderr)
+            assert bool(done.stdout.strip()) is fires, (args, done.stdout, done.stderr)
+        bare = _plugin_copy(tdp / 'bare', with_prompt_kind=False)
+        done = _child(bare, _prompt_args(), {**payload, 'session_id': 'other'}, env)
+        assert (done.returncode, done.stdout, done.stderr) == (0, b'', b''), done
+
+
+def test_the_hook_contract_through_a_subprocess():
+    """The section's acceptance, as the harness runs the hook: the argv hooks.json
+    ships, a Windows console's cp1252 stdout, a Stop then three prompts."""
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        transcript = tdp / 't.jsonl'
+        _write_transcript(transcript, ['one', 'two'], [_skill_call('plugin:habilitação')])
+        env = _child_env(
+            SESSION_WORKFLOW_NUDGE_STATE_DIR=td,
+            FEEDBACK_TARGETS_FILE=str(_targets(tdp)),
+            SESSION_WORKFLOW_NUDGE_MIN_TURNS='2',
+            PYTHONIOENCODING='cp1252',
+        )
+        env.pop('PYTHONUTF8', None)
+        script = Path(fn.__file__)
+        base = {'session_id': 'sid', 'transcript_path': str(transcript), 'cwd': td}
+        stop = _child(script, ['--stop-nudge'], {**base, 'hook_event_name': 'Stop'}, env)
+        assert (stop.returncode, stop.stdout) == (0, b''), stop
+
+        def prompt(text: str) -> bytes:
+            payload = {**base, 'hook_event_name': 'UserPromptSubmit', 'prompt': text}
+            done = _child(script, _prompt_args(), payload, env)
+            assert done.returncode == 0, done.stderr
+            return done.stdout
+
+        first = prompt('pode seguir')
+        line = _nudge_text(first.decode('ascii'))
+        assert 'habilitação' in line and '\n' not in line, line
+        assert prompt('and the next one') == b'', 'a second prompt got the nudge again'
+        assert prompt(HANDBACK) == b'', 'a hand-back got the nudge'
+        bad = _child(script, _prompt_args(), b'{not json', env)
+        assert (bad.returncode, bad.stdout) == (0, b''), bad
+
+
+def test_prompt_arm_on_a_large_transcript_stays_fast():
+    """The largest diagnosed transcript is 65 MB. The arm reads it once, parsing
+    only the lines that can hold an owner prompt or a plugin tool call. The 2 s
+    figure of the spec is measured on the owner's machine and recorded in the
+    PR; this bound leaves room for a loaded runner."""
+    import time
+
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        noise = json.dumps(
+            {
+                'type': 'user',
+                'message': {
+                    'content': [{'type': 'tool_result', 'tool_use_id': 'tu', 'content': 'x' * 5000}]
+                },
+            }
+        )
+        talk = json.dumps({'type': 'assistant', 'message': {'content': 'y' * 5000}})
+        owner = json.dumps({'type': 'user', 'message': {'content': 'an owner prompt'}})
+        skill = json.dumps(_skill_call('humblepowers:choosing-tools'))
+        transcript = tdp / 'big.jsonl'
+        with open(transcript, 'w', encoding='utf-8', newline='\n') as fh:
+            for i in range(13_000):
+                fh.write((owner if i % 1000 == 0 else talk if i % 2 else noise) + '\n')
+            fh.write(skill + '\n')
+        assert transcript.stat().st_size >= 65_000_000
+        payload = {'session_id': 'big', 'transcript_path': str(transcript)}
+        with _nudge_env(td, str(_targets(tdp)), min_turns='8'):
+            start = time.perf_counter()
+            rc, out = _prompt_run(payload)
+            elapsed = time.perf_counter() - start
+    assert rc == 0 and 'choosing-tools' in _nudge_text(out), out
+    assert elapsed < 5.0, f'65 MB took {elapsed:.2f}s'
+
+
+def test_hooks_json_moves_the_nudge_to_user_prompt_submit():
+    data = json.loads(HOOKS_JSON.read_text(encoding='utf-8'))
+    script = '${CLAUDE_PLUGIN_ROOT}/skills/tool-feedback/scripts/feedback_nudge.py'
+    stop = [h for g in data['hooks'].get('Stop', []) for h in g['hooks'] if script in h['args']]
+    assert stop == [], f'the Stop entry must be gone: {stop}'
+    wired = [
+        (group.get('matcher'), hook)
+        for group in data['hooks']['UserPromptSubmit']
+        for hook in group['hooks']
+        if script in hook.get('args', [])
+    ]
+    assert len(wired) == 1, wired
+    matcher, hook = wired[0]
+    assert matcher is None, matcher
+    assert hook['command'] == 'uv' and hook['args'][:4] == ['run', '--no-project', '--', 'python']
+    assert hook['args'][4:] == [script, '--prompt-nudge'], hook
+    assert hook.get('timeout') == 10, hook
+    assert 'SESSION_WORKFLOW_FEEDBACK_NUDGE=0' in data['description']
+    assert 'UserPromptSubmit: the feedback-debt nudge' in data['description']
 
 
 def test_stale_body_large_transcript_stays_fast():
@@ -783,6 +1033,11 @@ def test_hooks_json_wires_the_stale_body_check():
 
 def main() -> int:
     test_fires_once_with_no_env_set()
+    test_stop_with_feedback_debt_prints_nothing()
+    test_synthetic_prompts_neither_receive_nor_burn_the_nudge()
+    test_meta_and_compact_summary_records_are_not_owner_turns()
+    test_cheap_exits_come_before_the_transcript_read()
+    test_the_scan_resumes_where_the_last_prompt_stopped()
     test_silent_without_a_registered_targets_file()
     test_silent_paths()
     test_debt_cleared_by_tool_feedback()
@@ -813,7 +1068,10 @@ def main() -> int:
     test_stale_body_silent_paths()
     test_stale_body_a_quoted_marker_is_not_a_load()
     test_stale_body_exception_in_the_arm_exits_0()
-    test_stale_body_import_failure_cannot_touch_the_stop_nudge()
+    test_stale_body_import_failure_cannot_touch_the_prompt_nudge()
+    test_the_hook_contract_through_a_subprocess()
+    test_prompt_arm_on_a_large_transcript_stays_fast()
+    test_hooks_json_moves_the_nudge_to_user_prompt_submit()
     test_stale_body_large_transcript_stays_fast()
     test_hooks_json_wires_the_stale_body_check()
     print('ok: feedback_nudge')

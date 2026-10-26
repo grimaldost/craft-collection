@@ -359,7 +359,9 @@ def _command_hooks(manifest: dict, event: str) -> list[tuple[str | None, dict]]:
 def test_hooks_json_wires_the_gate_without_the_wrap_up_entry():
     manifest = json.loads(HOOKS_JSON.read_text(encoding='utf-8'))
     text = json.dumps(manifest['hooks'])
-    assert 'wrap_up' not in text and '--post-tool-use' not in text, 'the box entry is gone'
+    # The series guard has its own --post-tool-use arm; the gate's own entries are
+    # pinned exactly below, so the box entry's absence is checked there too.
+    assert 'wrap_up' not in text, 'the box entry is gone'
     prefix = [
         'run',
         '--no-project',

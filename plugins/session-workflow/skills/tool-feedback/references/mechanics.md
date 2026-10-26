@@ -40,17 +40,24 @@ Each report's destination, in precedence:
 
 Resolve only a **named or registered** dir, never an inferred one. A redirected
 destination moves the *write* only: when a registered binding exists, the
-recurrence check still reads **the registered dir's** `INDEX.md`, so a one-off
-sink can't sever the recurrence baseline. State in the report which baseline you
+recurrence check still reads **the registered dir** (its rebuilt `INDEX.md` and
+`--grep` over its reports), so a one-off sink can't sever the recurrence baseline. State in the report which baseline you
 used.
 
-## Why the INDEX, not greps
+## Why the rebuilt index and `--grep`, not hand greps
 
-The recurrence check reads one current `INDEX.md` (one entry per prior report
-with its numbered proposals and §-stubs) instead of N speculative greps, because
-grep-by-phrasing is fragile: a finding restated in different words is invisible
-to it, and a missed recurrence breaks the `extends` chain triage depends on for
-reinforcement counts.
+The recurrence check rebuilds `INDEX.md` (one entry per prior report with its
+numbered proposals and §-stubs) and then asks the builder for
+`--grep <term> [<term> ...]`, instead of N speculative greps over the directory.
+A hand grep matches one phrasing and returns a line out of its finding; the
+builder's `--grep` reads the same reports the index covers (no triage doc, digest,
+README or BACKLOG), matches any of several terms, and prints each matching finding
+whole: its numbered line or §-stub bullet, its indented body, and its `<stem>#<n>`.
+The index alone is not enough to judge "same cause?": it caps each title at 140
+characters, so the deciding clause of a long finding is often the clipped part.
+Pass several terms (the cause, the component, the symptom), because a finding
+restated in other words still escapes a single term, and a missed recurrence
+breaks the `extends` chain triage depends on for reinforcement counts.
 
 Each digest line carries the fields the "same cause?" question needs, in fixed
 positions — severity, the phase a miss names, and the `extends` referent:
@@ -58,8 +65,8 @@ positions — severity, the phase a miss names, and the `extends` referent:
     - `2026-08-01-wave#2` [HIGH] extends `2026-07-20-prior#3` — only the new evidence.
     - `2026-08-01-wave §Misses` [MED] (phase: gate) — the gate passed on a hollow record
 
-so answering it is one read of the index rather than four reads of the reports
-it summarizes. A field is omitted when the source report did not supply it.
+so a first pass over the whole corpus is one read of the index; `--grep` is the
+read of the candidates it turns up. A field is omitted when the source report did not supply it.
 
 ## When the builder refuses to write
 

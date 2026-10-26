@@ -111,7 +111,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   in both the directory the session started in (the first `cwd` in its
   transcript) and the current one, uses the better-ranked anchor (a live track
   beats a stale, parked, finished or non-anchor file; the start directory wins a
-  tie), and names both when they differ. When it
+  tie), and names both when they differ. Among live anchors, one the starting
+  session last wrote (`.claude/anchors/.owners.json`, kept by the PostToolUse arm
+  below) ranks first even when another is newer; a session that wrote none of them
+  gets the usual injection plus one line naming the session that did. When it
   finds open anchors it creates `.claude/anchors/.gitignore` (content `*`) if that
   file is missing, so the anchors and the hook's log never show as untracked; an
   existing `.gitignore` is never touched.
@@ -146,15 +149,25 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   `<!-- anchor:tail -->`, so the overrun is seen at the write rather than at the next
   injection. It is silent for every other path and for a HEAD with room, and it
   creates `.claude/anchors/.gitignore` (content `*`) when that file is missing, the
-  write-time half of the SessionStart behaviour above. It costs one Python start per
+  write-time half of the SessionStart behaviour above. Every write to an open anchor
+  also records the writing session as its owner in `.claude/anchors/.owners.json`,
+  replaced atomically; `--step` leaves the record alone, and an entry whose anchor was
+  renamed to `*.closed.md` is dropped. It costs one Python start per
   Write, Edit or MultiEdit, with the path filter first. **On by default**; opt out with
   `SESSION_WORKFLOW_ANCHOR_HOOKS=0` (the same switch as the SessionStart hook).
-- **Stop** — feedback-debt nudge: once per session, when the transcript shows
-  plugin tools were exercised, no tool-feedback invocation is on record, and
-  the session has at least `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) real
-  user turns, a Stop block asks the model to apply the tool-feedback skill (or
-  finish if nothing is worth recording). **On by default**; opt out with
-  `SESSION_WORKFLOW_FEEDBACK_NUDGE=0`.
+- **UserPromptSubmit** — feedback-debt nudge: once per session, when the
+  transcript shows registered plugin tools were exercised, no tool-feedback
+  invocation is on record, and it holds at least
+  `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) owner turns, the next
+  owner-typed prompt carries one line of additional context asking the model to
+  apply the tool-feedback skill at a natural stopping point (or carry on if
+  nothing is worth recording). It never blocks: it used to be a Stop block, which
+  forced one more turn out of every session that owed a report. A hand-back,
+  task notification or peer message gets nothing and does not use up the
+  session's one nudge (`hooks/prompt_kind.py` is the rule), and skill bodies and
+  compaction summaries are not owner turns. The cheap exits come before the
+  transcript is opened, and the read resumes from where the previous prompt
+  stopped. **On by default**; opt out with `SESSION_WORKFLOW_FEEDBACK_NUDGE=0`.
   What makes default-on safe is the binding check: it stays silent unless a
   feedback-targets file resolves (`$FEEDBACK_TARGETS_FILE`, else
   `~/.claude/feedback-targets.toml`), so an install with no registered tools
@@ -185,6 +198,40 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   the desktop next-step box (`mcp__ccd_turn__wrap_up`): the collection hooks none of
   the desktop app's own tools, and the final block's Decisions field carries every
   ask in text, so a question shown only in the box does not count as carried.
+- **PostToolUse / PreToolUse (Bash/PowerShell)** — series guard: the owner's rule that a
+  series of two or more PR-sized changes goes through keel's Definition of Ready and runs
+  with convoy's gate as the judge of each change, enforced at the moment a session turns
+  into a series, its second pull request in one repository. `gh pr create` is matched at
+  program position (heredoc bodies, comments and quoted arguments are data). The
+  PostToolUse arm records, per session, the repository of each PR whose
+  `github.com/<owner>/<repo>/pull/<n>` URL is on the command's stdout; a failed or
+  backgrounded command is not recorded. The PreToolUse arm keys each create by lowercase
+  `owner/repo`, from `-R`/`--repo`, else from the `origin` URL in the git config of the
+  command's working directory (the payload's `cwd`, or the directory of an opening `cd` or
+  `Set-Location`, also inside a `bash -c` or `powershell`/`pwsh -Command` wrapper), and
+  denies a create in a repository that already holds a recorded PR of the session unless
+  the command carries `KEEL_SERIES=<path>` naming an existing series file or spec, or
+  `KEEL_SERIES=none:<reason>`: in Bash as a prefix (`KEEL_SERIES=v gh pr create ...`), in
+  PowerShell as `$env:KEEL_SERIES='v'; gh pr create ...`. Each decision appends one line,
+  without the command text, to `series-guard/log.ndjson` in `CLAUDE_PLUGIN_DATA`. A
+  subagent counts with its parent session; a separate `claude -p` process counts on its
+  own. **On by default**; opt out with `SESSION_WORKFLOW_SERIES_GUARD=0`;
+  `SESSION_WORKFLOW_SERIES_GUARD=observe` logs the would-be deny and prints nothing.
+- **SessionStart / UserPromptSubmit** — governance-change notice: a running session
+  hears once that the owner's global `CLAUDE.md` changed. A session reads that file at
+  its start, and the supervising session edits it while others keep running, many of
+  them woken only by task notifications and hand-backs. At SessionStart, only when
+  the session has no baseline yet, the hook records the file's SHA-256 and
+  modification time (the governed home: `$SESSION_WORKFLOW_GOVERNED_HOME`, else
+  `$CLAUDE_CONFIG_DIR`, else `~/.claude`, resolved by `hooks/governed_home.py`), so a
+  compact or resume cannot absorb a change silently. On every prompt, owner-typed or
+  synthetic, it hashes the file again and, when the hash changed, adds one line of
+  `additionalContext` naming the file, the time it changed and the instruction to
+  re-read it before the next act; the new hash is recorded once that line was
+  written, so each change is announced once. A created or removed file counts; a
+  touch that leaves the content alone does not. Baselines live under
+  `CLAUDE_PLUGIN_DATA/governance-notice/`. **On by default** (an exact trigger: a
+  resolved path and its hash); opt out with `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0`.
 - **UserPromptSubmit / PreToolUse (Bash/PowerShell/Edit/Write/MultiEdit/NotebookEdit)** —
   owner-acts gate: an act only the owner may authorize needs a sentence of the owner
   that names it. The UserPromptSubmit arm records, per session, the text of the latest

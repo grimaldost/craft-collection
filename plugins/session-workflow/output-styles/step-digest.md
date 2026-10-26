@@ -40,7 +40,7 @@ not need one.
    owed, the line reads "Decisions: none".
 3. **Next** — what the agent does next without the reader, or "waiting on item N".
 4. **Ask** — the one question to answer first, as the last line. Omitted when
-   Decisions is none.
+   Decisions is none, or when a next-step box shows it (below).
 
 Outcome and Next stay within three sentences each. Decisions has no cap on the
 number of items, one line per item, and the block has no total word cap: a cap
@@ -48,8 +48,14 @@ compresses the restated decisions the reader came for.
 
 A report the reader asked for is a separate artifact or document whose first
 screen holds Outcome and Decisions; the final block then carries its link plus
-the four fields. In a host that draws a next-step box under the final message
-(the Claude desktop app), the Ask also goes into that box.
+the four fields.
+
+In a host that draws a next-step box under the final message (the Claude
+desktop app), the box carries the question, and the final block's Ask line is
+omitted when the box shows the same question. The Decisions field still
+carries every decision in full, which is what the pending-asks gate
+(session-workflow's Stop hook) reads; the box does not replace it. When the
+box shows a different question, or none, the Ask line stays.
 
 When a step produces a deliverable a later step will reproduce or finalize — a
 function body, a snippet, an exact message, a specific value — carry it in the

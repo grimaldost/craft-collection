@@ -123,9 +123,13 @@ Opt-outs (and `=on` for an observe-mode hook) go in the `env` block of `~/.claud
 | session-workflow | Control-anchor re-injection on compact, resume, clear and startup (SessionStart) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0` |
 | session-workflow | Stale skill-body check on resume and compact (SessionStart) | on | `SESSION_WORKFLOW_STALE_BODY_CHECK=0` |
 | session-workflow | Anchor size warning after a write to an open anchor (PostToolUse) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0`, the same switch as re-injection |
-| session-workflow | Feedback-debt nudge (Stop; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
+| session-workflow | Feedback-debt nudge: one line of context on the next owner-typed prompt, never a block (UserPromptSubmit; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
 | session-workflow | Pending-asks gate: ledger reset on an owner-typed prompt (UserPromptSubmit) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off |
 | session-workflow | Pending-asks gate: records earlier asks the final message dropped; with `=on`, names them as additionalContext (Stop) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off, the same switch |
+| session-workflow | Series guard: records the repository of a PR a `gh pr create` printed (PostToolUse on Bash/PowerShell) | on | `SESSION_WORKFLOW_SERIES_GUARD=0`; `=observe` logs without denying |
+| session-workflow | Series guard: denies a second `gh pr create` in one repository and session unless it carries `KEEL_SERIES=<series file or spec>` or `KEEL_SERIES=none:<reason>` (PreToolUse on Bash/PowerShell) | on | `SESSION_WORKFLOW_SERIES_GUARD=0`, the same switch |
+| session-workflow | Governance-change notice: records the hash of the governed `CLAUDE.md` once per session, so a compact or resume keeps the old baseline (SessionStart) | on | `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0` |
+| session-workflow | Governance-change notice: one line of context naming the changed governed `CLAUDE.md` and to re-read it, once per change, on owner-typed and synthetic prompts (UserPromptSubmit) | on | `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0`, the same switch |
 | session-workflow | Owner-acts gate: records the latest owner-typed prompt per session (UserPromptSubmit) | on | `SESSION_WORKFLOW_OWNER_ACTS_GATE=0`; `=observe` logs without denying |
 | session-workflow | Owner-acts gate: denies a governed CLAUDE.md or settings write, a `claude plugin` change, a user or machine environment variable, or a `git config --global` write unless an owner sentence names it (PreToolUse) | on | `SESSION_WORKFLOW_OWNER_ACTS_GATE=0`, the same switch; `=observe` logs without denying |
 | humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
@@ -135,7 +139,7 @@ start inject (the harness already lists skills and descriptions in the system
 prompt), the data pre-shipping checklist Stop nudge (exhortation through a hook,
 against seven runnable data checks that reject rather than remind, which a
 project wires into its own CI), and the skill-exercise ledger (a second write path for a fact the
-session transcript already carried — the Stop nudge reads the transcript).
+session transcript already carried — the feedback-debt nudge reads the transcript).
 humblepowers 0.18.0 removed two more, the subagent verification gate and the
 spawn-routing hint; its CHANGELOG gives the evidence.
 

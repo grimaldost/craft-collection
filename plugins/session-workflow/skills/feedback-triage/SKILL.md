@@ -38,8 +38,8 @@ and CHANGELOGs belong to the tool's release process.
    `uv run --no-project python "${CLAUDE_PLUGIN_ROOT}/skills/feedback-triage/scripts/build_feedback_index.py" <dir>`):
    its `### Untriaged` section is the input list — reports in no triage doc's
    **Inputs**, detection by input lists, not dates — and the `extends`-lookup in
-   steps 2–3 is one Read. A triage doc is detected by its `# Triage` H1, never its filename
-   (`references/mechanics.md`).
+   steps 2–3 is one Read. Triage docs and digests are detected by their H1, never the
+   filename (`references/mechanics.md`).
    State the count: `N un-triaged
    reports`. N of 1 with no prior triage doc is too thin — stop with a note
    (nothing to cluster); 1 new report over an existing baseline is a valid delta
@@ -90,7 +90,8 @@ and CHANGELOGs belong to the tool's release process.
      script/gate → hook → linter/CI — instead of re-prosing the same advice. A
      judgment-bound recurrence no mechanism can reach (a dispatch-timing nudge, a
      naming call) takes sharper prose or DECLINE, not a forced rung.
-   - **ROUTE OUT** — it belongs to another registered tool; record the target.
+   - **ROUTE OUT** — another registered tool owns it: deliver a report to its
+     feedback dir, path in the row (`references/mechanics.md`).
    - **DECLINE** — project-specific or out of charter; record why.
 -
      **FORWARD** — a sibling pass over *this same* tool owns it (a corpus split
@@ -139,9 +140,8 @@ and CHANGELOGs belong to the tool's release process.
    <dir>`: every finding of every report named under `## Inputs` must appear in
    the doc under a disposition — a cluster's evidence, Routed out, Declined,
    Forwarded, or an explicit "no action: <reason>" — so a finding leaves the loop
-   only with a disposition, never by omission. Write them as **full finding
-   ids**; `coverage --emit` prints the list to annotate, and the audit matches
-   whole ids, so an abbreviated one reads as undispositioned. Then
+   only with a disposition, never by omission. Write **full finding ids**
+   (`coverage --emit` prints them); the audit matches whole ids. Then
    re-list the dir: a same-corpus triage doc that appeared since step 1 is
    reconciled with, not duplicated. Close by re-running the index builder:
    just-triaged stems still under `### Untriaged` mean the Inputs did not
@@ -151,7 +151,7 @@ and CHANGELOGs belong to the tool's release process.
    otherwise the template below is authoritative — don't hunt for one. Triaging
    "everything" when one tool owns its own flow? That tool's slice is a
    **digest-for-handoff**: extracted, clustered, owner-tagged (per step 4)
-   findings written as INPUT to its flow (a `<date>-new-findings-digest.md`) —
+   findings written as INPUT to its flow (a doc whose H1 opens `# Digest`) —
    not a competing triage, not skipped.
 
 ## Triage doc template
@@ -182,7 +182,7 @@ date prefix reads as zero coverage>
 ### T2 — …
 
 ## Routed out
-<cluster → target tool, what was routed>
+<cluster → target tool, what was routed, delivered report path>
 
 ## Declined
 <cluster → reason>
