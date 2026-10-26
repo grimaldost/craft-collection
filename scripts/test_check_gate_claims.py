@@ -38,6 +38,41 @@ ON_GUARD = "import os\nENV_GATE = 'DEMO_GATE'\n\n\ndef main():\n    if os.enviro
 OFF_GUARD = "import os\n\n\ndef main():\n    if os.environ.get('DEMO_GATE') == '1':\n        return 1\n    return 0\n"
 
 
+# Three-valued gates. Each is classified by its unset value (the get() default, or
+# the fall-through when there is none), never by whether 'observe' appears.
+OBSERVE_DEFAULT = (
+    "import os\nGATE = 'DEMO_GATE'\n\n\ndef mode():\n"
+    "    value = os.environ.get(GATE, 'observe')\n"
+    "    if value == '0':\n        return 'off'\n"
+    "    if value == 'on':\n        return 'on'\n"
+    "    return 'observe'\n"
+)
+OBSERVE_BY_TAIL = (
+    "import os\n\n\ndef mode():\n    value = os.environ.get('DEMO_GATE')\n"
+    "    if value == '0':\n        return 'off'\n"
+    "    if value == 'on':\n        return 'on'\n"
+    "    return 'observe'\n"
+)
+OBSERVE_BY_ELIMINATION = (
+    "import os\n\n\ndef main():\n    value = os.environ.get('DEMO_GATE')\n"
+    "    if value == '0':\n        return 0\n    record()\n"
+    "    if value == 'on':\n        emit()\n    return 0\n"
+)
+# The section 5 and section 7 shape: '0' off, 'observe' logs only, unset on.
+THREE_VALUED_ON = (
+    "import os\n\n\ndef main():\n    value = os.environ.get('DEMO_GATE')\n"
+    "    if value == '0':\n        return 0\n    observe = value == 'observe'\n"
+    '    decide(observe)\n    return 0\n'
+)
+# The session-workflow 0.28.0 shape: a mode() whose fall-through is 'on'.
+THREE_VALUED_ON_BY_TAIL = (
+    "import os\nGATE = 'DEMO_GATE'\n\n\ndef mode():\n    value = os.environ.get(GATE)\n"
+    "    if value == '0':\n        return 'off'\n"
+    "    if value == 'observe':\n        return 'observe'\n"
+    "    return 'on'\n"
+)
+
+
 def _plugin_tree(root: Path, guard: str, doc: str, doc_name: str = 'SKILL.md') -> None:
     skill = root / 'plugins' / 'demo' / 'skills' / 'demo' / 'scripts'
     skill.mkdir(parents=True)
@@ -196,6 +231,113 @@ def test_a_hooks_table_with_one_row_per_hook_passes():
         assert proc.returncode == 0, proc.stdout
 
 
+def test_three_valued_gates_are_classified_by_their_unset_value():
+    assert cgc.gates_in_source(OBSERVE_DEFAULT) == {'DEMO_GATE': 'observe'}
+    assert cgc.gates_in_source(OBSERVE_BY_TAIL) == {'DEMO_GATE': 'observe'}
+    assert cgc.gates_in_source(OBSERVE_BY_ELIMINATION) == {'DEMO_GATE': 'observe'}
+    # 'observe' appears in both of these, and both still ship on.
+    assert cgc.gates_in_source(THREE_VALUED_ON) == {'DEMO_GATE': '0'}
+    assert cgc.gates_in_source(THREE_VALUED_ON_BY_TAIL) == {'DEMO_GATE': '0'}
+
+
+def test_an_observe_default_gate_called_on_by_default_reddens():
+    # The FM-9 defect: the pending-asks gate moved to observe by default, and prose
+    # still saying "on by default" must not pass.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _plugin_tree(
+            root,
+            OBSERVE_DEFAULT,
+            '# Demo\n\nThe gate is on by default; `DEMO_GATE=0` opts out.\n',
+            doc_name='README.md',
+        )
+        proc = run_cli(root)
+        assert proc.returncode == 1, proc.stdout
+        assert 'DEMO_GATE' in proc.stdout and 'observe' in proc.stdout, proc.stdout
+
+
+def test_an_observe_default_gate_called_observe_by_default_passes():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _plugin_tree(
+            root,
+            OBSERVE_DEFAULT,
+            '# Demo\n\nObserve by default: it records and prints nothing. `DEMO_GATE=on`\n'
+            'prints the advice and `DEMO_GATE=0` turns it off.\n',
+            doc_name='README.md',
+        )
+        proc = run_cli(root)
+        assert proc.returncode == 0, proc.stdout
+
+
+def test_a_three_valued_on_gate_keeps_its_on_by_default_prose():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _plugin_tree(
+            root,
+            THREE_VALUED_ON,
+            '# Demo\n\nOn by default; `DEMO_GATE=0` disables it and `DEMO_GATE=observe`\n'
+            'logs without denying.\n',
+        )
+        proc = run_cli(root)
+        assert proc.returncode == 0, proc.stdout
+
+
+def test_an_on_gate_called_observe_by_default_reddens():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _plugin_tree(
+            root, THREE_VALUED_ON, '# Demo\n\nObserve by default; `DEMO_GATE=0` opts out.\n'
+        )
+        proc = run_cli(root)
+        assert proc.returncode == 1, proc.stdout
+        assert 'ships on' in proc.stdout, proc.stdout
+
+
+def test_an_observe_default_gate_documented_with_one_reddens():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _plugin_tree(
+            root, OBSERVE_DEFAULT, '# Demo\n\nObserve by default; `DEMO_GATE=1` enables it.\n'
+        )
+        proc = run_cli(root)
+        assert proc.returncode == 1, proc.stdout
+        assert 'DEMO_GATE=1' in proc.stdout, proc.stdout
+
+
+def test_a_list_item_or_table_row_is_its_own_claim():
+    # A README lists hooks with different defaults as bullets of one list, or rows
+    # of one table; one item's "on by default" is not a claim about the next one's gate.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _plugin_tree(
+            root,
+            OBSERVE_DEFAULT,
+            '# Demo\n\n- Anchor hook. **On by default**; `OTHER_GATE=0` opts out.\n'
+            '- Demo hook. Observe by default; `DEMO_GATE=on` prints and\n'
+            '  `DEMO_GATE=0` turns it off.\n\n'
+            '| Hook | Default | Control |\n|---|---|---|\n'
+            '| other | on by default | `OTHER_GATE=0` |\n'
+            '| demo | observe by default | `DEMO_GATE=0` |\n',
+            doc_name='README.md',
+        )
+        proc = run_cli(root)
+        assert proc.returncode == 0, proc.stdout
+
+
+def test_a_wrapped_list_item_is_still_one_claim():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _plugin_tree(
+            root,
+            OBSERVE_DEFAULT,
+            '# Demo\n\n- Demo hook, which ships\n  on by default with `DEMO_GATE=0`.\n',
+            doc_name='README.md',
+        )
+        proc = run_cli(root)
+        assert proc.returncode == 1, proc.stdout
+
+
 def test_the_live_repository_is_clean():
     assert cgc.run(REPO) == []
 
@@ -213,5 +355,13 @@ if __name__ == '__main__':
     test_an_empty_tree_does_not_pass_quietly()
     test_a_hooks_table_missing_a_row_reddens_the_check()
     test_a_hooks_table_with_one_row_per_hook_passes()
+    test_three_valued_gates_are_classified_by_their_unset_value()
+    test_an_observe_default_gate_called_on_by_default_reddens()
+    test_an_observe_default_gate_called_observe_by_default_passes()
+    test_a_three_valued_on_gate_keeps_its_on_by_default_prose()
+    test_an_on_gate_called_observe_by_default_reddens()
+    test_an_observe_default_gate_documented_with_one_reddens()
+    test_a_list_item_or_table_row_is_its_own_claim()
+    test_a_wrapped_list_item_is_still_one_claim()
     test_the_live_repository_is_clean()
     print('ok: all check_gate_claims tests passed')

@@ -214,10 +214,13 @@ where a frozen record cannot name its own commit sha before that commit exists.
   entry is cheapest to make and hardest to see, and one shipped in the seeding
   pass itself (a proof that ran, and did not exercise the branch it claimed).
 - **A documented env-gate default must match its guard.**
-  `scripts/check_gate_claims.py` reads each hook's polarity from the guard
-  itself — `os.environ.get(GATE) == '0'` ships on, `== '1'` ships off — and fails
-  when a plugin's prose says otherwise, by wrong control value or by an
-  "off by default" phrase in the same paragraph. Fenced code is exempt (a
+  `scripts/check_gate_claims.py` reads each hook's default from the guard
+  itself — `os.environ.get(GATE) == '0'` ships on, `== '1'` ships off, and a
+  three-valued gate (`0`, `observe`, `on`) by its unset value (the `get()`
+  default or the fall-through), so a gate whose unset value is `observe` ships in
+  observe mode — and fails when a plugin's prose says otherwise, by wrong control
+  value or by an "off by default" (or "on by default", "observe by default")
+  phrase in the same paragraph, list item or table row. Fenced code is exempt (a
   verification recipe legitimately sets the variable) and so is `CHANGELOG.md`
   (a dated record of what was true then). It exists because
   `compaction-survival`'s body and its cold-start recipe both described the
