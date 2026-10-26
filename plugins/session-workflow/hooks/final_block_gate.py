@@ -1,7 +1,6 @@
 """Pending-asks gate: the asks a turn raised reach its final block.
 
-    python final_block_gate.py --prompt-submit   # UserPromptSubmit: a new turn, empty ledger
-    python final_block_gate.py --post-tool-use   # PostToolUse on the desktop next-step box tool
+    python final_block_gate.py --prompt-submit   # UserPromptSubmit: an owner-typed prompt opens a turn
     python final_block_gate.py --stop            # Stop: record this stop's asks; advise on dropped ones
     python final_block_gate.py --health          # print the ledgers' counts (no hook input)
 
@@ -19,20 +18,31 @@ nothing here reads the transcript, which may lag). At a stop with nothing in
 flight (`background_tasks` empty or absent) whose message does not restate an
 earlier ask of the same turn, the hook returns `hookSpecificOutput.additionalContext`
 naming the dropped asks verbatim, once per ask, so the model restates each one
-with its options and a recommendation or says it is resolved. The desktop app's
-next-step box counts as a channel: a PostToolUse hook on its tool records the
-box's question. `UserPromptSubmit` empties the ledger: a new human prompt starts
-a new turn.
+with its options and a recommendation or says it is resolved. An ask is marked
+advised only after the advice was written to stdout, so an advice that fails to
+print is given again at the next stop. `UserPromptSubmit` empties the ledger only
+for an owner-typed prompt (`prompt_kind.py`): a task notification, a subagent
+hand-back or a peer message wakes the session inside the same turn, and the asks
+raised before it are still owed.
+
+There is no channel for the desktop app's next-step box. 0.28.0 recorded the
+box's question from a PostToolUse hook on `mcp__ccd_turn__wrap_up`; that entry is
+gone. The collection hooks none of the desktop app's own `mcp__ccd_*` tools, and
+the final block's Decisions field carries every ask in text, which is what this
+hook reads, so a question shown only in the box is not counted as carried.
 
 Asks are found lexically (question-mark sentences with a second-person or
 permission marker, explicit requests, pending-list markers; Portuguese and
 English), which the measurement put at 82% recall. Restatement is a token
 overlap, not a judgment: the model does the judging when it reads the advice.
 
-Gate: `SESSION_WORKFLOW_FINAL_BLOCK_GATE`. Unset or any other value: on. `observe`:
-the ledger records what it would have advised and the hook prints nothing. `0`:
-off, nothing is read or written. Every path exits 0: a hook must not break a
-session.
+Gate: `SESSION_WORKFLOW_FINAL_BLOCK_GATE`. Unset, `observe` or any other value:
+observe, the default: the ledger records what it would have advised (the asks, in
+an `observed` event) and the hook prints nothing. `on`: the advice is printed.
+`0`: off, nothing is read or written. Observe is the default because the ask
+detector is a heuristic (the owner's rule: a heuristic trigger ships in observe
+mode). Output is UTF-8 whatever the console codepage. Every path exits 0: a hook
+must not break a session.
 """
 
 from __future__ import annotations
@@ -46,11 +56,18 @@ import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from prompt_kind import is_owner_typed
+except Exception:  # a partial install must not break the session: every prompt opens a turn
+
+    def is_owner_typed(prompt: object) -> bool:
+        return isinstance(prompt, str)
+
+
 GATE = 'SESSION_WORKFLOW_FINAL_BLOCK_GATE'
 STATE_DIR_ENV = 'SESSION_WORKFLOW_FINAL_BLOCK_GATE_DIR'
-BOX_TOOL_SUFFIX = 'wrap_up'
 MAX_ASKS = 40
-MAX_BOX_ASKS = 8
 MAX_EVENTS = 200
 MAX_ASKS_PER_MESSAGE = 10
 
@@ -162,13 +179,13 @@ _STOPWORDS = frozenset(
 
 
 def mode() -> str:
-    """off | observe | on. The guard that documents the default: `== '0'` opts out."""
-    value = os.environ.get(GATE)
+    """off | observe | on. Unset is observe: `== '0'` turns it off, `== 'on'` turns the advice on."""
+    value = os.environ.get(GATE, 'observe')
     if value == '0':
         return 'off'
-    if value == 'observe':
-        return 'observe'
-    return 'on'
+    if value == 'on':
+        return 'on'
+    return 'observe'
 
 
 def _state_dir() -> Path:
@@ -205,7 +222,6 @@ def _empty_ledger(session_id: object) -> dict:
         'session_id': str(session_id or ''),
         'turn': 0,
         'asks': [],
-        'box_asks': [],
         'events': [],
     }
 
@@ -220,7 +236,7 @@ def _read_json(path: Path) -> object:
 def load_ledger(session_id: object) -> dict:
     data = _read_json(ledger_path(session_id))
     if isinstance(data, dict) and isinstance(data.get('asks'), list):
-        data.setdefault('box_asks', [])
+        data.pop('box_asks', None)  # a 0.28.0 ledger; the box channel is gone
         data.setdefault('events', [])
         data.setdefault('turn', 0)
         return data
@@ -231,7 +247,6 @@ def save_ledger(session_id: object, ledger: dict) -> None:
     """Whole-file replace through a temp file, so a crash leaves the old ledger, not a half one."""
     path = ledger_path(session_id)
     ledger['asks'] = ledger['asks'][-MAX_ASKS:]
-    ledger['box_asks'] = ledger['box_asks'][-MAX_BOX_ASKS:]
     ledger['events'] = ledger['events'][-MAX_EVENTS:]
     with contextlib.suppress(Exception):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,11 +334,14 @@ def advice(asks: list[str]) -> str:
 
 
 def handle_prompt_submit(payload: dict) -> int:
-    """A new human prompt starts a new turn: the ledger forgets the previous turn's asks."""
+    """An owner-typed prompt starts a new turn: the ledger forgets the previous turn's asks.
+
+    A synthetic prompt (a task notification, a subagent hand-back, a peer message)
+    wakes the session inside the same turn and leaves the ledger as it is."""
     if mode() == 'off':
         return 0
     session_id = payload.get('session_id')
-    if not session_id:
+    if not session_id or not is_owner_typed(payload.get('prompt')):
         return 0
     ledger = load_ledger(session_id)
     fresh = _empty_ledger(session_id)
@@ -333,26 +351,23 @@ def handle_prompt_submit(payload: dict) -> int:
     return 0
 
 
-def handle_post_tool_use(payload: dict) -> int:
-    """The desktop next-step box carries a question the operator sees under the final message."""
-    if mode() == 'off':
-        return 0
-    session_id = payload.get('session_id')
-    name = str(payload.get('tool_name') or '')
-    if not session_id or not name.endswith(BOX_TOOL_SUFFIX):
-        return 0
-    tool_input = payload.get('tool_input')
-    ask = tool_input.get('ask') if isinstance(tool_input, dict) else None
-    if not isinstance(ask, str) or not ask.strip():
-        return 0
-    ledger = load_ledger(session_id)
-    ledger['box_asks'].append(ask.strip())
-    save_ledger(session_id, ledger)
-    return 0
+def emit_json(output: dict) -> None:
+    """Write `output` to stdout as UTF-8 JSON, whatever the console codepage."""
+    stream = sys.stdout
+    reconfigure = getattr(stream, 'reconfigure', None)
+    if reconfigure is not None:
+        reconfigure(encoding='utf-8')
+    stream.write(json.dumps(output, ensure_ascii=False) + '\n')
+    stream.flush()
 
 
-def handle_stop(payload: dict) -> dict | None:
-    """Record this stop's asks; advise, once per ask, on earlier asks the message dropped."""
+def handle_stop(payload: dict, emit=None) -> dict | None:
+    """Record this stop's asks; advise, once per ask, on earlier asks the message dropped.
+
+    With `emit` (the CLI passes `emit_json`), the advice is written first and the
+    asks are marked advised only when the write succeeded; a failed write leaves
+    them pending for the next stop and returns None. Without it, the caller
+    receives the advice and the asks count as advised."""
     current_mode = mode()
     if current_mode == 'off':
         return None
@@ -362,12 +377,10 @@ def handle_stop(payload: dict) -> dict | None:
     text = payload.get('last_assistant_message')
     text = text if isinstance(text, str) else ''
     ledger = load_ledger(session_id)
-    box_asks = list(ledger.get('box_asks', []))
-    carried = text if not box_asks else text + '\n' + '\n'.join(box_asks)
     pending = [a for a in ledger['asks'] if not a.get('advised') and not a.get('restated')]
     missing: list[dict] = []
     for ask in pending:
-        if restated(ask['text'], carried):
+        if restated(ask['text'], text):
             ask['restated'] = True
         else:
             missing.append(ask)
@@ -376,23 +389,30 @@ def handle_stop(payload: dict) -> dict | None:
     output = None
     now = time.strftime('%Y-%m-%dT%H:%M:%S')
     if text.strip() and missing and not busy:
-        for ask in missing:
-            ask['advised'] = True
-        kind = 'advised' if current_mode == 'on' else 'observed'
-        ledger['events'].append({'ts': now, 'kind': kind, 'n': len(missing)})
+        texts = [a['text'] for a in missing]
+        delivered = True
         if current_mode == 'on':
             output = {
                 'hookSpecificOutput': {
                     'hookEventName': 'Stop',
-                    'additionalContext': advice([a['text'] for a in missing]),
+                    'additionalContext': advice(texts),
                 }
             }
+            if emit is not None:
+                try:
+                    emit(output)
+                except Exception:
+                    delivered, output = False, None
+        if delivered:
+            for ask in missing:
+                ask['advised'] = True
+            kind = 'advised' if current_mode == 'on' else 'observed'
+            ledger['events'].append({'ts': now, 'kind': kind, 'n': len(missing), 'asks': texts})
     for sentence in ask_sentences(text):
         if not any(_same_ask(sentence, a['text']) for a in ledger['asks']):
             ledger['asks'].append(
                 {'text': sentence, 'ts': now, 'advised': False, 'restated': False}
             )
-    ledger['box_asks'] = []
     save_ledger(session_id, ledger)
     return output
 
@@ -423,14 +443,10 @@ def main(argv: list[str] | None = None) -> int:
         payload = _load_stdin_json()
         if '--prompt-submit' in argv:
             return handle_prompt_submit(payload)
-        if '--post-tool-use' in argv:
-            return handle_post_tool_use(payload)
         if '--stop' in argv:
-            output = handle_stop(payload)
-            if output is not None:
-                print(json.dumps(output, ensure_ascii=False))
+            handle_stop(payload, emit=emit_json)
             return 0
-        print('usage: final_block_gate.py --prompt-submit | --post-tool-use | --stop | --health')
+        print('usage: final_block_gate.py --prompt-submit | --stop | --health', file=sys.stderr)
         return 0
     except Exception:
         return 0

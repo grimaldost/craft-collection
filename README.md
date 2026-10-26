@@ -104,9 +104,15 @@ local `hook-log.ndjson` with no command text; nothing is sent over the network
 (the plugin README gives the fields and where the file lives).
 
 The rule for every other hook here: **it ships on with a documented opt-out, or
-it does not ship.** A hook behind a variable nobody sets has never run, which
-reads as enforcement in the manifest and is absent in the session. Opt-outs go in
-the `env` block of `~/.claude/settings.json` (every project) or
+it ships in observe mode, or it does not ship.** A hook behind a variable nobody
+sets has never run, which reads as enforcement in the manifest and is absent in
+the session. Observe mode is for a heuristic trigger (one that guesses, like the
+pending-asks gate's ask detector): by default it records what it would have done
+and prints nothing, `=on` turns it on, and `=0` turns it off. An exact trigger (a
+command at program position, a resolved path, a tool name) ships on once its
+end-to-end test passes.
+
+Opt-outs (and `=on` for an observe-mode hook) go in the `env` block of `~/.claude/settings.json` (every project) or
 `<repo>/.claude/settings.json` (one), e.g.
 `{ "env": { "SESSION_WORKFLOW_ANCHOR_HOOKS": "0" } }`.
 
@@ -118,9 +124,8 @@ the `env` block of `~/.claude/settings.json` (every project) or
 | session-workflow | Stale skill-body check on resume and compact (SessionStart) | on | `SESSION_WORKFLOW_STALE_BODY_CHECK=0` |
 | session-workflow | Anchor size warning after a write to an open anchor (PostToolUse) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0`, the same switch as re-injection |
 | session-workflow | Feedback-debt nudge (Stop; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
-| session-workflow | Pending-asks gate: ledger reset on a new prompt (UserPromptSubmit) | on | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0`; `=observe` records without output |
-| session-workflow | Pending-asks gate: records the desktop next-step box's question (PostToolUse) | on | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0`, the same switch |
-| session-workflow | Pending-asks gate: names earlier asks the final message dropped, as additionalContext (Stop) | on | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0`, the same switch |
+| session-workflow | Pending-asks gate: ledger reset on an owner-typed prompt (UserPromptSubmit) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off |
+| session-workflow | Pending-asks gate: records earlier asks the final message dropped; with `=on`, names them as additionalContext (Stop) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off, the same switch |
 | humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
 
 Three hooks were retired rather than defaulted on: the toolkit-inventory session
