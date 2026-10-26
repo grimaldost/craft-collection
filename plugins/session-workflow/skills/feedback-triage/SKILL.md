@@ -90,9 +90,8 @@ and CHANGELOGs belong to the tool's release process.
      script/gate → hook → linter/CI — instead of re-prosing the same advice. A
      judgment-bound recurrence no mechanism can reach (a dispatch-timing nudge, a
      naming call) takes sharper prose or DECLINE, not a forced rung.
-   - **ROUTE OUT** — it belongs to another registered tool: write a short report into
-     that tool's feedback dir and name its path in the row; `triage_audit.py coverage`
-     fails an undelivered one (`references/mechanics.md`).
+   - **ROUTE OUT** — another registered tool owns it: deliver a report to its
+     feedback dir, path in the row (`references/mechanics.md`).
    - **DECLINE** — project-specific or out of charter; record why.
 -
      **FORWARD** — a sibling pass over *this same* tool owns it (a corpus split
@@ -183,7 +182,7 @@ date prefix reads as zero coverage>
 ### T2 — …
 
 ## Routed out
-<cluster → target tool, what was routed, the delivered report's path>
+<cluster → target tool, what was routed, delivered report path>
 
 ## Declined
 <cluster → reason>
@@ -210,6 +209,7 @@ namespaces, don't conflate them.)
 - **Over-promotion** — a singleton promoted as if reinforced.
 - **Absorbing what should be routed out.**
 - **Re-prosing a recurrence** — a fourth sentence where a rung is needed.
+- **A decline for want of a home that is already an open row.**
 
 ## What this skill does NOT do
 
