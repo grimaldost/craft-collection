@@ -8,8 +8,8 @@ editing tool call (PreToolUse), denies one of those four families of act unless 
 sentence of that prompt names the act's object together with an act verb.
 
 Every hook case runs the script as a subprocess fed a real payload, with the
-child's stdout encoding forced to cp1252 (`PYTHONIOENCODING=cp1252`, no
-`PYTHONUTF8`), as on a Windows console. The governed home is a temporary
+child's stdout encoding forced to cp1252 (`PYTHONIOENCODING=cp1252`,
+`PYTHONUTF8=0`), as on a Windows console. The governed home is a temporary
 directory through `$CLAUDE_CONFIG_DIR` (or `$SESSION_WORKFLOW_GOVERNED_HOME`
 where that is the case under test); nothing reads or writes the real one.
 
@@ -78,6 +78,7 @@ class Sandbox:
             )
         }
         env['PYTHONIOENCODING'] = 'cp1252'
+        env['PYTHONUTF8'] = '0'
         env['CLAUDE_PLUGIN_DATA'] = str(self.data)
         if self.override:
             env['SESSION_WORKFLOW_GOVERNED_HOME'] = str(self.home)
@@ -236,7 +237,7 @@ def test_negated_conditional_purpose_and_question_sentences_deny_the_edit():
         'No CLAUDE.md update needed',
     ]
     for text in prompts:
-        tmp, box = _sandbox(inproc=True)
+        tmp, box = _sandbox()
         with tmp:
             box.prompt(text)
             _denied(box.edit_claude_md())
@@ -245,7 +246,7 @@ def test_negated_conditional_purpose_and_question_sentences_deny_the_edit():
 
 def test_the_contraction_no_before_the_object_allows_with_a_portuguese_verb():
     for text in ('pode editar a regra no CLAUDE.md', 'no CLAUDE.md, edite a regra'):
-        tmp, box = _sandbox(inproc=True)
+        tmp, box = _sandbox()
         with tmp:
             box.prompt(text)
             _allowed_silently(box.edit_claude_md())
@@ -337,7 +338,7 @@ def test_mentions_and_read_only_forms_are_allowed_with_no_output():
 
 
 def test_an_ordinary_repository_edit_is_allowed_with_no_output():
-    tmp, box = _sandbox(inproc=True)
+    tmp, box = _sandbox()
     with tmp:
         box.prompt(GO_ON)
         _allowed_silently(box.edit(box.repo / 'CLAUDE.md'))
@@ -436,6 +437,28 @@ def test_a_unicode_owner_prompt_is_read_as_utf8():
         box.prompt('pode definir a vari\u00e1vel de ambiente FOO \u2192 1')
         _allowed_silently(box.bash('setx FOO 1'))
         assert box.log()[0]['sentence'].startswith('pode definir a vari\u00e1vel'), box.log()
+
+
+def test_a_deny_with_a_character_outside_cp1252_reaches_a_cp1252_stdout():
+    """The deny is written as UTF-8 whatever the console codepage (the Invariants).
+
+    The reason quotes the act, here a plugin id holding U+2603, which cp1252 cannot
+    encode. Written through the child's cp1252 stdout, the write would raise, main()
+    would swallow it and exit 0 with no output, and the act would go through.
+    """
+    tmp, box = _sandbox()
+    with tmp:
+        probe = subprocess.run(
+            [sys.executable, '-c', 'import sys; print(sys.stdout.encoding)'],
+            capture_output=True,
+            env=box.env(),
+            timeout=60,
+        )
+        assert probe.stdout.decode('ascii').strip().lower() == 'cp1252', probe
+        box.prompt(GO_ON)
+        reason = _denied(box.bash('claude plugin update snow\u2603@y'))
+        assert 'snow\u2603@y' in reason, reason
+        assert [(e['family'], e['decision']) for e in box.log()] == [(2, 'deny')], box.log()
 
 
 def test_a_cli_call_without_a_flag_dispatches_on_the_event_name():
@@ -550,6 +573,7 @@ if __name__ == '__main__':
     test_a_shell_write_to_a_governed_file_is_observed_not_denied()
     test_no_recorded_owner_prompt_denies()
     test_a_unicode_owner_prompt_is_read_as_utf8()
+    test_a_deny_with_a_character_outside_cp1252_reaches_a_cp1252_stdout()
     test_a_cli_call_without_a_flag_dispatches_on_the_event_name()
     test_acts_found_in_commands()
     test_authorizing_sentence_rule()
