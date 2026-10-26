@@ -38,6 +38,16 @@ own log stay out of the repository's status.
 write to an open anchor it warns when the HEAD is over the budget or within 10% of it,
 and creates the same `.gitignore`. It shares the opt-out below and exits 0 on every path.
 
+Ownership: the same arm records the payload's `session_id` as the last writer of the
+anchor in `<anchors>/.owners.json` (filename to session id, replaced atomically);
+`--step` takes no payload and leaves the record alone, and an entry whose file is gone
+(renamed to `*.closed.md`) is dropped at the next anchor write or session start. At
+SessionStart an anchor the payload's session owns ranks first among anchors that pass
+the shape, content-terminal and parked keys, ahead of staleness. When the session owns
+none of the open anchors and the injected one was written by another session, one line
+names that session and says to ignore the anchor unless this session resumes its track.
+With no `.owners.json` the output is what it was before ownership existed.
+
 Ships ON. `SESSION_WORKFLOW_ANCHOR_HOOKS=0` is the documented opt-out. It shipped
 inert behind an unset variable until 2026-08, which meant the mechanism carrying
 this plugin's strongest claim had never run anywhere while the claim rested on
@@ -197,14 +207,15 @@ CONTINUING_SOURCES = ('compact', 'resume', 'clear')
 
 
 def resolve_anchors(
-    cwd: Path, source: str, transcript_path: object
+    cwd: Path, source: str, transcript_path: object, session_id: str = ''
 ) -> tuple[Path, list[Path], CwdMove | None]:
     """(anchors dir used, its open anchors, the move or None). On a continuing
     source whose transcript names a start directory other than `cwd`, both
     directories are searched. When only one holds an open anchor it is used; when
     both do, their primaries are compared by `anchor_rank` and the start
     directory wins unless the current one is strictly better, so a stale, landed,
-    parked or non-anchor file there cannot hide a live track here. Every other
+    parked or non-anchor file there cannot hide a live track here, and an anchor
+    `session_id` owns ranks above one it does not, in either directory. Every other
     case is the payload-cwd lookup alone."""
     here = cwd / '.claude' / 'anchors'
     open_here = find_open_anchors(here)
@@ -215,9 +226,11 @@ def resolve_anchors(
     open_there = find_open_anchors(there)
     if not open_there:
         return here, open_here, CwdMove(start, cwd, [])
-    if open_here and anchor_rank(select_anchor(open_here)[0]) < anchor_rank(
-        select_anchor(open_there)[0]
-    ):
+
+    def best(open_anchors: list[Path]) -> tuple[bool, ...]:
+        return anchor_rank(select_anchor(open_anchors, session_id)[0], session_id)
+
+    if open_here and best(open_here) < best(open_there):
         return here, open_here, CwdMove(start, cwd, open_there, chose_start=False)
     return there, open_there, CwdMove(start, cwd, open_here)
 
@@ -265,28 +278,35 @@ def parked_reason(text: str) -> str:
     return ''
 
 
-def anchor_rank(a: Path) -> tuple[bool, bool, bool, bool]:
+def anchor_rank(a: Path, session_id: str = '') -> tuple[bool, bool, bool, bool, bool]:
     """Sort key for choosing among anchors, lowest first: not anchor-shaped, then
-    content-terminal, then parked, then older than STALE_AFTER_S. Staleness comes
-    last, so it only separates anchors that are otherwise equally live."""
+    content-terminal, then parked, then not last written by `session_id`, then older
+    than STALE_AFTER_S. Ownership comes after the three liveness keys, so an owned
+    file that is not a live track never beats one that is, and before staleness, so
+    the session's own track beats a newer one of another session. With no session id,
+    or no owner record, the ownership key is equal for every anchor and today's order
+    stands. Staleness comes last, so it only separates anchors that are otherwise
+    equally ranked."""
     text = _read(a)
     return (
         not is_anchor_shaped(text),
         is_content_terminal(text),
         bool(parked_reason(text)),
+        not (bool(session_id) and owner_of(a) == session_id),
         time.time() - _mtime(a) > STALE_AFTER_S,
     )
 
 
-def select_anchor(open_anchors: list[Path]) -> tuple[Path, list[Path]]:
+def select_anchor(open_anchors: list[Path], session_id: str = '') -> tuple[Path, list[Path]]:
     """Choose the anchor to inject plus the others to warn about. The primary is the
     newest genuinely-active anchor; a file that is not shaped like an anchor at all,
     and a content-terminal-but-unrenamed anchor, are de-ranked and become primary
     only when nothing better remains (the recovery path never drops to zero bytes).
     `open_anchors` is newest-first; the sort is stable, so recency still decides
     within a rank, and `others` keeps that order minus the primary. A parked anchor
-    ranks below every live track and above a content-terminal one."""
-    primary = sorted(open_anchors, key=anchor_rank)[0]
+    ranks below every live track and above a content-terminal one. An anchor
+    `session_id` last wrote ranks above the other live ones (see `anchor_rank`)."""
+    primary = sorted(open_anchors, key=lambda a: anchor_rank(a, session_id))[0]
     return primary, [a for a in open_anchors if a != primary]
 
 
@@ -737,13 +757,15 @@ def build_context(
     other_open: list[Path] | None = None,
     source: str = '',
     moved: CwdMove | None = None,
+    owner: str = '',
 ) -> str:
     """FULL tier: the anchor HEAD (bounded), plus the concurrent-tracks warning.
     source=startup gets a conditional header: a fresh process may be the run
     restarting or an unrelated start (a subprocess of another tool) in the same
     directory, so the anchor's authority is stated as conditional. Every other
     source keeps the unconditional header. `moved` adds the line naming both
-    directories and the current directory's anchors to the warning.
+    directories and the current directory's anchors to the warning; `owner` adds
+    the line naming the other session that last wrote it.
     Race-safe read: an anchor renamed/deleted after selection (a concurrent
     session closing it) degrades to a path-only context — never a raise that
     would skip both the injection AND the failure telemetry."""
@@ -771,6 +793,8 @@ def build_context(
     ]
     if moved is not None:
         header.append(_moved_line(moved))
+    if owner:
+        header.append(owner_line(owner))
     if not is_anchor_shaped(raw):
         # It was the best candidate in the directory, so it is injected - but say
         # that it does not read as an anchor, rather than letting a design document
@@ -809,6 +833,7 @@ def build_parked(
     waits_on: str,
     other_open: list[Path] | None = None,
     moved: CwdMove | None = None,
+    owner: str = '',
 ) -> str:
     """PARKED tier: the one short block a parked anchor gets in place of the full
     or pointer tier: path, what it waits on, and the two ways out. Its body stays
@@ -823,6 +848,8 @@ def build_parked(
     ]
     if moved is not None:
         lines.insert(2, _moved_line(moved))
+    if owner:
+        lines.append(owner_line(owner))
     warn = _warning(other_open, moved)
     if warn:
         lines.append(warn)
@@ -835,6 +862,7 @@ def build_pointer(
     stale_s: float,
     other_open: list[Path] | None = None,
     moved: CwdMove | None = None,
+    owner: str = '',
 ) -> str:
     """POINTER tier for a stale anchor: identity + age + confirm-to-expand +
     the close command — a short pointer, never the 8K body, and never silence.
@@ -858,6 +886,8 @@ def build_pointer(
         lines.append(f'Cursor it still asserts: {cursor}')
     if moved is not None:
         lines.insert(2, _moved_line(moved))
+    if owner:
+        lines.append(owner_line(owner))
     warn = _warning(other_open, moved)
     if warn:
         lines.append(warn)
@@ -886,6 +916,104 @@ def append_telemetry(anchors_dir: Path, record: dict) -> None:
             fh.write(json.dumps(record, ensure_ascii=False) + '\n')
     except OSError:
         pass  # telemetry is best-effort, never load-bearing
+
+
+# Ownership: which session last wrote each open anchor. With recency as the only
+# tiebreak, a session sharing a directory with another track resumed whichever
+# anchor was written last; the record lets a session find its own.
+OWNERS_FILE = '.owners.json'
+
+
+def read_owners(anchors_dir: Path) -> dict[str, str]:
+    """The owner record of a directory: anchor filename to the session id that last
+    wrote it. Empty when the file is missing, unreadable or not a JSON object, and
+    any entry that is not a pair of non-empty strings is left out: a broken record
+    is no record."""
+    try:
+        data = json.loads((anchors_dir / OWNERS_FILE).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, str) and v}
+
+
+def owner_of(anchor: Path) -> str:
+    """The session id that last wrote `anchor`, '' when there is no record."""
+    return read_owners(anchor.parent).get(anchor.name, '')
+
+
+def _live_entries(anchors_dir: Path, owners: dict[str, str]) -> dict[str, str]:
+    """The entries whose file is still an open anchor: a rename to `*.closed.md`
+    (or a deletion) drops the entry."""
+    return {
+        name: sid
+        for name, sid in owners.items()
+        if not name.endswith('.closed.md') and (anchors_dir / name).is_file()
+    }
+
+
+def _write_owners(anchors_dir: Path, owners: dict[str, str]) -> None:
+    """Replace the owner record atomically: a temp file in the same directory, then
+    os.replace, so a reader never sees a half-written file. Two sessions writing at
+    once can lose one entry (the last replace wins), never corrupt the file.
+    Best-effort: every OSError is swallowed and the temp file removed."""
+    import tempfile
+
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(dir=anchors_dir, prefix='.owners.', suffix='.tmp')
+        with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as fh:
+            fh.write(json.dumps(owners, indent=2, sort_keys=True) + '\n')
+        os.replace(tmp, anchors_dir / OWNERS_FILE)
+        tmp = None
+    except OSError:
+        pass
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+def record_owner(anchor: Path, session_id: str) -> None:
+    """Record `session_id` as the last writer of `anchor`, dropping the entries of
+    anchors that are no longer open. Writes only when something changed. Never
+    raises: a failed record must not cost the size warning that follows it."""
+    try:
+        anchors_dir = anchor.parent
+        current = read_owners(anchors_dir)
+        updated = {**_live_entries(anchors_dir, current), anchor.name: session_id}
+        if updated != current or not (anchors_dir / OWNERS_FILE).is_file():
+            _write_owners(anchors_dir, updated)
+    except Exception:
+        return  # bookkeeping only: the hook goes on without it
+
+
+def prune_owners(anchors_dir: Path) -> None:
+    """Drop the entries of anchors that are no longer open. Never creates the file:
+    a directory with no record keeps none. Never raises: housekeeping must not
+    cost the injection."""
+    try:
+        if not (anchors_dir / OWNERS_FILE).is_file():
+            return
+        current = read_owners(anchors_dir)
+        live = _live_entries(anchors_dir, current)
+        if live != current:
+            _write_owners(anchors_dir, live)
+    except Exception:
+        return  # bookkeeping only: the hook goes on without it
+
+
+def owner_line(owner: str) -> str:
+    """The line an injection carries when the anchor was last written by another
+    session and this one owns none of the open anchors."""
+    return (
+        f'OWNER - this anchor was last written by session {owner}, and this session '
+        'wrote none of the open anchors. If this session is not resuming that track, '
+        'ignore this anchor and do not act on its cursor.'
+    )
 
 
 # PostToolUse: the anchor is written many times a session, and the HEAD budget is only
@@ -990,6 +1118,9 @@ def post_write_main() -> int:
     except OSError:
         return 0
     ensure_gitignore(anchor.parent)
+    session_id = payload.get('session_id')
+    if isinstance(session_id, str) and session_id:
+        record_owner(anchor, session_id)
     head, _ = split_head(text)
     if len(head) < POST_WRITE_WARN_FRACTION * MAX_CONTEXT_CHARS:
         return 0
@@ -1088,12 +1219,24 @@ def main() -> int:
     # A continuing session looks where it started before where it is now: a run
     # that changed directory armed its anchor under the first, and the payload
     # cwd is the second. Telemetry goes to whichever anchors dir was used.
-    anchors_dir, open_anchors, moved = resolve_anchors(cwd, source, payload.get('transcript_path'))
+    session_id = payload.get('session_id')
+    session_id = session_id if isinstance(session_id, str) else ''
+    anchors_dir, open_anchors, moved = resolve_anchors(
+        cwd, source, payload.get('transcript_path'), session_id
+    )
+    prune_owners(anchors_dir)
     if not open_anchors:
         return 0
     # Before the telemetry append below, so the log this hook writes is already ignored.
     ensure_gitignore(anchors_dir)
-    anchor, other_open = select_anchor(open_anchors)
+    anchor, other_open = select_anchor(open_anchors, session_id)
+    # The owner line goes out only when this session owns none of the open anchors
+    # and the injected one carries another session's record; with no record the
+    # injection is today's, byte for byte.
+    owner = owner_of(anchor)
+    searched = open_anchors + (moved.elsewhere if moved is not None else [])
+    if owner == session_id or (session_id and any(owner_of(a) == session_id for a in searched)):
+        owner = ''
 
     stale_s = max(0.0, time.time() - _mtime(anchor))
     # Crash-restart branch: a fresh process only gets the anchor when it was
@@ -1104,11 +1247,11 @@ def main() -> int:
     pointer = stale_s > STALE_AFTER_S
     waits_on = parked_reason(_read(anchor))
     if waits_on:
-        context = build_parked(anchor, waits_on, other_open, moved)
+        context = build_parked(anchor, waits_on, other_open, moved, owner)
     elif pointer:
-        context = build_pointer(anchor, stale_s, other_open, moved)
+        context = build_pointer(anchor, stale_s, other_open, moved, owner)
     else:
-        context = build_context(anchor, other_open, source, moved)
+        context = build_context(anchor, other_open, source, moved, owner)
 
     record = {
         'event': 'anchor-inject',
