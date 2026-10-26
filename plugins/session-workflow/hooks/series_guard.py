@@ -355,6 +355,7 @@ class Create:
     repo_flag: str | None
     workdir: Path | None
     keel_series: str | None
+    shell: str = 'bash'
 
 
 def _program_name(word: str) -> str:
@@ -366,13 +367,18 @@ def _home() -> Path:
     return Path.home()
 
 
-def resolve_dir(arg: str | None, base: Path | None) -> Path | None:
-    """The directory a `cd` argument names, or None when it cannot be resolved."""
+def resolve_dir(arg: str | None, base: Path | None, shell: str = 'bash') -> Path | None:
+    """The directory a `cd` argument names, or None when it cannot be resolved.
+
+    PowerShell takes a backslash as a path separator on every platform, so its
+    paths are read with `/` in its place; on Windows that changes nothing."""
     if arg is None or arg in ('', '~'):
         return _home()
     text = arg.strip()
     if text == '-':
         return None
+    if shell == 'powershell':
+        text = text.replace('\\', '/')
     if text.startswith(('~/', '~\\')):
         text = str(_home()) + '/' + text[2:]
     m = _HOME_VARS.match(text)
@@ -459,7 +465,7 @@ def find_creates(
         is_cd, arg = _cd_target(st)
         if not is_cd or st.sep not in _OPENING_SEPS:
             break
-        workdir = resolve_dir(arg, workdir)
+        workdir = resolve_dir(arg, workdir, shell)
         k += 1
     for st in sts[k:]:
         words = st.words
@@ -497,7 +503,7 @@ def find_creates(
         args = words[pos + 1 :]
         texts = [a.text for a in args]
         if name == 'gh' and texts[:2] == ['pr', 'create']:
-            found.append(Create(_repo_flag(texts[2:]), workdir, local.get('KEEL_SERIES')))
+            found.append(Create(_repo_flag(texts[2:]), workdir, local.get('KEEL_SERIES'), shell))
             continue
         if depth < MAX_DEPTH:
             inner = _wrapper_inner(name, args)
@@ -642,7 +648,7 @@ def handle_post_tool_use(payload: dict) -> None:
     save_state(session_id, state)
 
 
-def _series_ok(value: str | None, base: Path | None) -> tuple[bool, str]:
+def _series_ok(value: str | None, base: Path | None, shell: str = 'bash') -> tuple[bool, str]:
     """(satisfies the rule, why not) for a KEEL_SERIES value."""
     if value is None:
         return False, 'The command carries no KEEL_SERIES.'
@@ -651,7 +657,7 @@ def _series_ok(value: str | None, base: Path | None) -> tuple[bool, str]:
         if value[5:].strip():
             return True, ''
         return False, 'KEEL_SERIES=none: needs a reason after the colon.'
-    path = resolve_dir(value, base)
+    path = resolve_dir(value, base, shell)
     if path is not None and path.is_file():
         return True, ''
     shown = str(path) if path is not None else value
@@ -698,7 +704,7 @@ def handle_pre_tool_use(payload: dict) -> dict | None:
         if not prs:
             log({**entry, 'decision': 'allow' if key else 'unkeyed'})
             continue
-        ok, why = _series_ok(create.keel_series, create.workdir)
+        ok, why = _series_ok(create.keel_series, create.workdir, create.shell)
         if ok:
             log({**entry, 'decision': 'allow', 'prs': prs})
             continue

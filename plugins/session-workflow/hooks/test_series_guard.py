@@ -363,6 +363,18 @@ def test_keel_series_relative_path_resolves_against_the_cd_directory():
         assert decision(b.pre(bad, other)) == 'deny'
 
 
+def test_keel_series_powershell_backslash_path_resolves_on_any_host():
+    # PowerShell accepts a backslash as a path separator on every platform, so a
+    # relative `docs\series.toml` names the same file on Linux as on Windows.
+    with box() as b:
+        cwd = b.repo('or', 'https://github.com/o/r.git')
+        (cwd / 'docs').mkdir()
+        (cwd / 'docs' / 'series.toml').write_text('[series]\n', encoding='utf-8')
+        b.created('gh pr create -R o/r', cwd, tool='PowerShell')
+        cmd = "$env:KEEL_SERIES='docs\\series.toml'; gh pr create -R o/r --fill"
+        assert decision(b.pre(cmd, cwd, tool='PowerShell')) == 'allow'
+
+
 # ------------------------------------------------------ the working directory
 
 
