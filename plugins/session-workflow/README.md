@@ -24,6 +24,8 @@ tool-dogfooding feedback loop (capture + triage).
   Auto-triggers on phrasing like "spin this off", "hand this off", or "new session
   for this". SUBTASK mode (an artifact comes back) and FORK mode (continues
   independently). For in-session parallel work, prefer the Task tool / subagents.
+  `references/phase-briefs.md` lists, per phase of work, the disciplines a brief
+  names and their load order, and the closing block every brief carries.
 - **review-panel** (`/review-panel`) — convene fresh reviewer subagents that are
   blind to the conversation and to each other, pointed at an artifact you've
   anchored on from adversarial angles. Neutral brief, structured comparable
@@ -53,17 +55,23 @@ tool-dogfooding feedback loop (capture + triage).
   phase that should have caught them, vacuous gates, and proposals with stable
   finding IDs (`<file-stem>#<n>`). Targets come from a user-supplied
   `feedback-targets` table — the skill never hunts the filesystem. Offer-first
-  when self-activated.
+  when self-activated. Its recurrence check rebuilds the index and runs
+  `build_feedback_index.py --grep` on the candidate's key terms, which prints each
+  matching finding whole.
 - **feedback-triage** (`/feedback-triage`, manual-only) — the downstream pass: cluster a
   tool's accumulated feedback reports by underlying cause, reconcile what
   already shipped, assign dispositions (ATTACK / ROUTE OUT / DECLINE), apply a
   promotion gate (reinforced · specific · actionable), and emit a
   leverage-ordered, status-tracked backlog doc. Defers to a tool-registered
-  triage template (e.g. keel's reflection-triage) when one exists.
+  triage template (e.g. keel's reflection-triage) when one exists. A ROUTE OUT
+  row names the report it delivered to the other tool's feedback directory, and
+  `triage_audit.py coverage` fails a routed row whose report does not exist.
 - **compaction-survival** — maintain a persisted, re-readable control anchor
   (mission, plan pointer, live cursor, invariants, exact resume steps) so a
   long autonomous run survives context compaction without losing the plot —
-  updated after each step, re-read at the start of each turn.
+  updated after each step, re-read at the start of each turn. The anchor's
+  Invariants name the disciplines in force, and its Resume steps load each one
+  before the first action.
 
 ## Command
 
@@ -78,7 +86,9 @@ them as slash commands, and the model does not invoke them on its own.
 
 - **step-digest** — lean narration while working, then a final block the reader
   can act on alone: outcome, every decision the reader owes with its options and
-  a recommendation, next step, one question last. Off by default; select it
+  a recommendation, next step, one question last. In a host that draws a
+  next-step box, the box carries the question and the block's Ask line is
+  omitted when the box shows the same one. Off by default; select it
   under `/config` or set `"outputStyle": "session-workflow:step-digest"` in your
   user or project settings.
 
@@ -161,7 +171,7 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   `SESSION_WORKFLOW_NUDGE_MIN_TURNS` (default 8) owner turns, the next
   owner-typed prompt carries one line of additional context asking the model to
   apply the tool-feedback skill at a natural stopping point (or carry on if
-  nothing is worth recording). It never blocks: it used to be a Stop block, which
+  nothing is worth recording). It never blocks: until 0.29.0 it was a Stop block, which
   forced one more turn out of every session that owed a report. A hand-back,
   task notification or peer message gets nothing and does not use up the
   session's one nudge (`hooks/prompt_kind.py` is the rule), and skill bodies and
@@ -190,11 +200,11 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   each with its options and a recommendation or says it is resolved, and an ask counts
   as advised only once that advice was written; it never blocks. Measured cause
   (2026-10-25, 499 turns): 36% of the asks first raised before the final block were
-  absent from it. **Observe by default** (it records and prints nothing): the ask
+  absent from it. **Observe by default** since 0.29.0 (it records and prints nothing): the ask
   detector is a heuristic, and a heuristic trigger ships in observe mode.
   `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` turns the advice on and
   `SESSION_WORKFLOW_FINAL_BLOCK_GATE=0` turns the hook off;
-  `python hooks/final_block_gate.py --health` prints the counts. There is no hook on
+  `python hooks/final_block_gate.py --health` prints the counts. Since 0.29.0 there is no hook on
   the desktop next-step box (`mcp__ccd_turn__wrap_up`): the collection hooks none of
   the desktop app's own tools, and the final block's Decisions field carries every
   ask in text, so a question shown only in the box does not count as carried.
