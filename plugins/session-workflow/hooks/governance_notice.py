@@ -117,7 +117,7 @@ def notice_text(current: dict) -> str:
     else:
         what = f'The governed {path} changed at {format_time(current["mtime"])}'
     return (
-        f'{what}, after this session last read it. Re-read it before your next act: '
+        f'{what}, after this session last read it: re-read it before the next act, '
         'its rules may have changed.'
     )
 

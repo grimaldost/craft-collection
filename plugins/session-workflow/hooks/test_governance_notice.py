@@ -138,7 +138,7 @@ def test_a_change_is_announced_once_on_a_task_notification():
         rig.write('# rules v2: one more rule\n')
         text = _context(rig.prompt(TASK_NOTIFICATION))
         assert str(rig.claude_md) in text, text
-        assert 're-read' in text.lower(), text
+        assert 're-read it before the next act' in text, text
         assert '\n' not in text, 'the notice is one line'
         assert rig.prompt(OWNER).stdout == b'', 'each change is announced once'
         assert rig.prompt(HAND_BACK).stdout == b''
