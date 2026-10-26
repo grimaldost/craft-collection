@@ -126,6 +126,8 @@ Opt-outs (and `=on` for an observe-mode hook) go in the `env` block of `~/.claud
 | session-workflow | Feedback-debt nudge (Stop; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
 | session-workflow | Pending-asks gate: ledger reset on an owner-typed prompt (UserPromptSubmit) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off |
 | session-workflow | Pending-asks gate: records earlier asks the final message dropped; with `=on`, names them as additionalContext (Stop) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off, the same switch |
+| session-workflow | Governance-change notice: records the hash of the governed `CLAUDE.md` once per session, so a compact or resume keeps the old baseline (SessionStart) | on | `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0` |
+| session-workflow | Governance-change notice: one line of context naming the changed governed `CLAUDE.md` and to re-read it, once per change, on owner-typed and synthetic prompts (UserPromptSubmit) | on | `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0`, the same switch |
 | humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
 
 Three hooks were retired rather than defaulted on: the toolkit-inventory session

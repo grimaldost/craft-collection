@@ -191,3 +191,18 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   the desktop next-step box (`mcp__ccd_turn__wrap_up`): the collection hooks none of
   the desktop app's own tools, and the final block's Decisions field carries every
   ask in text, so a question shown only in the box does not count as carried.
+- **SessionStart / UserPromptSubmit** — governance-change notice: a running session
+  hears once that the owner's global `CLAUDE.md` changed. A session reads that file at
+  its start, and the supervising session edits it while others keep running, many of
+  them woken only by task notifications and hand-backs. At SessionStart, only when
+  the session has no baseline yet, the hook records the file's SHA-256 and
+  modification time (the governed home: `$SESSION_WORKFLOW_GOVERNED_HOME`, else
+  `$CLAUDE_CONFIG_DIR`, else `~/.claude`, resolved by `hooks/governed_home.py`), so a
+  compact or resume cannot absorb a change silently. On every prompt, owner-typed or
+  synthetic, it hashes the file again and, when the hash changed, adds one line of
+  `additionalContext` naming the file, the time it changed and the instruction to
+  re-read it before the next act; the new hash is recorded once that line was
+  written, so each change is announced once. A created or removed file counts; a
+  touch that leaves the content alone does not. Baselines live under
+  `CLAUDE_PLUGIN_DATA/governance-notice/`. **On by default** (an exact trigger: a
+  resolved path and its hash); opt out with `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0`.
