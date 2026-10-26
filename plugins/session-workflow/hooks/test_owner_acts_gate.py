@@ -231,6 +231,7 @@ def test_negated_conditional_purpose_and_question_sentences_deny_the_edit():
         'do not change settings.json',
         'No change to the global CLAUDE.md',
         'pode ver o que tem no CLAUDE.md?',
+        'pode editar o CLAUDE.md?',
         'se precisar alterar o settings.json, me avise',
         'No CLAUDE.md update needed',
     ]
@@ -464,6 +465,7 @@ def test_acts_found_in_commands():
     assert families('git config --global --unset user.email') == [(4, 'user.email')]
     assert families('git config --global user.name') == []
     assert families('git config --global --list') == []
+    assert families("git config --global --get-regexp alias '.*'") == []
     assert families('git config user.name "A B"') == []
     assert families('echo setx FOO 1 # setx BAR 2') == []
     assert families("[Environment]::SetEnvironmentVariable('A', '1')", 'powershell') == []
