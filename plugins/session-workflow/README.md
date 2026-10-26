@@ -191,6 +191,25 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   the desktop next-step box (`mcp__ccd_turn__wrap_up`): the collection hooks none of
   the desktop app's own tools, and the final block's Decisions field carries every
   ask in text, so a question shown only in the box does not count as carried.
+- **PostToolUse / PreToolUse (Bash/PowerShell)** — series guard: the owner's rule that a
+  series of two or more PR-sized changes goes through keel's Definition of Ready and runs
+  with convoy's gate as the judge of each change, enforced at the moment a session turns
+  into a series, its second pull request in one repository. `gh pr create` is matched at
+  program position (heredoc bodies, comments and quoted arguments are data). The
+  PostToolUse arm records, per session, the repository of each PR whose
+  `github.com/<owner>/<repo>/pull/<n>` URL is on the command's stdout; a failed or
+  backgrounded command is not recorded. The PreToolUse arm keys each create by lowercase
+  `owner/repo`, from `-R`/`--repo`, else from the `origin` URL in the git config of the
+  command's working directory (the payload's `cwd`, or the directory of an opening `cd` or
+  `Set-Location`, also inside a `bash -c` or `powershell`/`pwsh -Command` wrapper), and
+  denies a create in a repository that already holds a recorded PR of the session unless
+  the command carries `KEEL_SERIES=<path>` naming an existing series file or spec, or
+  `KEEL_SERIES=none:<reason>`: in Bash as a prefix (`KEEL_SERIES=v gh pr create ...`), in
+  PowerShell as `$env:KEEL_SERIES='v'; gh pr create ...`. Each decision appends one line,
+  without the command text, to `series-guard/log.ndjson` in `CLAUDE_PLUGIN_DATA`. A
+  subagent counts with its parent session; a separate `claude -p` process counts on its
+  own. **On by default**; opt out with `SESSION_WORKFLOW_SERIES_GUARD=0`;
+  `SESSION_WORKFLOW_SERIES_GUARD=observe` logs the would-be deny and prints nothing.
 - **SessionStart / UserPromptSubmit** — governance-change notice: a running session
   hears once that the owner's global `CLAUDE.md` changed. A session reads that file at
   its start, and the supervising session edits it while others keep running, many of

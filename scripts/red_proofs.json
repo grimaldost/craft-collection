@@ -61,6 +61,9 @@
     "plugins/session-workflow/hooks/final_block_gate.py": [
       "plugins/session-workflow/hooks/test_final_block_gate.py::test_later_stop_without_the_ask_advises_once"
     ],
+    "plugins/session-workflow/hooks/series_guard.py": [
+      "plugins/session-workflow/hooks/test_series_guard.py::test_second_create_in_the_same_repo_is_denied"
+    ],
     "plugins/session-workflow/skills/feedback-triage/scripts/build_feedback_index.py": [
       "plugins/session-workflow/skills/feedback-triage/scripts/test_build_feedback_index.py::test_refuses_to_overwrite_an_index_built_by_a_newer_builder"
     ],
