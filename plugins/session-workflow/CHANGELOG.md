@@ -6,6 +6,120 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.29.0] - 2026-10-26
+
+Mechanisms for session discipline, after a diagnosis of the owner's sessions of 2026-10-24
+and 2026-10-25 found that prose rules lost at the moment of choice: an owner-only act taken
+on a generic go-on, a second pull request in one repository outside the method, a running
+session that missed an edit of the global `CLAUDE.md`, a hook shipped on the day of its
+first test. Released as one cut over the wave pull requests #178 to #185. Minor bump: six
+new hook entry points ship on (the owner-acts gate, the series guard and the
+governance-change notice, two each), the pending-asks gate moves to observe mode and loses
+its next-step box entry, and the feedback-debt nudge moves from Stop to UserPromptSubmit;
+the plugin now has twelve hook entry points.
+
+### Added
+
+- **Owner-acts gate** (`hooks/owner_acts_gate.py`, UserPromptSubmit and PreToolUse on
+  Bash, PowerShell, Edit, Write, MultiEdit and NotebookEdit). It denies four acts only the
+  owner authorizes unless a sentence of the owner's latest typed prompt names the act's
+  object with an act verb, with no earlier negation or condition, and is not a question: a
+  write to the governed `CLAUDE.md`, `settings.json` or `settings.local.json`; a `claude
+  plugin` install, update, uninstall, enable, disable or marketplace change; setting a user
+  or machine environment variable; and a `git config --global` write. A shell command that
+  writes a governed file is logged, never denied. On by default (an exact trigger);
+  `SESSION_WORKFLOW_OWNER_ACTS_GATE=0` turns it off and `=observe` logs without denying.
+  Decisions go to `CLAUDE_PLUGIN_DATA/owner-acts-gate/log.ndjson`. Measured cause
+  (2026-10-25): the global CLAUDE.md and settings.json were edited, `claude plugin update`
+  run and a user environment variable set on a generic go-on.
+- **Series guard** (`hooks/series_guard.py`, PostToolUse and PreToolUse on Bash|PowerShell).
+  It records, per session, the repository of each pull request a `gh pr create` printed.
+  It then denies a second `gh pr create` in that repository unless the command carries
+  `KEEL_SERIES=<series file or spec>` or `KEEL_SERIES=none:<reason>`. The value given is
+  logged under `CLAUDE_PLUGIN_DATA/series-guard/`. On by default;
+  `SESSION_WORKFLOW_SERIES_GUARD=0` disables it, and `=observe` logs the would-be deny
+  without output.
+- **Governance-change notice** (`hooks/governance_notice.py`, SessionStart and
+  UserPromptSubmit). A running session hears once, in one line of context on its next
+  prompt (owner-typed or synthetic), that the governed `CLAUDE.md` changed, with the time it
+  changed and the instruction to re-read it before the next act. The baseline is recorded
+  at SessionStart only when the session has none, so a compact or resume does not absorb a
+  change. On by default; opt out with `SESSION_WORKFLOW_GOVERNANCE_NOTICE=0`.
+- **Shared hook helpers.** `hooks/prompt_kind.py`: one owner-typed-or-synthetic rule for
+  every hook. It is a superset of humblepowers' dispatch rule, adds the desktop side-session
+  event and a session's start-session brief, and also reads the head after the leading
+  system reminders. `hooks/governed_home.py`: one resolver for the governed home
+  (`SESSION_WORKFLOW_GOVERNED_HOME`, then `CLAUDE_CONFIG_DIR`, then `~/.claude`).
+- **tool-feedback: whole findings by search.** `build_feedback_index.py --grep TERM [TERM
+  ...]` prints every matching finding whole, with its indented body and its `stem#n`, read
+  from the reports themselves; tool-feedback's recurrence check uses it after the rebuild.
+- **feedback-triage: delivered route-outs.** A ROUTE OUT row names a delivered report in the
+  target's feedback dir, and `triage_audit.py coverage` fails a routed row whose report does
+  not exist.
+- **context-handoff: phase briefs.** New reference `references/phase-briefs.md`. For each
+  phase of work (design, specification, implementation, data-contract change, measurement,
+  release, review) it lists the disciplines a brief names and the order they load, and it
+  gives the closing block every brief carries: the hand-back file with done, artifacts,
+  leaves and blocked on, facts marked measured or relayed, and the questions only the owner
+  decides. SKILL.md points to it from workflow step 3. A new test,
+  `scripts/test_phase_briefs_text.py`, resolves every skill name the reference cites against
+  the repository's skills or an explicit external list (keel, convoy), so a misspelled name
+  fails the suite.
+- **compaction-survival: disciplines in force.** `references/anchor-spec.md` asks
+  Invariants for a "Disciplines in force" line (each governing skill and the phase it
+  governs) and asks Resume steps to load each of those skills before the first action.
+
+### Changed
+
+- **Pending-asks gate: observe by default** (`hooks/final_block_gate.py`). With the variable
+  unset (or set to `observe`), the gate records what it would have advised (the asks, in an
+  `observed` ledger event) and prints nothing, because its ask detector is a heuristic.
+  `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` prints the advice and `=0` turns it off. The root
+  README's hook rule gains the case: a hook ships on with a documented opt-out, or in
+  observe mode, or it does not ship.
+- **Feedback-debt nudge: never a Stop block.** The nudge is one line of additional context
+  on the next owner-typed prompt (UserPromptSubmit), once per session; a hand-back, task
+  notification or peer message neither receives it nor spends it. Owner turns no longer
+  count skill bodies or compaction summaries, and the arm takes its cheap exits before
+  reading the transcript, which it reads once per prompt, resuming where the previous prompt
+  stopped. `--stop-nudge` is kept as an inert arm.
+- **Feedback index: a digest is detected by its H1**, not by `digest` in the filename, so a
+  report whose slug contains `digest` is indexed; README.md and BACKLOG.md stay excluded.
+- **compaction-survival: anchor ownership.** The anchor hook records which session last
+  wrote each open anchor in `.claude/anchors/.owners.json`, written atomically from the
+  PostToolUse(Write|Edit|MultiEdit) arm; `--step` keeps it, and a rename to `*.closed.md`
+  drops the entry. At SessionStart, among anchor-shaped, unfinished, unparked anchors, the
+  starting session's own anchor ranks first even when another is newer (ownership is an
+  `anchor_rank` key before staleness). A session that owns none of the open anchors gets
+  today's injection plus one line naming the owner session. With no owner record the output
+  is unchanged.
+- **step-digest: one question under a next-step box.** In a host that draws a next-step box
+  under the final message (the Claude desktop app), the box carries the question and the
+  final block's Ask line is omitted when the box shows the same question; the Decisions
+  field still carries every decision in full, which is what the pending-asks gate reads. The
+  style previously put the same question in both places. `scripts/test_step_digest_text.py`
+  pins the rule.
+
+### Fixed
+
+- **Pending-asks gate: synthetic prompts no longer open a turn.** UserPromptSubmit empties
+  the ledger only for an owner-typed prompt. 0.28.0 emptied it on task notifications,
+  subagent hand-backs and peer messages too, which erased the asks the gate exists to carry.
+- **Pending-asks gate: UTF-8 output, and an ask counts as advised only once its advice was
+  written.** Under a cp1252 console, an ask holding a character such as `→` raised on print,
+  the hook swallowed the error, and the ask had already been marked advised, so its advice
+  was lost.
+
+### Removed
+
+- **The PostToolUse entry on `mcp__ccd_turn__wrap_up`** and the box-recording path. The
+  collection hooks none of the desktop app's own tools, and the final block's Decisions
+  field carries every ask in text, which is what the gate reads. Measured reason: the 0.28.0
+  ledgers could not show whether the entry ran, because each stop cleared `box_asks`.
+  Transcript latencies (wrap_up median 30 ms before 0.28.0, 322 ms after, minimum 156 ms;
+  update_plan unchanged at 24 ms) indicate that it did run, at the cost of one `uv` start
+  per box.
+
 ## [0.28.0] - 2026-10-25
 
 A mechanism for the final block, after the 0.27.0 specification: a Stop-hook gate that

@@ -72,9 +72,12 @@ travelling `record.yaml` / `report.md` pair.
 `context-handoff`, `review-panel`, `evaluate-skill`, `toolkit-awareness`,
 `llm-signature`, `tool-feedback`, `feedback-triage`, and `compaction-survival`;
 the `/anchor` command; a live `scan_toolkit.py` inventory; the headless
-skill-eval engine in `scripts/`; a selectable `step-digest` output style; four
-hooks, all on by default: control-anchor re-injection, a stale skill-body check,
-an anchor-size warning and a feedback-debt nudge (see the plugin README).
+skill-eval engine in `scripts/`; a selectable `step-digest` output style; and
+twelve hook entry points (see the Hooks table and the plugin README): control-anchor
+re-injection, a stale skill-body check, an anchor-size warning that also records
+each anchor's owner session, a feedback-debt nudge, the series guard, the
+governance-change notice and the owner-acts gate, and the pending-asks gate, which
+runs in observe mode.
 
 **humblepowers** — skills `choosing-tools`, `skill-authoring`, `brainstorming`,
 `test-driven-development`, `systematic-debugging`,
@@ -120,9 +123,9 @@ Opt-outs (and `=on` for an observe-mode hook) go in the `env` block of `~/.claud
 |--------|--------------|---------|---------|
 | engineering-discipline | `ruff_format`: format the edited `.py` files at end of turn (PostToolBatch) | always on | no gate |
 | engineering-discipline | `uv_enforce`: block pip/poetry/virtualenv in uv projects (PreToolUse) | always on | no gate; `CLAUDE_ALLOW_PIP=1` overrides one command |
-| session-workflow | Control-anchor re-injection on compact, resume, clear and startup (SessionStart) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0` |
+| session-workflow | Control-anchor re-injection on compact, resume, clear and startup; the starting session's own anchor ranks first (SessionStart) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0` |
 | session-workflow | Stale skill-body check on resume and compact (SessionStart) | on | `SESSION_WORKFLOW_STALE_BODY_CHECK=0` |
-| session-workflow | Anchor size warning after a write to an open anchor (PostToolUse) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0`, the same switch as re-injection |
+| session-workflow | Anchor size warning after a write to an open anchor, and the record of the session that wrote it (PostToolUse) | on | `SESSION_WORKFLOW_ANCHOR_HOOKS=0`, the same switch as re-injection |
 | session-workflow | Feedback-debt nudge: one line of context on the next owner-typed prompt, never a block (UserPromptSubmit; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
 | session-workflow | Pending-asks gate: ledger reset on an owner-typed prompt (UserPromptSubmit) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off |
 | session-workflow | Pending-asks gate: records earlier asks the final message dropped; with `=on`, names them as additionalContext (Stop) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off, the same switch |
@@ -141,7 +144,9 @@ against seven runnable data checks that reject rather than remind, which a
 project wires into its own CI), and the skill-exercise ledger (a second write path for a fact the
 session transcript already carried — the feedback-debt nudge reads the transcript).
 humblepowers 0.18.0 removed two more, the subagent verification gate and the
-spawn-routing hint; its CHANGELOG gives the evidence.
+spawn-routing hint; its CHANGELOG gives the evidence. session-workflow 0.29.0
+removed the pending-asks gate's PostToolUse entry on the desktop next-step box
+tool: the collection hooks none of the desktop app's own tools.
 
 ## Optional output style
 
