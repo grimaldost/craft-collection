@@ -126,6 +126,8 @@ Opt-outs (and `=on` for an observe-mode hook) go in the `env` block of `~/.claud
 | session-workflow | Feedback-debt nudge (Stop; silent unless a feedback-targets file resolves) | on | `SESSION_WORKFLOW_FEEDBACK_NUDGE=0` |
 | session-workflow | Pending-asks gate: ledger reset on an owner-typed prompt (UserPromptSubmit) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off |
 | session-workflow | Pending-asks gate: records earlier asks the final message dropped; with `=on`, names them as additionalContext (Stop) | observe by default | `SESSION_WORKFLOW_FINAL_BLOCK_GATE=on` advises, `=0` turns it off, the same switch |
+| session-workflow | Owner-acts gate: records the latest owner-typed prompt per session (UserPromptSubmit) | on | `SESSION_WORKFLOW_OWNER_ACTS_GATE=0`; `=observe` logs without denying |
+| session-workflow | Owner-acts gate: denies a governed CLAUDE.md or settings write, a `claude plugin` change, a user or machine environment variable, or a `git config --global` write unless an owner sentence names it (PreToolUse) | on | `SESSION_WORKFLOW_OWNER_ACTS_GATE=0`, the same switch; `=observe` logs without denying |
 | humblepowers | Dispatch router hint injected on each substantive prompt (UserPromptSubmit) | on | `HUMBLEPOWERS_DISPATCH_PROMPT_INJECT=0`, or `HUMBLEPOWERS_DISPATCH_ROUTER=0` to disable the router itself |
 
 Three hooks were retired rather than defaulted on: the toolkit-inventory session
