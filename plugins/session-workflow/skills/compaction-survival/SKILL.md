@@ -132,8 +132,8 @@ injection budget: [`references/anchor-spec.md`](references/anchor-spec.md).
   re-injects the newest **active** anchor's HEAD into fresh context, so the
   re-read stops depending on the model remembering the protocol; without
   session-start hooks, the manual re-read is the whole mechanism. `startup`
-  (crash restart) injects only an anchor updated within 6h. Ranking, the 24h
-  pointer and what a cut drops: `references/anchor-spec.md`.
+  (crash restart) injects only an anchor updated within 6h (a pointer if it
+  wrote none). Ranking, pointers, cuts: `references/anchor-spec.md`.
 - **Cold start without the plugin surface** — a session whose plugin snapshot
   predates the skill, or a harness whose menu omits it, arms everything by hand:
   `references/cold-start.md` has the full recipe (the anchor file by hand, manual

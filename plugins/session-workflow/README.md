@@ -123,8 +123,12 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   beats a stale, parked, finished or non-anchor file; the start directory wins a
   tie), and names both when they differ. Among live anchors, one the starting
   session last wrote (`.claude/anchors/.owners.json`, kept by the PostToolUse arm
-  below) ranks first even when another is newer; a session that wrote none of them
-  gets the usual injection plus one line naming the session that did. When it
+  below) ranks first even when another is newer; a session with a session id that wrote
+  none of them gets a pointer instead of the HEAD (path, title, the session that did,
+  the cursor's newest line, read-it-if-resuming, the close command), so a crash restart,
+  which has a new session id, reads the file the pointer names; a stale or parked anchor
+  keeps its tier plus one line naming the session. `--list-dormant` ends such an
+  anchor's line with `owner: <session id>`. When it
   finds open anchors it creates `.claude/anchors/.gitignore` (content `*`) if that
   file is missing, so the anchors and the hook's log never show as untracked; an
   existing `.gitignore` is never touched.

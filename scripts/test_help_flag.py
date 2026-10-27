@@ -42,6 +42,13 @@ SCRIPTS = [
     / 'check_red_exception.py',
     REPO / 'scripts' / 'check_commit_msg.py',
     REPO / 'scripts' / 'check_gate_claims.py',
+    REPO
+    / 'plugins'
+    / 'session-workflow'
+    / 'skills'
+    / 'compaction-survival'
+    / 'scripts'
+    / 'anchor_inject.py',
 ]
 
 
