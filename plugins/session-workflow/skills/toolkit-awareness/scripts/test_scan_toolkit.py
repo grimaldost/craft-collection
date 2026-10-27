@@ -45,6 +45,45 @@ def test_scan_enumerates_components():
         assert 'hook.py' in {h['name'] for h in out['hooks']}
 
 
+SAME_TREE = 'two roots are the same config tree (for example, cwd is the home directory); it was scanned once'
+
+
+def _own(out: dict, kind: str) -> list[str]:
+    return sorted(i['name'] for i in out[kind] if 'plugin' not in i)
+
+
+def test_scan_counts_a_repeated_root_once():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _make_tree(root)
+        out = scan([root, root])
+        for kind, name in (
+            ('skills', 'foo'),
+            ('commands', 'bar'),
+            ('agents', 'baz'),
+            ('hooks', 'hook.py'),
+        ):
+            assert _own(out, kind) == [name], (kind, _own(out, kind))
+        assert SAME_TREE in out['_caveats'], out['_caveats']
+        # A different spelling of the same directory is the same tree.
+        out2 = scan([root, root / '.' / '..' / root.name])
+        assert _own(out2, 'skills') == ['foo'], _own(out2, 'skills')
+        assert SAME_TREE in out2['_caveats'], out2['_caveats']
+
+
+def test_scan_single_and_distinct_roots_are_unchanged():
+    with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+        ra, rb = Path(a), Path(b)
+        _make_tree(ra)
+        _make_tree(rb)
+        one = scan([ra])
+        assert _own(one, 'skills') == ['foo']
+        assert SAME_TREE not in one['_caveats'], one['_caveats']
+        two = scan([ra, rb])
+        assert _own(two, 'skills') == ['foo', 'foo'], _own(two, 'skills')
+        assert SAME_TREE not in two['_caveats'], two['_caveats']
+
+
 def test_frontmatter_quotes_stripped():
     # A YAML-quoted name/description must not render with literal quotes in the
     # inventory. A matched surrounding pair is stripped and \" unescaped; the
@@ -687,6 +726,8 @@ def test_check_serving_cli_mode_reports_match():
 
 if __name__ == '__main__':
     test_scan_enumerates_components()
+    test_scan_counts_a_repeated_root_once()
+    test_scan_single_and_distinct_roots_are_unchanged()
     test_frontmatter_quotes_stripped()
     test_missing_dirs_do_not_raise()
     test_plugins_from_json_uses_id_and_hides_enabled()

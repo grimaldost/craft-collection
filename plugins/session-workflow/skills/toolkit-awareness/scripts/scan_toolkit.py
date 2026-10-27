@@ -531,6 +531,21 @@ def _scan_plugins() -> list[dict]:
         return []
 
 
+SAME_TREE_CAVEAT = (
+    'two roots are the same config tree (for example, cwd is the home directory); '
+    'it was scanned once'
+)
+
+
+def _same_dir(a: Path, b: Path) -> bool:
+    """True when `a` and `b` are the same directory: `os.path.samefile` when both
+    exist, else resolved and case-normalised paths."""
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
 def scan(roots: list[Path]) -> dict[str, list[dict]]:
     """Enumerate skills/commands/agents/hooks across each root's `.claude` dir, plus
     plugin-provided components (walked under each plugin's installPath). Missing dirs
@@ -539,10 +554,16 @@ def scan(roots: list[Path]) -> dict[str, list[dict]]:
     of a misleading bare `HOOKS (0)`."""
     result: dict[str, list[dict]] = {k: [] for k in DISPLAY_ORDER}
     result['_caveats'] = []
+    walked_trees: list[Path] = []
     for root in roots:
         claude = Path(root) / '.claude'
         if not claude.is_dir():
             continue
+        if any(_same_dir(claude, seen) for seen in walked_trees):
+            if SAME_TREE_CAVEAT not in result['_caveats']:
+                result['_caveats'].append(SAME_TREE_CAVEAT)
+            continue
+        walked_trees.append(claude)
         result['skills'].extend(_scan_skills(claude / 'skills'))
         result['commands'].extend(_scan_markdown_dir(claude / 'commands'))
         result['agents'].extend(_scan_markdown_dir(claude / 'agents'))
