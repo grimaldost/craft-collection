@@ -298,9 +298,11 @@ where a frozen record cannot name its own commit sha before that commit exists.
   `main` as authored — write each commit as a clean Conventional Commit line, not
   just the PR title.
 - **Stacked PRs:** push the base branch *before* `gh pr create --base <base>` (an
-  unpushed base gives `Base sha can't be blank`). Once the base merges, GitHub
-  retargets the stacked PR to `main` and its diff narrows to its own commits — no
-  rebase dance needed under merge-commit merges.
+  unpushed base gives `Base sha can't be blank`). If the base merges, GitHub
+  retargets the stacked PR to `main` and its diff narrows to its own commits. If
+  the base closes instead, the stack carries the base's commits and needs a
+  rebase whose manifest and changelog conflicts are certain. A hook-forced
+  redaction rides inside the pull request that hit the hook.
 
 ## Reviewing a pull request
 
@@ -358,9 +360,9 @@ in the suite: each plugin's manifest version is its CHANGELOG's top heading, a
 README that dates a change to a release (`since 0.29.0`, `retired in 0.21.0`,
 `session-workflow 0.29.0 removed`) names a released version no higher than the
 manifest and registers the dating in the test's `DATED_CLAIMS` with a phrase of
-that release's CHANGELOG section, and the hook counts in a `hooks.json`
-description and in the root README's plugin summaries equal the file's command
-hooks.
+that release's CHANGELOG section, and the hook counts in the root README's
+plugin summaries equal the file's command hooks. A `hooks.json` description
+carries no count word.
 
 Tag each release with the grammar `claude plugin tag` produces — an annotated
 `<plugin>--v<X.Y.Z>`:
