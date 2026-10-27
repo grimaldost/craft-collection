@@ -12,10 +12,11 @@ re-injection hook emits the HEAD only.
 ## Frontmatter
 
 A short block of `key: value` lines above the HEAD sections. `format: anchor/v1` marks
-the file as an anchor, `task:` names the work in one line, and `step:` counts the
-snapshots. The block opens on line 1 with a `---` line and closes with a `---` line, as
-`/anchor` writes it; `--step`, the `--head-fit` step warning and `parked:` read nothing
-from frontmatter that is not fenced this way. `parked: <what it waits on>` is optional and
+the file as an anchor and `task:` names the work in one line. The block opens on line 1
+with a `---` line and closes with a `---` line, as `/anchor` writes it; `--step` and
+`parked:` read nothing from frontmatter that is not fenced this way. There is no step
+counter in it: the numbered entries of the Cursor are the count, and a `step:` line left
+by an older anchor is ignored. `parked: <what it waits on>` is optional and
 opt-in: it marks a track that is deliberately waiting, such as on a review or an outside
 answer, rather than dormant. A
 parked anchor ranks below every live one, is injected as a short block naming the wait
@@ -69,10 +70,9 @@ boundary — the done-list is what actually accumulates, and a cursor that grows
 without bound spends the budget its own survival depends on.
 
 Entries are bullets, newest first, each opening with `Step N`. At a step boundary,
-`anchor_inject.py --step <anchor> "<text>"` sets the frontmatter `step:` to N+1 and puts
-`- Step N+1: <text>` at the top of this section in one atomic edit (it does not fold the
-older entries). `--head-fit` prints a line when `step:` is behind the cursor's newest
-`Step N`, so a field that nothing bumps does not stay wrong unnoticed.
+`anchor_inject.py --step <anchor> "<text>"` numbers the entry one past the section's newest
+`Step N` and puts `- Step N+1: <text>` at the top of this section in one atomic edit (it
+does not fold the older entries, and it leaves the frontmatter as it is).
 
 ### Resume steps
 
@@ -147,9 +147,17 @@ session in `.claude/anchors/.owners.json` (filename to session id; `--step` leav
 the record as it is, and a rename to `*.closed.md` drops the entry). Among anchors
 that are anchor-shaped, not done and not parked, one the starting session wrote
 last ranks first, ahead of a newer one, so two tracks sharing a directory each get
-their own back. A session that wrote none of the open anchors, such as a restart
-after a crash, gets the usual injection plus one line naming the session that last
-wrote it.
+their own back. A session with a session id that wrote none of the open anchors, a
+new session or a restart after a crash, gets a pointer in place of the HEAD: path,
+title, the session that last wrote it, the cursor's newest line, an instruction to
+read the file if this session is resuming that track, and the close command. It carries
+no age and no STALE word, since the anchor is current, only not this session's. A crash
+restart has a new session id, so it reads the file the pointer names (one Read in a rare
+restart, against about 8,000 injected characters in every unrelated session that starts
+in the directory). A session whose own anchor is open, a payload with no session id and
+an anchor with no owner record get the injection they got before; a stale or parked
+anchor keeps its tier plus one line naming the owner. `--list-dormant` ends each line
+of an anchor with an owner record with `owner: <session id>`.
 
 Over budget, the hook reserves the cursor section and then spends what is left
 top-down on whole sections, naming what it dropped. So a section's position is

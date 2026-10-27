@@ -10,9 +10,13 @@ Contract under test:
   before staleness, threaded through `select_anchor` and `resolve_anchors`: at
   SessionStart the payload session's own anchor ranks first even when another is
   newer, and among its own anchors today's order decides;
-- when the session owns none of the open anchors, today's ranking and tiers stay
-  and one line names the injected anchor's owner and says to ignore it if this
-  session is not resuming that track;
+- when the session (a non-empty `session_id`) owns none of the open anchors and the
+  selected anchor has an owner record, a fresh anchor is replaced by an owner
+  pointer: path, title, owner id, the cursor's newest line, read-if-resuming and the
+  close command, with no STALE word and no age, telemetry `tier: pointer`,
+  `stale: false`; a stale or parked anchor keeps its tier plus the owner line, and an
+  empty `session_id` keeps today's output;
+- `--list-dormant` appends `owner: <session id>` to an anchor with an owner record;
 - an anchor with no owner record behaves exactly as today, and a directory with no
   `.owners.json` produces byte-identical output to the script before ownership.
 
@@ -192,7 +196,7 @@ def test_step_leaves_the_recorded_owner_unchanged():
         before = (run.parent / '.owners.json').read_bytes()
         proc = _run(['--step', str(run), 'did the next thing'], '')
         assert proc.returncode == 0, proc.stderr
-        assert 'Step 4: did the next thing' in run.read_text(encoding='utf-8')
+        assert 'Step 1: did the next thing' in run.read_text(encoding='utf-8')
         assert (run.parent / '.owners.json').read_bytes() == before
 
 
@@ -247,23 +251,99 @@ def test_ownership_ranks_before_staleness():
         assert 'STALE' in ctx and 'mine.md' in ctx.splitlines()[1], ctx
 
 
-def test_startup_from_a_new_session_gets_todays_injection_plus_the_owner_line():
+POINTER_BODY = '# Mission\nMISSION-BODY-LINE-7f3a\n# Cursor\n- Step 3: newest cursor line\n- Step 2: older line\n'
+
+
+def _last_record(anchors: Path) -> dict:
+    lines = (anchors / 'log.ndjson').read_text(encoding='utf-8').splitlines()
+    return json.loads(lines[-1])
+
+
+def _owner_pointer_fixture(base: Path) -> Path:
+    run = _anchor(base, 'run.md', 'unused', body=POINTER_BODY)
+    _write_by(run, 'sess-Y')
+    return run
+
+
+def test_a_new_session_gets_the_owner_pointer_not_the_full_head():
+    # startup, a crash restart included (a new session id), and clear: the session
+    # wrote none of the open anchors, so it gets a pointer instead of 8,000 characters.
+    for source in ('startup', 'clear'):
+        with tempfile.TemporaryDirectory() as d:
+            run = _owner_pointer_fixture(Path(d))
+            ctx = _ctx(_session_start(Path(d), 'sess-NEW', source=source))
+            assert str(run) in ctx, (source, ctx)
+            assert 'sess-Y' in ctx and 'newest cursor line' in ctx, (source, ctx)
+            assert 'MISSION-BODY-LINE-7f3a' not in ctx, (source, ctx)
+            assert 'older line' not in ctx, (source, ctx)
+            assert 'STALE' not in ctx.upper(), (source, ctx)
+            assert 'read the file' in ctx and 'mv run.md run.closed.md' in ctx, ctx
+            assert ctx.isascii()
+            record = _last_record(run.parent)
+            assert record['tier'] == 'pointer' and record['stale'] is False, record
+            assert record['session'] == 'sess-NEW' and record['file'] == 'run.md', record
+
+
+def test_the_owner_pointer_carries_no_age():
+    with tempfile.TemporaryDirectory() as d:
+        run = _owner_pointer_fixture(Path(d))
+        _age(run, 5 * 3600)
+        ctx = _ctx(_session_start(Path(d), 'sess-NEW', source='startup'))
+        assert 'MISSION-BODY-LINE-7f3a' not in ctx and 'newest cursor line' in ctx, ctx
+        assert 'ago' not in ctx and '5h' not in ctx, ctx
+
+
+def test_the_owning_session_still_gets_the_full_head_on_compact_and_resume():
+    with tempfile.TemporaryDirectory() as d:
+        _owner_pointer_fixture(Path(d))
+        for source in ('compact', 'resume'):
+            ctx = _ctx(_session_start(Path(d), 'sess-Y', source=source))
+            assert 'MISSION-BODY-LINE-7f3a' in ctx, (source, ctx)
+            assert _owner_lines(ctx) == [], source
+            assert _last_record(Path(d) / '.claude' / 'anchors')['tier'] == 'full'
+
+
+def test_a_payload_with_no_session_id_keeps_the_full_head_and_the_owner_line():
+    with tempfile.TemporaryDirectory() as d:
+        _owner_pointer_fixture(Path(d))
+        for session in (None, ''):
+            fields = {'hook_event_name': 'SessionStart', 'source': 'startup', 'cwd': d}
+            if session is not None:
+                fields['session_id'] = session
+            ctx = _ctx(_run([], json.dumps(fields)))
+            assert 'MISSION-BODY-LINE-7f3a' in ctx, (session, ctx)
+            assert len(_owner_lines(ctx)) == 1, (session, ctx)
+
+
+def test_a_session_with_an_anchor_of_its_own_never_gets_the_owner_pointer():
     with tempfile.TemporaryDirectory() as d:
         base = Path(d)
-        older = _anchor(base, 'older.md', 'track of X')
-        newer = _anchor(base, 'newer.md', 'track of Y')
-        _age(older, 3600)
-        _age(newer, 60)
-        today = _ctx(_session_start(base, 'sess-NEW', source='startup'))
-        _write_by(older, 'sess-X', age_s=3600)
-        _write_by(newer, 'sess-Y', age_s=60)
+        _owner_pointer_fixture(base)
+        mine = _anchor(base, 'mine.md', 'track of X')
+        _write_by(mine, 'sess-X', age_s=3600)
+        ctx = _ctx(_session_start(base, 'sess-X', source='startup'))
+        assert 'track of X next step' in ctx and _owner_lines(ctx) == [], ctx
+
+
+def test_an_anchor_with_no_owner_record_keeps_the_full_head_for_a_new_session():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        _anchor(base, 'run.md', 'unused', body=POINTER_BODY)
         ctx = _ctx(_session_start(base, 'sess-NEW', source='startup'))
-        lines = _owner_lines(ctx)
-        assert len(lines) == 1, ctx
-        assert 'sess-Y' in lines[0] and 'ignore' in lines[0].lower(), lines[0]
-        assert lines[0].isascii()
-        rest = [line for line in ctx.splitlines() if line not in lines]
-        assert rest == today.splitlines(), (rest, today)
+        assert 'MISSION-BODY-LINE-7f3a' in ctx and _owner_lines(ctx) == [], ctx
+
+
+def test_list_dormant_appends_the_owner_of_an_anchor_with_a_record():
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        owned = _anchor(base, 'owned.md', 'owned track', age_s=96 * 3600)
+        _anchor(base, 'plain.md', 'plain track', age_s=96 * 3600)
+        _write_by(owned, 'sess-Y', age_s=96 * 3600)
+        proc = _run(['--list-dormant', str(owned.parent)], '')
+        assert proc.returncode == 0, proc.stderr
+        by_name = {line.split()[0]: line for line in proc.stdout.splitlines()}
+        assert 'owner: sess-Y' in by_name['owned.md'], proc.stdout
+        assert 'owner:' not in by_name['plain.md'], proc.stdout
 
 
 def test_the_owner_line_reaches_the_pointer_and_parked_tiers():
@@ -530,7 +610,13 @@ if __name__ == '__main__':
     test_a_closed_rename_is_dropped_at_the_next_anchor_write_too()
     test_compact_from_a_session_injects_its_own_anchor_when_the_other_is_newer()
     test_ownership_ranks_before_staleness()
-    test_startup_from_a_new_session_gets_todays_injection_plus_the_owner_line()
+    test_a_new_session_gets_the_owner_pointer_not_the_full_head()
+    test_the_owner_pointer_carries_no_age()
+    test_the_owning_session_still_gets_the_full_head_on_compact_and_resume()
+    test_a_payload_with_no_session_id_keeps_the_full_head_and_the_owner_line()
+    test_a_session_with_an_anchor_of_its_own_never_gets_the_owner_pointer()
+    test_an_anchor_with_no_owner_record_keeps_the_full_head_for_a_new_session()
+    test_list_dormant_appends_the_owner_of_an_anchor_with_a_record()
     test_the_owner_line_reaches_the_pointer_and_parked_tiers()
     test_an_owned_file_that_is_not_anchor_shaped_does_not_beat_an_unowned_live_anchor()
     test_an_owned_finished_or_parked_anchor_does_not_beat_an_unowned_live_one()

@@ -44,8 +44,11 @@ anchor in `<anchors>/.owners.json` (filename to session id, replaced atomically)
 (renamed to `*.closed.md`) is dropped at the next anchor write or session start. At
 SessionStart an anchor the payload's session owns ranks first among anchors that pass
 the shape, content-terminal and parked keys, ahead of staleness. When the session owns
-none of the open anchors and the injected one was written by another session, one line
-names that session and says to ignore the anchor unless this session resumes its track.
+none of the open anchors (a non-empty `session_id`) and the selected one carries another
+session's record, a fresh anchor is not injected: the session gets an owner pointer (path,
+title, owner, the cursor's newest line, read it if resuming, the close command). A stale
+or parked anchor keeps its tier plus one line naming the owner. A crash restart has a new
+session id, so it gets the pointer too and reads the file it names.
 With no `.owners.json` the output is what it was before ownership existed.
 
 Ships ON. `SESSION_WORKFLOW_ANCHOR_HOOKS=0` is the documented opt-out. It shipped
@@ -133,9 +136,8 @@ _PARKED_LINE = re.compile(r'^\s*parked\s*:\s*(.*?)\s*$', re.I)
 # Values that say "not parked": writing one is the obvious way to resume a track, so
 # it must not be read as the name of a wait.
 _NOT_PARKED = frozenset({'false', 'no', 'none', '0'})
-# `step: N`, the snapshot counter in the frontmatter; and a cursor entry that opens
-# with `Step N` (optionally bolded), the newest-first convention `--step` writes.
-_STEP_FIELD = re.compile(r'^\s*step\s*:\s*(\d*)', re.I)
+# A cursor entry that opens with `Step N` (optionally bolded), the newest-first
+# convention `--step` writes.
 _CURSOR_STEP = re.compile(r'^\s*[-*]\s+\**step\s+(\d+)', re.I)
 _BULLET = re.compile(r'^\s*[-*]\s')
 _BOM = '﻿'  # ascii-ok: a byte-order mark in file content, never printed
@@ -488,23 +490,13 @@ def newest_step(head: str) -> int | None:
     return best
 
 
-def frontmatter_step(head: str) -> int | None:
-    """The numeric value of `step:` in the HEAD frontmatter, None when the field
-    is absent or not a number."""
-    for line in _frontmatter_lines(head):
-        m = _STEP_FIELD.match(line)
-        if m:
-            return int(m.group(1)) if m.group(1) else None
-    return None
-
-
-def bump_step(text: str, entry: str) -> tuple[str, int | None, int]:
-    """Return (new text, old step, new step): frontmatter `step:` set to one past
-    the larger of itself and the cursor's newest `Step N`, and `- Step <new>: entry`
-    inserted as the first bullet of the HEAD's cursor section. Line endings and
-    every other byte are kept: the text is edited as a list of lines that still
-    carry their terminators. Raises ValueError, naming what is missing, before
-    anything is changed."""
+def bump_step(text: str, entry: str) -> tuple[str, int]:
+    """Return (new text, new step): `- Step <new>: entry` inserted as the first
+    bullet of the HEAD's cursor section, numbered one past the cursor's newest
+    `Step N`. The frontmatter is never touched (a `step:` line there is ignored).
+    Line endings and every other byte are kept: the text is edited as a list of
+    lines that still carry their terminators. Raises ValueError, naming what is
+    missing (the frontmatter fences, the cursor), before anything is changed."""
     bom = _BOM if text.startswith(_BOM) else ''
     body = text[len(bom) :]
     lines = body.splitlines(keepends=True)
@@ -537,9 +529,7 @@ def bump_step(text: str, entry: str) -> tuple[str, int | None, int]:
     if heading is None:
         raise ValueError('no Cursor section in the HEAD')
 
-    old = frontmatter_step(''.join(lines[:end]))
-    newest = newest_step(''.join(lines[:end]))
-    new = max(old or 0, newest or 0) + 1
+    new = (newest_step(''.join(lines[:end])) or 0) + 1
 
     at = next((j for j in range(heading + 1, stop) if _BULLET.match(lines[j])), None)
     if at is None:
@@ -549,26 +539,7 @@ def bump_step(text: str, entry: str) -> tuple[str, int | None, int]:
     if not lines[heading].endswith('\n'):
         lines[heading] += eol
     lines.insert(at, f'- Step {new}: {entry}{eol}')
-
-    field = next((j for j in range(1, close) if _STEP_FIELD.match(lines[j])), None)
-    if field is not None:
-        lines[field] = f'step: {new}' + lines[field][len(lines[field].rstrip('\r\n')) :]
-    else:
-        fmt = next((j for j in range(1, close) if _FORMAT_LINE.match(lines[j])), None)
-        lines.insert(close if fmt is None else fmt + 1, f'step: {new}{eol}')
-    return bom + ''.join(lines), old, new
-
-
-def step_report_line(head: str) -> str:
-    """The head-fit line for a `step:` field that lags the cursor, '' otherwise
-    (in step, ahead, or either side absent)."""
-    field, newest = frontmatter_step(head), newest_step(head)
-    if field is None or newest is None or newest <= field:
-        return ''
-    return (
-        f"step: frontmatter says {field}, cursor's newest is Step {newest}"
-        ' - run --step or correct the field'
-    )
+    return bom + ''.join(lines), new
 
 
 def head_fit_lines(text: str) -> list[str]:
@@ -608,9 +579,6 @@ def head_fit_lines(text: str) -> list[str]:
     lines.append(f'would drop: {", ".join(fit.dropped) if fit.dropped else "(nothing)"}')
     if fit.byte_cut:
         lines.append('and would still be cut mid-section: one section alone overruns the budget')
-    lag = step_report_line(head)
-    if lag:
-        lines.append(lag)
     return lines
 
 
@@ -625,7 +593,8 @@ def list_dormant(anchors_dir: Path, min_age_s: float = DORMANT_AFTER_S) -> list[
     content that reads as done, and an anchor abandoned mid-cursor never says so.
     Read at the moment a new anchor is armed, which is the one moment a human is
     reliably present to answer close-or-adopt. Anchors carrying a `parked:` field
-    are listed after the dormant ones, under a `parked:` heading line."""
+    are listed after the dormant ones, under a `parked:` heading line. An anchor with
+    an owner record ends with `| owner: <session id>`."""
     now = time.time()
     out = []
     parked = []
@@ -645,6 +614,9 @@ def list_dormant(anchors_dir: Path, min_age_s: float = DORMANT_AFTER_S) -> list[
         cursor = anchor_cursor(text)
         if cursor:
             line += f'  | cursor: {cursor}'
+        recorded = owner_of(f)
+        if recorded:
+            line += f'  | owner: {recorded}'
         (parked if waits else out).append(line)
     if parked:
         out.append('parked:')
@@ -888,6 +860,42 @@ def build_pointer(
         lines.insert(2, _moved_line(moved))
     if owner:
         lines.append(owner_line(owner))
+    warn = _warning(other_open, moved)
+    if warn:
+        lines.append(warn)
+    lines.append('</control-anchor>')
+    return '\n'.join(lines)
+
+
+def build_owner_pointer(
+    anchor: Path,
+    owner: str,
+    other_open: list[Path] | None = None,
+    moved: CwdMove | None = None,
+) -> str:
+    """OWNER POINTER tier: what a fresh anchor becomes for a session that wrote none of
+    the open anchors while the selected one carries another session's record. Path,
+    title, the owner, the cursor's newest line, the instruction to read the file when
+    this session is resuming that track, and the close command; the body stays on disk.
+    No STALE word and no age: the anchor is current, it is just not this session's."""
+    text = _read(anchor)
+    lines = [
+        '<control-anchor>',
+        f'A control anchor exists at {anchor}, last written by session {owner}; this '
+        'session wrote none of the open anchors, so its body is withheld.',
+        f'Title: {anchor_title(text)}',
+    ]
+    cursor = anchor_cursor(text)
+    if cursor:
+        lines.append(f'Cursor it asserts: {cursor}')
+    lines.append(
+        'If this session is resuming that track (for example after a crash restart), read '
+        'the file now - it is the source of truth for its run state. Otherwise ignore it '
+        'and do not act on its cursor. If the track is finished, close it: '
+        f'mv {anchor.name} {anchor.stem}.closed.md'
+    )
+    if moved is not None:
+        lines.insert(2, _moved_line(moved))
     warn = _warning(other_open, moved)
     if warn:
         lines.append(warn)
@@ -1158,8 +1166,8 @@ def _force_utf8_stdout() -> None:
 
 
 def step_main(argv: list[str]) -> int:
-    """`--step <anchor> "<text>"`: bump `step:` and prepend the cursor entry in one
-    atomic edit. Exit 2 for a usage error, with the file untouched and the path in
+    """`--step <anchor> "<text>"`: prepend the next numbered entry to the cursor in
+    one atomic edit. Exit 2 for a usage error, with the file untouched and the path in
     the message; the same contract as `--head-fit`. It does not fold older steps."""
 
     def usage(why: str) -> int:
@@ -1178,7 +1186,7 @@ def step_main(argv: list[str]) -> int:
     try:
         with open(path, encoding='utf-8', newline='') as fh:
             text = fh.read()
-        new_text, old, new = bump_step(text, entry)
+        new_text, new = bump_step(text, entry)
     except (OSError, UnicodeDecodeError, ValueError) as e:
         return usage(f'cannot edit {path}: {e}')
     # Imported here, not at module top: the SessionStart hook never writes.
@@ -1197,7 +1205,7 @@ def step_main(argv: list[str]) -> int:
         except OSError:
             pass
         return usage(f'cannot write {path}: {type(e).__name__}')
-    print(f'step: {"(none)" if old is None else old} -> {new}; cursor entry added to {path}')
+    print(f'Step {new} added to {path}')
     print(head_fit_report(path)[0])
     return 0
 
@@ -1246,10 +1254,15 @@ def main() -> int:
         return 0
     pointer = stale_s > STALE_AFTER_S
     waits_on = parked_reason(_read(anchor))
+    # A fresh anchor another session wrote, for a session that owns none: a pointer, not
+    # the full HEAD. Needs a session id: without one there is no "this session" to say.
+    owner_pointer = bool(owner and session_id) and not waits_on and not pointer
     if waits_on:
         context = build_parked(anchor, waits_on, other_open, moved, owner)
     elif pointer:
         context = build_pointer(anchor, stale_s, other_open, moved, owner)
+    elif owner_pointer:
+        context = build_owner_pointer(anchor, owner, other_open, moved)
     else:
         context = build_context(anchor, other_open, source, moved, owner)
 
@@ -1259,7 +1272,7 @@ def main() -> int:
         'session': payload.get('session_id', ''),
         'file': anchor.name,
         'stale': pointer,
-        'tier': 'parked' if waits_on else 'pointer' if pointer else 'full',
+        'tier': 'parked' if waits_on else 'pointer' if pointer or owner_pointer else 'full',
         'open_anchors': len(open_anchors),
         'anchor_dir': 'cwd' if anchors_dir == cwd / '.claude' / 'anchors' else 'start',
         'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
@@ -1306,12 +1319,37 @@ def _say_empty_sweep(kind: str, base: Path) -> None:
     print(f'no {kind} anchors in {base} ({closed} closed, {opened} open)', file=sys.stderr)
 
 
+CLI_ARMS = ('--list-stale', '--list-dormant', '--head-fit', '--step', '--post-write')
+USAGE = """usage: anchor_inject.py [ARM]
+
+With no argument: the SessionStart hook; reads the hook payload on stdin.
+Arms:
+  --post-write                 PostToolUse hook; reads the hook payload on stdin
+  --list-stale [ANCHORS_DIR]   print the rename commands for anchors marked done
+  --list-dormant [ANCHORS_DIR] print the open anchors untouched for 72 hours
+  --head-fit ANCHOR            print what the injection would do to this anchor
+  --step ANCHOR "TEXT"         add the next numbered entry to the anchor's cursor
+  -h, --help                   print this usage
+An unknown argument starting with -- prints this usage to stderr and exits 2."""
+
+
 if __name__ == '__main__':
     # Before any CLI arm prints: both sweeps emit anchor CONTENT (titles, cursors),
     # and campaign anchors essentially always carry non-ASCII. On a cp1252 console
     # an arrow in a cursor raised UnicodeEncodeError and the sweep died with a
     # traceback -- the same seam main() already forces, applied one scope out.
     _force_utf8_stdout()
+    # The argument check lives here, before any stdin read: `main()` and
+    # `post_write_main()` are called in-process by tests with the runner's own
+    # arguments. `-h` and `--help` are usage; any other `--` argument that is not an
+    # arm below is a mistake, and must not run the hook body (it would inject and log).
+    if len(sys.argv) > 1 and sys.argv[1] in ('-h', '--help'):
+        print(USAGE)
+        sys.exit(0)
+    if len(sys.argv) > 1 and sys.argv[1].startswith('--') and sys.argv[1] not in CLI_ARMS:
+        print(f'error: unknown argument {sys.argv[1]}', file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        sys.exit(2)
     # Explicit sweep entry: `python anchor_inject.py --list-stale [anchors_dir]` prints
     # the rename commands for the cycle-end /anchor close --stale sweep and exits.
     if len(sys.argv) > 1 and sys.argv[1] == '--list-stale':
@@ -1352,8 +1390,8 @@ if __name__ == '__main__':
             print(line)
         sys.exit(0)
     # Authoring entry: `python anchor_inject.py --step <anchor> "<text>"` is the one
-    # edit a step boundary needs (frontmatter `step:` plus a new first cursor bullet),
-    # done together so the counter and the cursor cannot drift apart.
+    # edit a step boundary needs: a new first cursor bullet, numbered from the cursor's
+    # own newest `Step N`, with the frontmatter left alone.
     if len(sys.argv) > 1 and sys.argv[1] == '--step':
         sys.exit(step_main(sys.argv[2:]))
     # PostToolUse entry: `python anchor_inject.py --post-write` reads the hook payload on

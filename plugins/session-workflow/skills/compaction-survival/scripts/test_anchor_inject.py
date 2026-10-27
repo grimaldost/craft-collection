@@ -1304,7 +1304,73 @@ def test_startup_hook_run_with_a_recent_anchor_gets_the_conditional_header():
             assert 'ignore it and do not act on its cursor' not in ctx, source
 
 
-# -- --step: bump `step:` and prepend the cursor entry in one edit ---------------
+# -- the command line: --help is usage, an unknown flag is an error, neither is a hook run --
+
+
+def _cli_in(cwd: Path, *args: str):
+    """The script run as the hook runner would, but with an argument, in a directory
+    that holds an open anchor and a payload on stdin that would make a hook run inject."""
+    payload = json.dumps(
+        {'hook_event_name': 'SessionStart', 'source': 'compact', 'session_id': 's', 'cwd': str(cwd)}
+    )
+    env = dict(os.environ)
+    env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
+    return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, str(SCRIPT), *args],
+        input=payload,
+        capture_output=True,
+        encoding='utf-8',
+        cwd=str(cwd),
+        env=env,
+        timeout=30,
+    )
+
+
+def test_help_prints_usage_and_is_not_a_hook_run():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp)
+        for flag in ('--help', '-h'):
+            proc = _cli_in(tmp, flag)
+            assert proc.returncode == 0, (flag, proc.stderr)
+            assert 'usage' in proc.stdout.lower() and '--post-write' in proc.stdout, proc.stdout
+            assert 'hookSpecificOutput' not in proc.stdout, flag
+            assert proc.stderr == '', (flag, proc.stderr)
+            assert proc.stdout.isascii()
+        assert not (tmp / '.claude' / 'anchors' / 'log.ndjson').exists(), 'it wrote telemetry'
+        assert not (tmp / '.claude' / 'anchors' / '.gitignore').exists(), 'it ran the hook body'
+
+
+def test_an_unknown_double_dash_argument_exits_2_with_usage_and_is_not_a_hook_run():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        make_anchor(tmp)
+        for flag in ('--bogus', '--post-writ', '--HELP'):
+            proc = _cli_in(tmp, flag)
+            assert proc.returncode == 2, (flag, proc.returncode, proc.stdout)
+            assert proc.stdout == '', (flag, proc.stdout)
+            assert flag in proc.stderr and 'usage' in proc.stderr.lower(), proc.stderr
+            assert proc.stderr.isascii()
+        assert not (tmp / '.claude' / 'anchors' / 'log.ndjson').exists(), 'it wrote telemetry'
+        assert not (tmp / '.claude' / 'anchors' / '.gitignore').exists(), 'it ran the hook body'
+
+
+def test_the_known_arms_still_run_after_the_argument_check():
+    # The registered hook arms are `--post-write` and no argument; the check must not
+    # shadow them, nor the authoring and sweep arms.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        f = make_anchor(tmp)
+        assert json.loads(_cli_in(tmp).stdout)['hookSpecificOutput']['hookEventName'] == (
+            'SessionStart'
+        )
+        assert _cli_in(tmp, '--post-write').returncode == 0
+        assert _cli_in(tmp, '--head-fit', str(f)).stdout.startswith('head:')
+        assert _cli_in(tmp, '--list-stale', str(f.parent)).returncode == 0
+        assert _cli_in(tmp, '--list-dormant', str(f.parent)).returncode == 0
+
+
+# -- --step: number and prepend the cursor entry in one edit (no `step:` field) ---
 
 STEP_ANCHOR = (
     '---\n'
@@ -1347,19 +1413,31 @@ def _step_cli(*args, encoding: str = 'utf-8'):
     )
 
 
-def test_step_bumps_the_frontmatter_and_puts_the_new_entry_first_in_the_cursor():
+def test_step_puts_the_new_entry_first_in_the_cursor_and_leaves_the_frontmatter_alone():
     with tempfile.TemporaryDirectory() as d:
         f = _write_anchor(Path(d), STEP_ANCHOR)
         proc = _step_cli(str(f), 'pushed the branch')
         out = proc.stdout.decode('utf-8')
         assert proc.returncode == 0, proc.stderr
-        want = STEP_ANCHOR.replace('step: 4\n---', 'step: 5\n---').replace(
-            '## Cursor\n\n', '## Cursor\n\n- Step 5: pushed the branch\n'
-        )
+        want = STEP_ANCHOR.replace('## Cursor\n\n', '## Cursor\n\n- Step 5: pushed the branch\n')
         assert f.read_bytes() == want.encode('utf-8')
-        assert 'step: 4 -> 5' in out
+        assert out.splitlines()[0] == f'Step 5 added to {f}', out
         assert 'head:' in out and 'budget' in out
         assert out.isascii()
+
+
+def test_step_numbers_from_the_cursor_and_ignores_a_frontmatter_step_field():
+    # The field says 9, the cursor's newest entry is Step 4: the entry is Step 5 and
+    # the frontmatter bytes are unchanged. On the base it wrote `step: 10`.
+    with tempfile.TemporaryDirectory() as d:
+        text = STEP_ANCHOR.replace('step: 4\n---', 'step: 9\n---')
+        f = _write_anchor(Path(d), text)
+        proc = _step_cli(str(f), 'ignore the field')
+        assert proc.returncode == 0, proc.stderr
+        got = f.read_bytes()
+        assert b'- Step 5: ignore the field\n' in got
+        assert got.split(b'---\n')[1] == text.encode('utf-8').split(b'---\n')[1]
+        assert b'step: 9\n' in got and b'step: 10' not in got
 
 
 def test_step_text_with_a_windows_path_and_an_arrow_round_trips_byte_exactly():
@@ -1385,7 +1463,7 @@ def test_step_survives_a_cp1252_stdout():
         assert 'proximo \u2192 passo' in f.read_text(encoding='utf-8')
 
 
-def test_step_adds_a_missing_field_as_step_1_after_the_format_line():
+def test_step_on_an_anchor_without_a_field_adds_none_and_numbers_from_one():
     with tempfile.TemporaryDirectory() as d:
         text = STEP_ANCHOR.replace('step: 4\n', '').replace(
             '- Step 4: older entry\n- Step 3: oldest entry\n', 'nothing yet\n'
@@ -1394,7 +1472,7 @@ def test_step_adds_a_missing_field_as_step_1_after_the_format_line():
         proc = _step_cli(str(f), 'first entry')
         assert proc.returncode == 0, proc.stderr
         got = f.read_text(encoding='utf-8')
-        assert got.startswith('---\nformat: anchor/v1\nstep: 1\ntask: demo\n---\n')
+        assert got.startswith('---\nformat: anchor/v1\ntask: demo\n---\n')
         assert '## Cursor\n\n- Step 1: first entry\nnothing yet\n' in got
 
 
@@ -1407,11 +1485,10 @@ def test_step_keeps_the_line_endings_of_the_file():
         raw = f.read_bytes()
         assert b'\r\n- Step 5: on a windows editor\r\n' in raw
         assert raw.count(b'\n') == raw.count(b'\r\n'), 'a bare LF crept into a CRLF file'
-        assert b'step: 5\r\n' in raw
 
 
-def test_step_edits_only_the_head_frontmatter_and_cursor():
-    # `step: 4` in the prose and a Cursor-like heading in the TAIL are not targets.
+def test_step_edits_only_the_head_cursor():
+    # A Cursor-like heading in the TAIL is not a target, and the prose is untouched.
     with tempfile.TemporaryDirectory() as d:
         text = STEP_ANCHOR.replace(
             '## Decisions log\n', '## Decisions log\nstep: 9\n## Cursor\n- Step 2: tail cursor\n'
@@ -1421,13 +1498,14 @@ def test_step_edits_only_the_head_frontmatter_and_cursor():
         got = f.read_text(encoding='utf-8')
         assert 'keep step: 4 out of this prose' in got
         assert got.count('step: 9\n') == 1
+        assert got.count('step: 4\n') == 1
         assert got.count('- Step 5: only the head') == 1
         assert got.index('- Step 5: only the head') < got.index('<!-- anchor:tail -->')
 
 
 def test_step_after_a_lagging_field_numbers_past_the_cursor():
     # The field says 3 but the cursor already shows Step 5: the next entry is 6,
-    # and the field is repaired in the same edit.
+    # and the field stays as it was.
     with tempfile.TemporaryDirectory() as d:
         text = STEP_ANCHOR.replace('step: 4\n', 'step: 3\n').replace(
             '- Step 4: older entry', '- Step 5: older entry'
@@ -1435,7 +1513,7 @@ def test_step_after_a_lagging_field_numbers_past_the_cursor():
         f = _write_anchor(Path(d), text)
         assert _step_cli(str(f), 'catch up').returncode == 0
         got = f.read_text(encoding='utf-8')
-        assert '\nstep: 6\n' in got
+        assert '\nstep: 3\n' in got
         assert '- Step 6: catch up\n- Step 5: older entry' in got
 
 
@@ -1452,9 +1530,8 @@ def test_step_on_an_anchor_without_a_cursor_exits_2_and_leaves_the_file_untouche
 
 
 def test_step_without_a_fenced_frontmatter_block_says_so_and_leaves_the_file_untouched():
-    # `--step` (like --head-fit's step warning and `parked:`) reads `step:` from a
-    # block that opens on line 1 and closes with its own `---` line. A bare
-    # `step: 4` line used to fail with the unexplained "no frontmatter block".
+    # `--step` (like `parked:`) reads the frontmatter only from a block that opens
+    # on line 1 and closes with its own `---` line.
     with tempfile.TemporaryDirectory() as d:
         body = '# Mission\nship it\n\n## Cursor\n\n- Step 4: x\n'
         bare = 'format: anchor/v1\nstep: 4\n' + body
@@ -1500,12 +1577,12 @@ def test_step_into_a_cursor_with_no_bullets_still_lands_under_the_heading():
         f = _write_anchor(base, spaced)
         assert _step_cli(str(f), 'first bullet').returncode == 0
         assert f.read_text(encoding='utf-8').endswith(
-            '## Cursor\n\n- Step 3: first bullet\nprose, no bullets\n'
+            '## Cursor\n\n- Step 1: first bullet\nprose, no bullets\n'
         )
         bare = '---\nformat: anchor/v1\nstep: 2\n---\n## Cursor'
         g = _write_anchor(base, bare, name='eof.md')
         assert _step_cli(str(g), 'at eof').returncode == 0
-        assert g.read_text(encoding='utf-8').endswith('## Cursor\n- Step 3: at eof\n')
+        assert g.read_text(encoding='utf-8').endswith('## Cursor\n- Step 1: at eof\n')
 
 
 def test_step_keeps_a_byte_order_mark():
@@ -1527,33 +1604,22 @@ def test_newest_step_reads_the_cursor_bullets_only():
     assert ai.newest_step('## Cursor\n- **Step 12**: bold label\n') == 12
 
 
-LAG_LINE = "step: frontmatter says 3, cursor's newest is Step 5 - run --step or correct the field"
-
-
-def test_head_fit_flags_a_step_field_behind_the_cursor():
-    with tempfile.TemporaryDirectory() as d:
-        text = STEP_ANCHOR.replace('step: 4\n', 'step: 3\n').replace('Step 4:', 'Step 5:')
-        f = _write_anchor(Path(d), text)
-        proc = _head_fit(str(f))
-        assert proc.returncode == 0
-        assert LAG_LINE in proc.stdout.splitlines()
-
-
-def test_head_fit_is_quiet_when_step_agrees_or_either_side_is_absent():
+def test_head_fit_prints_no_line_about_a_step_field():
+    # The `step:` field is gone: a field behind, level with or ahead of the cursor, or
+    # absent, gets no report. On the base the lagging case printed a warning.
     with tempfile.TemporaryDirectory() as d:
         base = Path(d)
         cases = {
+            'behind': STEP_ANCHOR.replace('step: 4\n', 'step: 3\n').replace('Step 4:', 'Step 5:'),
             'agree': STEP_ANCHOR,
             'ahead': STEP_ANCHOR.replace('step: 4\n', 'step: 9\n'),
             'nofield': STEP_ANCHOR.replace('step: 4\n', ''),
-            'nobullets': STEP_ANCHOR.replace(
-                '- Step 4: older entry\n- Step 3: oldest entry\n', 'idle\n'
-            ),
         }
         for name, text in cases.items():
             proc = _head_fit(str(_write_anchor(base, text, name + '.md')))
             assert proc.returncode == 0
-            assert 'step: frontmatter' not in proc.stdout, name
+            assert 'step: frontmatter' not in proc.stdout, (name, proc.stdout)
+            assert 'run --step' not in proc.stdout, (name, proc.stdout)
 
 
 # -- the directory the session started in, read from its transcript --------------
@@ -2381,12 +2447,16 @@ if __name__ == '__main__':
     test_compact_resume_clear_and_unknown_sources_keep_the_golden_header()
     test_startup_header_is_conditional_and_drops_the_source_of_truth_claim()
     test_startup_hook_run_with_a_recent_anchor_gets_the_conditional_header()
-    test_step_bumps_the_frontmatter_and_puts_the_new_entry_first_in_the_cursor()
+    test_help_prints_usage_and_is_not_a_hook_run()
+    test_an_unknown_double_dash_argument_exits_2_with_usage_and_is_not_a_hook_run()
+    test_the_known_arms_still_run_after_the_argument_check()
+    test_step_puts_the_new_entry_first_in_the_cursor_and_leaves_the_frontmatter_alone()
+    test_step_numbers_from_the_cursor_and_ignores_a_frontmatter_step_field()
     test_step_text_with_a_windows_path_and_an_arrow_round_trips_byte_exactly()
     test_step_survives_a_cp1252_stdout()
-    test_step_adds_a_missing_field_as_step_1_after_the_format_line()
+    test_step_on_an_anchor_without_a_field_adds_none_and_numbers_from_one()
     test_step_keeps_the_line_endings_of_the_file()
-    test_step_edits_only_the_head_frontmatter_and_cursor()
+    test_step_edits_only_the_head_cursor()
     test_step_after_a_lagging_field_numbers_past_the_cursor()
     test_step_on_an_anchor_without_a_cursor_exits_2_and_leaves_the_file_untouched()
     test_step_without_a_fenced_frontmatter_block_says_so_and_leaves_the_file_untouched()
@@ -2394,8 +2464,7 @@ if __name__ == '__main__':
     test_step_into_a_cursor_with_no_bullets_still_lands_under_the_heading()
     test_step_keeps_a_byte_order_mark()
     test_newest_step_reads_the_cursor_bullets_only()
-    test_head_fit_flags_a_step_field_behind_the_cursor()
-    test_head_fit_is_quiet_when_step_agrees_or_either_side_is_absent()
+    test_head_fit_prints_no_line_about_a_step_field()
     test_a_moved_session_injects_the_start_directory_anchor_and_names_both_directories()
     test_a_moved_session_with_no_start_anchor_injects_the_current_one_and_names_both()
     test_anchors_in_both_directories_inject_the_start_one_and_warn_about_the_other()

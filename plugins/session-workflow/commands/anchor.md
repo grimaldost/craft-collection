@@ -63,8 +63,8 @@ motivated this).
    order, then the tail, each at task-appropriate depth. The order matters: the
    re-injection hook spends its budget top-down, so a section's position is its
    priority.
-   - Frontmatter: `format: anchor/v1`, `date`, `task:` (one line), `step:`
-     (prior step + 1, or 1), `source: /anchor`. The block opens and closes with
+   - Frontmatter: `format: anchor/v1`, `date`, `task:` (one line),
+     `source: /anchor`. The block opens and closes with
      a `---` line (line 1 and after the last field); `--step` and `parked:` read
      only a block fenced this way.
    - **Mission** — the goal, plus the owner's authorizations and instructions
@@ -101,8 +101,8 @@ motivated this).
    cursor it would reserve, and the sections a cut would take. A hand-counted head went out 118 bytes
    over.
 5. **Append telemetry** to `.claude/anchors/log.ndjson`:
-   `{"event":"anchor-write","source":"command","date":"<YYYY-MM-DD HH:MM>","step":<N>,"file":"<basename>"}`
-6. **Confirm in one line:** path, step number, and — when the user is about to
+   `{"event":"anchor-write","source":"command","date":"<YYYY-MM-DD HH:MM>","file":"<basename>"}`
+6. **Confirm in one line:** the path and — when the user is about to
    compact — that `/compact` is now safe to run.
 
 ## Boundary
@@ -115,6 +115,6 @@ before stepping away, before an irreversible move.
 
 Between snapshots, when only a step boundary moved, one edit does both halves of it:
 `python <this-plugin>/skills/compaction-survival/scripts/anchor_inject.py --step <the anchor> "<what moved>"`
-sets the frontmatter `step:` to the next number and puts `- Step N: <what moved>` first in the
-Cursor section, atomically, then prints the head's size. It does not fold older entries; do that
-at the phase boundary. `--head-fit` also says when `step:` is behind the newest cursor entry.
+numbers the entry one past the Cursor's newest `Step N` and puts `- Step N: <what moved>` first in
+the Cursor section, atomically, then prints the head's size. It does not fold older entries; do that
+at the phase boundary. The frontmatter holds no step counter.
