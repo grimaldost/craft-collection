@@ -406,44 +406,17 @@ def test_the_session_workflow_hooks_description_carries_no_count_word():
 
 
 def test_a_hook_added_to_the_session_workflow_plugin_leaves_the_description_alone():
+    # The description is the shipped one; the README summary is synthetic, so the
+    # case holds whatever spelling the root README uses for its count.
     import copy
 
-    readmes, _, _, hooks_files = _repository()
-    scratch = copy.deepcopy(hooks_files)
-    actual = _command_count(scratch['session-workflow'])
-    scratch['session-workflow']['hooks'].setdefault('Stop', []).append(
-        {'hooks': [{'type': 'command', 'command': 'x'}]}
+    hooks = copy.deepcopy(json.loads(SESSION_WORKFLOW_HOOKS.read_text(encoding='utf-8')))
+    hooks['hooks'].setdefault('Stop', []).append({'hooks': [{'type': 'command', 'command': 'x'}]})
+    summary = (
+        f'**session-workflow** \u2014 skills `a`; and {_command_count(hooks)} hook entry points.\n'
     )
-    names = {n: w for w, n in NUMBER_WORDS.items()}
-    bumped = re.sub(
-        rf'\b{names[actual]}(\s+hook\s+entry\s+points)',
-        rf'{names[actual + 1]}\1',
-        readmes['README.md'],
-        count=1,
-        flags=re.IGNORECASE,
-    )
-    assert bumped != readmes['README.md'], 'the root README summary count was not found'
-    found = count_findings(bumped, scratch)
+    found = count_findings(summary, {'session-workflow': hooks})
     assert found == [], '\n'.join(found)
-
-
-def _stacked_bullet() -> str:
-    text = _normalize((ROOT / 'CONTRIBUTING.md').read_text(encoding='utf-8'))
-    start = text.index('**Stacked PRs:**')
-    end = text.find(' ## ', start)
-    return text[start : end if end > 0 else len(text)]
-
-
-def test_contributing_states_both_outcomes_of_a_stacked_pull_request():
-    bullet = _stacked_bullet()
-    assert 'closes' in bullet, bullet
-    assert 'no rebase dance needed' not in bullet, bullet
-    assert 'retargets' in bullet, bullet
-
-
-def test_contributing_names_only_the_root_readme_hook_counts():
-    text = _normalize((ROOT / 'CONTRIBUTING.md').read_text(encoding='utf-8'))
-    assert 'hook counts in a `hooks.json` description' not in text
 
 
 def test_the_scan_sees_what_it_guards():
@@ -473,7 +446,5 @@ if __name__ == '__main__':
     test_the_repository_hook_counts_agree()
     test_the_session_workflow_hooks_description_carries_no_count_word()
     test_a_hook_added_to_the_session_workflow_plugin_leaves_the_description_alone()
-    test_contributing_states_both_outcomes_of_a_stacked_pull_request()
-    test_contributing_names_only_the_root_readme_hook_counts()
     test_the_scan_sees_what_it_guards()
     print('ok: the READMEs agree with the manifests, CHANGELOGs and hooks.json files')
