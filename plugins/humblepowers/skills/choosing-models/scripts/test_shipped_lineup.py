@@ -77,6 +77,19 @@ def test_calibration_note_records_the_5_5_run():
         assert '2026-10-25' in data['typical_cost'][tier], f'{tier} cost not dated'
 
 
+def test_calibration_floor_verdict_names_the_variable_by_its_mechanism():
+    calibration = _data()['meta']['calibration']
+    assert '\n' not in calibration
+    assert 'default model of unrouted spawns' in calibration
+    assert 'Sonnet floor on subagents' not in calibration
+    assert 'session-wide Sonnet floor' not in calibration
+    assert calibration.count('CLAUDE_CODE_SUBAGENT_MODEL') == 1
+    assert (
+        'Floor verdict (whether setting the default model of unrouted spawns, '
+        'CLAUDE_CODE_SUBAGENT_MODEL=sonnet, is needed for these implementers) LIFT:'
+    ) in calibration
+
+
 def test_review_stamp():
     meta = _data()['meta']
     assert meta['last_reviewed'] == '2026-10-08', meta['last_reviewed']
@@ -88,6 +101,7 @@ def main() -> int:
     test_shipped_lineup_per_tier()
     test_new_rows_mark_unmeasured_what_is_unmeasured()
     test_calibration_note_records_the_5_5_run()
+    test_calibration_floor_verdict_names_the_variable_by_its_mechanism()
     test_review_stamp()
     print('ok: shipped_lineup')
     return 0

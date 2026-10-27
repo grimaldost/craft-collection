@@ -670,6 +670,23 @@ def test_stale_body_names_both_versions_and_the_fix():
     assert 'again' in line and 'anchor' in line, f'the fix is not named: {line}'
 
 
+def test_stale_body_notice_asks_a_reload_before_the_next_use_not_every_skill_now():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _install_registry(root, {'session-workflow': '0.24.4'})
+        transcript = _write_records(
+            root / 't.jsonl',
+            [_skill_load(_cache_base(root, 'session-workflow', '0.21.0', 'tool-feedback'))],
+        )
+        rc, out = _stale_run(transcript)
+    assert rc == 0, out
+    line = _context(out)
+    assert 'before its next use' in line, line
+    assert 'decisions already taken stand' in line, line
+    assert 'again' in line and 'anchor' in line, line
+    assert 'Invoke each skill' not in line, line
+
+
 def test_stale_body_same_version_is_silent():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -1060,6 +1077,7 @@ def main() -> int:
     test_a_session_of_only_unregistered_skills_owes_nothing()
     test_a_registered_skill_beside_an_unregistered_one_still_nudges()
     test_stale_body_names_both_versions_and_the_fix()
+    test_stale_body_notice_asks_a_reload_before_the_next_use_not_every_skill_now()
     test_stale_body_same_version_is_silent()
     test_stale_body_a_later_reload_clears_the_warning()
     test_stale_body_reattached_bodies_count_as_loads()

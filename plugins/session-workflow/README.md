@@ -149,8 +149,10 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   skill:` line in front of each served body, the last load per skill winning)
   and compares each body served from a plugin cache directory with the versions
   `installed_plugins.json` beside that cache lists. For each plugin with an
-  older body it adds one line naming both versions and the fix: invoke the
-  skill again to load the current body, or restart and resume from the anchor.
+  older body it adds one line naming both versions and the fix: invoke a listed
+  skill again before its next use to load the current body (decisions already
+  taken stand unless the newer body's CHANGELOG entry changes them), or restart
+  and resume from the anchor if it still loads the old one.
   Silent when every body is current, for a body served from outside a cache (a
   `--plugin-dir` checkout), for a plugin the registry does not list, and when
   the transcript or the registry cannot be read. **On by default**; opt out

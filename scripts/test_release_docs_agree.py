@@ -16,10 +16,11 @@ What it checks, for every plugin:
     CHANGELOG section it points to, and that section contains the phrase, so a
     README that dates a change to the wrong release fails, and so does a
     registry entry moved along with it;
-  * the count word that opens a hooks.json description ("Twelve entry
-    points.") and the count of hooks in the root README's summary of the plugin
-    ("twelve hook entry points") equal the number of command hooks in the
-    plugin's hooks.json.
+  * the count of hooks in the root README's summary of the plugin ("twelve
+    hook entry points") equals the number of command hooks in the plugin's
+    hooks.json. A hooks.json description carries no count word: every
+    hook-adding pull request would change the same line, and concurrent ones
+    would conflict.
 
 A plugin README dates a change of its own plugin with `in`, `since` or `until`
 before the version, or `removed`, `added` or `retired` after it; the root
@@ -120,7 +121,6 @@ NUMBER_WORDS = {
     )
 }
 COUNT = r'(\d+|' + '|'.join(NUMBER_WORDS) + r')'
-DESCRIPTION_COUNT = re.compile(rf'^{COUNT}\s+(?:entry\s+points|hooks?)\b', re.IGNORECASE)
 SUMMARY_COUNT = re.compile(rf'\b{COUNT}\s+hook(?:s|\s+entry\s+points?)\b', re.IGNORECASE)
 
 
@@ -226,14 +226,6 @@ def _number(word: str) -> int:
 def count_findings(root_readme: str, hooks_files: dict[str, dict]) -> list[str]:
     """Each hook count in prose that differs from the hooks.json it counts. Pure."""
     found: list[str] = []
-    for plugin, hooks_file in sorted(hooks_files.items()):
-        actual = _command_count(hooks_file)
-        m = DESCRIPTION_COUNT.match(hooks_file.get('description', ''))
-        if m and _number(m.group(1)) != actual:
-            found.append(
-                f'plugins/{plugin}/hooks/hooks.json: the description opens with {m.group(0)!r} '
-                f'({_number(m.group(1))}), but the file has {actual} command hooks'
-            )
     for m in re.finditer(
         r'^\*\*(?P<plugin>[\w-]+)\*\* —(?P<body>.*?)(?=\n\s*\n|\Z)', root_readme, re.M | re.S
     ):
@@ -347,22 +339,16 @@ ROOT_SUMMARY = (
 
 def test_matching_counts_have_no_findings():
     hooks = {
-        'demo': _hooks('Twelve entry points. More.', 12),
+        'demo': _hooks('Entry points. More.', 12),
         'other': _hooks('One hook. More.', 1),
     }
     assert count_findings(ROOT_SUMMARY, hooks) == []
 
 
-def test_a_hooks_description_count_word_off_by_one_is_a_finding():
-    hooks = {'demo': _hooks('Eleven entry points. More.', 12), 'other': _hooks('One hook.', 1)}
-    found = count_findings(ROOT_SUMMARY, hooks)
-    assert any('demo' in f and 'hooks.json' in f and '11' in f for f in found), found
-
-
 def test_a_stale_hook_count_in_the_root_summary_is_a_finding():
     # The 0.27.0 summary wrapped between the count and its noun.
     stale = ROOT_SUMMARY.replace('twelve hook entry points', 'four\nhooks, all on by default')
-    hooks = {'demo': _hooks('Twelve entry points.', 12), 'other': _hooks('One hook.', 1)}
+    hooks = {'demo': _hooks('Entry points.', 12), 'other': _hooks('One hook.', 1)}
     found = count_findings(stale, hooks)
     assert any('demo' in f and 'README.md' in f and '4' in f for f in found), found
 
@@ -403,6 +389,36 @@ def test_the_repository_hook_counts_agree():
     assert found == [], '\n'.join(found)
 
 
+SESSION_WORKFLOW_HOOKS = ROOT / 'plugins' / 'session-workflow' / 'hooks' / 'hooks.json'
+_ANY_NUMBER = r'(?:\d+|' + '|'.join(NUMBER_WORDS) + r')'
+OPENING_NUMBER_WORD = re.compile(rf'^{_ANY_NUMBER}\b', re.IGNORECASE)
+NUMBER_WORD_BEFORE_ENTRY = re.compile(
+    rf'\b{_ANY_NUMBER}\s+(?:\w+\s+)?entr(?:y|ies)\b', re.IGNORECASE
+)
+
+
+def test_the_session_workflow_hooks_description_carries_no_count_word():
+    description = json.loads(SESSION_WORKFLOW_HOOKS.read_text(encoding='utf-8'))['description']
+    assert description.startswith('Entry points:'), description[:40]
+    assert not OPENING_NUMBER_WORD.match(description), description[:40]
+    found = NUMBER_WORD_BEFORE_ENTRY.search(description)
+    assert not found, found and found.group(0)
+
+
+def test_a_hook_added_to_the_session_workflow_plugin_leaves_the_description_alone():
+    # The description is the shipped one; the README summary is synthetic, so the
+    # case holds whatever spelling the root README uses for its count.
+    import copy
+
+    hooks = copy.deepcopy(json.loads(SESSION_WORKFLOW_HOOKS.read_text(encoding='utf-8')))
+    hooks['hooks'].setdefault('Stop', []).append({'hooks': [{'type': 'command', 'command': 'x'}]})
+    summary = (
+        f'**session-workflow** \u2014 skills `a`; and {_command_count(hooks)} hook entry points.\n'
+    )
+    found = count_findings(summary, {'session-workflow': hooks})
+    assert found == [], '\n'.join(found)
+
+
 def test_the_scan_sees_what_it_guards():
     readmes, *_ = _repository()
     assert {c[0] for c in DATED_CLAIMS} >= {
@@ -425,9 +441,10 @@ if __name__ == '__main__':
     test_another_products_version_is_not_read_as_a_dating()
     test_the_root_readme_dates_a_change_by_the_plugin_name()
     test_matching_counts_have_no_findings()
-    test_a_hooks_description_count_word_off_by_one_is_a_finding()
     test_a_stale_hook_count_in_the_root_summary_is_a_finding()
     test_the_repository_readmes_agree_with_the_releases()
     test_the_repository_hook_counts_agree()
+    test_the_session_workflow_hooks_description_carries_no_count_word()
+    test_a_hook_added_to_the_session_workflow_plugin_leaves_the_description_alone()
     test_the_scan_sees_what_it_guards()
     print('ok: the READMEs agree with the manifests, CHANGELOGs and hooks.json files')
