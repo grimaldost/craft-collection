@@ -6,6 +6,53 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.30.0] - 2026-10-27
+
+Corrections to the 0.29.0 wave from the 2026-10-27 review, released as one cut over the pull
+requests #188 to #192. Minor bump: a running session that owns none of the open anchors is
+injected a different, shorter block (an owner pointer in place of another track's full
+head), and the anchor's frontmatter `step:` field is removed, which an installed copy and
+its anchors can notice. The other changes are text and bug fixes.
+
+### Changed
+
+- **compaction-survival: a non-owner session gets an owner pointer.** A session with a
+  session id that wrote none of the open anchors now gets a pointer in place of another
+  track's full head: the anchor's path, title and owner, the cursor's newest line, an
+  instruction to read the file if this session is resuming that track, and the close
+  command. A crash restart, which has a new session id, reads the file the pointer names. A
+  stale or parked anchor keeps its tier plus the owner line. `--list-dormant` appends
+  `owner: <session id>`.
+- **Stale skill body notice.** It asks to invoke a listed skill again before its next use,
+  and says decisions already taken stand unless the newer body's CHANGELOG entry changes
+  them, instead of asking to reload every skill now.
+- **review-panel: the fallback names the Workflow tool's opt-in gate.** The reference now
+  says the Level 3 fallback to concurrent Agent calls also applies when the user has not
+  opted into multi-agent orchestration (the Workflow tool's own gate), not only when the
+  tool is unavailable.
+- **The `hooks.json` description no longer opens with a count word,** so concurrent
+  hook-adding changes stop colliding on it; the release-docs agreement test keeps pinning
+  only the root README hook count.
+
+### Fixed
+
+- **Owner-acts gate: the deny message names the object it denied.** It used one fixed
+  example per family; it now builds the example from the denied act. A wrapped
+  `claude plugin` act without an id is told "pode atualizar o claude plugin", which the gate
+  accepts.
+- **`anchor_inject.py --help` and `-h`** print usage and exit 0, and an unknown `--`
+  argument exits 2 with usage, instead of running the hook (injecting and logging).
+- **Toolkit scan counted every component twice** when the working directory is the home
+  directory; a root that is the same config tree as one already scanned is now skipped,
+  with a caveat.
+
+### Removed
+
+- **The anchor's frontmatter `step:` field.** `--step` numbers its entry from the cursor's
+  newest `Step N` and leaves the frontmatter alone; `--head-fit` no longer reports a lagging
+  field; `/anchor` no longer writes it. An existing `step:` line is left untouched and
+  ignored.
+
 ## [0.29.0] - 2026-10-26
 
 Mechanisms for session discipline, after a diagnosis of the owner's sessions of 2026-10-24
