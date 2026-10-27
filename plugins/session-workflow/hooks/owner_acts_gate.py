@@ -109,10 +109,12 @@ SIDE_EFFECTS = {
 }
 EXAMPLES = {
     1: "'pode editar o CLAUDE.md'",
-    2: "'pode atualizar o <plugin>@<marketplace>'",
+    2: "'pode atualizar o claude plugin'",
     3: "'pode definir a variavel de ambiente <NAME>'",
     4: "'pode alterar o git config global'",
 }
+
+_UNSAFE_KEY = re.compile(r"""[\s"'`;?!]|[.!?]\s""")
 
 
 # ------------------------------------------------------------------ the rule
@@ -926,6 +928,30 @@ def handle_prompt_submit(payload: dict) -> None:
         record_prompt(session_id, prompt)
 
 
+def _safe_key(key: str | None) -> bool:
+    """A key that can stand as one word inside an example sentence."""
+    return isinstance(key, str) and bool(key) and not _UNSAFE_KEY.search(key)
+
+
+def example_for(act: Act) -> str:
+    """The sentence that would authorize `act`, built from the denied object.
+
+    Never raises: main() swallows any exception and exits 0, which would turn a deny
+    into an allow. An unreadable or awkward key falls back to the family's fixed example.
+    """
+    try:
+        key = act.key
+        if act.family == 1 and _safe_key(key):
+            return f"'pode editar o {key}'"
+        if act.family == 2 and isinstance(key, str) and '@' in key:
+            return f"'pode atualizar o plugin {key}'"
+        if act.family == 3 and _safe_key(key):
+            return f"'pode definir a variavel de ambiente {key}'"
+    except Exception:  # noqa: S110 - fail open to the fixed example, never raise
+        pass
+    return EXAMPLES[act.family]
+
+
 def deny_reason(denied: list[Act]) -> str:
     families = sorted({a.family for a in denied})
     acts = '; '.join(a.summary for a in denied)
@@ -938,7 +964,7 @@ def deny_reason(denied: list[Act]) -> str:
         'the owner in your final block, framed: what the act is and why, the exact command '
         'or edit, and its side effects: ' + '; '.join(SIDE_EFFECTS[f] for f in families) + '.',
         'The owner authorizes it with a sentence naming the object and the act, for example '
-        + ' or '.join(EXAMPLES[f] for f in families)
+        + ' or '.join(dict.fromkeys(example_for(a) for a in sorted(denied, key=lambda a: a.family)))
         + '.',
     ]
     return ' '.join(lines)
