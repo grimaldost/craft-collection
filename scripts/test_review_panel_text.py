@@ -36,6 +36,12 @@ DEFAULT_RUNG = (
     'Level 1 is the default: one reviewer subagent that did not see the session, briefed to refute.'
 )
 LEVEL3_QUARTET = 'Level 3 default quartet'
+PANEL_REFERENCE = REFERENCES / 'running-a-panel.md'
+FALLBACK = (
+    'If the Workflow tool is not available in the session, or the user has not opted into '
+    "multi-agent orchestration (the tool's own gate), fall back to concurrent Agent calls, "
+    'accepting the loss of schema-forced output.'
+)
 
 
 def _parts():
@@ -83,6 +89,12 @@ def test_rubric_grades_the_rung_by_stakes():
     assert 'Picks several appropriate adversarial lenses' not in text
 
 
+def test_fallback_names_the_workflow_tools_opt_in_gate():
+    text = re.sub(r'\s+', ' ', PANEL_REFERENCE.read_text(encoding='utf-8'))
+    assert 'has not opted into multi-agent orchestration' in text
+    assert FALLBACK in text
+
+
 if __name__ == '__main__':
     test_description_keeps_the_handoff_trigger_verbatim()
     test_description_keeps_the_draft_negative_verbatim()
@@ -90,4 +102,5 @@ if __name__ == '__main__':
     test_quartet_is_the_level_three_default()
     test_no_reference_calls_the_quartet_the_skill_default()
     test_rubric_grades_the_rung_by_stakes()
+    test_fallback_names_the_workflow_tools_opt_in_gate()
     print('ok: review-panel keeps its hand-off trigger and its one-reviewer default')
