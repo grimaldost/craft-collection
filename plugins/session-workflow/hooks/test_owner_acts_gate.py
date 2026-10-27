@@ -287,6 +287,100 @@ def test_the_named_quoted_plugin_id_allows_its_update():
         _denied(box.bash('claude plugin update other@craft-collection'))
 
 
+def _example_sentences(reason: str) -> list[str]:
+    """The quoted example sentences of a deny reason (the text after 'for example')."""
+    tail = reason.split('for example ', 1)[1]
+    return [part.strip().strip("'") for part in tail.rstrip('.').split(' or ')]
+
+
+def test_the_deny_example_names_the_denied_file():
+    tmp, box = _sandbox()
+    with tmp:
+        box.prompt(GO_ON)
+        reason = _denied(box.edit(box.home / 'settings.json'))
+        assert 'pode editar o settings.json' in reason, reason
+        assert 'pode editar o CLAUDE.md' not in reason, reason
+        local = _denied(box.edit(box.home / 'settings.local.json'))
+        assert 'pode editar o settings.local.json' in local, local
+        assert 'pode editar o CLAUDE.md' in _denied(box.edit_claude_md())
+
+
+def test_the_deny_example_names_the_denied_variable():
+    tmp, box = _sandbox()
+    with tmp:
+        box.prompt(GO_ON)
+        reason = _denied(box.bash('setx FOO 1'))
+        assert 'pode definir a variavel de ambiente FOO' in reason, reason
+        assert '<NAME>' not in reason, reason
+
+
+def test_the_example_sentence_fed_back_allows_the_same_call():
+    calls = [
+        lambda box: box.edit(box.home / 'settings.json'),
+        lambda box: box.edit(box.home / 'settings.local.json'),
+        lambda box: box.edit_claude_md(),
+        lambda box: box.bash('setx FOO 1'),
+        lambda box: box.bash('claude plugin update "humblepowers@craft-collection"'),
+        lambda box: box.bash('powershell -Command "claude plugin marketplace list"'),
+        lambda box: box.bash('git config --global user.name "A B"'),
+    ]
+    for call in calls:
+        tmp, box = _sandbox()
+        with tmp:
+            box.prompt(GO_ON)
+            examples = _example_sentences(_denied(call(box)))
+            assert len(examples) == 1, examples
+            box.prompt(examples[0])
+            _allowed_silently(call(box))
+
+
+def test_a_wrapped_plugin_act_without_an_id_gets_the_authorizing_example():
+    tmp, box = _sandbox()
+    with tmp:
+        box.prompt(GO_ON)
+        reason = _denied(box.bash('powershell -Command "claude plugin marketplace list"'))
+        assert 'pode atualizar o claude plugin' in reason, reason
+        assert '<plugin>@<marketplace>' not in reason, reason
+        box.prompt('pode atualizar o claude plugin')
+        _allowed_silently(box.bash('powershell -Command "claude plugin marketplace list"'))
+
+
+def test_the_example_builder_names_the_plugin_id_and_never_raises():
+    for key in (None, 'x', 'a b', "it's", 'a;b', 'a?', 'a!', 'a. b', '', 'x@y z'):
+        for family in (1, 2, 3, 4):
+            act = gate.Act(family, 'shell', key, 'summary')
+            text = gate.deny_reason([act])
+            assert 'for example' in text and text.isascii(), (family, key, text)
+    assert (
+        gate.deny_reason([gate.Act(2, 'shell', 'x@y', 's')]).count('pode atualizar o plugin x@y')
+        == 1
+    )
+    fixed1 = 'pode editar o CLAUDE.md'
+    fixed3 = 'pode definir a variavel de ambiente <NAME>'
+    for key in (None, 'a b', "it's", 'a"b', 'a;b', 'a?', 'a!', 'a. b'):
+        assert fixed1 in gate.deny_reason([gate.Act(1, 'edit', key, 's')]), key
+        assert fixed3 in gate.deny_reason([gate.Act(3, 'shell', key, 's')]), key
+    assert 'pode editar o settings.json' in gate.deny_reason(
+        [gate.Act(1, 'edit', 'settings.json', 's')]
+    )
+    assert 'pode alterar o git config global' in gate.deny_reason(
+        [gate.Act(4, 'shell', 'user.name', 's')]
+    )
+
+
+def test_examples_of_several_denied_acts_are_deduplicated_and_joined_with_or():
+    acts = [
+        gate.Act(1, 'edit', 'settings.json', 'a'),
+        gate.Act(1, 'edit', 'settings.json', 'b'),
+        gate.Act(3, 'shell', 'FOO', 'c'),
+    ]
+    reason = gate.deny_reason(acts)
+    assert reason.count('pode editar o settings.json') == 1, reason
+    assert "'pode editar o settings.json' or 'pode definir a variavel de ambiente FOO'" in reason, (
+        reason
+    )
+
+
 def test_the_governed_home_override_moves_the_governed_files():
     tmp, box = _sandbox(override=True)
     with tmp:
@@ -577,4 +671,10 @@ if __name__ == '__main__':
     test_a_cli_call_without_a_flag_dispatches_on_the_event_name()
     test_acts_found_in_commands()
     test_authorizing_sentence_rule()
+    test_the_deny_example_names_the_denied_file()
+    test_the_deny_example_names_the_denied_variable()
+    test_the_example_sentence_fed_back_allows_the_same_call()
+    test_a_wrapped_plugin_act_without_an_id_gets_the_authorizing_example()
+    test_the_example_builder_names_the_plugin_id_and_never_raises()
+    test_examples_of_several_denied_acts_are_deduplicated_and_joined_with_or()
     print('ok: owner_acts_gate denies owner-only acts the owner did not name, and logs each')
