@@ -8,6 +8,21 @@ and the honest-cross-tool-references + MIT-license pass (0.3.1).
 Tags start at 0.13.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.18.3] - 2026-10-27
+
+Two documentation and data-text corrections. Patch bump: no behaviour changes, and no
+router pattern or rubric threshold moves.
+
+### Changed
+
+- **choosing-tools: the router rules comment and the README say the router's recall figures
+  are English-only.** The lexicon and the recall figures are English-only, and recall on
+  prompts in another language is near zero by construction. No pattern changed.
+- **choosing-models: the calibration note in `models.toml` describes
+  `CLAUDE_CODE_SUBAGENT_MODEL` as the default model of unrouted spawns.** The floor verdict
+  now names the variable by its mechanism instead of calling it a session-wide Sonnet floor
+  on subagents; the verdict itself is unchanged.
+
 ## [0.18.2] - 2026-10-25
 
 The `choosing-models` calibration record covers the 5.5 lineup. Patch bump: data and
