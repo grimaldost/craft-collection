@@ -96,8 +96,8 @@ dropped as not installed, whether a hint shipped) to a size-capped local NDJSON
 `inject_dispatch.py --health`. Router calibration
 numbers are dev-set numbers by construction — the trigger datasets are also the
 calibration corpus; seal a fresh holdout before citing generalization. Router
-rules are English-lexicon; prompts in other languages match only on loanwords
-(pipeline, backfill, dashboard, ETL).
+rules are English-lexicon, and the recall figures are English-only too; prompts in
+other languages match only on loanwords (pipeline, backfill, dashboard, ETL).
 
 **Retired in 0.8.0.** The generic dispatch *protocol* injection (both the
 session-start `HUMBLEPOWERS_DISPATCH_INJECT` full-protocol print and the
