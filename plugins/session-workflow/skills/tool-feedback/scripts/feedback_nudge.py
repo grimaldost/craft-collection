@@ -546,8 +546,10 @@ def stale_body_lines(transcript_path: str) -> list[str]:
         f'Stale skill body: {plugin} {newest} is installed, but this session holds skill '
         'bodies loaded from an older copy: '
         + ', '.join(f'{skill} ({version})' for skill, version in sorted(bodies))
-        + '. Invoke each skill again to load the current body; if it still loads the old '
-        'version, this process predates the update: restart and resume from the anchor.'
+        + '. Invoke a listed skill again before its next use in this session to load the '
+        "current body; decisions already taken stand unless the newer body's CHANGELOG "
+        'entry changes them; if it still loads the old version, this process predates the '
+        'update: restart and resume from the anchor.'
         for (plugin, newest), bodies in sorted(stale.items())
     ]
 
