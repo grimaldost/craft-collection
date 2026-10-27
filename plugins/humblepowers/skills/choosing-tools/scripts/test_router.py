@@ -440,6 +440,16 @@ def test_multilingual_is_silent_not_wrong():
         )
 
 
+def test_router_figures_are_scoped_to_english():
+    """The lexicon and the recall figures are English-only; the rules file and
+    the README say so (rows T334a)."""
+    data = json.loads(RULES_PATH.read_text(encoding='utf-8'))
+    assert 'English-only' in data['comment'], 'router_rules.json comment lacks English-only'
+    readme = (SCRIPTS_DIR.parent.parent.parent / 'README.md').read_text(encoding='utf-8')
+    flat = ' '.join(readme.split())
+    assert 'recall figures are English-only too' in flat, 'README lacks the recall-figures clause'
+
+
 if __name__ == '__main__':
     import sys
 
