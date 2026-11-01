@@ -297,7 +297,11 @@ def test_the_owner_pointer_carries_no_age():
         _age(run, 5 * 3600)
         ctx = _ctx(_session_start(Path(d), 'sess-NEW', source='startup'))
         assert 'MISSION-BODY-LINE-7f3a' not in ctx and 'newest cursor line' in ctx, ctx
-        assert 'ago' not in ctx and '5h' not in ctx, ctx
+        # The anchor path comes from the random temporary folder, whose name can hold
+        # "5h" or "ago"; the age check reads the context without it.
+        assert str(run) in ctx, ctx
+        without_path = ctx.replace(str(run), '<anchor>')
+        assert 'ago' not in without_path and '5h' not in without_path, ctx
 
 
 def test_the_owning_session_still_gets_the_full_head_on_compact_and_resume():
