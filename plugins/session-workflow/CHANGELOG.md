@@ -6,7 +6,7 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
-## [Unreleased]
+## [0.31.0] - 2026-11-01
 
 Every anchor hook run now leaves one record naming its session and its outcome, in a log
 that does not depend on the session's working directory. Minor bump: new log fields and a
