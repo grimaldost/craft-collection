@@ -30,13 +30,24 @@ Lifecycle gates (T22a hardening):
   anchor in the first. startup, and an unreadable transcript, use the payload
   cwd alone.
 
-When it finds open anchors it also creates `<anchors>/.gitignore` containing `*` if
-that file is missing (never touching one that exists), so anchors and this hook's
+When the anchors directory exists it also creates `<anchors>/.gitignore` containing `*`
+if that file is missing (never touching one that exists), so anchors and this hook's
 own log stay out of the repository's status.
+
+Records (v: 2): every exit of the SessionStart arm past the opt-out writes exactly one
+record, with its `outcome` (full, pointer-stale, pointer-owner, parked, no-anchors,
+startup-too-old, bad-payload, error, emit-failed) and the payload's session and source,
+to the central log `anchor-hooks/log.ndjson` under CLAUDE_PLUGIN_DATA (the temporary
+folder when unset), and to `<anchors>/log.ndjson` only when that directory already
+exists. The four injecting outcomes log `event: anchor-inject`, emit-failed
+`anchor-inject-failed`, the rest `anchor-inject-skipped` with `tier` and `stale` null.
+Records are written after the print; a failed write changes neither stdout nor the exit
+code.
 
 `--post-write` is the PostToolUse(Write|Edit|MultiEdit) arm of the same script: after a
 write to an open anchor it warns when the HEAD is over the budget or within 10% of it,
-and creates the same `.gitignore`. It shares the opt-out below and exits 0 on every path.
+creates the same `.gitignore`, and appends an `anchor-write` record to the central log.
+It shares the opt-out below and exits 0 on every path.
 
 Ownership: the same arm records the payload's `session_id` as the last writer of the
 anchor in `<anchors>/.owners.json` (filename to session id, replaced atomically);
@@ -922,8 +933,138 @@ def append_telemetry(anchors_dir: Path, record: dict) -> None:
         log = anchors_dir / 'log.ndjson'
         with log.open('a', encoding='utf-8') as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + '\n')
-    except OSError:
-        pass  # telemetry is best-effort, never load-bearing
+    except Exception:
+        return  # telemetry is best-effort, never load-bearing
+
+
+# The central log: one line per SessionStart outcome and per anchor write, in the
+# plugin's data folder, so a measurement finds every run whatever directory the
+# session ran in. The per-directory log alone missed worktrees, the home folder and
+# every run that found no anchor (the anchors directory it would go to may not exist).
+CENTRAL_LOG_SUBDIR = 'anchor-hooks'
+RECORD_VERSION = 2
+# The outcomes that inject keep today's `anchor-inject` event, so a reader of that
+# event counts no new record as an injection. Tier as today's record names it.
+INJECTED_TIER = {
+    'full': 'full',
+    'pointer-stale': 'pointer',
+    'pointer-owner': 'pointer',
+    'parked': 'parked',
+}
+
+
+def central_log() -> Path:
+    """`anchor-hooks/log.ndjson` under CLAUDE_PLUGIN_DATA, else the temporary folder:
+    the rule the plugin's other hooks follow."""
+    import tempfile
+
+    base = os.environ.get('CLAUDE_PLUGIN_DATA') or tempfile.gettempdir()
+    return Path(base) / CENTRAL_LOG_SUBDIR / 'log.ndjson'
+
+
+def append_central(record: dict) -> None:
+    """Best-effort like the per-directory log: an unwritable data folder costs the
+    line, never the hook's output or exit code."""
+    try:
+        log = central_log()
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open('a', encoding='utf-8') as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + '\n')
+    except Exception:
+        return  # the line is lost, never the hook's output
+
+
+def plugin_version() -> str | None:
+    """The `version` of this plugin's `.claude-plugin/plugin.json`; None when it
+    cannot be read."""
+    try:
+        manifest = Path(__file__).resolve().parents[3] / '.claude-plugin' / 'plugin.json'
+        version = json.loads(manifest.read_text(encoding='utf-8')).get('version')
+    except Exception:
+        return None
+    return version if isinstance(version, str) else None
+
+
+def _guarded(compute):
+    """A record field that cannot be computed is null, never a raise."""
+    try:
+        return compute()
+    except Exception:
+        return None
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec='seconds')
+
+
+def outcome_record(outcome: str, run: dict) -> dict:
+    """The one record a SessionStart run leaves, from what `main` learned before it
+    exited (`run`). Fields not learned yet are null. Every field is computed here,
+    after the print or in place of it, and each under a guard."""
+    payload = run.get('payload') if isinstance(run.get('payload'), dict) else {}
+    anchor = run.get('anchor')
+    anchors_dir = run.get('anchors_dir')
+    cwd = run.get('cwd')
+    attempted = run.get('attempted')  # the tier outcome an emit was tried for
+    injecting = outcome in INJECTED_TIER or outcome == 'emit-failed'
+    if outcome in INJECTED_TIER:
+        event = 'anchor-inject'
+    elif outcome == 'emit-failed':
+        event = 'anchor-inject-failed'
+    else:
+        event = 'anchor-inject-skipped'
+
+    def dropped():
+        if attempted != 'full':
+            return 0  # the pointer and parked tiers inject no HEAD, so drop nothing
+        return len(fit_head(split_head(_read(anchor))[0]).dropped)
+
+    return {
+        'event': event,
+        'source': payload.get('source', 'unknown'),
+        'session': payload.get('session_id', ''),
+        'file': _guarded(lambda: anchor.name),
+        'stale': run.get('stale') if injecting else None,
+        'tier': INJECTED_TIER.get(attempted) if injecting else None,
+        'open_anchors': _guarded(lambda: len(run['open_anchors'])),
+        'anchor_dir': None
+        if anchors_dir is None
+        else _guarded(lambda: 'cwd' if anchors_dir == cwd / '.claude' / 'anchors' else 'start'),
+        'ts': _guarded(_utc_now),
+        'v': RECORD_VERSION,
+        'outcome': outcome,
+        'owner': run.get('owner', ''),
+        'owns_open_anchor': run.get('owns_open_anchor'),
+        'anchor_age_s': _guarded(lambda: round(run['stale_s'])),
+        'head_chars': _guarded(lambda: len(split_head(_read(anchor))[0])),
+        'dropped': _guarded(dropped) if injecting else None,
+        'cwd': None if cwd is None else _guarded(lambda: str(cwd)),
+        'anchors_dir': None if anchors_dir is None else _guarded(lambda: str(anchors_dir)),
+        'plugin_version': plugin_version(),
+    }
+
+
+def log_outcome(outcome: str, run: dict, error: str = '') -> None:
+    """Write the run's one record: to the central log always, and to the anchors
+    directory's own log only when that directory already exists (the hook never
+    creates one), after making it self-ignoring. Each write carries its own guard,
+    so a failed central write never costs the per-directory one, and a raise in the
+    per-directory step never reaches `main`'s error path (a second record)."""
+    try:
+        record = outcome_record(outcome, run)
+        if error:
+            record['error'] = error
+        anchors_dir = run.get('anchors_dir')
+        per_dir = anchors_dir is not None and anchors_dir.is_dir()
+    except Exception:
+        return
+    append_central(record)
+    if per_dir:
+        try:
+            ensure_gitignore(anchors_dir)
+            append_telemetry(anchors_dir, record)
+        except Exception:
+            return  # the per-directory line is lost, never a second record
 
 
 # Ownership: which session last wrote each open anchor. With recency as the only
@@ -1124,26 +1265,50 @@ def post_write_main() -> int:
     try:
         text = anchor.read_text(encoding='utf-8', errors='ignore')
     except OSError:
+        # Still a write to an open anchor: its record says so, with no HEAD size.
+        append_central(_write_record(payload, anchor, None, False))
         return 0
     ensure_gitignore(anchor.parent)
     session_id = payload.get('session_id')
     if isinstance(session_id, str) and session_id:
         record_owner(anchor, session_id)
     head, _ = split_head(text)
-    if len(head) < POST_WRITE_WARN_FRACTION * MAX_CONTEXT_CHARS:
-        return 0
-    print(
-        json.dumps(
-            {
-                'hookSpecificOutput': {
-                    'hookEventName': 'PostToolUse',
-                    'additionalContext': build_post_write_warning(anchor, text),
-                }
-            },
-            ensure_ascii=False,
+    warned = False
+    try:
+        if len(head) < POST_WRITE_WARN_FRACTION * MAX_CONTEXT_CHARS:
+            return 0
+        print(
+            json.dumps(
+                {
+                    'hookSpecificOutput': {
+                        'hookEventName': 'PostToolUse',
+                        'additionalContext': build_post_write_warning(anchor, text),
+                    }
+                },
+                ensure_ascii=False,
+            )
         )
-    )
-    return 0
+        warned = True
+        return 0
+    finally:
+        # After the print, so `warned` says whether the warning reached stdout.
+        append_central(_write_record(payload, anchor, len(head), warned))
+
+
+def _write_record(payload: dict, anchor: Path, head_chars: int | None, warned: bool) -> dict:
+    """The `anchor-write` record: the write history per session, which `.owners.json`
+    (last writer only) lacks. `head_chars` is None when the anchor cannot be read."""
+    return {
+        'event': 'anchor-write',
+        'v': RECORD_VERSION,
+        'session': payload.get('session_id', ''),
+        'file': anchor.name,
+        'anchors_dir': str(anchor.parent),
+        'head_chars': head_chars,
+        'warned': warned,
+        'plugin_version': plugin_version(),
+        'ts': _guarded(_utc_now),
+    }
 
 
 def post_write_entry() -> int:
@@ -1211,17 +1376,39 @@ def step_main(argv: list[str]) -> int:
 
 
 def main() -> int:
+    """The SessionStart arm. Every exit past the opt-out leaves exactly one record
+    (`log_outcome`); with the opt-out set nothing is written."""
     if os.environ.get(ENV_GATE) == '0':
         return 0
+    run: dict = {}
+    try:
+        return _session_start(run)
+    except Exception as e:
+        # Nothing was printed (the print is the last step and catches its own
+        # failure), so stdout and the exit code are what the outer guard gave.
+        log_outcome('error', run, error=type(e).__name__)
+        return 0
 
+
+def _session_start(run: dict) -> int:
+    """`main` body. `run` collects what the record needs as it is learned, so an
+    exception at any point still leaves a record with what was known."""
     _force_utf8_stdout()
 
     try:
         payload = json.loads(sys.stdin.read() or '{}')
-    except json.JSONDecodeError:
+    except (UnicodeDecodeError, ValueError):
+        # Undecodable bytes, malformed JSON (JSONDecodeError is a ValueError) and a
+        # number json cannot convert are all a payload the hook cannot read.
+        log_outcome('bad-payload', run)
         return 0
+    if not isinstance(payload, dict):
+        log_outcome('bad-payload', run)
+        return 0
+    run['payload'] = payload
 
     cwd = Path(payload.get('cwd') or os.getcwd())
+    run['cwd'] = cwd
     source = payload.get('source')
     source = source if isinstance(source, str) else ''
     # A continuing session looks where it started before where it is now: a run
@@ -1232,25 +1419,33 @@ def main() -> int:
     anchors_dir, open_anchors, moved = resolve_anchors(
         cwd, source, payload.get('transcript_path'), session_id
     )
+    run.update(anchors_dir=anchors_dir, open_anchors=open_anchors)
     prune_owners(anchors_dir)
     if not open_anchors:
+        run['owns_open_anchor'] = False
+        log_outcome('no-anchors', run)
         return 0
     # Before the telemetry append below, so the log this hook writes is already ignored.
     ensure_gitignore(anchors_dir)
     anchor, other_open = select_anchor(open_anchors, session_id)
+    run['anchor'] = anchor
     # The owner line goes out only when this session owns none of the open anchors
     # and the injected one carries another session's record; with no record the
     # injection is today's, byte for byte.
     owner = owner_of(anchor)
     searched = open_anchors + (moved.elsewhere if moved is not None else [])
-    if owner == session_id or (session_id and any(owner_of(a) == session_id for a in searched)):
+    owns = bool(session_id) and any(owner_of(a) == session_id for a in searched)
+    run.update(owner=owner, owns_open_anchor=owns)
+    if owner == session_id or owns:
         owner = ''
 
     stale_s = max(0.0, time.time() - _mtime(anchor))
+    run['stale_s'] = stale_s
     # Crash-restart branch: a fresh process only gets the anchor when it was
     # updated recently enough to plausibly be the interrupted run. Explicit
     # continuation/reset signals (compact/resume/clear) always evaluate.
     if source == 'startup' and stale_s > STARTUP_RECENT_S:
+        log_outcome('startup-too-old', run)
         return 0
     pointer = stale_s > STALE_AFTER_S
     waits_on = parked_reason(_read(anchor))
@@ -1259,24 +1454,17 @@ def main() -> int:
     owner_pointer = bool(owner and session_id) and not waits_on and not pointer
     if waits_on:
         context = build_parked(anchor, waits_on, other_open, moved, owner)
+        outcome = 'parked'
     elif pointer:
         context = build_pointer(anchor, stale_s, other_open, moved, owner)
+        outcome = 'pointer-stale'
     elif owner_pointer:
         context = build_owner_pointer(anchor, owner, other_open, moved)
+        outcome = 'pointer-owner'
     else:
         context = build_context(anchor, other_open, source, moved, owner)
-
-    record = {
-        'event': 'anchor-inject',
-        'source': payload.get('source', 'unknown'),
-        'session': payload.get('session_id', ''),
-        'file': anchor.name,
-        'stale': pointer,
-        'tier': 'parked' if waits_on else 'pointer' if pointer or owner_pointer else 'full',
-        'open_anchors': len(open_anchors),
-        'anchor_dir': 'cwd' if anchors_dir == cwd / '.claude' / 'anchors' else 'start',
-        'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
-    }
+        outcome = 'full'
+    run.update(stale=pointer, attempted=outcome)
     try:
         print(
             json.dumps(
@@ -1293,12 +1481,10 @@ def main() -> int:
         # Never break a session start, but never log success for an injection
         # that emitted nothing: a distinct failure event is the difference
         # between a 5-minute fix and a state-loss postmortem.
-        append_telemetry(
-            anchors_dir, {**record, 'event': 'anchor-inject-failed', 'error': type(e).__name__}
-        )
+        log_outcome('emit-failed', run, error=type(e).__name__)
         return 0
     # Success telemetry only after the payload actually reached stdout.
-    append_telemetry(anchors_dir, record)
+    log_outcome(outcome, run)
     return 0
 
 

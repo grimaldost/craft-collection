@@ -60,8 +60,15 @@ def _age(f: Path, age_s: int) -> None:
         os.utime(f, (old, old))
 
 
+# The hook writes a central log under CLAUDE_PLUGIN_DATA (the temporary folder when
+# unset); every environment this module builds pins it to a temporary folder the
+# module owns, so no test writes to the inherited location or to the fallback one.
+_PLUGIN_DATA = tempfile.TemporaryDirectory(prefix='anchor-ownership-test-data-')
+
+
 def _env(extra: dict | None = None) -> dict:
     env = dict(os.environ)
+    env['CLAUDE_PLUGIN_DATA'] = _PLUGIN_DATA.name
     env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
     env.pop('PYTHONUTF8', None)
     env['PYTHONIOENCODING'] = 'cp1252'  # the Windows hook stdout this must survive
@@ -290,7 +297,11 @@ def test_the_owner_pointer_carries_no_age():
         _age(run, 5 * 3600)
         ctx = _ctx(_session_start(Path(d), 'sess-NEW', source='startup'))
         assert 'MISSION-BODY-LINE-7f3a' not in ctx and 'newest cursor line' in ctx, ctx
-        assert 'ago' not in ctx and '5h' not in ctx, ctx
+        # The anchor path comes from the random temporary folder, whose name can hold
+        # "5h" or "ago"; the age check reads the context without it.
+        assert str(run) in ctx, ctx
+        without_path = ctx.replace(str(run), '<anchor>')
+        assert 'ago' not in without_path and '5h' not in without_path, ctx
 
 
 def test_the_owning_session_still_gets_the_full_head_on_compact_and_resume():
