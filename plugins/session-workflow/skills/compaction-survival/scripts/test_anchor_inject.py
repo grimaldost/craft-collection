@@ -29,6 +29,7 @@ The tests own their temp dirs via tempfile so `run_tests.py` (bare-python runner
 actually executes them, rather than silently collecting zero pytest-fixture tests.
 """
 
+import contextlib
 import json
 import os
 import subprocess
@@ -39,6 +40,32 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent / 'anchor_inject.py'
 
+# The hook writes a central log under CLAUDE_PLUGIN_DATA (the temporary folder when
+# unset). Every environment this module builds, and every in-process run, pins it to
+# a temporary folder the module owns, so no test writes to the inherited location or
+# to the fallback one.
+_PLUGIN_DATA = tempfile.TemporaryDirectory(prefix='anchor-inject-test-data-')
+
+
+def _base_env() -> dict:
+    env = dict(os.environ)
+    env['CLAUDE_PLUGIN_DATA'] = _PLUGIN_DATA.name
+    return env
+
+
+@contextlib.contextmanager
+def _plugin_data_pinned():
+    """The in-process form of `_base_env`: CLAUDE_PLUGIN_DATA pinned for the block."""
+    old = os.environ.get('CLAUDE_PLUGIN_DATA')
+    os.environ['CLAUDE_PLUGIN_DATA'] = _PLUGIN_DATA.name
+    try:
+        yield
+    finally:
+        if old is None:
+            os.environ.pop('CLAUDE_PLUGIN_DATA', None)
+        else:
+            os.environ['CLAUDE_PLUGIN_DATA'] = old
+
 
 def run_hook(
     cwd: Path,
@@ -47,7 +74,7 @@ def run_hook(
     extra_env: dict | None = None,
     transcript=None,
 ):
-    env = dict(os.environ)
+    env = _base_env()
     # Default ON: env_on leaves the variable unset, which is how a real install
     # runs. env_on=False sets the documented opt-out value.
     env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
@@ -639,7 +666,8 @@ def test_emit_failure_logs_failure_event_not_success():
         os.environ.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
         sys.stdin, sys.stdout = io.StringIO(payload), BoomStdout()
         try:
-            rc = anchor_inject.main()
+            with _plugin_data_pinned():
+                rc = anchor_inject.main()
         finally:
             sys.stdin, sys.stdout = old_in, old_out
             if old_env is None:
@@ -753,7 +781,7 @@ def test_a_head_with_no_cursor_section_still_spends_top_down():
 
 
 def _head_fit(*args):
-    env = dict(os.environ)
+    env = _base_env()
     env['PYTHONIOENCODING'] = 'utf-8'
     return subprocess.run(  # noqa: S603 - fixed argv, no shell
         [sys.executable, str(SCRIPT), '--head-fit', *args],
@@ -982,7 +1010,7 @@ def test_sweeps_survive_a_cp1252_stdout():
         )
         make_anchor(tmp, name='done.md', body='**Status:** CLOSED\npronto\n')
         for arm in ('--list-dormant', '--list-stale'):
-            env = dict(os.environ)
+            env = _base_env()
             env['PYTHONIOENCODING'] = 'cp1252'
             proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
                 [sys.executable, str(SCRIPT), arm, str(tmp / '.claude' / 'anchors')],
@@ -991,7 +1019,7 @@ def test_sweeps_survive_a_cp1252_stdout():
                 timeout=30,
             )
             assert proc.returncode == 0, f'{arm} died on a cp1252 stdout: {proc.stderr[-300:]}'
-        env = dict(os.environ)
+        env = _base_env()
         env['PYTHONIOENCODING'] = 'cp1252'
         proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
             [sys.executable, str(SCRIPT), '--list-dormant', str(tmp / '.claude' / 'anchors')],
@@ -1087,6 +1115,7 @@ def test_a_parked_anchor_lists_under_the_parked_heading_and_not_as_dormant():
             [sys.executable, str(SCRIPT), '--list-dormant', str(anchors)],
             capture_output=True,
             encoding='utf-8',
+            env=_base_env(),
             timeout=30,
         )
         assert proc.returncode == 0
@@ -1313,7 +1342,7 @@ def _cli_in(cwd: Path, *args: str):
     payload = json.dumps(
         {'hook_event_name': 'SessionStart', 'source': 'compact', 'session_id': 's', 'cwd': str(cwd)}
     )
-    env = dict(os.environ)
+    env = _base_env()
     env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
     return subprocess.run(  # noqa: S603 - fixed argv, no shell
         [sys.executable, str(SCRIPT), *args],
@@ -1402,7 +1431,7 @@ def _write_anchor(base: Path, text: str, name: str = 'run.md') -> Path:
 
 
 def _step_cli(*args, encoding: str = 'utf-8'):
-    env = dict(os.environ)
+    env = _base_env()
     env['PYTHONIOENCODING'] = encoding
     return subprocess.run(  # noqa: S603 - fixed argv, no shell
         [sys.executable, str(SCRIPT), '--step', *args],
@@ -1823,7 +1852,7 @@ def _git_env() -> dict:
     # Same scrub as evals/harness/test_git_env_isolation.py: an ambient GIT_DIR
     # (set by git itself inside a hook) would make `git -C <tmp>` answer about the
     # outer repository.
-    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    env = {k: v for k, v in _base_env().items() if not k.startswith('GIT_')}
     env['GIT_CONFIG_GLOBAL'] = os.devnull
     env['GIT_CONFIG_SYSTEM'] = os.devnull
     return env
@@ -1989,7 +2018,7 @@ def _anchor_with_head(base: Path, n: int, name: str = 'run.md', tail: str = 'old
 
 
 def _post_write(payload, env_off: bool = False, raw: str | None = None):
-    env = dict(os.environ)
+    env = _base_env()
     env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
     if env_off:
         env['SESSION_WORKFLOW_ANCHOR_HOOKS'] = '0'
@@ -2184,7 +2213,8 @@ def test_post_write_exits_zero_when_the_measurement_itself_raises():
         ai.fit_head = boom
         sys.stdin, sys.stdout = io.StringIO(json.dumps(_write_payload(anchor))), io.StringIO()
         try:
-            code = ai.post_write_entry()
+            with _plugin_data_pinned():
+                code = ai.post_write_entry()
             printed = sys.stdout.getvalue()
         finally:
             ai.fit_head, sys.stdin, sys.stdout = saved
@@ -2218,7 +2248,7 @@ def test_post_write_templates_are_ascii_even_for_a_non_ascii_cursor():
 
 
 def _sweep(arm: str, *args: str):
-    env = dict(os.environ)
+    env = _base_env()
     env['PYTHONIOENCODING'] = 'utf-8'
     return subprocess.run(  # noqa: S603 - fixed argv, no shell
         [sys.executable, str(SCRIPT), arm, *args],

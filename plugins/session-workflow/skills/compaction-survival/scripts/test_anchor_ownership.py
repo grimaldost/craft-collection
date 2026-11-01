@@ -60,8 +60,15 @@ def _age(f: Path, age_s: int) -> None:
         os.utime(f, (old, old))
 
 
+# The hook writes a central log under CLAUDE_PLUGIN_DATA (the temporary folder when
+# unset); every environment this module builds pins it to a temporary folder the
+# module owns, so no test writes to the inherited location or to the fallback one.
+_PLUGIN_DATA = tempfile.TemporaryDirectory(prefix='anchor-ownership-test-data-')
+
+
 def _env(extra: dict | None = None) -> dict:
     env = dict(os.environ)
+    env['CLAUDE_PLUGIN_DATA'] = _PLUGIN_DATA.name
     env.pop('SESSION_WORKFLOW_ANCHOR_HOOKS', None)
     env.pop('PYTHONUTF8', None)
     env['PYTHONIOENCODING'] = 'cp1252'  # the Windows hook stdout this must survive
