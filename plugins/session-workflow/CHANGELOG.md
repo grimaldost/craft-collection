@@ -6,6 +6,48 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [Unreleased]
+
+Every anchor hook run now leaves one record naming its session and its outcome, in a log
+that does not depend on the session's working directory. Minor bump: new log fields and a
+new log file under the plugin's data folder, which an installed copy writes. What the hook
+injects into a session is unchanged, byte for byte.
+
+### Added
+
+- **compaction-survival: one record per SessionStart run.** Every exit of the anchor hook
+  past the opt-out writes exactly one record (`v: 2`) with its `outcome` (`full`,
+  `pointer-stale`, `pointer-owner`, `parked`, `no-anchors`, `startup-too-old`,
+  `bad-payload`, `error`, `emit-failed`), the payload's `session` and `source`, the
+  anchor's recorded `owner`, `owns_open_anchor`, `anchor_age_s`, `head_chars`, `dropped`,
+  `cwd`, `anchors_dir`, `plugin_version` and `ts` in UTC, beside today's `event`, `tier`
+  and `stale`. The four outcomes that inject keep `event: anchor-inject`, `emit-failed`
+  keeps `anchor-inject-failed`, and the outcomes that inject nothing write
+  `anchor-inject-skipped` with `tier` and `stale` null, so a reader of `anchor-inject`
+  counts no new record as an injection. Before this, a run that found no open anchor, a
+  startup past the six-hour window, a bad payload and an exception left no record at all,
+  and the record of an injection dropped the ownership fact.
+- **A central log.** Records go to `anchor-hooks/log.ndjson` under `CLAUDE_PLUGIN_DATA`
+  (the temporary folder when it is unset, as the plugin's other hooks do), and still to
+  `.claude/anchors/log.ndjson` when that directory already exists; the hook never creates
+  one. Runs in worktrees, in the home folder and in directories with no anchors are now
+  found in one place.
+- **compaction-survival: an `anchor-write` record.** The PostToolUse arm appends, on each
+  write to an open anchor, the session, the file, the HEAD size, whether it warned and
+  `ts` to the central log: the per-session write history `.owners.json` (last writer only)
+  cannot give.
+
+### Changed
+
+- **The anchors directory is made self-ignoring on every outcome.** A run that finds the
+  anchors directory with no open anchor now writes its record there too, so it creates the
+  missing `.gitignore` (content `*`) first, as the inject path already did. An existing
+  `.gitignore` is still never touched.
+
+With `SESSION_WORKFLOW_ANCHOR_HOOKS=0` nothing is written. Every record is written after
+the output, and a failed central or per-directory write, or an unreadable `plugin.json`,
+changes neither the output nor the exit code.
+
 ## [0.30.0] - 2026-10-27
 
 Corrections to the 0.29.0 wave from the 2026-10-27 review, released as one cut over the pull

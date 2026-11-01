@@ -94,5 +94,6 @@ echo '{"hook_event_name":"SessionStart","source":"compact","cwd":"<abs-project-p
 Non-empty `hookSpecificOutput` JSON on stdout is the pass; 0 bytes means the
 injection would silently not happen. Use an anchor containing non-ASCII text
 (`→`, accented prose) as the fixture — that is the historical failure mode,
-and `log.ndjson` in the anchors dir records an `anchor-inject-failed` event
-when emission fails.
+and `log.ndjson` in the anchors dir (and `anchor-hooks/log.ndjson` under
+`CLAUDE_PLUGIN_DATA`, the temporary folder when unset) records an
+`anchor-inject-failed` event when emission fails.

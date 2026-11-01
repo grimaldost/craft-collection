@@ -1967,14 +1967,23 @@ def test_hook_still_injects_and_logs_when_the_gitignore_write_fails():
         assert (anchor.parent / 'log.ndjson').read_text(encoding='utf-8').strip()
 
 
-def test_hook_with_no_open_anchor_creates_no_gitignore():
+def test_hook_with_no_open_anchor_ignores_the_log_it_writes_and_creates_no_directory():
+    # A run that finds no open anchor still leaves its record in an existing anchors
+    # directory, so the directory is made self-ignoring before that append, as the
+    # inject path does. A directory that does not exist is never created.
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
         anchor = make_anchor(tmp, name='done.closed.md')
         proc = run_hook(tmp)
         assert proc.returncode == 0
         assert proc.stdout == ''
-        assert not (anchor.parent / '.gitignore').exists()
+        assert (anchor.parent / '.gitignore').read_text(encoding='utf-8') == '*'
+        assert (anchor.parent / 'log.ndjson').read_text(encoding='utf-8').strip()
+    with tempfile.TemporaryDirectory() as d:
+        proc = run_hook(Path(d))
+        assert proc.returncode == 0
+        assert proc.stdout == ''
+        assert not (Path(d) / '.claude').exists()
 
 
 def test_hook_ensures_the_ignore_file_even_when_a_stale_startup_injects_nothing():
@@ -2510,7 +2519,7 @@ if __name__ == '__main__':
     test_hook_with_open_anchors_makes_the_anchors_dir_self_ignoring()
     test_hook_leaves_an_existing_gitignore_byte_identical()
     test_hook_still_injects_and_logs_when_the_gitignore_write_fails()
-    test_hook_with_no_open_anchor_creates_no_gitignore()
+    test_hook_with_no_open_anchor_ignores_the_log_it_writes_and_creates_no_directory()
     test_hook_ensures_the_ignore_file_even_when_a_stale_startup_injects_nothing()
     test_post_write_reports_how_far_over_budget_an_anchor_head_is()
     test_post_write_warns_inside_the_ten_percent_band_and_reports_headroom()

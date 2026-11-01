@@ -128,10 +128,20 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   the cursor's newest line, read-it-if-resuming, the close command), so a crash restart,
   which has a new session id, reads the file the pointer names; a stale or parked anchor
   keeps its tier plus one line naming the session. `--list-dormant` ends such an
-  anchor's line with `owner: <session id>`. When it
-  finds open anchors it creates `.claude/anchors/.gitignore` (content `*`) if that
-  file is missing, so the anchors and the hook's log never show as untracked; an
-  existing `.gitignore` is never touched.
+  anchor's line with `owner: <session id>`. When the
+  anchors directory exists it creates `.claude/anchors/.gitignore` (content `*`) if
+  that file is missing, so the anchors and the hook's log never show as untracked; an
+  existing `.gitignore` is never touched, and a missing anchors directory is never
+  created. Every run past the opt-out leaves exactly one record (`v: 2`) naming its
+  `outcome` (`full`, `pointer-stale`, `pointer-owner`, `parked`, `no-anchors`,
+  `startup-too-old`, `bad-payload`, `error`, `emit-failed`), the payload's session and
+  source, the anchor's recorded owner and whether the session owns an open anchor, in
+  `anchor-hooks/log.ndjson` under `CLAUDE_PLUGIN_DATA` (the temporary folder when
+  unset) and, when the anchors directory exists, in its `log.ndjson`. The outcomes
+  that inject log `event: anchor-inject`, `emit-failed` logs `anchor-inject-failed`,
+  and the rest log `anchor-inject-skipped` with `tier` and `stale` null. The records
+  are written after the output; a failed write changes neither the output nor the exit
+  code.
   Lifecycle gates: an anchor untouched for
   >24h degrades to a one-paragraph pointer (path + title + age +
   confirm-to-expand + close command) instead of the full body; `startup`
@@ -168,7 +178,9 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   write-time half of the SessionStart behaviour above. Every write to an open anchor
   also records the writing session as its owner in `.claude/anchors/.owners.json`,
   replaced atomically; `--step` leaves the record alone, and an entry whose anchor was
-  renamed to `*.closed.md` is dropped. It costs one Python start per
+  renamed to `*.closed.md` is dropped, and each write appends an `anchor-write` record
+  (session, file, HEAD size, whether it warned) to the same central log. It costs one
+  Python start per
   Write, Edit or MultiEdit, with the path filter first. **On by default**; opt out with
   `SESSION_WORKFLOW_ANCHOR_HOOKS=0` (the same switch as the SessionStart hook).
 - **UserPromptSubmit** — feedback-debt nudge: once per session, when the
