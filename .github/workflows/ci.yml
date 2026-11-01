@@ -51,15 +51,15 @@ jobs:
 
   # >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
   railform:
-    uses: grimaldost/railform/.github/workflows/python-ci.yml@300d175b50b62a9844b480ada55435ede5ca38ab
+    uses: grimaldost/railform/.github/workflows/python-ci.yml@3e6f27f8970700c5166b908fae65572c431b2571
     permissions:
       contents: read
     with:
-      railform-sha: 300d175b50b62a9844b480ada55435ede5ca38ab
+      railform-sha: 3e6f27f8970700c5166b908fae65572c431b2571
   gate:
     if: always()
     needs: [railform, plugins, release-discipline]
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && fromJSON(vars.LINUX_RUNS_ON || '"ubuntu-latest"') || 'ubuntu-latest' }}
     permissions: {}
     steps:
       - name: Fail when a needed job failed or was cancelled
