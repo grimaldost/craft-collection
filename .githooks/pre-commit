@@ -2,4 +2,15 @@
 # Written by railform adopt: runs the pre-commit stage of .pre-commit-config.yaml.
 # `railform hooks-check` fails if this file is edited; arm a clone with `railform arm`.
 HERE="$(cd "$(dirname "$0")" && pwd)"
+EGRESS="$RAILFORM_EGRESS_HOOK"
+if [ -z "$EGRESS" ]; then
+    EGRESS="$(git config --get railform.egressHook)"
+fi
+if [ -n "$EGRESS" ]; then
+    if [ -f "$EGRESS" ]; then
+        uv run --no-project python "$EGRESS" pre-commit </dev/null
+    else
+        printf '%s\n' "railform: egress hook $EGRESS is not a file; the commit goes on" >&2
+    fi
+fi
 exec uvx --from pre-commit==4.6.2 python -m pre_commit hook-impl --config=.pre-commit-config.yaml --hook-type=pre-commit --hook-dir "$HERE" -- "$@"

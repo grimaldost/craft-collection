@@ -11,9 +11,9 @@ permissions:
   contents: read
 jobs:
   release-check:
-    uses: grimaldost/railform/.github/workflows/tag-watch.yml@300d175b50b62a9844b480ada55435ede5ca38ab
+    uses: grimaldost/railform/.github/workflows/tag-watch.yml@3e6f27f8970700c5166b908fae65572c431b2571
     permissions:
       contents: read
       pull-requests: read
     with:
-      railform-sha: 300d175b50b62a9844b480ada55435ede5ca38ab
+      railform-sha: 3e6f27f8970700c5166b908fae65572c431b2571

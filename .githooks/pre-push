@@ -2,4 +2,26 @@
 # Written by railform adopt: runs the pre-push stage of .pre-commit-config.yaml.
 # `railform hooks-check` fails if this file is edited; arm a clone with `railform arm`.
 HERE="$(cd "$(dirname "$0")" && pwd)"
-exec uvx --from pre-commit==4.6.2 python -m pre_commit hook-impl --config=.pre-commit-config.yaml --hook-type=pre-push --hook-dir "$HERE" -- "$@"
+EGRESS="$RAILFORM_EGRESS_HOOK"
+if [ -z "$EGRESS" ]; then
+    EGRESS="$(git config --get railform.egressHook)"
+fi
+if [ -z "$EGRESS" ]; then
+    exec uvx --from pre-commit==4.6.2 python -m pre_commit hook-impl --config=.pre-commit-config.yaml --hook-type=pre-push --hook-dir "$HERE" -- "$@"
+fi
+if [ ! -f "$EGRESS" ]; then
+    printf '%s\n' "railform: egress hook $EGRESS is not a file" >&2
+    exit 2
+fi
+INPUT="$(mktemp)" || exit 1
+trap 'rm -f "$INPUT"' EXIT
+trap 'exit 1' HUP INT TERM
+cat >"$INPUT"
+uv run --no-project python "$EGRESS" pre-push "$1" "$2" <"$INPUT"
+STATUS=$?
+if [ "$STATUS" -ne 0 ]; then
+    printf '%s\n' "railform: egress hook $EGRESS refused the push (exit $STATUS)" >&2
+    exit "$STATUS"
+fi
+uvx --from pre-commit==4.6.2 python -m pre_commit hook-impl --config=.pre-commit-config.yaml --hook-type=pre-push --hook-dir "$HERE" -- "$@" <"$INPUT"
+exit $?
