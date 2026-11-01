@@ -1027,9 +1027,9 @@ def outcome_record(outcome: str, run: dict) -> dict:
         'stale': run.get('stale') if injecting else None,
         'tier': INJECTED_TIER.get(attempted) if injecting else None,
         'open_anchors': _guarded(lambda: len(run['open_anchors'])),
-        'anchor_dir': _guarded(
-            lambda: 'cwd' if anchors_dir == cwd / '.claude' / 'anchors' else 'start'
-        ),
+        'anchor_dir': None
+        if anchors_dir is None
+        else _guarded(lambda: 'cwd' if anchors_dir == cwd / '.claude' / 'anchors' else 'start'),
         'ts': _guarded(_utc_now),
         'v': RECORD_VERSION,
         'outcome': outcome,
@@ -1048,7 +1048,8 @@ def log_outcome(outcome: str, run: dict, error: str = '') -> None:
     """Write the run's one record: to the central log always, and to the anchors
     directory's own log only when that directory already exists (the hook never
     creates one), after making it self-ignoring. Each write carries its own guard,
-    so a failed central write never costs the per-directory one."""
+    so a failed central write never costs the per-directory one, and a raise in the
+    per-directory step never reaches `main`'s error path (a second record)."""
     try:
         record = outcome_record(outcome, run)
         if error:
@@ -1059,8 +1060,11 @@ def log_outcome(outcome: str, run: dict, error: str = '') -> None:
         return
     append_central(record)
     if per_dir:
-        ensure_gitignore(anchors_dir)
-        append_telemetry(anchors_dir, record)
+        try:
+            ensure_gitignore(anchors_dir)
+            append_telemetry(anchors_dir, record)
+        except Exception:
+            return  # the per-directory line is lost, never a second record
 
 
 # Ownership: which session last wrote each open anchor. With recency as the only
@@ -1261,6 +1265,8 @@ def post_write_main() -> int:
     try:
         text = anchor.read_text(encoding='utf-8', errors='ignore')
     except OSError:
+        # Still a write to an open anchor: its record says so, with no HEAD size.
+        append_central(_write_record(payload, anchor, None, False))
         return 0
     ensure_gitignore(anchor.parent)
     session_id = payload.get('session_id')
@@ -1286,20 +1292,23 @@ def post_write_main() -> int:
         return 0
     finally:
         # After the print, so `warned` says whether the warning reached stdout.
-        # The write history per session, which `.owners.json` (last writer only) lacks.
-        append_central(
-            {
-                'event': 'anchor-write',
-                'v': RECORD_VERSION,
-                'session': payload.get('session_id', ''),
-                'file': anchor.name,
-                'anchors_dir': str(anchor.parent),
-                'head_chars': len(head),
-                'warned': warned,
-                'plugin_version': plugin_version(),
-                'ts': _guarded(_utc_now),
-            }
-        )
+        append_central(_write_record(payload, anchor, len(head), warned))
+
+
+def _write_record(payload: dict, anchor: Path, head_chars: int | None, warned: bool) -> dict:
+    """The `anchor-write` record: the write history per session, which `.owners.json`
+    (last writer only) lacks. `head_chars` is None when the anchor cannot be read."""
+    return {
+        'event': 'anchor-write',
+        'v': RECORD_VERSION,
+        'session': payload.get('session_id', ''),
+        'file': anchor.name,
+        'anchors_dir': str(anchor.parent),
+        'head_chars': head_chars,
+        'warned': warned,
+        'plugin_version': plugin_version(),
+        'ts': _guarded(_utc_now),
+    }
 
 
 def post_write_entry() -> int:
@@ -1388,7 +1397,9 @@ def _session_start(run: dict) -> int:
 
     try:
         payload = json.loads(sys.stdin.read() or '{}')
-    except json.JSONDecodeError:
+    except (UnicodeDecodeError, ValueError):
+        # Undecodable bytes, malformed JSON (JSONDecodeError is a ValueError) and a
+        # number json cannot convert are all a payload the hook cannot read.
         log_outcome('bad-payload', run)
         return 0
     if not isinstance(payload, dict):

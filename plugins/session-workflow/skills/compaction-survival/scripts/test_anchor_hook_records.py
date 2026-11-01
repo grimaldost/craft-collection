@@ -370,6 +370,102 @@ def test_emit_failed_outcome():
         assert rec['error'] == 'UnicodeEncodeError'
 
 
+def test_a_raise_in_the_per_directory_step_leaves_one_record():
+    # The per-directory step runs after the print. A raise there must stay inside
+    # log_outcome: reaching main's error path would write a second record.
+    import anchor_inject
+
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        cwd = base / 'work'
+        _anchor(cwd)
+        stdin = _payload(cwd)
+        golden = _run(SCRIPT, stdin, base / 'data-golden')
+        data = base / 'data'
+        out = io.StringIO()
+
+        def boom(_anchors_dir, _record):
+            raise RuntimeError('per-directory step')
+
+        # append_telemetry runs only inside log_outcome, after the print.
+        saved = anchor_inject.append_telemetry
+        anchor_inject.append_telemetry = boom
+        try:
+            with _in_process(data, stdin, out):
+                assert anchor_inject.main() == 0
+        finally:
+            anchor_inject.append_telemetry = saved
+        assert out.getvalue() == golden.stdout and golden.stdout, (golden.stdout, out.getvalue())
+        _one(_central(data), 'full', 'sess-rec', 'compact')
+
+
+def test_the_anchor_dir_field_is_null_with_no_anchors_directory():
+    # A raise before the anchors directory is resolved: the record cannot say
+    # which directory was used, so it says nothing rather than "start".
+    import anchor_inject
+
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        cwd = base / 'work'
+        _anchor(cwd)
+        data = base / 'data'
+
+        def boom(*_args):
+            raise RuntimeError('resolve')
+
+        saved = anchor_inject.resolve_anchors
+        anchor_inject.resolve_anchors = boom
+        try:
+            with _in_process(data, _payload(cwd), io.StringIO()):
+                assert anchor_inject.main() == 0
+        finally:
+            anchor_inject.resolve_anchors = saved
+        rec = _one(_central(data), 'error', 'sess-rec', 'compact')
+        assert rec['anchors_dir'] is None and rec['anchor_dir'] is None, rec
+
+
+class _UndecodableStdin:
+    """A stdin whose bytes are not text in its encoding."""
+
+    def read(self, *_args):
+        raise UnicodeDecodeError('utf-8', b'\xff', 0, 1, 'invalid start byte')
+
+
+def test_an_undecodable_or_unparseable_stdin_is_a_bad_payload():
+    import anchor_inject
+
+    # A digit string past the interpreter's int conversion limit is a ValueError
+    # from json.loads that is not a JSONDecodeError.
+    huge_int = '{"n": ' + '1' * 5000 + '}'
+    for label, stdin in (('undecodable', None), ('unparseable', huge_int)):
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+            cwd = base / 'work'
+            _anchor(cwd)
+            data = base / 'data'
+            out = io.StringIO()
+            with _in_process(data, stdin or '', out):
+                if stdin is None:
+                    sys.stdin = _UndecodableStdin()
+                assert anchor_inject.main() == 0, label
+            assert out.getvalue() == '', (label, out.getvalue())
+            rec = _one(_central(data), 'bad-payload', '', 'unknown')
+            assert 'error' not in rec, (label, rec)
+    # The same as a subprocess: bytes that are not UTF-8 on a UTF-8 stdin.
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        data = base / 'data'
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, str(SCRIPT)],
+            input=b'{"source": "compact", "x": "\xff"}',
+            capture_output=True,
+            env=_env(data),
+            timeout=30,
+        )
+        assert proc.returncode == 0 and proc.stdout == b'', (proc.stdout, proc.stderr)
+        _one(_central(data), 'bad-payload', '', 'unknown')
+
+
 # --- the write arm -----------------------------------------------------------------
 
 
@@ -405,6 +501,26 @@ def test_anchor_write_record():
             assert r['ts'].endswith('+00:00'), r
         assert records[0]['head_chars'] == len(small.read_text(encoding='utf-8'))
         assert records[1]['head_chars'] >= 7_500
+
+
+def test_an_unreadable_anchor_write_still_leaves_a_record():
+    # A write to an open anchor that cannot be read back (a folder at the path
+    # here) is still a write: its record says so, with no HEAD size.
+    with tempfile.TemporaryDirectory() as d:
+        base = Path(d)
+        cwd = base / 'work'
+        _anchor(cwd)
+        blocked = cwd / '.claude' / 'anchors' / 'gone.md'
+        blocked.mkdir()
+        _, _, new, records = _case(
+            base, _write_payload(blocked, 'sess-writer'), cwd, args=('--post-write',)
+        )
+        assert new.stdout == ''
+        assert len(records) == 1, records
+        rec = records[0]
+        assert rec['event'] == 'anchor-write' and rec['file'] == 'gone.md', rec
+        assert rec['session'] == 'sess-writer' and rec['head_chars'] is None, rec
+        assert rec['warned'] is False and rec['v'] == 2, rec
 
 
 # --- the opt-out -------------------------------------------------------------------
@@ -512,7 +628,11 @@ if __name__ == '__main__':
     test_bad_payload_outcome()
     test_error_outcome()
     test_emit_failed_outcome()
+    test_a_raise_in_the_per_directory_step_leaves_one_record()
+    test_the_anchor_dir_field_is_null_with_no_anchors_directory()
+    test_an_undecodable_or_unparseable_stdin_is_a_bad_payload()
     test_anchor_write_record()
+    test_an_unreadable_anchor_write_still_leaves_a_record()
     test_opt_out_writes_nothing()
     test_unreadable_plugin_json_keeps_the_golden_stdout_and_a_null_version()
     test_unwritable_plugin_data_keeps_the_golden_stdout_and_the_per_directory_record()

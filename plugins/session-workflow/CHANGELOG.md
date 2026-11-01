@@ -47,6 +47,9 @@ injects into a session is unchanged, byte for byte.
 With `SESSION_WORKFLOW_ANCHOR_HOOKS=0` nothing is written. Every record is written after
 the output, and a failed central or per-directory write, or an unreadable `plugin.json`,
 changes neither the output nor the exit code.
+A stdin that cannot be decoded or parsed is recorded as `bad-payload`, a write to an open
+anchor that cannot be read back still leaves its `anchor-write` record (`head_chars` null),
+and a failure in the per-directory write never adds a second record.
 
 ## [0.30.0] - 2026-10-27
 
