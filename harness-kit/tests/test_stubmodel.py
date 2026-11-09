@@ -210,6 +210,22 @@ def test_log_has_one_line_per_request_with_the_named_keys():
         assert lines[2]['kind'] == 'GET' and lines[2]['path'] == '/v1/models', lines[2]
 
 
+def test_only_a_model_post_carries_the_model_keys():
+    model_keys = {'wire', 'decision', 'step_index', 'body'}
+    with stub([TOOL_STEP]) as (port, log):
+        body = {'model': 'm', 'tools': TOOLS, 'messages': []}
+        call(port, 'POST', '/v1/messages/count_tokens', body, AUTH)
+        call(port, 'POST', '/nowhere', body, AUTH)
+        call(port, 'GET', '/v1/models', None, AUTH)
+        call(port, 'POST', '/v1/messages', body, AUTH)
+        lines = rows(log)
+        assert len(lines) == 4, lines
+        for other in lines[:3]:
+            assert not (model_keys & set(other)), other
+        assert model_keys <= set(lines[3]), lines[3]
+        assert [r for r in lines if 'wire' in r] == [lines[3]]
+
+
 def test_models_listing_and_token_count():
     with stub([]) as (port, _log):
         for path in ('/v1/models', '/models'):
@@ -379,6 +395,7 @@ if __name__ == '__main__':
     test_chat_streaming_tool_call_then_text()
     test_requests_without_tools_get_aux_text_and_consume_nothing()
     test_log_has_one_line_per_request_with_the_named_keys()
+    test_only_a_model_post_carries_the_model_keys()
     test_models_listing_and_token_count()
     test_connect_and_absolute_urls_get_403_and_are_logged()
     test_any_other_method_is_logged()

@@ -282,11 +282,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             'stream': bool(body.get('stream')),
         }
         if path.endswith('/messages/count_tokens'):
-            self.server.record({**rec, 'wire': 'anthropic-count'})
+            self.server.record(rec)
             return self.reply(200, _dump({'input_tokens': 1}))
         wire = WIRES.get(path)
         if wire is None:
-            self.server.record({**rec, 'wire': None, 'body': body})
+            self.server.record(rec)
             return self.reply(404, _dump(NOT_FOUND))
         if has_tools(body):
             index, step = self.server.next_step()
