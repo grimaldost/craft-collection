@@ -212,6 +212,21 @@ def test_log_has_one_line_per_request_with_the_named_keys():
         assert lines[2]['kind'] == 'GET' and lines[2]['path'] == '/v1/models', lines[2]
 
 
+def test_log_lines_carry_exactly_the_documented_keys():
+    base = {'kind', 'n', 't', 'path', 'auth'}
+    model = base | {'wire', 'decision', 'step_index', 'body'}
+    with stub([TOOL_STEP]) as (port, log):
+        body = {'model': 'm', 'tools': TOOLS, 'messages': []}
+        call(port, 'POST', '/v1/messages', body, AUTH)
+        call(port, 'POST', '/v1/messages', {'model': 'm'}, AUTH)
+        call(port, 'POST', '/v1/chat/completions', {**body, 'stream': True}, AUTH)
+        call(port, 'POST', '/v1/messages/count_tokens', body, AUTH)
+        call(port, 'GET', '/v1/models', None, AUTH)
+        call(port, 'CONNECT', 'example.com:443')
+        keys = [set(r) for r in rows(log)]
+        assert keys == [model, model, model, base, base, base], keys
+
+
 def test_only_a_model_post_carries_the_model_keys():
     model_keys = {'wire', 'decision', 'step_index', 'body'}
     with stub([TOOL_STEP]) as (port, log):
@@ -397,6 +412,7 @@ if __name__ == '__main__':
     test_chat_streaming_tool_call_then_text()
     test_requests_without_tools_get_aux_text_and_consume_nothing()
     test_log_has_one_line_per_request_with_the_named_keys()
+    test_log_lines_carry_exactly_the_documented_keys()
     test_only_a_model_post_carries_the_model_keys()
     test_models_listing_and_token_count()
     test_connect_and_absolute_urls_get_403_and_are_logged()

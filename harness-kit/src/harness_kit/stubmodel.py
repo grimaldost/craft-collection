@@ -279,7 +279,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             'kind': 'POST',
             'path': self.path,
             'auth': self.auth_class(),
-            'stream': bool(body.get('stream')),
         }
         if path.endswith('/messages/count_tokens'):
             self.server.record(rec)
@@ -290,10 +289,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.reply(404, _dump(NOT_FOUND))
         if has_tools(body):
             index, step = self.server.next_step()
-            rec.update({'decision': 'scripted', 'step_index': index, 'step': step})
+            rec.update({'decision': 'scripted', 'step_index': index})
         else:
             step = AUX_STEP
-            rec.update({'decision': 'aux-no-tools', 'step_index': None, 'step': step})
+            rec.update({'decision': 'aux-no-tools', 'step_index': None})
         rec.update({'wire': wire, 'body': body})
         n = self.server.record(rec)
         model = body.get('model', 'stub-model')
