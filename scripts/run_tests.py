@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Discover and run every `test_*.py` under plugins/, evals/, and scripts/.
+"""Discover and run every `test_*.py` under plugins/, evals/, scripts/, and harness-kit/.
 
 Each test module is self-contained (no pytest required): it prints an `ok:`
 line on success (or an explicit `skip: <reason>` when a dependency is
@@ -27,11 +27,17 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SEARCH_DIRS = ('plugins', 'evals', 'scripts')
+SEARCH_DIRS = ('plugins', 'evals', 'scripts', 'harness-kit')
 
 
 def discover(root: Path = ROOT) -> list[Path]:
-    return sorted(t for d in SEARCH_DIRS for t in (root / d).rglob('test_*.py'))
+    # A virtual environment holds other packages' own tests; they are not ours to run.
+    return sorted(
+        t
+        for d in SEARCH_DIRS
+        for t in (root / d).rglob('test_*.py')
+        if '.venv' not in t.relative_to(root).parts
+    )
 
 
 def working_tree_state(root: Path) -> str | None:
