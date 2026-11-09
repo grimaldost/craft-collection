@@ -90,16 +90,19 @@ objective as `absent` so that the kit is not read as protection.
   once per harness. The hooks stay, as feedback that names the verdict to the
   model in the turn.
 - **Rely on each harness's native permission tables alone.** Rejected as the
-  core: the tables differ in shape and strength, and a table that fails to load
-  fails open on the harnesses measured. They remain usable as defence in depth,
-  each switched on only after a deny-and-allow test shows it works.
+  core: each harness's table has its own shape, so the policy would be written
+  once per harness, and none of them has been through a deny-and-allow test, so
+  whether one holds, and what happens when one fails to load, is unmeasured. They
+  remain usable as defence in depth, each switched on only after such a test
+  passes.
 - **A resource boundary first (file ownership or a separate account).** Not
-  chosen for this slice: the measurements it needs have not been run, and
-  claiming prevention before they are would be worse than stating the limit. It
-  is the next layer, not a replacement for this one.
-- **A broker that holds credentials and mediates writes.** Deferred for the same
-  reason, and because it solves a different problem (who may write) than the one
-  measured here (a guard that disappears without notice).
+  chosen for this slice: its measurements are incomplete and where the protection
+  should live is still an open choice, and claiming prevention before both are
+  settled would be worse than stating the limit. It is the next layer, not a
+  replacement for this one.
+- **A broker that holds credentials and mediates writes.** Deferred: no broker
+  has been measured, and it solves a different problem (who may write) than the
+  one measured here (a guard that disappears without notice).
 - **Translate the verdict into one harness's shape and have the others imitate
   it.** Rejected: the neutral event and verdict keep the core free of any
   harness's keys (invariant 4), and each shell does its own translation.
@@ -115,9 +118,10 @@ objective as `absent` so that the kit is not read as protection.
 - `kit doctor` reports, per objective and per harness, what was tested. A loss
   that is known and cannot be closed is listed in the harness's contract rather
   than left implicit.
-- The package adds a second test root and a second lint root. `scripts/run_tests.py`
-  and `scripts/ascii_runtime_lint.py` read `harness-kit/`, and the test runner
-  skips any folder named `.venv`.
+- The package adds one more test root and one more lint root:
+  `scripts/run_tests.py` and `scripts/ascii_runtime_lint.py` read `harness-kit/`,
+  `scripts/subprocess_encoding_lint.py` follows through the ASCII lint's file
+  list, and the test runner skips any folder named `.venv`.
 - The kit adds a failure mode of its own: a judge that is down denies governed
   acts. That is the intended trade, and the doctor and the launcher are the
   places that make it visible.
