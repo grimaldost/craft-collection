@@ -193,9 +193,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header('Content-Type', ctype)
         self.send_header('Content-Length', str(len(raw)))
-        self.send_header('Connection', 'close')
+        # The connection stays open for the next request (HTTP/1.1 keep-alive, pipelining) unless the
+        # client asked to close it or spoke HTTP/1.0, so every request a connection carries is answered and logged.
+        if self.close_connection:
+            self.send_header('Connection', 'close')
         self.end_headers()
-        self.close_connection = True
         if self.command != 'HEAD':
             self.wfile.write(raw)
 
@@ -224,6 +226,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.reply(403, 'refused by stub\n', 'text/plain')
 
     def do_CONNECT(self) -> None:
+        self.read_body()
         self.refuse('CONNECT-refused')
 
     def handle_other(self) -> None:
@@ -240,21 +243,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.handle_other
         raise AttributeError(name)
 
+    def parse_request(self) -> bool:
+        # On a kept-alive connection the previous request's path and headers would otherwise survive into the
+        # log line of a request the library rejects.
+        self.path = ''
+        self.headers = None  # type: ignore[assignment]
+        return super().parse_request()
+
     def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
         """A request the server library rejects (a malformed line, an oversized header) is logged too."""
-        auth = self.auth_class() if hasattr(self, 'headers') else ['none']
+        auth = self.auth_class() if getattr(self, 'headers', None) is not None else ['none']
         self.server.record(
             {'kind': f'ERROR-{code}', 'path': getattr(self, 'path', ''), 'auth': auth}
         )
         super().send_error(code, message, explain)
 
     def do_HEAD(self) -> None:
+        self.read_body()
         if self.path.startswith('http'):
             return self.refuse('PROXY-HEAD-refused')
         self.server.record({'kind': 'HEAD', 'path': self.path, 'auth': self.auth_class()})
         self.reply(200, b'')
 
     def do_GET(self) -> None:
+        self.read_body()
         if self.path.startswith('http'):
             return self.refuse('PROXY-GET-refused')
         self.server.record({'kind': 'GET', 'path': self.path, 'auth': self.auth_class()})

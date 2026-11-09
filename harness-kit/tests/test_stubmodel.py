@@ -88,6 +88,29 @@ def rows(log):
     ]
 
 
+def read_response(reader):
+    """Read one HTTP/1.1 response with a Content-Length from a binary reader; None at end of stream."""
+    status_line = reader.readline()
+    if not status_line:
+        return None
+    headers = {}
+    while True:
+        line = reader.readline().decode('ascii').strip()
+        if not line:
+            break
+        name, _, value = line.partition(':')
+        headers[name.strip().lower()] = value.strip()
+    body = reader.read(int(headers.get('content-length', '0')))
+    return int(status_line.split()[1]), headers, body
+
+
+def raw_request(method, target, body=b'', extra=''):
+    head = f'{method} {target} HTTP/1.1\r\nHost: 127.0.0.1\r\nx-api-key: {FAKE}\r\n{extra}'
+    if body:
+        head += f'Content-Type: application/json\r\nContent-Length: {len(body)}\r\n'
+    return head.encode('ascii') + b'\r\n' + body
+
+
 def sse(text):
     events = []
     for block in text.split('\n\n'):
@@ -404,6 +427,89 @@ def test_output_is_ascii_for_non_ascii_script_text():
         assert log.read_bytes().isascii()
 
 
+def test_two_pipelined_requests_on_one_connection_get_two_answers_and_two_lines():
+    with stub([]) as (port, log):
+        with socket.create_connection(('127.0.0.1', port), timeout=30) as conn:
+            conn.sendall(raw_request('GET', '/v1/models') + raw_request('GET', '/models'))
+            reader = conn.makefile('rb')
+            first = read_response(reader)
+            second = read_response(reader)
+        assert first is not None and first[0] == 200, first
+        assert second is not None and second[0] == 200, second
+        assert [r['path'] for r in rows(log)] == ['/v1/models', '/models'], rows(log)
+
+
+def test_a_kept_alive_connection_serves_model_requests_one_after_another():
+    body = json.dumps({'model': 'm', 'tools': TOOLS, 'messages': []}).encode('ascii')
+    with stub([TOOL_STEP, TEXT_STEP]) as (port, log):
+        with socket.create_connection(('127.0.0.1', port), timeout=30) as conn:
+            reader = conn.makefile('rb')
+            conn.sendall(raw_request('POST', '/v1/messages', body))
+            first = read_response(reader)
+            conn.sendall(raw_request('POST', '/v1/messages', body))
+            second = read_response(reader)
+        assert first is not None and json.loads(first[2])['content'][0]['type'] == 'tool_use'
+        assert second is not None and json.loads(second[2])['content'][0]['text'] == 'all done'
+        assert [r['step_index'] for r in rows(log)] == [0, 1], rows(log)
+
+
+def test_a_request_after_a_refused_connect_on_the_same_connection_is_logged():
+    with stub([]) as (port, log):
+        with socket.create_connection(('127.0.0.1', port), timeout=30) as conn:
+            reader = conn.makefile('rb')
+            conn.sendall(raw_request('CONNECT', 'example.com:443'))
+            first = read_response(reader)
+            conn.sendall(raw_request('GET', 'http://example.com/v1/models'))
+            second = read_response(reader)
+        assert first is not None and first[0] == 403, first
+        assert second is not None and second[0] == 403, second
+        kinds = [r['kind'] for r in rows(log)]
+        assert kinds == ['CONNECT-refused', 'PROXY-GET-refused'], rows(log)
+
+
+def test_a_client_asking_to_close_gets_the_connection_closed():
+    with stub([]) as (port, log):
+        with socket.create_connection(('127.0.0.1', port), timeout=30) as conn:
+            reader = conn.makefile('rb')
+            conn.sendall(raw_request('GET', '/v1/models', extra='Connection: close\r\n'))
+            first = read_response(reader)
+            assert first is not None and first[0] == 200, first
+            assert first[1].get('connection') == 'close', first[1]
+            assert reader.read() == b''
+        assert len(rows(log)) == 1, rows(log)
+
+
+def test_a_get_with_a_body_does_not_break_the_next_request_on_its_connection():
+    with stub([]) as (port, log):
+        with socket.create_connection(('127.0.0.1', port), timeout=30) as conn:
+            reader = conn.makefile('rb')
+            conn.sendall(raw_request('GET', '/v1/models', b'{"x": 1}'))
+            first = read_response(reader)
+            conn.sendall(raw_request('GET', '/models'))
+            second = read_response(reader)
+        assert first is not None and first[0] == 200, first
+        assert second is not None and second[0] == 200, second
+        assert [r['path'] for r in rows(log)] == ['/v1/models', '/models'], rows(log)
+
+
+def test_a_malformed_request_after_a_good_one_does_not_reuse_its_path_or_key():
+    with stub([]) as (port, log):
+        with socket.create_connection(('127.0.0.1', port), timeout=30) as conn:
+            reader = conn.makefile('rb')
+            conn.sendall(raw_request('GET', '/v1/models'))
+            first = read_response(reader)
+            conn.sendall(b'this is not http\r\n\r\n')
+            second = (
+                reader.read()
+            )  # the library answers a bad request line without headers, then closes
+        assert first is not None and first[0] == 200, first
+        assert b'400' in second, second
+        lines = rows(log)
+        assert len(lines) == 2, lines
+        assert lines[1]['kind'] == 'ERROR-400', lines[1]
+        assert lines[1]['path'] == '' and lines[1]['auth'] == ['none'], lines[1]
+
+
 if __name__ == '__main__':
     test_first_stdout_line_is_the_port()
     test_anthropic_plain_tool_call_then_text()
@@ -426,4 +532,10 @@ if __name__ == '__main__':
     test_a_fixed_port_is_honoured()
     test_an_invalid_script_exits_non_zero_before_serving()
     test_output_is_ascii_for_non_ascii_script_text()
+    test_two_pipelined_requests_on_one_connection_get_two_answers_and_two_lines()
+    test_a_kept_alive_connection_serves_model_requests_one_after_another()
+    test_a_request_after_a_refused_connect_on_the_same_connection_is_logged()
+    test_a_client_asking_to_close_gets_the_connection_closed()
+    test_a_get_with_a_body_does_not_break_the_next_request_on_its_connection()
+    test_a_malformed_request_after_a_good_one_does_not_reuse_its_path_or_key()
     print('ok: stub model')
