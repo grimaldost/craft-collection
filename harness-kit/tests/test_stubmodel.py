@@ -247,10 +247,10 @@ def test_log_lines_carry_exactly_the_documented_keys():
         call(port, 'GET', '/v1/models', None, AUTH)
         call(port, 'CONNECT', 'example.com:443')
         keys = [set(r) for r in rows(log)]
-        assert keys == [model, model, model, base, base, base], keys
+        assert keys == [model, model, model, model, base, base], keys
 
 
-def test_only_a_model_post_carries_the_model_keys():
+def test_every_post_the_stub_answers_carries_the_model_keys_and_only_a_model_path_consumes():
     model_keys = {'wire', 'decision', 'step_index', 'body'}
     with stub([TOOL_STEP]) as (port, log):
         body = {'model': 'm', 'tools': TOOLS, 'messages': []}
@@ -260,10 +260,13 @@ def test_only_a_model_post_carries_the_model_keys():
         call(port, 'POST', '/v1/messages', body, AUTH)
         lines = rows(log)
         assert len(lines) == 4, lines
-        for other in lines[:3]:
-            assert not (model_keys & set(other)), other
-        assert model_keys <= set(lines[3]), lines[3]
-        assert [r for r in lines if 'wire' in r] == [lines[3]]
+        count, nowhere, listing, model = lines
+        assert model_keys <= set(count) and model_keys <= set(nowhere), lines
+        assert count['wire'] == 'anthropic-count' and count['step_index'] is None, count
+        assert nowhere['wire'] is None and nowhere['step_index'] is None, nowhere
+        assert count['body'] == body and nowhere['body'] == body, lines
+        assert not (model_keys & set(listing)), listing
+        assert model['step_index'] == 0 and model['decision'] == 'scripted', model
 
 
 def test_models_listing_and_token_count():
@@ -519,7 +522,7 @@ if __name__ == '__main__':
     test_requests_without_tools_get_aux_text_and_consume_nothing()
     test_log_has_one_line_per_request_with_the_named_keys()
     test_log_lines_carry_exactly_the_documented_keys()
-    test_only_a_model_post_carries_the_model_keys()
+    test_every_post_the_stub_answers_carries_the_model_keys_and_only_a_model_path_consumes()
     test_models_listing_and_token_count()
     test_connect_and_absolute_urls_get_403_and_are_logged()
     test_any_other_method_is_logged()

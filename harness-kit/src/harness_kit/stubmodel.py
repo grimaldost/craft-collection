@@ -292,11 +292,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             'path': self.path,
             'auth': self.auth_class(),
         }
+        # Every POST the stub answers carries the model keys; only a model path consumes a step.
+        unscripted = {'step_index': None, 'body': body}
         if path.endswith('/messages/count_tokens'):
+            rec.update({'wire': 'anthropic-count', 'decision': 'count-tokens', **unscripted})
             self.server.record(rec)
             return self.reply(200, _dump({'input_tokens': 1}))
         wire = WIRES.get(path)
         if wire is None:
+            rec.update({'wire': None, 'decision': 'no-such-path', **unscripted})
             self.server.record(rec)
             return self.reply(404, _dump(NOT_FOUND))
         if has_tools(body):
