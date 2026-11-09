@@ -184,6 +184,8 @@ def test_requests_without_tools_get_aux_text_and_consume_nothing():
         posts = [r for r in rows(log) if r['kind'] == 'POST']
         assert [r['decision'] for r in posts] == ['aux-no-tools', 'aux-no-tools', 'scripted'], posts
         assert posts[2]['step_index'] == 0, posts[2]
+        assert all('step_index' in r for r in posts), posts
+        assert posts[0]['step_index'] is None and posts[1]['step_index'] is None, posts
 
 
 def test_log_has_one_line_per_request_with_the_named_keys():

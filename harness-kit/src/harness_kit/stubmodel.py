@@ -293,7 +293,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             rec.update({'decision': 'scripted', 'step_index': index, 'step': step})
         else:
             step = AUX_STEP
-            rec.update({'decision': 'aux-no-tools', 'step': step})
+            rec.update({'decision': 'aux-no-tools', 'step_index': None, 'step': step})
         rec.update({'wire': wire, 'body': body})
         n = self.server.record(rec)
         model = body.get('model', 'stub-model')
