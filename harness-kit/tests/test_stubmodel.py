@@ -244,6 +244,40 @@ def test_any_other_method_is_logged():
         assert len(lines) == 1 and lines[0]['kind'] == 'DELETE', lines
 
 
+def test_a_method_the_stub_does_not_serve_is_still_logged():
+    with stub([]) as (port, log):
+        status, _ = call(port, 'TRACE', '/v1/models')
+        assert status == 404, status
+        status, _ = call(port, 'PROPFIND', '/anything')
+        assert status == 404, status
+        assert [r['kind'] for r in rows(log)] == ['TRACE', 'PROPFIND'], rows(log)
+
+
+def test_a_malformed_request_is_logged_and_the_stub_keeps_serving():
+    with stub([]) as (port, log):
+        with socket.create_connection(('127.0.0.1', port), timeout=30) as conn:
+            conn.sendall(b'this is not http\r\n\r\n')
+            conn.recv(4096)
+        assert len(rows(log)) == 1, rows(log)
+        status, _ = call(port, 'GET', '/v1/models', None, AUTH)
+        assert status == 200, status
+        assert len(rows(log)) == 2, rows(log)
+
+
+def test_a_body_that_cannot_be_decoded_is_logged():
+    with stub([TOOL_STEP]) as (port, log):
+        conn = http.client.HTTPConnection('127.0.0.1', port, timeout=30)
+        conn.request(
+            'POST', '/v1/messages', body=b'not gzip', headers={**AUTH, 'Content-Encoding': 'gzip'}
+        )
+        resp = conn.getresponse()
+        resp.read()
+        conn.close()
+        lines = rows(log)
+        assert len(lines) == 1 and lines[0]['kind'] == 'POST', lines
+        assert lines[0]['decision'] == 'aux-no-tools', lines
+
+
 def test_a_foreign_key_is_flagged_and_the_fake_one_is_not():
     with stub([]) as (port, log):
         call(port, 'GET', '/v1/models', None, {'x-api-key': FAKE})
@@ -321,6 +355,9 @@ if __name__ == '__main__':
     test_models_listing_and_token_count()
     test_connect_and_absolute_urls_get_403_and_are_logged()
     test_any_other_method_is_logged()
+    test_a_method_the_stub_does_not_serve_is_still_logged()
+    test_a_malformed_request_is_logged_and_the_stub_keeps_serving()
+    test_a_body_that_cannot_be_decoded_is_logged()
     test_a_foreign_key_is_flagged_and_the_fake_one_is_not()
     test_a_stub_that_receives_nothing_leaves_no_log_file()
     test_a_fixed_port_is_honoured()

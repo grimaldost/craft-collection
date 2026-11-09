@@ -212,7 +212,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             raw = self.rfile.read(int(self.headers.get('Content-Length') or 0))
         if (self.headers.get('Content-Encoding') or '').lower() == 'gzip':
-            raw = gzip.decompress(raw)
+            try:
+                raw = gzip.decompress(raw)
+            except (OSError, EOFError):
+                pass  # logged as an unparsed body below
         return raw
 
     def refuse(self, kind: str) -> None:
@@ -230,7 +233,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.server.record({'kind': self.command, 'path': self.path, 'auth': self.auth_class()})
         self.reply(404, _dump(NOT_FOUND))
 
-    do_PUT = do_DELETE = do_PATCH = do_OPTIONS = handle_other  # noqa: N815 - http.server names its methods do_<VERB>
+    def __getattr__(self, name: str) -> Any:
+        # http.server answers an unknown verb with 501 before any handler runs; every verb is handled here instead.
+        if name.startswith('do_'):
+            return self.handle_other
+        raise AttributeError(name)
+
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+        """A request the server library rejects (a malformed line, an oversized header) is logged too."""
+        auth = self.auth_class() if hasattr(self, 'headers') else ['none']
+        self.server.record(
+            {'kind': f'ERROR-{code}', 'path': getattr(self, 'path', ''), 'auth': auth}
+        )
+        super().send_error(code, message, explain)
 
     def do_HEAD(self) -> None:
         if self.path.startswith('http'):
