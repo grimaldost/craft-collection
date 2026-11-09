@@ -91,10 +91,9 @@ objective as `absent` so that the kit is not read as protection.
   model in the turn.
 - **Rely on each harness's native permission tables alone.** Rejected as the
   core: each harness's table has its own shape, so the policy would be written
-  once per harness, and none of them has been through a deny-and-allow test, so
-  whether one holds, and what happens when one fails to load, is unmeasured. They
-  remain usable as defence in depth, each switched on only after such a test
-  passes.
+  once per harness, and each table is unproved until a deny-and-allow test
+  passes on it; what happens when one fails to load is unmeasured. They remain
+  usable as defence in depth, each switched on only after such a test passes.
 - **A resource boundary first (file ownership or a separate account).** Not
   chosen for this slice: its measurements are incomplete and where the protection
   should live is still an open choice, and claiming prevention before both are
