@@ -104,6 +104,20 @@ def test_adr_names_adr_0003():
     assert 'ADR-0003' in ADR.read_text(encoding='utf-8')
 
 
+def _adr_section(name):
+    text = ADR.read_text(encoding='utf-8')
+    match = re.search(r'^## +' + name + r'.*?$(.*?)(?=^## |\Z)', text, re.MULTILINE | re.DOTALL)
+    assert match, name
+    return ' '.join(match.group(1).split())
+
+
+def test_adr_states_the_launcher_rule_as_the_judges_and_names_the_bare_start_loss():
+    consequences = _adr_section('Consequences')
+    assert '`launcher.required`' in consequences
+    assert 'no plugin' in consequences
+    assert 'starts only through' not in consequences
+
+
 if __name__ == '__main__':
     test_pyproject_declares_the_contract_fields()
     test_import_walk_flags_a_third_party_import_at_any_depth()
@@ -111,4 +125,5 @@ if __name__ == '__main__':
     test_package_imports_only_stdlib_and_itself()
     test_adr_holds_the_four_sections()
     test_adr_names_adr_0003()
+    test_adr_states_the_launcher_rule_as_the_judges_and_names_the_bare_start_loss()
     print('ok: package contract')

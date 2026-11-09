@@ -25,8 +25,9 @@ fails to load is lost without a sound:
   running, with one warning line in a log file.
 - **Every harness.** A denied run exits 0, so only a marker written to disk tells
   a denial from a success.
-- **Payloads.** No harness payload says who wrote a prompt, so a policy that
-  reads an "owner" origin from a payload reads something nobody supplied.
+- **Payloads.** On the harnesses examined, no payload says who wrote a prompt
+  (measured on opencode and goose, read on Claude Code), so a policy that reads
+  an "owner" origin from a payload reads something nobody supplied.
 
 A hook inside the harness is therefore feedback to the model, not governance.
 Governance needs a judge that runs outside the harness, a launcher that will not
@@ -111,9 +112,15 @@ objective as `absent` so that the kit is not read as protection.
 - New decisions about enforcement are made in the kit's judge and tested there;
   shells stay short enough to read at a glance, and a change to one is a change
   to a translation only.
-- A harness that is not Claude Code starts only through `kit run`, which proves
-  the guard live with a canary before the first model request. A start outside
-  the launcher is recorded as not launched.
+- `kit run` proves the guard live with a canary before the first model request.
+  Outside Claude Code the launcher is required by the judge, not by the harness:
+  the rule `launcher.required` denies a governed act from an event that `kit run`
+  did not launch. A bare opencode start with the shell plugin loaded still
+  starts, and its first governed tool call is denied. A bare start with no
+  plugin, or with one that fails to load, never reaches the judge: it runs
+  unguarded and nothing journals it. That loss is out of reach of this slice and
+  is recorded in the harness's contract. Claude Code without the launcher stays
+  possible; its events are judged by the policy and recorded as not launched.
 - `kit doctor` reports, per objective and per harness, what was tested. A loss
   that is known and cannot be closed is listed in the harness's contract rather
   than left implicit.
