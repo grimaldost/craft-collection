@@ -21,6 +21,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -278,6 +279,32 @@ def test_a_body_that_cannot_be_decoded_is_logged():
         assert lines[0]['decision'] == 'aux-no-tools', lines
 
 
+def test_concurrent_requests_are_all_answered_and_logged():
+    count = 100
+    failures = []
+    start = threading.Barrier(count)
+
+    def one(port):
+        try:
+            start.wait(timeout=30)
+            status, _ = call(port, 'POST', '/v1/messages', {'model': 'm', 'tools': TOOLS}, AUTH)
+            if status != 200:
+                failures.append(status)
+        except OSError as exc:
+            failures.append(repr(exc))
+
+    with stub([]) as (port, log):
+        threads = [threading.Thread(target=one, args=(port,)) for _ in range(count)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert failures == [], failures[:3]
+        lines = rows(log)
+        assert len(lines) == count, len(lines)
+        assert sorted(r['n'] for r in lines) == list(range(1, count + 1))
+
+
 def test_a_foreign_key_is_flagged_and_the_fake_one_is_not():
     with stub([]) as (port, log):
         call(port, 'GET', '/v1/models', None, {'x-api-key': FAKE})
@@ -358,6 +385,7 @@ if __name__ == '__main__':
     test_a_method_the_stub_does_not_serve_is_still_logged()
     test_a_malformed_request_is_logged_and_the_stub_keeps_serving()
     test_a_body_that_cannot_be_decoded_is_logged()
+    test_concurrent_requests_are_all_answered_and_logged()
     test_a_foreign_key_is_flagged_and_the_fake_one_is_not()
     test_a_stub_that_receives_nothing_leaves_no_log_file()
     test_a_fixed_port_is_honoured()

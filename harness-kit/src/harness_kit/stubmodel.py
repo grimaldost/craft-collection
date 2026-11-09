@@ -143,6 +143,7 @@ def has_tools(body: Any) -> bool:
 
 class Stub(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
+    request_queue_size = 256  # the library default of 5 refuses a burst of concurrent clients
 
     def __init__(self, log_path: Path, script: list[dict], port: int = 0) -> None:
         super().__init__(('127.0.0.1', port), Handler)
