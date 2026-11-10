@@ -28,12 +28,15 @@ from pathlib import Path
 from kit_fixtures import SAMPLE_POLICY, SRC, event, run_module, write_event
 
 PACKAGE = SRC / 'harness_kit'
+# Every judgement appends a journal line; keep them out of the real state root.
+_STATE = tempfile.TemporaryDirectory()
 
 
 def _env(**extra: str) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.startswith('KIT_')}
     env.pop('PYTHONIOENCODING', None)
     env['PYTHONPATH'] = str(SRC)
+    env['KIT_STATE_ROOT'] = _STATE.name
     env.update(extra)
     return env
 
