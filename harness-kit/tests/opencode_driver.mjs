@@ -1,9 +1,30 @@
 // Test driver: loads the opencode shell under Node with a fake host context.
 // Reads one JSON spec on stdin, prints one JSON line with the outcome of one execute.before call.
+import cp from "node:child_process";
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { pathToFileURL } from "node:url";
 
 const spec = JSON.parse(readFileSync(0, "utf8"));
+let killerDone = false;
+if (spec.killerDelayMs) {
+  // A slow killer: the real taskkill starts killerDelayMs late, and its exit is reported when it ends.
+  const real = cp.spawn;
+  cp.spawn = (cmd, args, opts) => {
+    if (!/taskkill\.exe$/i.test(cmd)) return real(cmd, args, opts);
+    const fake = new EventEmitter();
+    fake.unref = () => fake;
+    setTimeout(() => {
+      real(cmd, args, opts).on("exit", () => {
+        killerDone = true;
+        fake.emit("exit", 0);
+      });
+    }, spec.killerDelayMs);
+    return fake;
+  };
+  syncBuiltinESMExports();
+}
 const mod = await import(pathToFileURL(spec.shell).href);
 const hooks = {};
 const gets = [];
@@ -40,6 +61,7 @@ console.log(
     threw,
     message,
     elapsed_ms: Date.now() - started,
+    killer_done: killerDone,
     gets,
   }),
 );
