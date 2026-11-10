@@ -53,6 +53,21 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         '--endpoint', metavar='URL', required=True, help='model endpoint, http://127.0.0.1:PORT'
     )
+    doctor = sub.add_parser(
+        'doctor',
+        help='report what was tested per objective and harness, the runs and unlaunched sessions',
+    )
+    doctor.add_argument('--json', action='store_true', help='print the report as one JSON line')
+    doctor.add_argument(
+        '--live',
+        action='store_true',
+        help='also run the presence canary per harness found (needs --live-root)',
+    )
+    doctor.add_argument(
+        '--live-root',
+        metavar='DIR',
+        help='folder for the live scratch homes, under a test root of KIT_POLICY',
+    )
     sub.add_parser(
         'run',
         help='check a session, then start the harness: run --harness NAME --home DIR '
@@ -190,6 +205,10 @@ def main(argv: list[str] | None = None) -> int:
         return run_state(args)
     if args.command == 'home':
         return run_home(args)
+    if args.command == 'doctor':
+        from harness_kit import doctor
+
+        return doctor.main(args.json, args.live, args.live_root)
     if args.command == 'stub':
         from harness_kit import stubmodel
 

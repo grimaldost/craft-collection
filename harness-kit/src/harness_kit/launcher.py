@@ -41,7 +41,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from harness_kit import canary, harnesses, state
+from harness_kit import canary, doctor, harnesses, state
 from harness_kit.policy import Policy, PolicyError, load_policy
 
 EXIT_REFUSED = 64
@@ -521,8 +521,22 @@ def run_plan_canary(plan: Plan, environ: dict) -> dict:
 
 
 def launch(plan: Plan, environ: dict) -> int:
-    """Mint the run, record it, run the canary, start the harness, wait, record the end."""
+    """Mint the run, record it, run the canary, start the harness, wait, record the end.
+
+    From the mint until the session ends a thread rewrites the run's
+    `heartbeat.json` every 2 seconds, so `kit doctor` can tell a killed
+    launcher (`stale`) from a running one.
+    """
     state.mint_run(plan.root, plan.driver.name, run_id=plan.run_id)
+    beat = doctor.Heartbeat(plan.run_dir, plan.run_id)
+    beat.start()
+    try:
+        return _launch_minted(plan, environ)
+    finally:
+        beat.stop()
+
+
+def _launch_minted(plan: Plan, environ: dict) -> int:
     (plan.run_dir / 'tmp').mkdir()
     (plan.run_dir / 'gh-config').mkdir()
     (plan.run_dir / 'gitconfig-empty').write_bytes(b'')

@@ -17,7 +17,9 @@ With `KIT_CANARY_NONCE` it plays the canary's harness. It asks the endpoint in
 - `nothing`: runs no call;
 - `allow-only`: runs only the call whose command names an allow marker;
 - `hang`: starts a grandchild that writes `OUT.late` after 4 seconds and its
-  pid to `OUT.grandchild-pid`, then sleeps.
+  pid to `OUT.grandchild-pid`, then sleeps;
+- `sleep-N`: as `guarded`; and the session, after writing OUT, writes its
+  pid to `OUT.pid` and sleeps N seconds before it exits.
 The guard of a Claude Code home is the hook its `settings.json` registers; the
 guard of an opencode home is the kit CLI that the plugin folder's
 `shell_config.json` names. A call is `echo WORD > FILE`, run as a file write.
@@ -133,6 +135,8 @@ def run_call(command: str) -> None:
 
 
 def canary(out: str, mode: str) -> None:
+    if mode.startswith('sleep-'):
+        mode = 'guarded'
     if mode == 'hang':
         late = (
             'import sys, time; time.sleep(float(sys.argv[2])); open(sys.argv[1], "w").write("late")'
@@ -152,7 +156,7 @@ def canary(out: str, mode: str) -> None:
         run_call(command)
 
 
-def session(out: str) -> None:
+def session(out: str, mode: str) -> None:
     probe = 'import os, sys; open(sys.argv[1], "w").write(os.environ.get("KIT_RUN_ID", "none"))'
     subprocess.run([sys.executable, '-c', probe, out + '.grandchild'], check=True)  # noqa: S603
     try:
@@ -161,6 +165,9 @@ def session(out: str) -> None:
         pass
     with open(out, 'w', encoding='utf-8') as fh:
         json.dump({'args': sys.argv[5:], 'env': dict(os.environ), 'cwd': os.getcwd()}, fh)
+    if mode.startswith('sleep-'):
+        Path(out + '.pid').write_text(str(os.getpid()), encoding='ascii')
+        time.sleep(float(mode[len('sleep-') :]))
 
 
 def main() -> int:
@@ -171,7 +178,7 @@ def main() -> int:
     if os.environ.get('KIT_CANARY_NONCE'):
         canary(out, mode)
     else:
-        session(out)
+        session(out, mode)
     return code
 
 
