@@ -185,7 +185,8 @@ def test_claude_code_home_contents():
         assert hook['type'] == 'command'
         assert Path(hook['command']).is_absolute() and Path(hook['command']).is_file()
         assert hook['args'][0] == '-I' and len(hook['args']) == 2, hook
-        assert Path(hook['args'][1]) == Path(home['shell_entry'])
+        assert hook['args'][1] == home['shell_entry'], hook
+        assert hook['command'] == sys.executable, hook
         assert hook['timeout'] == 30 and hook['onFailure'] == 'block'
         shipped = SRC / 'harness_kit' / 'shells' / 'claude_code' / 'kit_hook.py'
         assert Path(home['shell_entry']).read_bytes() == shipped.read_bytes()

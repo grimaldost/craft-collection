@@ -62,7 +62,7 @@ class ClaudeCode:
         hook = {
             'type': 'command',
             'command': sys.executable,
-            'args': ['-I', entry.as_posix()],
+            'args': ['-I', str(entry)],
             'timeout': 30,
             'onFailure': 'block',
         }
