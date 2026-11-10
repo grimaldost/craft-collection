@@ -12,6 +12,8 @@ With `KIT_CANARY_NONCE` it plays the canary's harness. It asks the endpoint in
 - `guarded`: asks the guard of the home before each call and runs the calls it
   allows (no guard loaded, as with a broken home, allows everything);
 - `unguarded`: runs every call without asking;
+- `ignores-guard`: asks the guard before each call, as `guarded` does, and
+  runs every call whatever it answered;
 - `nothing`: runs no call;
 - `allow-only`: runs only the call whose command names an allow marker;
 - `hang`: starts a grandchild that writes `OUT.late` after 4 seconds and its
@@ -145,6 +147,8 @@ def canary(out: str, mode: str) -> None:
             continue
         if mode == 'guarded' and not guard_allows(command):
             continue
+        if mode == 'ignores-guard':
+            guard_allows(command)
         run_call(command)
 
 

@@ -9,8 +9,9 @@ Contract under test, with the fake harness of `canary_fake_harness.py`:
   policy still reads `unknown`;
 - with the guard intact the canary passes whatever the harness's exit code,
   `canary.json` records `passed` and the markers, and the session starts;
-- a harness that runs the calls without the guard, runs nothing, runs only
-  the allow half, or a home whose guard is broken or whose copy fails, fails
+- a harness that runs the calls without the guard, asks the guard and runs
+  the denied call anyway, runs nothing, runs only the allow half, or a home
+  whose guard is broken or whose copy fails, fails
   the canary: exit 65, `outcome` `refused-canary`, no session start, zero
   requests on the session's endpoint;
 - a project-config path of the working folder is copied into the canary's
@@ -361,6 +362,17 @@ def test_canary_markers_are_recorded_on_failure():
     with_case('opencode', body, mode='unguarded')
 
 
+def test_canary_fails_when_the_harness_asks_the_guard_and_runs_the_denied_call_anyway():
+    def body(case, proc):
+        record = assert_failed(case, proc)
+        assert record['refused_marker'] is True, record
+        assert record['deny_marker'] is True and record['allow_marker'] is True, record
+        assert 'deny marker' in record['reason'], record
+
+    for harness in ('claude-code', 'opencode'):
+        with_case(harness, body, mode='ignores-guard')
+
+
 def test_canary_fails_on_a_broken_home():
     def malformed(case):
         (case.home / 'claude-config' / 'settings.json').write_text('{"hooks": ', encoding='utf-8')
@@ -436,6 +448,17 @@ def _alive(pid: int) -> bool:
     finally:
         k32.CloseHandle(ctypes.c_void_p(handle))
     return code.value == 259  # STILL_ACTIVE
+
+
+def test_canary_deadline_is_sixty_seconds_by_default():
+    import inspect
+
+    from harness_kit import canary
+
+    default = inspect.signature(canary.run_canary).parameters['timeout_s'].default
+    assert canary.TIMEOUT_S == 60 and default == 60, (canary.TIMEOUT_S, default)
+    source = inspect.getsource(launcher.run_plan_canary)
+    assert 'timeout_s' not in source, 'kit run overrides the canary deadline'
 
 
 def test_hung_harness_is_ended_at_the_deadline_with_its_grandchild():

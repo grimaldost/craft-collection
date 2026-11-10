@@ -9,6 +9,11 @@ request; the allowed call's marker is present. The harness's exit code is not
 read as proof. opencode events need a launched run, so its session gets a run
 id minted by `kit state new-run`.
 
+Then, for each harness, `kit run` with an intact rendered home pointed at a
+session stub: the presence canary passes (refused marker present, deny marker
+absent, allow marker present, in `canary.json`), and the session starts and
+reaches the session stub.
+
 Prints `skip:` unless KIT_CONFORMANCE_BASE, KIT_HARNESS_ARGV_CLAUDE_CODE and
 KIT_HARNESS_ARGV_OPENCODE are set; the base must be an existing folder.
 
@@ -166,6 +171,69 @@ def run_harness(name: str, base: Path) -> dict:
     }
 
 
+def run_canary(name: str, base: Path) -> dict:
+    """`kit run` with an intact rendered home: the canary passes and the session starts."""
+    driver = harnesses.get(name)
+    folder = base / f'{name}-canary-{time.strftime("%H%M%S")}'
+    work = folder / 'tests' / 'work'
+    work.mkdir(parents=True)
+    policy = folder / 'policy.toml'
+    roots = json.dumps(str(folder / 'tests'))
+    policy.write_text(
+        f'version = 1\n\n[launcher]\ntest_roots = [{roots}]\nforbidden_roots = []\n',
+        encoding='utf-8',
+    )
+    argv_names = ('KIT_HARNESS_ARGV_CLAUDE_CODE', 'KIT_HARNESS_ARGV_OPENCODE')
+    kit_env = _kit_env(
+        {'KIT_STATE_ROOT': str(folder / 'state'), **{k: os.environ[k] for k in argv_names}}
+    )
+    stub, port = _start_stub(folder, [{'text': 'session-done'}], kit_env)
+    try:
+        home = folder / 'home'
+        _kit(
+            'home',
+            'render',
+            '--harness',
+            name,
+            '--dir',
+            str(home),
+            '--endpoint',
+            f'http://127.0.0.1:{port}',
+            env=kit_env,
+        )
+        args = ['--home', str(home), '--workdir', str(work), '--policy', str(policy), '--']
+        session = driver.canary_argv('Say done.')
+        with open(folder / 'stdout.txt', 'wb') as out, open(folder / 'stderr.txt', 'wb') as err:
+            proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+                [sys.executable, '-m', 'harness_kit', 'run', '--harness', name, *args, *session],
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+                env=kit_env,
+                timeout=240,
+                check=False,
+            )
+    finally:
+        stub.kill()
+        stub.wait()
+    runs = sorted((folder / 'state' / 'runs').glob('*/run.json'))
+    record, run = {}, {}
+    if len(runs) == 1:
+        run = json.loads(runs[0].read_text(encoding='utf-8'))
+        found = runs[0].parent / 'canary' / 'canary.json'
+        record = json.loads(found.read_text(encoding='utf-8')) if found.exists() else {}
+    return {
+        'harness': name,
+        'folder': str(folder),
+        'canary_passed': record.get('passed') is True,
+        'refused_marker': record.get('refused_marker') is True,
+        'deny_marker_absent': record.get('deny_marker') is False,
+        'allow_marker': record.get('allow_marker') is True,
+        'session_started': run.get('outcome') == 'ended' and proc.returncode != 65,
+        'session_endpoint_reached': len(_log(folder)) >= 1,
+    }
+
+
 def main() -> int:
     missing = [name for name in REQUIRED if not os.environ.get(name)]
     if missing:
@@ -175,13 +243,14 @@ def main() -> int:
     if not base.is_dir():
         print('FAIL: KIT_CONFORMANCE_BASE is not an existing folder')
         return 1
-    rows = [run_harness(name, base) for name in ('claude-code', 'opencode')]
+    names = ('claude-code', 'opencode')
+    rows = [run_harness(name, base) for name in names] + [run_canary(name, base) for name in names]
     print(json.dumps(rows, indent=2))
     bad = [r for r in rows if not all(v for k, v in r.items() if k not in ('harness', 'folder'))]
     if bad:
-        print('FAIL: ' + ', '.join(r['harness'] for r in bad))
+        print('FAIL: ' + ', '.join(r['folder'] for r in bad))
         return 1
-    print('ok: real harness homes (deny and allow on both harnesses)')
+    print('ok: real harness homes (deny and allow, and the canary of kit run, on both harnesses)')
     return 0
 
 
