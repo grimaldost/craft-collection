@@ -12,6 +12,9 @@ remembered. A deny match denies; an allow match allows unless a cannot-tell was
 remembered, which gives `unknown`. At the end: `unknown` when one was
 remembered, else an ungoverned `allow`. An invalid event or an unreadable
 policy is `unknown`. `unknown` has effect deny.
+
+Ahead of the policy's rules and after the policy loads, an event of a harness
+other than Claude Code that was not launched is denied by `launcher.required`.
 """
 
 from __future__ import annotations
@@ -39,6 +42,10 @@ MATCH = 'match'
 NO_MATCH = 'no-match'
 CANNOT_TELL = 'cannot-tell'
 SKIPPED = 'skipped'
+
+LAUNCHER_FREE_HARNESS = 'claude-code'
+LAUNCHER_RULE = 'launcher.required'
+LAUNCHER_REASON = 'this harness runs only under kit run; start the session with kit run'
 
 
 def make_verdict(
@@ -110,8 +117,12 @@ def rule_result(rule: Rule, event: dict, windows: bool = False) -> str:
     return NO_MATCH if results else MATCH
 
 
-def judge(event: object, policy: Policy | PolicyError) -> dict:
-    """Judge one event (parsed JSON) against a loaded policy or the error that loading raised."""
+def judge(event: object, policy: Policy | PolicyError, launched: bool | None = None) -> dict:
+    """Judge one event (parsed JSON) against a loaded policy or the error that loading raised.
+
+    `launched` is whether the event belongs to a run the launcher minted; None
+    leaves the launcher rule out (a caller that judges outside the CLI).
+    """
     if isinstance(policy, PolicyError):
         return unknown_verdict(f'unreadable policy: {policy}', policy.sha256)
     sha = policy.sha256
@@ -119,6 +130,10 @@ def judge(event: object, policy: Policy | PolicyError) -> dict:
         ev = check_event(event)
     except InvalidEventError as exc:
         return unknown_verdict(f'invalid event: {exc}', sha)
+    if launched is False and ev['harness']['name'] != LAUNCHER_FREE_HARNESS:
+        return make_verdict(
+            'deny', governed=True, rule=LAUNCHER_RULE, reason=LAUNCHER_REASON, policy_sha256=sha
+        )
 
     remembered: Rule | None = None
     for rule in policy.rules:
@@ -156,12 +171,12 @@ def _cannot_tell_reason(rule: Rule) -> str:
     return f'{text}: {rule.reason}' if rule.reason else text
 
 
-def judge_bytes(data: bytes, policy: Policy | PolicyError) -> dict:
+def judge_bytes(data: bytes, policy: Policy | PolicyError, launched: bool | None = None) -> dict:
     """Judge the raw bytes of one event; bytes that are not one JSON object are invalid."""
     if isinstance(policy, PolicyError):
-        return judge(None, policy)
+        return judge(None, policy, launched)
     try:
         event = parse_event(data)
     except InvalidEventError as exc:
         return unknown_verdict(f'invalid event: {exc}', policy.sha256)
-    return judge(event, policy)
+    return judge(event, policy, launched)
