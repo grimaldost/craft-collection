@@ -15,6 +15,7 @@ marker after 6 seconds) and then hangs. A cell passes when:
 The cell's tree is sampled while the harness runs: a process joins it through
 a parent already in it, and only when it was created after that parent, since
 Windows keeps an exited parent's id in a child's record and ids are reused.
+No process created after the clock was read for a sample joins in that sample.
 A survivor is ended only while it is still the process that was recorded.
 
 opencode also runs once with System32 off `PATH`. Claude Code is left out of
@@ -111,6 +112,8 @@ def _kernel32():
     k32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
     k32.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
     k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    k32.GetSystemTimePreciseAsFileTime.argtypes = (ctypes.POINTER(wintypes.FILETIME),)
+    k32.GetSystemTimePreciseAsFileTime.restype = None
     return ctypes, wintypes, k32, Entry
 
 
@@ -158,6 +161,8 @@ def grow_family(
     parents: dict[int, int],
     created: Callable[[int], int | None],
     seen: dict[int, int],
+    *,
+    taken: int,
 ) -> dict[int, int]:
     """The live members of `root`'s tree, as pid -> creation time.
 
@@ -167,11 +172,17 @@ def grow_family(
     Windows keeps an exited parent's id in a child's record, so without the
     order an older, unrelated process whose dead parent's id was reused by a
     cell process would join the tree, and everything below it.
+
+    `taken` is the system time read before `parents` was listed. No pid is
+    admitted with a creation time later than it: a listed process can exit and
+    its id be reused before its creation time is read, and the newer process
+    must not join. A child created after the clock was read waits for the next
+    sample.
     """
     family: dict[int, int] = {}
     for pid, known in [(root, None), *seen.items()]:
         now = created(pid)
-        if now is not None and known in (None, now):
+        if now is not None and now <= taken and known in (None, now):
             family[pid] = now
     if root not in family:
         return {}
@@ -182,15 +193,24 @@ def grow_family(
             if pid in family or parent not in family:
                 continue
             now = created(pid)
-            if now is not None and now > family[parent]:
+            if now is not None and family[parent] < now <= taken:
                 family[pid] = now
                 grew = True
     return family
 
 
+def _system_time() -> int:
+    """The system time, in the units and epoch of a process's creation time."""
+    ctypes, wintypes, k32, _entry = _kernel32()
+    now = wintypes.FILETIME()
+    k32.GetSystemTimePreciseAsFileTime(ctypes.byref(now))
+    return (now.dwHighDateTime << 32) | now.dwLowDateTime
+
+
 def collect_tree(root: int, seen: dict[int, int]) -> None:
     """Add every live descendant of `root` (and `root`) to `seen`, as pid -> creation time."""
-    for pid, created in grow_family(root, _parents(), _created, seen).items():
+    taken = _system_time()
+    for pid, created in grow_family(root, _parents(), _created, seen, taken=taken).items():
         seen.setdefault(pid, created)
 
 
@@ -458,12 +478,17 @@ def check_tree_admission() -> None:
         610: 1400,  # started by 600 after its parent died
         700: 1500,  # a reused id: the process seen as 700 had another creation time
         710: 1600,  # started by the new 700
+        620: 1700,  # started by 610 at the very time the clock was read
+        800: 1800,  # listed under 300, its id reused after the clock was read
+        810: 1900,  # started by that newer 800
     }
     parents = {200: 100, 300: 200, 400: 200, 410: 400, 600: 999, 610: 600, 700: 999, 710: 700}
-    family = grow_family(100, parents, times.get, {600: 1300, 700: 900})
-    assert sorted(family) == [100, 200, 300, 600, 610], sorted(family)
+    parents.update({620: 610, 800: 300, 810: 800})
+    family = grow_family(100, parents, times.get, {600: 1300, 700: 900}, taken=1700)
+    assert sorted(family) == [100, 200, 300, 600, 610, 620], sorted(family)
     assert family[300] == 1200, family
-    assert grow_family(100, parents, {}.get, {}) == {}, 'a dead root has no tree'
+    assert grow_family(100, parents, {}.get, {}, taken=1700) == {}, 'a dead root has no tree'
+    assert grow_family(100, parents, times.get, {}, taken=999) == {}, 'a root newer than the clock'
 
 
 def check_terminate_guard() -> None:
@@ -487,11 +512,40 @@ def check_terminate_guard() -> None:
         child.wait()
 
 
+def check_live_tree() -> None:
+    """On live processes, the clock read before a snapshot admits a child and its grandchild (Windows)."""
+    if not WINDOWS:
+        return
+    code = (
+        'import subprocess, sys, time; '
+        'subprocess.Popen([sys.executable, "-I", "-c", "import time; time.sleep(30)"]); '
+        'time.sleep(30)'
+    )
+    child = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, '-I', '-c', code], stdin=subprocess.DEVNULL
+    )
+    seen: dict[int, int] = {}
+    try:
+        created = _created(child.pid)
+        assert created is not None, 'no creation time for a live child'
+        assert created <= _system_time(), 'the clock reads earlier than a child created before it'
+        deadline = time.monotonic() + 10
+        while len(seen) < 2 and time.monotonic() < deadline:
+            collect_tree(child.pid, seen)
+            time.sleep(0.1)
+        assert len(seen) >= 2, f'the tree of a child and its grandchild: {seen}'
+    finally:
+        terminate({pid: c for pid, c in seen.items() if pid != child.pid})
+        child.kill()
+        child.wait()
+
+
 def main() -> int:
     if sys.argv[1:2] == ['--hang']:
         return hang(sys.argv[2])
     check_tree_admission()
     check_terminate_guard()
+    check_live_tree()
     missing = [name for name in REQUIRED if not os.environ.get(name)]
     if missing:
         print(f'skip: the hung-guard matrix needs {", ".join(missing)}')
