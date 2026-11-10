@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 from harness_kit import __version__, state
 from harness_kit.event import InvalidEventError, check_event, parse_event
@@ -41,6 +42,16 @@ def build_parser() -> argparse.ArgumentParser:
     stub.add_argument('--script', required=True, help='JSON array of tool-call and text steps')
     stub.add_argument(
         '--port', type=int, default=0, help='port on 127.0.0.1 (default: any free port)'
+    )
+    home = sub.add_parser('home', help='test homes a harness runs in')
+    home_sub = home.add_subparsers(dest='home_command', metavar='HOME_COMMAND', required=True)
+    render = home_sub.add_parser(
+        'render', help='render a test home into an absent or empty folder; print home.json'
+    )
+    render.add_argument('--harness', metavar='NAME', required=True, help='claude-code or opencode')
+    render.add_argument('--dir', metavar='DIR', required=True, help='absent or empty folder')
+    render.add_argument(
+        '--endpoint', metavar='URL', required=True, help='model endpoint, http://127.0.0.1:PORT'
     )
     return parser
 
@@ -131,6 +142,24 @@ def run_state(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_home(args: argparse.Namespace) -> int:
+    """`kit home render`; a non-empty folder, an unknown harness or a foreign endpoint exits 64."""
+    from harness_kit import harnesses
+
+    try:
+        driver = harnesses.get(args.harness)
+    except KeyError as exc:
+        return _fail(EXIT_REFUSED, str(exc.args[0]))
+    try:
+        home = driver.render_home(Path(args.dir), args.endpoint)
+    except harnesses.HomeError as exc:
+        return _fail(EXIT_REFUSED, f'home not rendered: {exc}')
+    except OSError as exc:
+        return _fail(EXIT_INTERNAL, f'home not rendered: {exc!a}')
+    sys.stdout.write(json.dumps(home, ensure_ascii=True) + '\n')
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -138,6 +167,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_judge(args.policy)
     if args.command == 'state':
         return run_state(args)
+    if args.command == 'home':
+        return run_home(args)
     if args.command == 'stub':
         from harness_kit import stubmodel
 
