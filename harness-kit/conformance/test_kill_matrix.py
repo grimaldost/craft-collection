@@ -12,6 +12,11 @@ marker after 6 seconds) and then hangs. A cell passes when:
 - the grandchild's late marker is still absent 8 seconds after the harness ended;
 - no process of the cell's tree is alive after that.
 
+The cell's tree is sampled while the harness runs: a process joins it through
+a parent already in it, and only when it was created after that parent, since
+Windows keeps an exited parent's id in a child's record and ids are reused.
+A survivor is ended only while it is still the process that was recorded.
+
 opencode also runs once with System32 off `PATH`. Claude Code is left out of
 that case: it starts system tools of its own, so its tree needs System32.
 
@@ -37,6 +42,7 @@ import subprocess
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 WINDOWS = os.name == 'nt'
@@ -55,6 +61,7 @@ SECRET_NAME = re.compile(r'(^GH_|_KEY$|_TOKEN$|_SECRET$|_PASSWORD$)', re.IGNOREC
 LATE_CODE = f'import sys, time; time.sleep({LATE_AFTER_S}); open(sys.argv[1], "w").write("late")'
 STILL_ACTIVE = 259
 QUERY_LIMITED = 0x1000
+PROCESS_TERMINATE = 0x0001
 TH32CS_SNAPPROCESS = 0x2
 
 
@@ -122,51 +129,91 @@ def _parents() -> dict[int, int]:
     return out
 
 
+def _live_created(handle) -> int | None:
+    """The creation time of the live process behind `handle`; None once it has exited."""
+    ctypes, wintypes, k32, _entry = _kernel32()
+    times = [wintypes.FILETIME() for _ in range(4)]
+    code = wintypes.DWORD()
+    if not k32.GetProcessTimes(handle, *[ctypes.byref(t) for t in times]):
+        return None
+    if not k32.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value != STILL_ACTIVE:
+        return None
+    return (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+
+
 def _created(pid: int) -> int | None:
     """The creation time of a live process, so a reused id is not taken for it."""
-    ctypes, wintypes, k32, _entry = _kernel32()
+    _ctypes, _wintypes, k32, _entry = _kernel32()
     handle = k32.OpenProcess(QUERY_LIMITED, False, pid)
     if not handle:
         return None
     try:
-        times = [wintypes.FILETIME() for _ in range(4)]
-        code = wintypes.DWORD()
-        if not k32.GetProcessTimes(handle, *[ctypes.byref(t) for t in times]):
-            return None
-        if not k32.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value != STILL_ACTIVE:
-            return None
-        return (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+        return _live_created(handle)
     finally:
         k32.CloseHandle(handle)
 
 
-def collect_tree(root: int, seen: dict[int, int]) -> None:
-    """Add every live descendant of `root` (and `root`) to `seen`, as pid -> creation time."""
-    parents = _parents()
-    family = {root}
+def grow_family(
+    root: int,
+    parents: dict[int, int],
+    created: Callable[[int], int | None],
+    seen: dict[int, int],
+) -> dict[int, int]:
+    """The live members of `root`'s tree, as pid -> creation time.
+
+    The tree starts from `root` and from every process of `seen` that is still
+    the same process (same creation time). A pid joins only through a parent
+    already in the tree, and only when it was created after that parent:
+    Windows keeps an exited parent's id in a child's record, so without the
+    order an older, unrelated process whose dead parent's id was reused by a
+    cell process would join the tree, and everything below it.
+    """
+    family: dict[int, int] = {}
+    for pid, known in [(root, None), *seen.items()]:
+        now = created(pid)
+        if now is not None and known in (None, now):
+            family[pid] = now
+    if root not in family:
+        return {}
     grew = True
     while grew:
         grew = False
         for pid, parent in parents.items():
-            if parent in family and pid not in family:
-                family.add(pid)
+            if pid in family or parent not in family:
+                continue
+            now = created(pid)
+            if now is not None and now > family[parent]:
+                family[pid] = now
                 grew = True
-    for pid in family:
-        created = _created(pid)
-        if created is not None:
-            seen.setdefault(pid, created)
+    return family
+
+
+def collect_tree(root: int, seen: dict[int, int]) -> None:
+    """Add every live descendant of `root` (and `root`) to `seen`, as pid -> creation time."""
+    for pid, created in grow_family(root, _parents(), _created, seen).items():
+        seen.setdefault(pid, created)
 
 
 def survivors(seen: dict[int, int]) -> list[int]:
     return [pid for pid, created in seen.items() if _created(pid) == created]
 
 
-def terminate(pids: list[int]) -> None:
+def terminate(members: dict[int, int]) -> None:
+    """End the cell's own survivors, each checked on the handle that ends it.
+
+    Only pids `grow_family` admitted reach here, and each is ended only while
+    it is still the process seen (same creation time), so a pid reused by an
+    unrelated process in between is left alone.
+    """
     _ctypes, _wintypes, k32, _entry = _kernel32()
-    for pid in pids:
-        handle = k32.OpenProcess(0x0001, False, pid)  # PROCESS_TERMINATE
-        if handle:
-            k32.TerminateProcess(handle, 1)
+    for pid, created in members.items():
+        handle = k32.OpenProcess(PROCESS_TERMINATE | QUERY_LIMITED, False, pid)
+        if not handle:
+            continue
+        try:
+            if _live_created(handle) == created:
+                k32.TerminateProcess(handle, 1)
+        finally:
             k32.CloseHandle(handle)
 
 
@@ -362,7 +409,7 @@ def run_cell(harness: str, shell: str, base: Path, *, system32_off: bool = False
                 time.sleep(0.2)
             row['timed_out'] = proc.poll() is None
             if row['timed_out']:
-                terminate(survivors(seen))
+                terminate({pid: seen[pid] for pid in survivors(seen)})
             proc.wait(timeout=30)
         ended = time.monotonic()
     finally:
@@ -371,7 +418,7 @@ def run_cell(harness: str, shell: str, base: Path, *, system32_off: bool = False
     if ended is not None:
         time.sleep(max(0.0, LATE_WAIT_S - (time.monotonic() - ended)))
     alive = survivors(seen)
-    terminate(alive)
+    terminate({pid: seen[pid] for pid in alive})
     gap, reason = _gap_and_reason(folder)
     row.update(
         gap_s=gap,
@@ -394,9 +441,57 @@ def run_cell(harness: str, shell: str, base: Path, *, system32_off: bool = False
     return row
 
 
+def check_tree_admission() -> None:
+    """The tree rule, on a fixed process table (runs everywhere, before any skip).
+
+    Windows keeps an exited parent's id in a child's record, and ids are reused:
+    an old process whose dead parent's id now belongs to a cell process must
+    not join the cell's tree, nor anything below it.
+    """
+    times = {
+        100: 1000,  # the parent shell
+        200: 1100,  # the harness, started by the shell
+        300: 1200,  # the hanging CLI, started by the harness
+        400: 500,  # an older process whose dead parent had id 200
+        410: 600,  # its child
+        600: 1300,  # seen before, its parent gone since
+        610: 1400,  # started by 600 after its parent died
+        700: 1500,  # a reused id: the process seen as 700 had another creation time
+        710: 1600,  # started by the new 700
+    }
+    parents = {200: 100, 300: 200, 400: 200, 410: 400, 600: 999, 610: 600, 700: 999, 710: 700}
+    family = grow_family(100, parents, times.get, {600: 1300, 700: 900})
+    assert sorted(family) == [100, 200, 300, 600, 610], sorted(family)
+    assert family[300] == 1200, family
+    assert grow_family(100, parents, {}.get, {}) == {}, 'a dead root has no tree'
+
+
+def check_terminate_guard() -> None:
+    """`terminate` ends a pid only while it is still the process recorded for it (Windows)."""
+    if not WINDOWS:
+        return
+    child = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, '-I', '-c', 'import time; time.sleep(30)'],
+        stdin=subprocess.DEVNULL,
+    )
+    try:
+        created = _created(child.pid)
+        assert created is not None, 'no creation time for a live child'
+        terminate({child.pid: created - 1})
+        time.sleep(0.5)
+        assert child.poll() is None, 'terminate ended a pid recorded with another creation time'
+        terminate({child.pid: created})
+        child.wait(timeout=10)
+    finally:
+        child.kill()
+        child.wait()
+
+
 def main() -> int:
     if sys.argv[1:2] == ['--hang']:
         return hang(sys.argv[2])
+    check_tree_admission()
+    check_terminate_guard()
     missing = [name for name in REQUIRED if not os.environ.get(name)]
     if missing:
         print(f'skip: the hung-guard matrix needs {", ".join(missing)}')
