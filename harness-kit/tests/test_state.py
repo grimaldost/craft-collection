@@ -153,6 +153,24 @@ def test_a_minted_run_has_the_id_shape_and_run_json():
         assert other != run_id
 
 
+def test_a_run_id_computed_ahead_is_minted_once():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        run_id = state.new_run_id()
+        assert state.RUN_ID_RE.fullmatch(run_id), run_id
+        assert not (root / 'runs').exists()
+        minted, run_dir = state.mint_run(root, 'claude-code', run_id=run_id)
+        assert minted == run_id and run_dir == root / 'runs' / run_id
+        data = json.loads((run_dir / 'run.json').read_text(encoding='utf-8'))
+        assert data['run_id'] == run_id and data['outcome'] == 'minted', data
+        try:
+            state.mint_run(root, 'claude-code', run_id=run_id)
+        except FileExistsError:
+            pass
+        else:
+            raise AssertionError('a run id was minted twice')
+
+
 def test_the_run_id_pattern_rejects_near_misses():
     good = '20261109T120000Z-0123456789ab'
     assert state.RUN_ID_RE.fullmatch(good)

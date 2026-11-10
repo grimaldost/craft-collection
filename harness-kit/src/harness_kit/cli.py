@@ -53,6 +53,12 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         '--endpoint', metavar='URL', required=True, help='model endpoint, http://127.0.0.1:PORT'
     )
+    sub.add_parser(
+        'run',
+        help='check a session, then start the harness: run --harness NAME --home DIR '
+        '--workdir DIR --policy FILE -- HARNESS_ARGS...',
+        add_help=False,
+    )
     return parser
 
 
@@ -161,8 +167,13 @@ def run_home(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ['run']:
+        from harness_kit import launcher
+
+        return launcher.main(argv[1:])
     parser = build_parser()
-    args = parser.parse_args(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(argv)
     if args.command == 'judge':
         return run_judge(args.policy)
     if args.command == 'state':
