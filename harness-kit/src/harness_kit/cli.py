@@ -27,6 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     judge.add_argument('--policy', metavar='PATH', help=f'policy file (default: ${POLICY_ENV})')
+    stub = sub.add_parser('stub', help='serve a scripted local model endpoint for tests')
+    stub.add_argument('--log', required=True, help='file that receives one JSON line per request')
+    stub.add_argument('--script', required=True, help='JSON array of tool-call and text steps')
+    stub.add_argument(
+        '--port', type=int, default=0, help='port on 127.0.0.1 (default: any free port)'
+    )
     return parser
 
 
@@ -56,5 +62,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     if args.command == 'judge':
         return run_judge(args.policy)
+    if args.command == 'stub':
+        from harness_kit import stubmodel
+
+        return stubmodel.run(args.log, args.script, args.port)
     parser.print_help()
     return 0
