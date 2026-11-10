@@ -5,7 +5,9 @@ checks, in order: the arguments, the policy (it must load whole), the rendered
 home, a nested launch, the folder and its remotes, the session flags, the
 project layer and the environment. Any refusal exits 64 with one line on
 stderr and starts nothing; a run is minted only after every check passed, so a
-refusal leaves no `run.json`. Then the harness starts with the arguments
+refusal leaves no `run.json`. After the mint the presence canary runs
+(`canary.py`); a failed canary sets `outcome` to `refused-canary`, exits 65
+and never starts the session. Then the harness starts with the arguments
 unchanged, in the working folder, under an environment built from an allow
 list, and `kit run` returns its exit code.
 
@@ -24,7 +26,8 @@ folder (up to the top of its work tree, or to the filesystem root, and from
 `runs/` under the state root to that root, as the driver's walk says) is a
 refusal; one found in the working folder is recorded in `run.json`.
 
-Exit codes: 64 a refusal, 70 an internal error, else the harness's own.
+Exit codes: 64 a refusal, 65 a failed canary, 70 an internal error, else the
+harness's own.
 """
 
 from __future__ import annotations
@@ -38,10 +41,11 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from harness_kit import harnesses, state
+from harness_kit import canary, harnesses, state
 from harness_kit.policy import Policy, PolicyError, load_policy
 
 EXIT_REFUSED = 64
+EXIT_CANARY = 65
 EXIT_INTERNAL = 70
 WINDOWS = os.name == 'nt'
 CLAUDE_CODE = 'claude-code'
@@ -108,6 +112,7 @@ class Plan:
     remotes: list[dict] = field(default_factory=list)
     project_config: list[str] = field(default_factory=list)
     scrubbed: list[str] = field(default_factory=list)
+    binary: list[str] = field(default_factory=list)
 
 
 def _ascii(text: object) -> str:
@@ -480,6 +485,7 @@ def preflight(
         remotes=remotes,
         project_config=project_config,
         scrubbed=scrubbed,
+        binary=list(binary),
     )
 
 
@@ -487,8 +493,35 @@ def _exit_code(code: int) -> int:
     return 128 - code if code < 0 else code
 
 
+def run_plan_canary(plan: Plan, environ: dict) -> dict:
+    """The presence canary for a minted run, under the session's environment builder."""
+
+    def make_env(copy: dict, work: Path) -> dict:
+        env, _ = build_env(
+            plan.driver,
+            copy,
+            environ,
+            run_dir=plan.run_dir,
+            run_id=plan.run_id,
+            root=plan.root,
+            policy_path=plan.policy_path,
+            workdir=work,
+        )
+        return env
+
+    return canary.run_canary(
+        plan.driver,
+        plan.home,
+        plan.binary,
+        run_dir=plan.run_dir,
+        workdir=plan.workdir,
+        project_config=plan.project_config,
+        make_env=make_env,
+    )
+
+
 def launch(plan: Plan, environ: dict) -> int:
-    """Mint the run, record it, start the harness, wait, record the end."""
+    """Mint the run, record it, run the canary, start the harness, wait, record the end."""
     state.mint_run(plan.root, plan.driver.name, run_id=plan.run_id)
     (plan.run_dir / 'tmp').mkdir()
     (plan.run_dir / 'gh-config').mkdir()
@@ -505,12 +538,19 @@ def launch(plan: Plan, environ: dict) -> int:
         harness_version_found=found,
         scrubbed=plan.scrubbed,
     )
+    state.write_json_atomic(run_json, record)
     if found != plan.driver.pinned_version:
         sys.stderr.write(
             f'kit: {plan.driver.name} version {found or "not found"} differs from the pinned '
             f'{plan.driver.pinned_version}; starting it\n'
         )
         sys.stderr.flush()
+    result = run_plan_canary(plan, environ)
+    state.write_json_atomic(plan.run_dir / state.CANARY_DIR / canary.CANARY_JSON, result)
+    if not result['passed']:
+        record.update(outcome='refused-canary')
+        state.write_json_atomic(run_json, record)
+        return _fail(EXIT_CANARY, f'canary failed: {_ascii(result["reason"])}')
     try:
         proc = subprocess.Popen(plan.argv, env=plan.env, cwd=str(plan.workdir))  # noqa: S603
     except OSError as exc:
