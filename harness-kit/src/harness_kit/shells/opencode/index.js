@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LOOKUP_MS = 1000;
 const MAX_OUTPUT = 1024 * 1024;
+const KILL_WAIT_MS = 1000;
 
 const readConfig = () => {
   const c = JSON.parse(readFileSync(join(HERE, "shell_config.json"), "utf8"));
@@ -20,21 +21,24 @@ const readConfig = () => {
   return c;
 };
 
-// Ends the CLI's tree and releases the host's hold on its pipes. The kill is not waited for.
-const kill = (child) => {
-  try {
-    if (process.platform === "win32") {
+// Ends the CLI's tree and releases the host's hold on its pipes. The promise settles once the killer has
+// exited, or after KILL_WAIT_MS: a host that tears its tree down as soon as this plugin settles would take
+// a killer still at work with it. The killer's exit code is never read.
+const kill = (child) =>
+  new Promise((done) => {
+    const wait = setTimeout(done, KILL_WAIT_MS);
+    const over = () => (clearTimeout(wait), done());
+    for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy();
+    try {
+      if (process.platform !== "win32") return over(process.kill(-child.pid, "SIGKILL"));
       const root = process.env.SystemRoot || "C:\\Windows";
       const args = ["/PID", String(child.pid), "/T", "/F"];
-      spawn(root + "\\System32\\taskkill.exe", args, { stdio: "ignore", windowsHide: true })
-        .on("error", () => {})
-        .unref();
-    } else {
-      process.kill(-child.pid, "SIGKILL");
+      const killer = spawn(root + "\\System32\\taskkill.exe", args, { stdio: "ignore", windowsHide: true });
+      killer.on("error", over).on("exit", over).unref();
+    } catch {
+      over();
     }
-  } catch {}
-  for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy();
-};
+  });
 
 const runCli = (argv, text, ms) =>
   new Promise((done, fail) => {
@@ -48,9 +52,11 @@ const runCli = (argv, text, ms) =>
       clearTimeout(timer);
       fn(value);
     };
+    let stopping = false;
     const stop = (why) => {
-      if (child) kill(child);
-      finish(fail, new Error(why));
+      if (stopping) return;
+      stopping = true;
+      (child ? kill(child) : Promise.resolve()).then(() => finish(fail, new Error(why)));
     };
     const timer = setTimeout(() => stop("timed out"), Math.max(ms, 0));
     try {
@@ -70,9 +76,10 @@ const runCli = (argv, text, ms) =>
       if (size > MAX_OUTPUT) return stop("output too large");
       chunks.push(chunk);
     });
-    child.on("close", (code) =>
-      code === 0 ? finish(done, Buffer.concat(chunks).toString("utf8")) : finish(fail, new Error(`exit ${code}`)),
-    );
+    child.on("close", (code) => {
+      if (stopping) return;
+      finish(code === 0 ? done : fail, code === 0 ? Buffer.concat(chunks).toString("utf8") : new Error(`exit ${code}`));
+    });
     child.stdin.on("error", () => {});
     child.stdin.end(text);
   });

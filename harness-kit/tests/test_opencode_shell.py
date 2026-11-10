@@ -8,6 +8,7 @@ Contract under test:
 - effect allow returns, effect deny throws the reason;
 - each failure class throws a reason that starts `kit could not judge:`;
 - a hung CLI settles within 4.5 seconds and its grandchild never writes its late marker (Windows);
+- the plugin settles only once the killer has exited (a slow killer is waited for, up to a second);
 - the file names no bare kill command, has an error handler on the killer, imports only Node
   built-ins and holds at most 160 non-blank lines.
 
@@ -62,12 +63,19 @@ class Scene:
     def close(self) -> None:
         self.td.cleanup()
 
-    def start(self, event: object, session: str = 'none', env: dict | None = None):
+    def start(
+        self,
+        event: object,
+        session: str = 'none',
+        env: dict | None = None,
+        killer_delay_ms: int = 0,
+    ):
         spec = {
             'shell': str(self.shell_dir / 'index.js'),
             'directory': '/w',
             'session': session,
             'event': event,
+            'killerDelayMs': killer_delay_ms,
         }
         proc = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
             [NODE, str(DRIVER)],
@@ -306,6 +314,28 @@ def test_a_hung_cli_settles_within_4_5_seconds_and_its_grandchild_never_writes()
             assert not scene.marker.exists(), 'the grandchild wrote its late marker'
         finally:
             scene.close()
+
+
+def test_a_slow_killer_is_waited_for_before_the_plugin_settles():
+    """A host that tears its tree down when the plugin settles must not cut the killer short."""
+    if not IS_WINDOWS:
+        return  # the POSIX kill is unmeasured in this slice and has no check here
+    scene = Scene('hang')
+    try:
+        proc = scene.start(shell_event(), killer_delay_ms=400)
+        text, err = proc.communicate(timeout=30)
+        assert proc.returncode == 0, f'driver failed: {err}'
+        out = json.loads(text.strip().splitlines()[-1])
+        _assert_could_not_judge(out)
+        # The fake killer reports its exit 0.4 s after it is spawned, well inside the 1 s cap, whatever
+        # the real taskkill takes, so this holds only if the plugin waited for that exit.
+        assert out['killer_done'] is True, 'the plugin settled before the killer had exited'
+        # the 3 s deadline, then the killer's 0.4 s (timers may fire a millisecond early)
+        assert 3390 <= out['elapsed_ms'] < 4500, out
+        time.sleep(7)
+        assert not scene.marker.exists(), 'the grandchild wrote its late marker'
+    finally:
+        scene.close()
 
 
 def _source() -> str:
