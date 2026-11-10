@@ -9,17 +9,17 @@ import { pathToFileURL } from "node:url";
 const spec = JSON.parse(readFileSync(0, "utf8"));
 let killerDone = false;
 if (spec.killerDelayMs) {
-  // A slow killer: the real taskkill starts killerDelayMs late, and its exit is reported when it ends.
+  // A slow killer: the real taskkill starts at once and is not watched, so the hung tree still ends; the
+  // shell is told the killer exited exactly killerDelayMs later, however long the real taskkill runs.
   const real = cp.spawn;
   cp.spawn = (cmd, args, opts) => {
     if (!/taskkill\.exe$/i.test(cmd)) return real(cmd, args, opts);
+    real(cmd, args, opts).on("error", () => {});
     const fake = new EventEmitter();
     fake.unref = () => fake;
     setTimeout(() => {
-      real(cmd, args, opts).on("exit", () => {
-        killerDone = true;
-        fake.emit("exit", 0);
-      });
+      killerDone = true;
+      fake.emit("exit", 0);
     }, spec.killerDelayMs);
     return fake;
   };

@@ -327,9 +327,11 @@ def test_a_slow_killer_is_waited_for_before_the_plugin_settles():
         assert proc.returncode == 0, f'driver failed: {err}'
         out = json.loads(text.strip().splitlines()[-1])
         _assert_could_not_judge(out)
+        # The fake killer reports its exit 0.4 s after it is spawned, well inside the 1 s cap, whatever
+        # the real taskkill takes, so this holds only if the plugin waited for that exit.
         assert out['killer_done'] is True, 'the plugin settled before the killer had exited'
-        # the 3 s deadline, then the killer's 0.4 s delay and its run
-        assert 3400 <= out['elapsed_ms'] < 4500, out
+        # the 3 s deadline, then the killer's 0.4 s (timers may fire a millisecond early)
+        assert 3390 <= out['elapsed_ms'] < 4500, out
         time.sleep(7)
         assert not scene.marker.exists(), 'the grandchild wrote its late marker'
     finally:
