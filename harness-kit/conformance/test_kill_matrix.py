@@ -470,7 +470,7 @@ def check_terminate_guard() -> None:
     """`terminate` ends a pid only while it is still the process recorded for it (Windows)."""
     if not WINDOWS:
         return
-    child = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+    child = subprocess.Popen(
         [sys.executable, '-I', '-c', 'import time; time.sleep(30)'],
         stdin=subprocess.DEVNULL,
     )
