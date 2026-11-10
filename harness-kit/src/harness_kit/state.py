@@ -177,22 +177,34 @@ def write_json_atomic(
         raise
 
 
-def mint_run(root: Path, harness: str) -> tuple[str, Path]:
-    """Create `runs/<id>/run.json` with outcome `minted`; return the id and the run folder."""
+def new_run_id(now: datetime | None = None) -> str:
+    """A fresh run id, `YYYYMMDDTHHMMSSZ-` and 12 hex, nothing created."""
+    now = datetime.now(timezone.utc) if now is None else now
+    return f'{now:%Y%m%dT%H%M%SZ}-{secrets.token_hex(6)}'
+
+
+def mint_run(root: Path, harness: str, run_id: str | None = None) -> tuple[str, Path]:
+    """Create `runs/<id>/run.json` with outcome `minted`; return the id and the run folder.
+
+    A `run_id` computed ahead (`new_run_id`) is minted as given, and one whose
+    folder exists raises FileExistsError; without one a fresh id is drawn.
+    """
     runs = Path(root) / 'runs'
     runs.mkdir(parents=True, exist_ok=True)
     while True:
         now = datetime.now(timezone.utc)
-        run_id = f'{now:%Y%m%dT%H%M%SZ}-{secrets.token_hex(6)}'
-        run_dir = runs / run_id
+        chosen = run_id if run_id is not None else new_run_id(now)
+        run_dir = runs / chosen
         try:
             run_dir.mkdir()
         except FileExistsError:
+            if run_id is not None:
+                raise
             continue
         break
-    record = {'run_id': run_id, 'harness': harness, 'started_utc': _utc(now), 'outcome': 'minted'}
+    record = {'run_id': chosen, 'harness': harness, 'started_utc': _utc(now), 'outcome': 'minted'}
     write_json_atomic(run_dir / 'run.json', record)
-    return run_id, run_dir
+    return chosen, run_dir
 
 
 def is_launched(root: Path, run_id: str | None) -> bool:
