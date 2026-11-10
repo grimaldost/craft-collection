@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     st_sub.add_parser('path', help='print the state root')
     new_run = st_sub.add_parser('new-run', help='mint a run; print its id and folder as JSON')
     new_run.add_argument('--harness', metavar='NAME', required=True, help='harness name')
+    stub = sub.add_parser('stub', help='serve a scripted local model endpoint for tests')
+    stub.add_argument('--log', required=True, help='file that receives one JSON line per request')
+    stub.add_argument('--script', required=True, help='JSON array of tool-call and text steps')
+    stub.add_argument(
+        '--port', type=int, default=0, help='port on 127.0.0.1 (default: any free port)'
+    )
     return parser
 
 
@@ -132,5 +138,9 @@ def main(argv: list[str] | None = None) -> int:
         return run_judge(args.policy)
     if args.command == 'state':
         return run_state(args)
+    if args.command == 'stub':
+        from harness_kit import stubmodel
+
+        return stubmodel.run(args.log, args.script, args.port)
     parser.print_help()
     return 0
