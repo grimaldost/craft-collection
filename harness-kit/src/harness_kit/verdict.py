@@ -15,6 +15,9 @@ policy is `unknown`. `unknown` has effect deny.
 
 Ahead of the policy's rules and after the policy loads, an event of a harness
 other than Claude Code that was not launched is denied by `launcher.required`.
+Then, when the caller passes the canary's nonce, a shell act whose command
+names `deny-<nonce>.marker` is denied by `canary.deny`, and one that names
+`allow-<nonce>.marker` is allowed by `canary.allow`.
 """
 
 from __future__ import annotations
@@ -46,6 +49,11 @@ SKIPPED = 'skipped'
 LAUNCHER_FREE_HARNESS = 'claude-code'
 LAUNCHER_RULE = 'launcher.required'
 LAUNCHER_REASON = 'this harness runs only under kit run; start the session with kit run'
+
+CANARY_DENY_RULE = 'canary.deny'
+CANARY_ALLOW_RULE = 'canary.allow'
+CANARY_DENY_REASON = 'kit canary: this call is refused on purpose'
+CANARY_ALLOW_REASON = 'kit canary: this call is allowed on purpose'
 
 
 def make_verdict(
@@ -117,11 +125,30 @@ def rule_result(rule: Rule, event: dict, windows: bool = False) -> str:
     return NO_MATCH if results else MATCH
 
 
-def judge(event: object, policy: Policy | PolicyError, launched: bool | None = None) -> dict:
+def canary_rule(event: dict, nonce: str | None) -> str | None:
+    """`canary.deny`, `canary.allow` or None for one valid event under the canary's nonce."""
+    act = event['act']
+    if not nonce or act['kind'] != 'shell' or event['observation']['command'] != 'observed':
+        return None
+    command = act['command'] or ''
+    if f'deny-{nonce}.marker' in command:
+        return CANARY_DENY_RULE
+    if f'allow-{nonce}.marker' in command:
+        return CANARY_ALLOW_RULE
+    return None
+
+
+def judge(
+    event: object,
+    policy: Policy | PolicyError,
+    launched: bool | None = None,
+    nonce: str | None = None,
+) -> dict:
     """Judge one event (parsed JSON) against a loaded policy or the error that loading raised.
 
     `launched` is whether the event belongs to a run the launcher minted; None
     leaves the launcher rule out (a caller that judges outside the CLI).
+    `nonce` is the canary's, when the CLI judges inside a canary run.
     """
     if isinstance(policy, PolicyError):
         return unknown_verdict(f'unreadable policy: {policy}', policy.sha256)
@@ -133,6 +160,16 @@ def judge(event: object, policy: Policy | PolicyError, launched: bool | None = N
     if launched is False and ev['harness']['name'] != LAUNCHER_FREE_HARNESS:
         return make_verdict(
             'deny', governed=True, rule=LAUNCHER_RULE, reason=LAUNCHER_REASON, policy_sha256=sha
+        )
+    canary = canary_rule(ev, nonce)
+    if canary is not None:
+        deny = canary == CANARY_DENY_RULE
+        return make_verdict(
+            'deny' if deny else 'allow',
+            governed=True,
+            rule=canary,
+            reason=CANARY_DENY_REASON if deny else CANARY_ALLOW_REASON,
+            policy_sha256=sha,
         )
 
     remembered: Rule | None = None
@@ -171,7 +208,12 @@ def _cannot_tell_reason(rule: Rule) -> str:
     return f'{text}: {rule.reason}' if rule.reason else text
 
 
-def judge_bytes(data: bytes, policy: Policy | PolicyError, launched: bool | None = None) -> dict:
+def judge_bytes(
+    data: bytes,
+    policy: Policy | PolicyError,
+    launched: bool | None = None,
+    nonce: str | None = None,
+) -> dict:
     """Judge the raw bytes of one event; bytes that are not one JSON object are invalid."""
     if isinstance(policy, PolicyError):
         return judge(None, policy, launched)
@@ -179,4 +221,4 @@ def judge_bytes(data: bytes, policy: Policy | PolicyError, launched: bool | None
         event = parse_event(data)
     except InvalidEventError as exc:
         return unknown_verdict(f'invalid event: {exc}', policy.sha256)
-    return judge(event, policy, launched)
+    return judge(event, policy, launched, nonce)

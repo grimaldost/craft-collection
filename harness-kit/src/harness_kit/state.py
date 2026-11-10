@@ -38,6 +38,10 @@ APP_DIR = 'harness-kit'
 
 RUN_ID_RE = re.compile(r'[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}')
 
+CANARY_NONCE_ENV = 'KIT_CANARY_NONCE'
+NONCE_RE = re.compile(r'[0-9a-f]{16}')
+CANARY_DIR = 'canary'
+
 HARNESS_DIRS = ('.claude', '.codex', '.opencode', '.gemini', '.pi', '.agents', '.goose')
 HARNESS_CONFIG_VARS = (
     'CLAUDE_CONFIG_DIR',
@@ -212,6 +216,17 @@ def is_launched(root: Path, run_id: str | None) -> bool:
     if not isinstance(run_id, str) or not RUN_ID_RE.fullmatch(run_id):
         return False
     return (Path(root) / 'runs' / run_id / 'run.json').is_file()
+
+
+def canary_nonce(env) -> str | None:
+    """The canary's nonce from the environment, or None unless it is 16 lowercase hex."""
+    value = env.get(CANARY_NONCE_ENV)
+    return value if isinstance(value, str) and NONCE_RE.fullmatch(value) else None
+
+
+def refused_marker(root: Path, run_id: str, nonce: str) -> Path:
+    """Where the CLI records that it refused the canary's denied call."""
+    return Path(root) / 'runs' / run_id / CANARY_DIR / f'refused-{nonce}.marker'
 
 
 def session_folder(session_id: str | None) -> str:

@@ -12,7 +12,7 @@ from pathlib import Path
 from harness_kit import __version__, state
 from harness_kit.event import InvalidEventError, check_event, parse_event
 from harness_kit.policy import PolicyError, load_policy
-from harness_kit.verdict import judge_bytes, unknown_verdict
+from harness_kit.verdict import CANARY_DENY_RULE, judge_bytes, unknown_verdict
 
 POLICY_ENV = 'KIT_POLICY'
 EXIT_REFUSED = 64
@@ -82,7 +82,9 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
     """Judge one event under the run identity the environment names, and journal it.
 
     A journal that cannot be written, a refused state root among its forms,
-    turns the verdict into `unknown`, governed.
+    turns the verdict into `unknown`, governed. Inside a canary run (its nonce
+    in `KIT_CANARY_NONCE`) a refusal by `canary.deny` of a launched event is
+    recorded by the refused marker in the run's canary folder.
     """
     try:
         root = state.state_root(env)
@@ -93,8 +95,9 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
     run_id = env.get(state.RUN_ID_ENV)
     launched = root is not None and state.is_launched(root, run_id)
     run_id = run_id if launched else None
+    nonce = state.canary_nonce(env)
 
-    verdict = judge_bytes(data, policy, launched)
+    verdict = judge_bytes(data, policy, launched, nonce)
     if root is not None:
         event = _valid_event(data)
         now = datetime.now(timezone.utc)
@@ -105,6 +108,13 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
             journal_error = str(exc)
     if journal_error is not None:
         verdict = unknown_verdict(f'journal not written: {journal_error}', verdict['policy_sha256'])
+    if verdict['rule'] == CANARY_DENY_RULE and launched and nonce is not None:
+        marker = state.refused_marker(root, run_id, nonce)
+        try:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_bytes(b'')
+        except OSError:
+            pass  # no marker: the canary fails, which is the closed side
     verdict['run_id'] = run_id
     verdict['launched'] = launched
     return verdict

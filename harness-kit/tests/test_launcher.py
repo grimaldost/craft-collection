@@ -64,19 +64,8 @@ OPENCODE_ARGS = [
 SESSION_ARGS = {'claude-code': CLAUDE_ARGS, 'opencode': OPENCODE_ARGS}
 PINNED = {'claude-code': '2.1.316', 'opencode': '2.2.5'}
 
-FAKE_HARNESS = r"""
-import json, os, subprocess, sys
-out, version, code = sys.argv[1], sys.argv[2], int(sys.argv[3])
-args = sys.argv[4:]
-if args == ['--version']:
-    print('fake harness ' + version)
-    sys.exit(0)
-probe = 'import os, sys; open(sys.argv[1], "w").write(os.environ.get("KIT_RUN_ID", "none"))'
-subprocess.run([sys.executable, '-c', probe, out + '.grandchild'], check=True)
-with open(out, 'w', encoding='utf-8') as fh:
-    json.dump({'args': args, 'env': dict(os.environ), 'cwd': os.getcwd()}, fh)
-sys.exit(code)
-"""
+# Its canary run honours the home's guard, so the canary passes and the session starts.
+FAKE_HARNESS = Path(__file__).resolve().parent / 'canary_fake_harness.py'
 
 
 class Case:
@@ -91,14 +80,13 @@ class Case:
         self.work = self.tests / 'work'
         self.work.mkdir(exist_ok=True)
         self.out = base / 'fake-out.json'
-        fake = base / 'fake_harness.py'
-        fake.write_text(FAKE_HARNESS, encoding='utf-8')
         self.argv = [
             sys.executable,
-            str(fake),
+            str(FAKE_HARNESS),
             str(self.out),
             version or PINNED[harness],
             str(code),
+            'guarded',
         ]
         self.home = base / f'home-{harness}'
         self.policy = base / 'policy.toml'
