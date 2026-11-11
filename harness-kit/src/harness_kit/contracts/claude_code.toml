@@ -8,45 +8,45 @@ version = "2.1.316"
 
 [[objective]]
 id = "guard_loaded"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "degraded"
+mark = "measured"
+evidence = "Conformance cell guard-loaded passed on Claude Code 2.1.316, 2026-11-10."
 
 [[objective]]
 id = "refusal_in_turn"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "degraded"
+mark = "measured"
+evidence = "Conformance cells deny-shell and deny-write passed on Claude Code 2.1.316, 2026-11-10."
 
 [[objective]]
 id = "allow_passes"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "tested"
+mark = "measured"
+evidence = "Conformance cell allow-shell passed on Claude Code 2.1.316, 2026-11-10."
 
 [[objective]]
 id = "run_identity"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "degraded"
+mark = "measured"
+evidence = "Conformance cell run-identity passed on Claude Code 2.1.316, 2026-11-10."
 
 [[objective]]
 id = "launcher_checks"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "tested"
+mark = "measured"
+evidence = "Conformance cell not-launched passed on Claude Code 2.1.316, 2026-11-10."
 
 [[objective]]
 id = "hung_guard"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "tested"
+mark = "measured"
+evidence = "Conformance cell hung-guard passed on Claude Code 2.1.316, 2026-11-10."
 
 [[objective]]
 id = "heartbeat"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "tested"
+mark = "measured"
+evidence = "Conformance cell heartbeat passed on Claude Code 2.1.316, 2026-11-10."
 
 [[objective]]
 id = "prevention"

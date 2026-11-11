@@ -3,9 +3,10 @@
 
 Contract under test, with the fake harness of `canary_fake_harness.py`:
 - each contract parses, holds the closed objective list once, states from the
-  closed vocabulary, `prevention` `absent` and every other objective `unknown`,
-  and every loss row this slice requires, each with a plain evidence sentence
-  naming the harness version and a date;
+  closed vocabulary, the states the conformance suite measured (`prevention`
+  `absent`), each evidence naming the conformance cells behind it, and every
+  loss row this slice requires, each with a plain evidence sentence naming the
+  harness version and a date;
 - `kit run` writes `runs/<id>/heartbeat.json` (`run_id`, `pid`, `seq`, `utc`)
   every 2 seconds while the session runs; the run reads `running`, and
   `stale` once the launcher is killed and its heartbeat is older than 10 s;
@@ -77,6 +78,46 @@ REQUIRED_LOSSES = {
     },
 }
 CONTRACT_FILES = {'claude-code': 'claude_code.toml', 'opencode': 'opencode.toml'}
+# What the conformance suite measured: each objective's state, and the cells that name it.
+MEASURED = {
+    'claude-code': {
+        'guard_loaded': ('degraded', ('guard-loaded',)),
+        'refusal_in_turn': ('degraded', ('deny-shell', 'deny-write')),
+        'allow_passes': ('tested', ('allow-shell',)),
+        'run_identity': ('degraded', ('run-identity',)),
+        'launcher_checks': ('tested', ('not-launched',)),
+        'hung_guard': ('tested', ('hung-guard',)),
+        'heartbeat': ('tested', ('heartbeat',)),
+    },
+    'opencode': {
+        'guard_loaded': ('degraded', ('guard-loaded',)),
+        'refusal_in_turn': ('tested', ('deny-shell', 'deny-write')),
+        'allow_passes': ('tested', ('allow-shell',)),
+        'run_identity': ('degraded', ('run-identity',)),
+        'launcher_checks': ('degraded', ('launcher-required',)),
+        'hung_guard': ('tested', ('hung-guard',)),
+        'heartbeat': ('tested', ('heartbeat',)),
+    },
+}
+CELL_IDS = (
+    'guard-loaded',
+    'deny-shell',
+    'deny-write',
+    'allow-shell',
+    'run-identity',
+    'hung-guard',
+    'heartbeat',
+    'not-launched',
+    'launcher-required',
+)
+
+
+def measured_state(harness: str, objective: str) -> str:
+    if objective == 'prevention':
+        return 'absent'
+    return MEASURED[harness][objective][0]
+
+
 FORBIDDEN = re.compile(r'%|percent|score', re.IGNORECASE)
 PRIVATE_LABELS = re.compile(r'\b(CC[0-9]|O3load|O-guard-off|P[0-9]|R[0-9]|O[0-9])\b')
 OUTPUTS: list[str] = []
@@ -120,12 +161,20 @@ def test_contracts_hold_the_closed_lists_and_the_required_losses():
         for objective in data['objective']:
             assert set(objective) == {'id', 'state', 'mark', 'evidence'}, objective
             assert objective['state'] in STATES and objective['mark'] in MARKS, objective
-            expected = 'absent' if objective['id'] == 'prevention' else 'unknown'
-            assert objective['state'] == expected, objective
-            if objective['id'] == 'prevention':
-                assert objective['evidence'].strip(), objective
-            else:
-                assert objective['evidence'] == '', objective
+            assert objective['state'] == measured_state(harness, objective['id']), objective
+            assert objective['evidence'].strip(), objective
+            if objective['id'] != 'prevention':
+                _, cells = MEASURED[harness][objective['id']]
+                named = {
+                    c
+                    for c in CELL_IDS
+                    if re.search(rf'(?<![\w-]){c}(?![\w-])', objective['evidence'])
+                }
+                assert named == set(cells), (harness, objective)
+                assert PINNED[harness] in objective['evidence'], objective
+                degraded = objective['state'] == 'degraded'
+                has_loss = any(x['objective'] == objective['id'] for x in data['loss'])
+                assert degraded == has_loss, (harness, objective)
         losses = {loss['id']: loss for loss in data['loss']}
         assert len(losses) == len(data['loss']), 'a loss id repeats'
         for loss_id, objective in REQUIRED_LOSSES[harness].items():
@@ -376,8 +425,7 @@ def test_doctor_reads_the_contract_when_the_version_matches():
             for name, objective in entry['objectives'].items():
                 assert set(objective) == {'state', 'source', 'evidence'}, objective
                 assert objective['source'] == 'contract', objective
-                expected = 'absent' if name == 'prevention' else 'unknown'
-                assert objective['state'] == expected, (name, objective)
+                assert objective['state'] == measured_state(harness, name), (name, objective)
             losses = {loss['id'] for loss in entry['losses']}
             assert set(REQUIRED_LOSSES[harness]) <= losses, losses
     finally:
@@ -406,7 +454,11 @@ def test_a_tested_contract_reads_unknown_once_the_version_differs():
         contracts = base / 'contracts'
         shutil.copytree(saved, contracts)
         path = contracts / CONTRACT_FILES['claude-code']
-        text = path.read_text(encoding='utf-8').replace('state = "unknown"', 'state = "tested"')
+        text = re.sub(
+            r'state = "(?:tested|degraded|unknown)"',
+            'state = "tested"',
+            path.read_text(encoding='utf-8'),
+        )
         path.write_text(text, encoding='utf-8')
         doctor.CONTRACTS_DIR = contracts
         driver = harnesses.get('claude-code')
