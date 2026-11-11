@@ -34,6 +34,12 @@ floor relies on changes: a new export, or a fix to one of the exported hooks. Th
 `rev` must be a commit on `main` at or after the export a consumer needs, so a
 consumer adopting an experiment-rigor gate takes a `rev` that already carries it.
 
+Beside the act-time hooks sits a mechanism kept outside the harness: the
+`kit` command line in `harness-kit/` judges events, starts a harness only after a
+presence canary, and reports what was tested per harness. A shell's refusal there
+is feedback to the model, not prevention, and the doctor reports `prevention` as
+`absent`. See `harness-kit/README.md`.
+
 ## Commands and output styles, by hand
 
 Both are plain markdown an agent can be pointed at — no command/output-style
