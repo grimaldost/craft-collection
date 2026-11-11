@@ -8,45 +8,45 @@ version = "2.2.5"
 
 [[objective]]
 id = "guard_loaded"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "degraded"
+mark = "measured"
+evidence = "Conformance cell guard-loaded passed on opencode 2.2.5, 2026-11-10."
 
 [[objective]]
 id = "refusal_in_turn"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "tested"
+mark = "measured"
+evidence = "Conformance cells deny-shell and deny-write passed on opencode 2.2.5, 2026-11-10."
 
 [[objective]]
 id = "allow_passes"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "tested"
+mark = "measured"
+evidence = "Conformance cell allow-shell passed on opencode 2.2.5, 2026-11-10."
 
 [[objective]]
 id = "run_identity"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "degraded"
+mark = "measured"
+evidence = "Conformance cell run-identity passed on opencode 2.2.5, 2026-11-10."
 
 [[objective]]
 id = "launcher_checks"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "degraded"
+mark = "measured"
+evidence = "Conformance cell launcher-required passed on opencode 2.2.5, 2026-11-10."
 
 [[objective]]
 id = "hung_guard"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "tested"
+mark = "measured"
+evidence = "Conformance cell hung-guard passed on opencode 2.2.5, 2026-11-10."
 
 [[objective]]
 id = "heartbeat"
-state = "unknown"
-mark = "read"
-evidence = ""
+state = "tested"
+mark = "measured"
+evidence = "Conformance cell heartbeat passed on opencode 2.2.5, 2026-11-10."
 
 [[objective]]
 id = "prevention"
