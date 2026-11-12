@@ -1,0 +1,22 @@
+# The uv rule: inside a uv project, steer installs and environments toward uv.
+# The logic is the engineering-discipline plugin's own core, called by uv_rule.py;
+# `reason` is, character for character, what its harness_adapters.block_message() returns.
+pack = 1
+name = "uv"
+
+[[checker]]
+id = "uv-rule"
+file = "uv_rule.py"
+budget_ms = 250
+
+[[rule]]
+id = "uv-project-uses-uv"
+effect = "deny"
+governed = false
+kinds = ["shell"]
+check = "uv-rule"
+reason = "This is a uv-managed project. Use `uv add <pkg>` for dependencies or `uv venv` / `uv sync` for environments, instead of pip/poetry/virtualenv."
+
+[prevention]
+rule = "uv-project-uses-uv"
+layer = "pip's require-virtualenv setting in the user's pip configuration"
