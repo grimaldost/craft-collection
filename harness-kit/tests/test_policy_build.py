@@ -311,7 +311,12 @@ def _refusal_cases(tree: Tree) -> list[tuple[str, object]]:
     def remove(path: Path):
         return lambda: path.unlink()
 
-    absolute = _fwd(tree.root / 'elsewhere.py')
+    def pack_a_absolute():
+        # The absolute file exists and is a valid checker, so only the absolute check refuses it.
+        elsewhere = tree.root / 'elsewhere.py'
+        elsewhere.write_bytes(MATCH.encode('utf-8'))
+        _pack(tree.pack_a, 'alpha', ('a-one',), 'ca', file=_fwd(elsewhere))
+
     return [
         ('base missing', remove(tree.base)),
         ('base not TOML', base_text('version = = 1\n')),
@@ -332,7 +337,7 @@ def _refusal_cases(tree: Tree) -> list[tuple[str, object]]:
         ),
         ('rule repeats across packs', lambda: _pack(tree.pack_a, 'alpha', ('b-one',), 'ca')),
         ('checker repeats across packs', lambda: _pack(tree.pack_a, 'alpha', ('a-one',), 'cb')),
-        ('file absolute', pack_a(file=absolute)),
+        ('file absolute', pack_a_absolute),
         ('file with ..', pack_a(file='../pb/cb.py')),
         ('file inner ..', pack_a(file='sub/../ca.py')),
         ('file missing', pack_a(file='nowhere.py')),
