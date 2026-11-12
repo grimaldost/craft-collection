@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from harness_kit import __version__, checkers, state
+from harness_kit import __version__, checkers, packs, state
 from harness_kit.event import InvalidEventError, check_event, parse_event
 from harness_kit.policy import Policy, PolicyError, load_policy
 from harness_kit.verdict import CANARY_DENY_RULE, judge_bytes, unknown_verdict
@@ -68,6 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar='DIR',
         help='folder for the live scratch homes, under a test root of KIT_POLICY',
     )
+    packs.add_parser(sub)
     sub.add_parser(
         'run',
         help='check a session, then start the harness: run --harness NAME --home DIR '
@@ -226,6 +227,8 @@ def main(argv: list[str] | None = None) -> int:
         from harness_kit import doctor
 
         return doctor.main(args.json, args.live, args.live_root)
+    if args.command == 'policy':
+        return packs.run_build(args)
     if args.command == 'stub':
         from harness_kit import stubmodel
 
