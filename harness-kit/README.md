@@ -52,6 +52,7 @@ Python 3.11 or later, no dependencies.
 | `kit home render --harness NAME --dir DIR --endpoint URL` | Render a test home for `claude-code` or `opencode` into an absent or empty folder; print its `home.json`. |
 | `kit run --harness NAME --home DIR --workdir DIR --policy FILE -- HARNESS_ARGS...` | Check the session, run the presence canary, then start the harness and return its exit code. |
 | `kit doctor [--json] [--live --live-root DIR]` | Report what was tested, the runs and the sessions that were not launched. |
+| `kit policy build --base FILE --pack DIR [--pack DIR ...] --out FILE [--force]` | Write a version 2 policy from a base policy and rule packs, with `<out>.packs.json` beside it; a refused input exits 64 and writes nothing. |
 
 In this slice `kit run` accepts only a home rendered by `kit home render`, and
 only a headless session (`claude -p`, `opencode run`): the canary ran nothing
