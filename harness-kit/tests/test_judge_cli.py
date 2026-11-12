@@ -233,9 +233,17 @@ def test_a_checker_writing_to_both_streams_leaves_one_verdict_line():
         'past its budget, still writing': ('allow', None),
         'raises after writing': ('allow', None),
     }
+    # The load and the call each start a child interpreter under one wait: a case
+    # that must finish in time gets the largest budget, so a busy machine cannot
+    # turn its result into cannot-tell. Only the case meant to overrun keeps 100 ms.
+    budgets = {
+        'returns at once': 500,
+        'past its budget, still writing': 100,
+        'raises after writing': 500,
+    }
     for label, call in calls.items():
         with tempfile.TemporaryDirectory() as td:
-            policy = _noisy_checker(td, call)
+            policy = _noisy_checker(td, call, budgets[label])
             v = _judge(_ev(event()), '--policy', str(policy))
             assert (v['verdict'], v['rule']) == expected[label], (label, v)
 

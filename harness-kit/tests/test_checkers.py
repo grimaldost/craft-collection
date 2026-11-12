@@ -235,6 +235,9 @@ def test_the_total_budget_leaves_the_third_slow_checker_uncalled():
         start = time.monotonic()
         v = _verdict(_policy(*parts))
         elapsed = time.monotonic() - start
+        # A third checker called with no wait left would still write its marker
+        # a moment after the judgement returns; wait past that before looking.
+        time.sleep(0.5)
         assert v['verdict'] == 'allow', v
         assert markers[0].exists() and markers[1].exists()
         assert not markers[2].exists()
