@@ -9,9 +9,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from harness_kit import __version__, state
+from harness_kit import __version__, checkers, state
 from harness_kit.event import InvalidEventError, check_event, parse_event
-from harness_kit.policy import PolicyError, load_policy
+from harness_kit.policy import Policy, PolicyError, load_policy
 from harness_kit.verdict import CANARY_DENY_RULE, judge_bytes, unknown_verdict
 
 POLICY_ENV = 'KIT_POLICY'
@@ -136,15 +136,32 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
 
 
 def run_judge(policy_path: str | None) -> int:
-    """Print exactly one verdict line; exit 0 whenever it was printed."""
+    """Print exactly one verdict line; exit 0 whenever it was printed.
+
+    A policy that declares checkers puts the output sink in place before any
+    checker loads: descriptors 1 and 2 go to the null device and the verdict
+    is written to a duplicate of descriptor 1. The process then ends through
+    `os._exit` right after that line, since a checker thread still writing
+    could otherwise abort the interpreter's shutdown.
+    """
+    verdict_fd = None
     try:
         policy = _load(policy_path or os.environ.get(POLICY_ENV))
+        if isinstance(policy, Policy) and policy.checkers:
+            verdict_fd = checkers.install_sink()
         verdict = judge_and_journal(sys.stdin.buffer.read(), policy, os.environ)
     except Exception as exc:  # a verdict is owed whatever failed; unknown denies
         verdict = unknown_verdict(f'judge failed: {type(exc).__name__}')
-    sys.stdout.write(json.dumps(verdict, ensure_ascii=True) + '\n')
-    sys.stdout.flush()
-    return 0
+    line = json.dumps(verdict, ensure_ascii=True) + '\n'
+    if verdict_fd is None:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        return 0
+    try:
+        checkers.write_all(verdict_fd, line.encode('ascii'))
+        os.close(verdict_fd)
+    finally:
+        os._exit(0)
 
 
 def _fail(code: int, message: str) -> int:

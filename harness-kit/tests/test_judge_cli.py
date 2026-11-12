@@ -9,6 +9,9 @@ Contract under test:
 - input that is not one valid event (bad JSON, empty, duplicate keys, bytes that
   are not UTF-8) is judged `unknown`;
 - non-ASCII input under a cp1252 stdout still prints a parsable ASCII verdict;
+- under a version 2 policy, whatever a checker writes to descriptors 1 and 2
+  (print, os.write, sys.__stdout__, a child process), before or after its
+  budget, stdout holds exactly the verdict line and the exit is 0;
 - no `.py` file of the package outside `shells/` and `harnesses/` names a key of
   any harness's payload.
 
@@ -97,7 +100,7 @@ def test_judge_denies_on_a_matching_deny_rule():
 def test_judge_falls_back_to_kit_policy_and_the_flag_wins():
     with tempfile.TemporaryDirectory() as td:
         good = _policy_file(td)
-        bad = _policy_file(td, 'version = 2\n', 'bad.toml')
+        bad = _policy_file(td, 'version = 3\n', 'bad.toml')
         v = _judge(_ev(event()), KIT_POLICY=str(good))
         assert v['verdict'] == 'allow' and v['policy_sha256'] == _sha(good), v
         v = _judge(_ev(event()), '--policy', str(good), KIT_POLICY=str(bad))
@@ -172,6 +175,85 @@ def test_a_write_event_is_judged_by_its_paths():
         assert (v['verdict'], v['rule']) == ('unknown', 'no-config-write'), v
         v = _judge(_ev(write_event(['/w/notes.md'])), '--policy', str(policy))
         assert v['verdict'] == 'allow', v
+
+
+_NOISE = """\
+import os, subprocess, sys, threading, time
+
+def noise(tag):
+    print(tag + ' print')
+    sys.stdout.write(tag + ' stdout no newline')
+    sys.stderr.write(tag + ' stderr\\n')
+    os.write(1, (tag + ' fd1\\n').encode())
+    os.write(2, (tag + ' fd2\\n').encode())
+    sys.__stdout__.write(tag + ' dunder out\\n')
+    sys.__stdout__.flush()
+    sys.__stderr__.write(tag + ' dunder err\\n')
+    subprocess.run([sys.executable, '-c', 'import sys; print("child"); sys.stderr.write("e")'])
+
+def later():
+    for _ in range(200):
+        noise('late')
+        time.sleep(0.002)
+
+noise('load')
+"""
+
+
+def _noisy_checker(td: str, call_body: str, budget_ms: int = 100) -> Path:
+    body = _NOISE + 'def check(act, observation):\n' + call_body
+    data = body.encode('utf-8')
+    path = Path(td) / 'noisy_check.py'
+    path.write_bytes(data)
+    sha = hashlib.sha256(data).hexdigest()
+    rule = (
+        '[[rule]]\nid = "noisy"\neffect = "deny"\ngoverned = false\nkinds = ["shell"]\n'
+        'check = "n"\nreason = "noise"\n'
+    )
+    table = (
+        f'[[checker]]\nid = "n"\nfile = "{path.as_posix()}"\nsha256 = "{sha}"\n'
+        f'budget_ms = {budget_ms}\n\n'
+    )
+    return _policy_file(td, 'version = 2\n\n' + table + rule, 'noisy.toml')
+
+
+def test_a_checker_writing_to_both_streams_leaves_one_verdict_line():
+    calls = {
+        'returns at once': '    noise("call")\n    return {"result": "match"}\n',
+        'past its budget, still writing': (
+            '    threading.Thread(target=later, daemon=True).start()\n'
+            '    noise("call")\n'
+            '    time.sleep(1)\n'
+            '    return {"result": "match"}\n'
+        ),
+        'raises after writing': '    noise("call")\n    raise RuntimeError("x")\n',
+    }
+    expected = {
+        'returns at once': ('deny', 'noisy'),
+        'past its budget, still writing': ('allow', None),
+        'raises after writing': ('allow', None),
+    }
+    for label, call in calls.items():
+        with tempfile.TemporaryDirectory() as td:
+            policy = _noisy_checker(td, call)
+            v = _judge(_ev(event()), '--policy', str(policy))
+            assert (v['verdict'], v['rule']) == expected[label], (label, v)
+
+
+def test_a_checker_that_sleeps_while_it_loads_reads_cannot_tell():
+    with tempfile.TemporaryDirectory() as td:
+        data = b'import time\ntime.sleep(5)\ndef check(act, observation):\n    return {}\n'
+        path = Path(td) / 'slow.py'
+        path.write_bytes(data)
+        sha = hashlib.sha256(data).hexdigest()
+        text = (
+            f'version = 2\n[[checker]]\nid = "s"\nfile = "slow.py"\nsha256 = "{sha}"\n'
+            'budget_ms = 100\n[[rule]]\nid = "slow"\neffect = "deny"\ngoverned = true\n'
+            'kinds = ["shell"]\ncheck = "s"\n'
+        )
+        policy = _policy_file(td, text)
+        v = _judge(_ev(event()), '--policy', str(policy))
+        assert (v['verdict'], v['governed'], v['rule']) == ('unknown', True, 'slow'), v
 
 
 # Built from parts so this file does not itself carry the words it looks for.
