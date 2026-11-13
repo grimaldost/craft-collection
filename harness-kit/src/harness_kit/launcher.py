@@ -1,9 +1,11 @@
 """Launcher preflight and `kit run`.
 
 `kit run --harness NAME --home DIR --workdir DIR --policy FILE -- HARNESS_ARGS...`
-checks, in order: the arguments, the policy (it must load whole), the rendered
-home, a nested launch, the folder and its remotes, the session flags, the
-project layer and the environment. Any refusal exits 64 with one line on
+checks, in order: the arguments, the policy (it must load whole, and each of
+its checkers must execute and define a callable `check` within its budget,
+loaded with descriptors 1 and 2 at the null device for the load only), the
+rendered home, a nested launch, the folder and its remotes, the session flags,
+the project layer and the environment. Any refusal exits 64 with one line on
 stderr and starts nothing; a run is minted only after every check passed, so a
 refusal leaves no `run.json`. After the mint the presence canary runs
 (`canary.py`); a failed canary sets `outcome` to `refused-canary`, exits 65
@@ -41,7 +43,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from harness_kit import canary, doctor, harnesses, state
+from harness_kit import canary, doctor, harnesses, packs, state
 from harness_kit.policy import Policy, PolicyError, load_policy
 
 EXIT_REFUSED = 64
@@ -441,6 +443,9 @@ def preflight(
         policy = load_policy(policy_path)
     except PolicyError as exc:
         raise RefusalError(f'policy unreadable: {_ascii(exc)}') from None
+    broken = packs.verify_checkers(policy.checkers)
+    if broken is not None:
+        raise RefusalError(f'policy checker unusable: {_ascii(broken)}')
     home = check_home(Path(home_dir), driver)
     if state.RUN_ID_ENV in environ:
         raise RefusalError(f'nested launch: {state.RUN_ID_ENV} is already set')
