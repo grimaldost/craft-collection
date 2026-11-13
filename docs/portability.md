@@ -38,7 +38,8 @@ Beside the act-time hooks sits a mechanism kept outside the harness: the
 `kit` command line in `harness-kit/` judges events, starts a harness only after a
 presence canary, and reports what was tested per harness. A shell's refusal there
 is feedback to the model, not prevention, and the doctor reports `prevention` as
-`absent`. See `harness-kit/README.md`.
+`absent`. A tool's own rule reaches that judge through a rule pack that calls the
+tool's core. See `harness-kit/README.md`, which also describes packs.
 
 ## Commands and output styles, by hand
 
