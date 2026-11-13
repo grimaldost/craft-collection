@@ -24,7 +24,7 @@ string's first line.
 
 Run:   uv run --no-project -- python scripts/ascii_runtime_lint.py
        ... --write-baseline   # after fixing, to ratchet down
-Scope: git-tracked *.py under plugins/, scripts/, evals/ (rglob fallback when
+Scope: git-tracked *.py under plugins/, scripts/, evals/, harness-kit/ (rglob fallback when
        git is unavailable); test_*.py excluded.
 """
 
@@ -40,7 +40,7 @@ import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SCAN_DIRS = ('plugins', 'scripts', 'evals')
+SCAN_DIRS = ('plugins', 'scripts', 'evals', 'harness-kit')
 SUPPRESS_MARK = '# ascii-ok'
 BASELINE_NAME = 'ascii_lint_baseline.json'
 

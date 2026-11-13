@@ -1,0 +1,13 @@
+[project]
+name = "harness-kit"
+version = "0.1.0"
+description = "Policy CLI, launcher and doctor that keep a coding-agent harness's guard outside the harness."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+kit = "harness_kit.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
