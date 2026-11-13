@@ -20,6 +20,17 @@ whose binary is found, in a scratch home under DIR (which must lie under a
 `refusal_in_turn` and `allow_passes` to `degraded` where the contract holds a
 loss for that objective and to `tested` where it holds none; a failed one sets
 them to `absent`.
+
+When `KIT_POLICY` names a readable version 2 policy with a `<policy>.packs.json`
+beside it whose `policy_sha256` is the policy's, the report gains a section
+`rules`: per rule with a checker, its pack, `governed`, a state per harness from
+the contract's `[rules]` table (`unknown` when the binary is absent or its
+version differs) and the pack's declared preventing layer. A policy that does
+not load gives the one line `policy unreadable: <reason>` (a file that is TOML
+with `version = 1` gives no section), a sidecar of another policy gives
+`sidecar stale`. With a version 1 policy, with no `KIT_POLICY` and with a
+version 2 policy that has no sidecar the report has no such section. The
+section reads files only: it runs no checker and starts no program.
 """
 
 from __future__ import annotations
@@ -37,8 +48,8 @@ from pathlib import Path
 
 import tomllib
 
-from harness_kit import canary, harnesses, state, stubmodel
-from harness_kit.policy import PolicyError, load_policy
+from harness_kit import canary, harnesses, packs, state, stubmodel
+from harness_kit.policy import Policy, PolicyError, load_policy
 
 CONTRACTS_DIR = Path(__file__).resolve().parent / 'contracts'
 CONTRACT_FILES = {'claude-code': 'claude_code.toml', 'opencode': 'opencode.toml'}
@@ -62,6 +73,11 @@ STALE_S = 10
 READ_DEADLINE_S = 1.0
 UTC_FORMS = ('%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S.%fZ')
 NOT_LAUNCHED_TEXT = 'not launched, guarantees unknown'
+RULES_KEY = 'rules'
+UNREADABLE_TEXT = 'policy unreadable: '
+STALE_TEXT = 'sidecar stale'
+DECLARED_TEXT = 'declared by the pack, not checked by the kit'
+NO_PREVENTION_TEXT = 'none declared'
 
 EXIT_REFUSED = 64
 
@@ -261,6 +277,103 @@ def harness_report(driver: harnesses.Driver, env: Mapping[str, str], live: dict 
     }
 
 
+# ---- rules from a built policy
+
+
+def _toml_version(path: Path) -> object:
+    """The top-level `version` of a file that parses as TOML, else None."""
+    try:
+        data = tomllib.loads(Path(path).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    return data.get('version')
+
+
+def _is_version(value: object, number: int) -> bool:
+    return type(value) is int and value == number
+
+
+def _read_sidecar(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _sidecar_packs(data: dict) -> list[dict]:
+    items = data.get('packs')
+    return [p for p in items if isinstance(p, dict)] if isinstance(items, list) else []
+
+
+def _rule_state(contract: dict, found: object, rule_id: str) -> tuple[str, str]:
+    """A harness's state for a rule and its evidence text, as the objectives follow."""
+    if found is None or found != contract['harness']['version']:
+        return 'unknown', ''
+    entry = (contract.get(RULES_KEY) or {}).get(rule_id)
+    if not isinstance(entry, dict) or entry.get('state') != 'tested':
+        return 'unknown', ''
+    return 'tested', _ascii(entry.get('evidence', ''))
+
+
+def _rule_rows(policy: Policy, sidecar: dict, harness_rows: Mapping[str, dict]) -> list[dict]:
+    pack_list = _sidecar_packs(sidecar)
+    contracts = {name: load_contract(name) for name in harness_rows}
+    rows = []
+    for rule in policy.rules:
+        if rule.check is None:
+            continue
+        owner = next((p for p in pack_list if rule.id in (p.get('rules') or [])), None)
+        prevention = NO_PREVENTION_TEXT
+        for pack in pack_list:
+            declared = pack.get('prevention')
+            if isinstance(declared, dict) and declared.get('rule') == rule.id:
+                prevention = f'{_ascii(declared.get("layer"))} ({DECLARED_TEXT})'
+        states, evidence = {}, {}
+        for name, entry in harness_rows.items():
+            states[name], evidence[name] = _rule_state(
+                contracts[name], entry['version_found'], rule.id
+            )
+        rows.append(
+            {
+                'id': rule.id,
+                'governed': rule.governed,
+                'pack': _ascii(owner.get('name')) if owner is not None else None,
+                'states': states,
+                'evidence': evidence,
+                'prevention': prevention,
+            }
+        )
+    return rows
+
+
+def rules_section(environ: Mapping[str, str], harness_rows: Mapping[str, dict]):
+    """The `rules` value for the report: a list, a one-line string, or None for no section.
+
+    Reads the policy and its sidecar as files; nothing is executed.
+    """
+    policy_file = environ.get('KIT_POLICY')
+    if not policy_file:
+        return None
+    path = Path(os.path.abspath(policy_file))
+    try:
+        policy = load_policy(path)
+    except PolicyError as exc:
+        if _is_version(_toml_version(path), 1):
+            return None
+        return UNREADABLE_TEXT + _ascii(exc)
+    version = _toml_version(path)
+    if not _is_version(version, 2):
+        return None
+    sidecar_file = packs.sidecar_path(path)
+    if not sidecar_file.exists():
+        return None
+    sidecar = _read_sidecar(sidecar_file)
+    if sidecar.get('policy_sha256') != policy.sha256:
+        return STALE_TEXT
+    return _rule_rows(policy, sidecar, harness_rows)
+
+
 # ---- the live canary
 
 
@@ -375,12 +488,32 @@ def build_report(environ: Mapping[str, str], live_root: str | None = None) -> di
         name: harness_report(harnesses.get(name), environ, live.get(name))
         for name in harnesses.names()
     }
-    return {
+    report = {
         'kit_doctor': 1,
         'harnesses': report_harnesses,
         'runs': list_runs(root),
         'not_launched': list_not_launched(root),
     }
+    rules = rules_section(environ, report_harnesses)
+    if rules is not None:
+        report[RULES_KEY] = rules
+    return report
+
+
+def _rules_lines(rules: object) -> list[str]:
+    if isinstance(rules, str):
+        return [f'rules: {rules}']
+    lines = ['rules:']
+    for row in rules:  # type: ignore[attr-defined]
+        pack = row['pack'] if row['pack'] is not None else '-'
+        lines.append(f'  {row["id"]} governed {str(row["governed"]).lower()} pack {pack}')
+        for name, value in row['states'].items():
+            evidence = f' ({row["evidence"][name]})' if row['evidence'][name] else ''
+            lines.append(f'    {name} {value}{evidence}')
+        lines.append(f'    prevention: {row["prevention"]}')
+    if not rules:
+        lines.append('  (none)')
+    return lines
 
 
 def render_text(report: dict) -> str:
@@ -394,6 +527,8 @@ def render_text(report: dict) -> str:
             lines.append(
                 f'  loss {loss["id"]} [{loss["objective"]}, {loss["mark"]}]: {loss["text"]}'
             )
+    if RULES_KEY in report:
+        lines.extend(_rules_lines(report[RULES_KEY]))
     lines.append('runs:')
     for run in report['runs'] or [{'run_id': '(none)', 'harness': '', 'status': ''}]:
         lines.append(f'  {run["run_id"]} {run["harness"] or ""} {run["status"]}'.rstrip())
