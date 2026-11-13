@@ -95,3 +95,10 @@ objective = "launcher_checks"
 mark = "inferred"
 evidence = "opencode 2.2.5, 2026-11-08: inferred from the design, nothing run; a start outside kit run whose configuration lacks the plugin calls no kit code."
 text = "opencode started without kit run and without the plugin loaded reaches no kit check at all, so the launcher requirement cannot catch it."
+
+# Rules a pack carries, by rule id: tested when the rule's three cells of conformance/test_rules.py
+# held on this harness, as its rules-results.json recorded them.
+[rules.uv-project-uses-uv]
+state = "tested"
+mark = "measured"
+evidence = "Rule cells uv-deny, uv-allow-outside and uv-allow-mention passed on opencode 2.2.5, 2026-11-12."

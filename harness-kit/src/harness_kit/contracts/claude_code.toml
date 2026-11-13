@@ -109,3 +109,10 @@ objective = "guard_loaded"
 mark = "measured"
 evidence = "Claude Code 2.1.316, 2026-11-08: with a read deny on settings.json the run exited 0, the hook did not run and Bash executed, in 3 of 3 sets."
 text = "An unreadable settings.json leaves exit 0, no hook run and the tool executed; caught at launch by the canary, not during a run."
+
+# Rules a pack carries, by rule id: tested when the rule's three cells of conformance/test_rules.py
+# held on this harness, as its rules-results.json recorded them.
+[rules.uv-project-uses-uv]
+state = "tested"
+mark = "measured"
+evidence = "Rule cells uv-deny, uv-allow-outside and uv-allow-mention passed on Claude Code 2.1.316, 2026-11-12."

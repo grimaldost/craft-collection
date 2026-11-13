@@ -5,7 +5,10 @@ gives no-match and nothing else is read. Then each optional matcher, by the
 observation of the field it reads: `unavailable` cannot tell, `not_applicable`
 is skipped, `observed` matches or not. The rule's result is the first row that
 holds: any no-match; any cannot-tell; at least one match; all matchers skipped
-(no-match); no matcher at all (match).
+(no-match); no matcher at all (match). The `check` matcher of policy version
+2 is read last, and only when no other matcher gave no-match; its result
+enters the same table. A deny from a rule whose checker returned a `detail`
+carries the detail, one space and the rule's reason.
 
 Rules scan in file order. The first governed rule that cannot tell is
 remembered. A deny match denies; an allow match allows unless a cannot-tell was
@@ -22,6 +25,7 @@ names `deny-<nonce>.marker` is denied by `canary.deny`, and one that names
 
 from __future__ import annotations
 
+from harness_kit import checkers
 from harness_kit.event import InvalidEventError, check_event, parse_event
 from harness_kit.policy import Policy, PolicyError, Rule, normalize_path
 
@@ -94,12 +98,28 @@ def _matcher(observation: str, test) -> str:
     return MATCH if test() else NO_MATCH
 
 
-def rule_result(rule: Rule, event: dict, windows: bool = False) -> str:
-    """`match`, `no-match` or `cannot-tell` for one rule against one valid event."""
+def rule_result(
+    rule: Rule,
+    event: dict,
+    windows: bool = False,
+    checks: checkers.Judgement | None = None,
+) -> str:
+    """`match`, `no-match` or `cannot-tell` for one rule against one valid event.
+
+    `checks` calls the rule's checker; without it a rule with `check` cannot tell
+    once its other matchers leave the checker to decide.
+    """
+    return _rule_outcome(rule, event, windows, checks)[0]
+
+
+def _rule_outcome(
+    rule: Rule, event: dict, windows: bool, checks: checkers.Judgement | None
+) -> tuple[str, str | None]:
+    """The rule's result and the checker's detail, if one was returned."""
     act = event['act']
     observation = event['observation']
     if act['kind'] not in rule.kinds:
-        return NO_MATCH
+        return NO_MATCH, None
     results: list[str] = []
     if rule.command_regex is not None:
         regex = rule.command_regex
@@ -116,13 +136,20 @@ def rule_result(rule: Rule, event: dict, windows: bool = False) -> str:
     if rule.origin_in is not None:
         origins = rule.origin_in
         results.append(_matcher(observation['origin'], lambda: event['origin'] in origins))
+    detail = None
+    if rule.check is not None and NO_MATCH not in results:
+        if checks is None:
+            results.append(CANNOT_TELL)
+        else:
+            result, detail = checks.call(rule.check, act, observation)
+            results.append(result)
     if NO_MATCH in results:
-        return NO_MATCH
+        return NO_MATCH, detail
     if CANNOT_TELL in results:
-        return CANNOT_TELL
+        return CANNOT_TELL, detail
     if MATCH in results:
-        return MATCH
-    return NO_MATCH if results else MATCH
+        return MATCH, detail
+    return (NO_MATCH if results else MATCH), detail
 
 
 def canary_rule(event: dict, nonce: str | None) -> str | None:
@@ -172,9 +199,10 @@ def judge(
             policy_sha256=sha,
         )
 
+    checks = checkers.Judgement(policy.checkers) if policy.checkers else None
     remembered: Rule | None = None
     for rule in policy.rules:
-        result = rule_result(rule, ev, policy.windows)
+        result, detail = _rule_outcome(rule, ev, policy.windows, checks)
         if result == CANNOT_TELL:
             if rule.governed and remembered is None:
                 remembered = rule
@@ -183,7 +211,11 @@ def judge(
             continue
         if rule.effect == 'deny':
             return make_verdict(
-                'deny', governed=rule.governed, rule=rule.id, reason=rule.reason, policy_sha256=sha
+                'deny',
+                governed=rule.governed,
+                rule=rule.id,
+                reason=_deny_reason(rule, detail),
+                policy_sha256=sha,
             )
         if remembered is None:
             return make_verdict(
@@ -201,6 +233,12 @@ def judge(
     return make_verdict(
         'allow', governed=False, rule=None, reason='no rule matched', policy_sha256=sha
     )
+
+
+def _deny_reason(rule: Rule, detail: str | None) -> str:
+    if detail is None:
+        return rule.reason
+    return f'{detail} {rule.reason}' if rule.reason else detail
 
 
 def _cannot_tell_reason(rule: Rule) -> str:
