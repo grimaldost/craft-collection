@@ -9,6 +9,12 @@ A CLI still running at the deadline is ended with its whole tree: on Windows by
 TerminateJobObject on the Job Object the CLI joined as it started; if a Job
 Object call fails, or under the test seam KIT_SHELL_NO_JOB=1, by an absolute
 System32 taskkill.exe, not waited for; on POSIX by a group kill.
+
+Run with `--note`, it is a UserPromptSubmit, PostToolUse and PostToolUseFailure
+hook instead: it sends what happened, as one note, to the `note_argv` that
+`note_config.json` beside this file names, under the same deadline and tree
+kill. A note never decides: the mode prints nothing, does not read the CLI's
+exit status, and ends silently whatever fails.
 """
 
 import ctypes
@@ -28,6 +34,10 @@ WRITE_TOOLS['NotebookEdit'] = 'notebook_path'
 WINDOWS = os.name == 'nt'
 NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW
 QUIET = {'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL, 'stderr': subprocess.DEVNULL}
+HERE = os.path.dirname(os.path.abspath(__file__))
+NOTE_KINDS = ('prompt', 'outcome')
+RESULT_EVENTS = ('PostToolUse', 'PostToolUseFailure')
+TEXT_CAP, OUTPUT_CAP = 20000, 65536
 
 
 class CouldNotJudgeError(Exception):
@@ -35,7 +45,7 @@ class CouldNotJudgeError(Exception):
 
 
 def load_config() -> dict:
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shell_config.json')
+    path = os.path.join(HERE, 'shell_config.json')
     try:
         with open(path, 'rb') as fh:
             config = json.loads(fh.read().decode('utf-8'))
@@ -50,6 +60,20 @@ def load_config() -> dict:
     return config
 
 
+def head(session_id: str, config: dict) -> dict:
+    """The keys an event and a note share, from `run_id` to `observation`."""
+    observation = {
+        'session': 'observed',
+        **dict.fromkeys(('parent', 'root', 'origin'), 'unavailable'),
+    }
+    observation.update(command='not_applicable', paths='not_applicable')
+    out = {'run_id': os.environ.get('KIT_RUN_ID') or None}
+    out['harness'] = {'name': 'claude-code', 'version': config['harness_version']}
+    out['session'] = {'id': session_id, 'parent_id': None, 'root_id': None}
+    out.update(origin='unknown', observation=observation)
+    return out
+
+
 def build_event(raw: bytes, config: dict) -> dict:
     try:
         payload = json.loads(raw.decode('utf-8'))
@@ -61,11 +85,8 @@ def build_event(raw: bytes, config: dict) -> dict:
     tool, cwd, given = payload['tool_name'], payload['cwd'], payload.get('tool_input')
     given = given if isinstance(given, dict) else {}
     act = {'kind': 'other', 'command': None, 'argv': None, 'paths': [], 'cwd': cwd}
-    observation = {
-        'session': 'observed',
-        **dict.fromkeys(('parent', 'root', 'origin'), 'unavailable'),
-    }
-    observation.update(command='not_applicable', paths='not_applicable')
+    event = {'kit_event': 1, **head(payload['session_id'], config)}
+    observation = event['observation']
     if tool in SHELL_TOOLS:
         act['kind'], observation['command'] = 'shell', 'observed'
         act['command'] = given['command'] if isinstance(given.get('command'), str) else None
@@ -75,10 +96,7 @@ def build_event(raw: bytes, config: dict) -> dict:
         if isinstance(path, str) and path:
             act['paths'] = [os.path.normpath(os.path.join(cwd, path))]
     act['payload_sha256'] = hashlib.sha256(raw).hexdigest()
-    event = {'kit_event': 1, 'run_id': os.environ.get('KIT_RUN_ID') or None}
-    event['harness'] = {'name': 'claude-code', 'version': config['harness_version']}
-    event['session'] = {'id': payload['session_id'], 'parent_id': None, 'root_id': None}
-    event.update(origin='unknown', observation=observation, act=act)
+    event['act'] = act
     return event
 
 
@@ -113,6 +131,14 @@ def kill_tree(proc: subprocess.Popen, job) -> None:
 
 
 def run_cli(argv: list, data: bytes, timeout: float) -> bytes:
+    proc, out = start_cli(argv, data, timeout)
+    if not out or proc.returncode != 0:
+        raise CouldNotJudgeError(f'CLI exited {proc.returncode}')
+    return out[0] or b''
+
+
+def start_cli(argv: list, data: bytes, timeout: float) -> tuple:
+    """Run the CLI with `data` on stdin; its tree is ended at the deadline."""
     deadline = time.monotonic() + timeout
     extra = {'creationflags': NO_WINDOW} if WINDOWS else {'start_new_session': True}
     pipes = {'stdin': subprocess.PIPE, 'stdout': subprocess.PIPE, 'stderr': subprocess.DEVNULL}
@@ -129,9 +155,7 @@ def run_cli(argv: list, data: bytes, timeout: float) -> bytes:
     if worker.is_alive():
         kill_tree(proc, job)
         raise CouldNotJudgeError(f'CLI ran past {timeout} s and was ended')
-    if not out or proc.returncode != 0:
-        raise CouldNotJudgeError(f'CLI exited {proc.returncode}')
-    return out[0] or b''
+    return proc, out
 
 
 def judge(raw: bytes) -> dict | None:
@@ -170,5 +194,60 @@ def main() -> None:
     os._exit(0)  # leave nothing waiting on a pipe a killed tree may still hold
 
 
+def load_note_config() -> dict:
+    with open(os.path.join(HERE, 'note_config.json'), 'rb') as fh:
+        config = json.loads(fh.read().decode('utf-8'))
+    get = config.get if isinstance(config, dict) else {}.get
+    argv, timeout, records = get('note_argv'), get('timeout_s'), get('records')
+    ok = type(get('kit_note_config')) is int and get('kit_note_config') == 1
+    ok = ok and isinstance(argv, list) and bool(argv) and all(isinstance(a, str) for a in argv)
+    ok = ok and type(timeout) in (int, float) and timeout > 0 and isinstance(records, list)
+    if not (ok and all(kind in NOTE_KINDS for kind in records)):
+        raise ValueError('note_config.json malformed')
+    return config
+
+
+def build_note(raw: bytes, config: dict, records: list) -> dict | None:
+    """The note for this payload, or None when it gives none."""
+    payload = json.loads(raw.decode('utf-8'))
+    fields = ('session_id', 'hook_event_name')
+    if not isinstance(payload, dict) or not all(isinstance(payload.get(k), str) for k in fields):
+        return None
+    name, text = payload['hook_event_name'], payload.get('prompt')
+    if name == 'UserPromptSubmit' and isinstance(text, str) and 'prompt' in records:
+        body = {'kind': 'prompt', 'text': text[:TEXT_CAP], 'truncated': len(text) > TEXT_CAP}
+        return {'kit_note': 1, **head(payload['session_id'], config), 'note': body}
+    tool = payload.get('tool_name')
+    if name not in RESULT_EVENTS or tool not in SHELL_TOOLS or 'outcome' not in records:
+        return None
+    event = build_event(raw, config)
+    del event['kit_event']
+    status, output = 'failed', None
+    if name == 'PostToolUse':
+        response = payload.get('tool_response')
+        response = response if isinstance(response, dict) else {}
+        task = response.get('backgroundTaskId')
+        status = 'background' if isinstance(task, str) and task else 'completed'
+        stdout = response.get('stdout')
+        output = stdout if status == 'completed' and isinstance(stdout, str) else None
+    body = {'kind': 'outcome', 'act': event.pop('act'), 'status': status}
+    body['output'] = None if output is None else output[-OUTPUT_CAP:]
+    body['truncated'] = output is not None and len(output) > OUTPUT_CAP
+    return {'kit_note': 1, **event, 'note': body}
+
+
+def note_main() -> None:
+    try:
+        raw = sys.stdin.buffer.read()
+        notes, config = load_note_config(), load_config()
+        note = build_note(raw, config, notes['records'])
+        if note is not None:
+            data = json.dumps(note, ensure_ascii=True).encode('ascii')
+            start_cli(notes['note_argv'], data, notes['timeout_s'])  # its output is discarded
+    except BaseException:  # noqa: S110 - a note never decides: every failure ends silently
+        pass
+    os._exit(0)
+
+
 if __name__ == '__main__':
-    main()
+    note_main() if sys.argv[1:] == ['--note'] else main()
