@@ -53,6 +53,7 @@ Python 3.11 or later, no dependencies.
 |---|---|
 | `kit --version` | Print the version. |
 | `kit judge [--policy PATH]` | Read one neutral event as JSON on stdin, print one verdict as one line of JSON, exit 0 whenever a verdict was printed. The policy is `--policy`, else `KIT_POLICY`. |
+| `kit note [--policy PATH]` | Read one session note as JSON on stdin and print one receipt as one line of JSON; it always exits 0 once its arguments parse. |
 | `kit state path` | Print the state root. |
 | `kit state new-run --harness NAME` | Mint a run id and its folder; print them as JSON. |
 | `kit stub --log FILE --script FILE [--port N]` | Serve a scripted model endpoint on 127.0.0.1 for tests; the first stdout line is `{"port": N}`. |
