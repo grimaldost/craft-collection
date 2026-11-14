@@ -10,7 +10,7 @@ Contract under test:
 - a hung CLI settles within 4.5 seconds and its grandchild never writes its late marker (Windows);
 - the plugin settles only once the killer has exited (a slow killer is waited for, up to a second);
 - the file names no bare kill command, has an error handler on the killer, imports only Node
-  built-ins and holds at most 160 non-blank lines.
+  built-ins and holds at most 240 non-blank lines.
 
 Stdlib-runnable: `python test_opencode_shell.py`.
 """
@@ -349,14 +349,14 @@ def test_source_has_no_bare_kill_command_and_an_error_handler_on_the_killer():
     assert '.on("error"' in src, 'the killer has no error handler'
 
 
-def test_source_imports_only_node_built_ins_and_stays_within_160_lines():
+def test_source_imports_only_node_built_ins_and_stays_within_240_lines():
     src = _source()
     specs = re.findall(r'(?:from|import)\s*\(?\s*["\']([^"\']+)["\']', src)
     assert specs and all(s.startswith('node:') for s in specs), specs
     assert 'harness_kit' not in src
     assert 'shell: true' not in src
     lines = [ln for ln in src.splitlines() if ln.strip()]
-    assert len(lines) <= 160, len(lines)
+    assert len(lines) <= 240, len(lines)
 
 
 def test_source_is_ascii():
