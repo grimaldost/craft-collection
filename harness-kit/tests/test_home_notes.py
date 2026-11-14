@@ -12,7 +12,6 @@ Contract under test:
 - without `--policy`, or with a policy that records nothing, the render writes
   the same `home.json`, `shell_config.json` and harness configuration as
   before, and no `note_config.json`;
-- no harness configuration registers a note hook yet.
 
 Stdlib-runnable: `python test_home_notes.py`.
 """
@@ -154,14 +153,19 @@ def test_no_policy_or_one_that_records_nothing_renders_the_same_home():
             assert seen[0] == seen[1] == seen[2], harness
 
 
-def test_no_harness_configuration_registers_a_note_hook_yet():
+def test_a_policy_recording_prompt_and_outcome_registers_the_four_claude_code_hooks():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         policy = _policy(root, '["prompt", "outcome"]')
         folder = root / 'cc'
         assert _render('claude-code', folder, '--policy', str(policy)).returncode == 0
         settings = json.loads((folder / 'claude-config' / 'settings.json').read_text('utf-8'))
-        assert list(settings['hooks']) == ['PreToolUse'], settings
+        assert list(settings['hooks']) == [
+            'PreToolUse',
+            'UserPromptSubmit',
+            'PostToolUse',
+            'PostToolUseFailure',
+        ], settings
 
 
 def test_render_home_keeps_two_arguments_and_takes_records():
