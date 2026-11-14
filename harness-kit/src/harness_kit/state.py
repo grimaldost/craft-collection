@@ -17,6 +17,11 @@ payload hash and the verdict, never the command text or a path. Each append
 holds one exclusive lock on `journal.ndjson.lock` beside the journal (one byte
 at offset 0 through `msvcrt.locking` on Windows, `fcntl.flock` on POSIX; nothing
 is written to that file), taken with retries for at most one second.
+
+Every note (`kit note`) appends one line to `notes.ndjson` in the folder its
+event would use, under the same lock, so the readers of `journal.ndjson` count
+what they counted before. A note line holds kinds, sizes and hashes, never a
+prompt's text, a command, an output or a path.
 """
 
 from __future__ import annotations
@@ -54,6 +59,7 @@ HARNESS_CONFIG_VARS = (
 
 JOURNAL = 'journal.ndjson'
 JOURNAL_LOCK = 'journal.ndjson.lock'
+NOTES = 'notes.ndjson'
 LOCK_TIMEOUT = 1.0
 REPLACE_DEADLINE = 2.0
 _RETRY_SLEEP = 0.01
@@ -261,6 +267,53 @@ def journal_record(
         'verdict': verdict['verdict'],
         'effect': verdict['effect'],
         'rule': verdict['rule'],
+    }
+
+
+def notes_path(root: Path, run_id: str | None, note: dict | None) -> Path:
+    """Where a note's line goes: `notes.ndjson` in the folder its event would use."""
+    return journal_path(root, run_id, note).with_name(NOTES)
+
+
+def _sha_text(text: str) -> str:
+    return hashlib.sha256(text.encode('utf-8', 'surrogatepass')).hexdigest()
+
+
+def note_record(
+    note: dict | None,
+    run_id: str | None,
+    launched: bool,
+    outcome: str,
+    reason: str | None,
+    recorders: list,
+    now: datetime,
+) -> dict:
+    """One note journal line: kind, sizes and hashes; never a text, command, output or path.
+
+    `reason` is the journal's closed vocabulary only: null, `policy-unreadable`,
+    `no-recorder` or `no-root`.
+    """
+    body = note['note'] if note else None
+    kind = body['kind'] if body else None
+    content = None
+    if body is not None:
+        content = body['text'] if kind == 'prompt' else body['output']
+    outcome_note = kind == 'outcome'
+    return {
+        'ts_utc': _utc(now, micro=True),
+        'run_id': run_id,
+        'launched': launched,
+        'session_id': note['session']['id'] if note else None,
+        'harness': note['harness']['name'] if note else None,
+        'note_kind': kind,
+        'status': body['status'] if outcome_note else None,
+        'chars': len(content) if content is not None else None,
+        'truncated': body['truncated'] if body else None,
+        'content_sha256': _sha_text(content) if content is not None else None,
+        'payload_sha256': body['act']['payload_sha256'] if outcome_note else None,
+        'outcome': outcome,
+        'reason': reason,
+        'recorders': list(recorders),
     }
 
 

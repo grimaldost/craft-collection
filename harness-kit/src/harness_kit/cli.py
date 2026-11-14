@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from harness_kit import __version__, checkers, packs, state
+from harness_kit import __version__, checkers, notes, packs, state
 from harness_kit.event import InvalidEventError, check_event, parse_event
 from harness_kit.policy import Policy, PolicyError, load_policy
 from harness_kit.verdict import CANARY_DENY_RULE, judge_bytes, unknown_verdict
@@ -32,6 +32,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     judge.add_argument('--policy', metavar='PATH', help=f'policy file (default: ${POLICY_ENV})')
+    note = sub.add_parser(
+        'note',
+        help='take one session note read from stdin; print one receipt line; exit 0',
+        description=(
+            'Read one note (a submitted prompt or a finished shell call) as JSON on stdin '
+            'and print one receipt as one line of JSON. Exits 0 once the arguments parse. '
+            f'The policy is --policy, else ${POLICY_ENV}.'
+        ),
+    )
+    note.add_argument('--policy', metavar='PATH', help=f'policy file (default: ${POLICY_ENV})')
     st = sub.add_parser('state', help='the state root and run identity')
     st_sub = st.add_subparsers(dest='state_command', metavar='STATE_COMMAND', required=True)
     st_sub.add_parser('path', help='print the state root')
@@ -165,6 +175,65 @@ def run_judge(policy_path: str | None) -> int:
         os._exit(0)
 
 
+def _receipt(outcome: str, reason: str | None) -> dict:
+    if reason is not None:
+        reason = reason.encode('ascii', 'backslashreplace').decode('ascii')
+    return {'kit_note_receipt': 1, 'outcome': outcome, 'reason': reason, 'recorders': []}
+
+
+def note_and_journal(data: bytes, policy_path: str | None, env) -> dict:
+    """Take one note under the run identity the environment names, journal it, return the receipt.
+
+    In order: an invalid note is `invalid`; a refused state root is `failed` and
+    writes nothing; a note outside a minted run is `outside-run`; an unreadable
+    policy is `dropped`, `policy-unreadable`; else `dropped`, `no-recorder`. No
+    checker is loaded. A journal line that cannot be written turns the receipt
+    into `failed`.
+    """
+    try:
+        note = notes.check_note(notes.parse_note(data))
+        invalid = None
+    except notes.InvalidNoteError as exc:
+        note, invalid = None, str(exc)
+    try:
+        root = state.state_root(env)
+    except state.StateRootError as exc:
+        return _receipt('failed', f'journal not written: {exc}')
+    run_id = env.get(state.RUN_ID_ENV)
+    launched = state.is_launched(root, run_id)
+    run_id = run_id if launched else None
+
+    if note is None:
+        outcome, reason = 'invalid', None
+    elif not launched:
+        outcome, reason = 'outside-run', None
+    elif isinstance(_load(policy_path), PolicyError):
+        outcome, reason = 'dropped', 'policy-unreadable'
+    else:
+        outcome, reason = 'dropped', 'no-recorder'
+
+    now = datetime.now(timezone.utc)
+    record = state.note_record(note, run_id, launched, outcome, reason, [], now)
+    try:
+        state.append_journal(state.notes_path(root, run_id, note), record)
+    except state.JournalError as exc:
+        return _receipt('failed', f'journal not written: {exc}')
+    return _receipt(outcome, invalid if note is None else reason)
+
+
+def run_note(policy_path: str | None) -> int:
+    """Print exactly one receipt line; exit 0 whatever the note and whatever failed."""
+    try:
+        receipt = note_and_journal(
+            sys.stdin.buffer.read(), policy_path or os.environ.get(POLICY_ENV), os.environ
+        )
+    except Exception as exc:  # a receipt is owed whatever failed; a note never decides
+        receipt = _receipt('failed', f'note failed: {type(exc).__name__}')
+    sys.stdout.write(json.dumps(receipt, ensure_ascii=True) + '\n')
+    sys.stdout.flush()
+    return 0
+
+
 def _fail(code: int, message: str) -> int:
     sys.stderr.write(f'kit: {message}\n')
     sys.stderr.flush()
@@ -219,6 +288,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == 'judge':
         return run_judge(args.policy)
+    if args.command == 'note':
+        return run_note(args.policy)
     if args.command == 'state':
         return run_state(args)
     if args.command == 'home':
