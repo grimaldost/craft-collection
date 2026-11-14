@@ -201,7 +201,7 @@ def test_an_unloadable_policy_gives_one_line():
         junk.write_text('this is = = not toml', encoding='utf-8')
         _only_unreadable(base, junk)
         three = base / 'three.toml'
-        three.write_text('version = 3\n', encoding='utf-8')
+        three.write_text('version = 4\n', encoding='utf-8')
         _only_unreadable(base, three)
     finally:
         shutil.rmtree(base, ignore_errors=True)

@@ -3,7 +3,9 @@
 `get(name)` gives the driver of `claude-code` or `opencode`. A driver renders a
 test home (the shell, its `shell_config.json`, the harness configuration and
 `home.json`), builds the session environment over that home, copies the home
-for the canary, and names the arguments the launcher checks.
+for the canary, and names the arguments the launcher checks. Given the kinds
+of note a policy records, a render also writes `note_config.json` beside
+`shell_config.json`: how a shell's note mode starts `kit note`.
 
 `binary_argv` returns an empty list when the binary is missing; a caller never
 runs an empty argv. On Windows a `.cmd` or `.bat` file is never run, from the
@@ -29,6 +31,8 @@ import harness_kit
 WINDOWS = os.name == 'nt'
 FAKE_KEY = 'stub-not-a-key'
 SHELL_TIMEOUT_S = 3
+NOTE_KINDS = ('prompt', 'outcome')
+NOTE_CONFIG = 'note_config.json'
 VERSION_TIMEOUT_S = 30
 VERSION_RE = re.compile(r'\d+\.\d+\.\d+')
 ENDPOINT_RE = re.compile(r'http://(127\.0\.0\.1|localhost):[0-9]{1,5}')
@@ -53,7 +57,7 @@ class Driver(Protocol):
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]: ...
     def version(self, env: Mapping[str, str]) -> str | None: ...
-    def render_home(self, home: Path, endpoint: str) -> dict: ...
+    def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict: ...
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]: ...
     def copy_home_for_canary(self, home: dict, dest: Path, canary_endpoint: str) -> dict: ...
     def canary_argv(self, prompt: str) -> list[str]: ...
@@ -177,6 +181,31 @@ def cli_argv() -> list[str]:
         'from harness_kit.cli import main; sys.exit(main())'
     )
     return [sys.executable, '-I', '-c', bootstrap, 'judge']
+
+
+def note_argv() -> list[str]:
+    """The kit CLI as a shell's note mode starts it: `cli_argv` with `note` last."""
+    return [*cli_argv()[:-1], 'note']
+
+
+def recorded_kinds(checkers) -> tuple[str, ...]:
+    """The union of the checkers' `records`, in the order `prompt`, `outcome`."""
+    found = {kind for checker in checkers for kind in checker.records}
+    return tuple(kind for kind in NOTE_KINDS if kind in found)
+
+
+def write_note_config(dest_dir: Path, records: tuple[str, ...]) -> None:
+    """Write `note_config.json` into `dest_dir` when `records` is not empty."""
+    if not records:
+        return
+    value = {
+        'kit_note_config': 1,
+        'note_argv': note_argv(),
+        'timeout_s': SHELL_TIMEOUT_S,
+        'records': [kind for kind in NOTE_KINDS if kind in records],
+    }
+    text = json.dumps(value, ensure_ascii=True) + '\n'
+    (dest_dir / NOTE_CONFIG).write_bytes(text.encode('ascii'))
 
 
 def check_endpoint(endpoint: str) -> None:

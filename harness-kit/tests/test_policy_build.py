@@ -326,7 +326,7 @@ def _refusal_cases(tree: Tree) -> list[tuple[str, object]]:
             'base launcher key',
             base_text(SAMPLE_POLICY.replace('forbidden_roots = []', 'forbidden_roots = []\nx = 1')),
         ),
-        ('base version 3', base_text(SAMPLE_POLICY.replace('version = 1', 'version = 3'))),
+        ('base version 4', base_text(SAMPLE_POLICY.replace('version = 1', 'version = 4'))),
         ('pack.toml missing', remove(tree.pack_a / 'pack.toml')),
         ('pack not TOML', lambda: (tree.pack_a / 'pack.toml').write_bytes(b'pack = = 1\n')),
         ('pack unknown key', pack_a(extra_top='colour = "red"')),

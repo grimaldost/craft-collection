@@ -63,6 +63,11 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         '--endpoint', metavar='URL', required=True, help='model endpoint, http://127.0.0.1:PORT'
     )
+    render.add_argument(
+        '--policy',
+        metavar='FILE',
+        help='policy whose recorded note kinds go into note_config.json; unreadable exits 64',
+    )
     doctor = sub.add_parser(
         'doctor',
         help='report what was tested per objective and harness, the runs and unlaunched sessions',
@@ -261,15 +266,25 @@ def run_state(args: argparse.Namespace) -> int:
 
 
 def run_home(args: argparse.Namespace) -> int:
-    """`kit home render`; a non-empty folder, an unknown harness or a foreign endpoint exits 64."""
+    """`kit home render`; a non-empty folder, an unknown harness or a foreign endpoint exits 64.
+
+    With `--policy`, the policy must load, else the render exits 64 and writes
+    nothing; the kinds of note its checkers record go to `note_config.json`.
+    """
     from harness_kit import harnesses
 
     try:
         driver = harnesses.get(args.harness)
     except KeyError as exc:
         return _fail(EXIT_REFUSED, str(exc.args[0]))
+    records: tuple[str, ...] = ()
+    if args.policy is not None:
+        try:
+            records = harnesses.recorded_kinds(load_policy(args.policy).checkers)
+        except PolicyError as exc:
+            return _fail(EXIT_REFUSED, f'home not rendered: policy unreadable: {exc}')
     try:
-        home = driver.render_home(Path(args.dir), args.endpoint)
+        home = driver.render_home(Path(args.dir), args.endpoint, records)
     except harnesses.HomeError as exc:
         return _fail(EXIT_REFUSED, f'home not rendered: {exc}')
     except OSError as exc:

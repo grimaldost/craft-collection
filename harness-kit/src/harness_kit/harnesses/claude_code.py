@@ -20,6 +20,7 @@ from harness_kit.harnesses import (
     read_version,
     set_var,
     write_json,
+    write_note_config,
 )
 
 MATCHER = 'Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit'
@@ -53,11 +54,12 @@ class ClaudeCode:
     def version(self, env: Mapping[str, str]) -> str | None:
         return read_version(self.binary_argv(env), env, CONFIG_NAMES)
 
-    def render_home(self, home: Path, endpoint: str) -> dict:
+    def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict:
         check_endpoint(endpoint)
         folder = prepare_dir(home)
         source = SHELLS_DIR / 'claude_code' / 'kit_hook.py'
         entry, shell_config = materialize_shell(source, folder / 'kit-shell', self.pinned_version)
+        write_note_config(shell_config.parent, records)
         config = folder / 'claude-config' / 'settings.json'
         hook = {
             'type': 'command',
