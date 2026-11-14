@@ -1,4 +1,4 @@
-"""The policy file, versions 1 and 2 (TOML): load, validate and compile it whole.
+"""The policy file, versions 1, 2 and 3 (TOML): load, validate and compile it whole.
 
 A policy is read whole before any judgement. Any failure (TOML syntax, a wrong
 version, an unknown key, a bad effect, kinds or governed value, a regular
@@ -12,6 +12,11 @@ of them. A checker table holds exactly `id`, `file`, `sha256` and, optionally,
 bytes are read and hashed, and kept for the judge to execute; loading never
 executes them. A missing or unreadable file or a hash that differs makes the
 whole policy unreadable.
+
+Version 3 is version 2 with one more optional checker key, `records`: a
+non-empty array of distinct strings, each `prompt` or `outcome`, the kinds of
+note the checker records. A recording checker's id names its facts file, so it
+matches `[a-z0-9][a-z0-9-]{0,62}` and is no reserved device name.
 
 Paths are compared in forward-slash form, case-folded on Windows. In a glob,
 `**` spans folders, while `*` and `?` stay inside one folder; `[...]` is a
@@ -31,7 +36,8 @@ import tomllib
 from harness_kit.event import ACT_KINDS, ORIGINS
 
 POLICY_VERSION = 1
-POLICY_VERSIONS = (1, 2)
+POLICY_VERSIONS = (1, 2, 3)
+CHECKER_VERSIONS = (2, 3)
 
 EFFECTS = ('allow', 'deny')
 TOP_KEYS = ('version', 'launcher', 'rule')
@@ -40,6 +46,11 @@ RULE_REQUIRED = ('id', 'effect', 'governed', 'kinds')
 RULE_OPTIONAL = ('command_regex', 'path_glob', 'origin_in', 'reason')
 CHECKER_REQUIRED = ('id', 'file', 'sha256')
 CHECKER_OPTIONAL = ('budget_ms',)
+RECORD_KINDS = ('prompt', 'outcome')
+_RECORDING_ID = re.compile('[a-z0-9][a-z0-9-]{0,62}')
+RESERVED_IDS = frozenset(
+    ('con', 'prn', 'aux', 'nul', *(f'{dev}{n}' for dev in ('com', 'lpt') for n in range(1, 10)))
+)
 BUDGET_MIN_MS = 50
 BUDGET_MAX_MS = 500
 BUDGET_DEFAULT_MS = 250
@@ -85,6 +96,7 @@ class Checker:
     sha256: str
     budget_ms: int = BUDGET_DEFAULT_MS
     source: bytes = field(default=b'', repr=False)
+    records: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -225,11 +237,32 @@ def _rule(raw: object, n: int, windows: bool, checker_ids: tuple[str, ...] | Non
     )
 
 
-def _checker(raw: object, n: int, folder: Path | None) -> Checker:
+def check_records(value: object, checker_id: str, where: str) -> tuple[str, ...]:
+    """The kinds of a checker's `records`, validated, with the rule its id must meet."""
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(k, str) and k in RECORD_KINDS for k in value)
+        or len(set(value)) != len(value)
+    ):
+        raise PolicyError(
+            f'{where}: records is not a non-empty list of distinct: {", ".join(RECORD_KINDS)}'
+        )
+    if not _RECORDING_ID.fullmatch(checker_id) or checker_id in RESERVED_IDS:
+        raise PolicyError(
+            f'{where}: a recording checker id is not [a-z0-9][a-z0-9-]{{0,62}} '
+            'or is a reserved device name'
+        )
+    return tuple(value)
+
+
+def _checker(raw: object, n: int, folder: Path | None, v3: bool) -> Checker:
+    """One checker table; `records` is a known key under version 3 only."""
     where = f'checker {n}'
     if not isinstance(raw, dict):
         raise PolicyError(f'{where} is not a table')
-    unknown = sorted(ascii(k) for k in raw if k not in CHECKER_REQUIRED + CHECKER_OPTIONAL)
+    known = CHECKER_REQUIRED + CHECKER_OPTIONAL + (('records',) if v3 else ())
+    unknown = sorted(ascii(k) for k in raw if k not in known)
     if unknown:
         raise PolicyError(f'{where} has unknown key(s): {", ".join(unknown)}')
     missing = [k for k in CHECKER_REQUIRED if k not in raw]
@@ -250,6 +283,7 @@ def _checker(raw: object, n: int, folder: Path | None) -> Checker:
         raise PolicyError(
             f'{where}: budget_ms is not an integer from {BUDGET_MIN_MS} to {BUDGET_MAX_MS}'
         )
+    records = check_records(raw['records'], checker_id, where) if 'records' in raw else ()
     path = Path(file)
     if not path.is_absolute():
         if folder is None:
@@ -262,14 +296,16 @@ def _checker(raw: object, n: int, folder: Path | None) -> Checker:
         raise PolicyError(f'{where}: file cannot be read: {type(exc).__name__}') from None
     if hashlib.sha256(source).hexdigest() != sha:
         raise PolicyError(f'{where}: file bytes do not match its sha256')
-    return Checker(id=checker_id, path=str(path), sha256=sha, budget_ms=budget, source=source)
+    return Checker(
+        id=checker_id, path=str(path), sha256=sha, budget_ms=budget, source=source, records=records
+    )
 
 
-def _checkers(data: dict, folder: Path | None) -> tuple[Checker, ...]:
+def _checkers(data: dict, folder: Path | None, v3: bool) -> tuple[Checker, ...]:
     raw_checkers = data.get('checker', [])
     if not isinstance(raw_checkers, list):
         raise PolicyError('checker is not an array of tables')
-    checkers = tuple(_checker(raw, n, folder) for n, raw in enumerate(raw_checkers, 1))
+    checkers = tuple(_checker(raw, n, folder, v3) for n, raw in enumerate(raw_checkers, 1))
     seen: set[str] = set()
     for checker in checkers:
         if checker.id in seen:
@@ -296,13 +332,13 @@ def load_policy_text(
         raise PolicyError(f'policy is not valid TOML: {exc}', sha256) from None
     try:
         version = data.get('version')
-        v2 = type(version) is int and version == 2
+        v2 = type(version) is int and version in CHECKER_VERSIONS
         top_keys = TOP_KEYS + (('checker',) if v2 else ())
         unknown = sorted(ascii(k) for k in data if k not in top_keys)
         if unknown:
             raise PolicyError(f'policy has unknown key(s): {", ".join(unknown)}')
         if type(version) is not int or version not in POLICY_VERSIONS:
-            raise PolicyError('policy version is not 1 or 2')
+            raise PolicyError('policy version is not 1, 2 or 3')
         launcher = data.get('launcher', {})
         if not isinstance(launcher, dict):
             raise PolicyError('launcher is not a table')
@@ -315,7 +351,7 @@ def load_policy_text(
         checkers: tuple[Checker, ...] = ()
         checker_ids = None
         if v2:
-            checkers = _checkers(data, None if folder is None else Path(folder))
+            checkers = _checkers(data, None if folder is None else Path(folder), version == 3)
             checker_ids = tuple(c.id for c in checkers)
         rules = tuple(_rule(raw, n, win, checker_ids) for n, raw in enumerate(raw_rules, 1))
     except PolicyError as exc:

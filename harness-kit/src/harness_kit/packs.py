@@ -1,14 +1,17 @@
-"""Rule packs and `kit policy build`: compose one version 2 policy from a base and packs.
+"""Rule packs and `kit policy build`: compose one version 2 or 3 policy from a base and packs.
 
 A pack is a folder holding `pack.toml` and the checker files it names:
 `pack = 1`, a `name`, `[[checker]]` tables (`id`, `file` relative to the pack
-with no `..` segment, optional `budget_ms`), `[[rule]]` tables with the keys of
-a policy rule, and an optional `[prevention]` table (`rule`, `layer`) that the
-doctor reads.
+with no `..` segment, optional `budget_ms` and `records`), `[[rule]]` tables
+with the keys of a policy rule, and an optional `[prevention]` table (`rule`,
+`layer`) that the doctor reads.
 
 The build writes the base's `launcher` table, the base's rules then each
 pack's rules in argument order, and every checker with its `file` absolute in
-forward-slash form and its `sha256` computed from its bytes now. The standard
+forward-slash form and its `sha256` computed from its bytes now. When any
+checker of the base or of the packs has `records`, the policy is version 3 and
+each such checker's `records` follows its `budget_ms`; otherwise it is version
+2, the same bytes as before version 3 existed. The standard
 library has no TOML writer, so this module emits its own: basic strings with
 every character outside U+0020..U+007E escaped, keys in a fixed order, LF line
 ends; the same inputs give the same bytes. Beside the policy it writes
@@ -40,6 +43,7 @@ from harness_kit.policy import (
     RULE_REQUIRED,
     Checker,
     PolicyError,
+    check_records,
     load_policy,
     load_policy_text,
 )
@@ -51,7 +55,7 @@ PACK_FILE = 'pack.toml'
 PACK_VERSION = 1
 PACK_KEYS = ('pack', 'name', 'checker', 'rule', 'prevention')
 PACK_CHECKER_REQUIRED = ('id', 'file')
-PACK_CHECKER_OPTIONAL = ('budget_ms',)
+PACK_CHECKER_OPTIONAL = ('budget_ms', 'records')
 PREVENTION_KEYS = ('rule', 'layer')
 RULE_KEYS = RULE_REQUIRED + RULE_OPTIONAL + ('check',)
 # The order a rule's keys are written in; every key a version 2 rule may hold.
@@ -82,6 +86,7 @@ class CheckerEntry:
     file: str
     sha256: str
     budget_ms: object
+    records: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -170,6 +175,7 @@ def read_base(path: str | os.PathLike[str]) -> tuple[dict, tuple[CheckerEntry, .
             file=forward(c.path),
             sha256=hashlib.sha256(c.source).hexdigest(),
             budget_ms=c.budget_ms,
+            records=c.records,
         )
         for c in policy.checkers
     )
@@ -201,6 +207,12 @@ def _pack_checker(raw: dict, n: int, folder: Path, where: str) -> CheckerEntry:
     if not isinstance(checker_id, str) or not checker_id:
         raise BuildError(f'{where}: id is not a non-empty string')
     where = f'{outer}: checker {checker_id!a}'
+    records = ()
+    if 'records' in raw:
+        try:
+            records = check_records(raw['records'], checker_id, where)
+        except PolicyError as exc:
+            raise BuildError(str(exc)) from None
     path = folder / _relative_file(raw['file'], where)
     if not path.is_file():
         raise BuildError(f'{where}: file {raw["file"]!a} does not exist in the pack')
@@ -213,6 +225,7 @@ def _pack_checker(raw: dict, n: int, folder: Path, where: str) -> CheckerEntry:
         file=forward(path),
         sha256=hashlib.sha256(source).hexdigest(),
         budget_ms=raw.get('budget_ms', BUDGET_DEFAULT_MS),
+        records=records,
     )
 
 
@@ -275,8 +288,10 @@ def _unique(ids: Iterable[str], what: str) -> None:
 
 
 def compose(launcher: dict, entries: Iterable[CheckerEntry], rules: Iterable[dict]) -> str:
-    """The text of a version 2 policy; keys in a fixed order, LF line ends."""
-    lines = ['version = 2', '', '[launcher]']
+    """The text of a version 2 policy, or 3 when a checker records; fixed key order, LF ends."""
+    entries = tuple(entries)
+    version = 3 if any(e.records for e in entries) else 2
+    lines = [f'version = {version}', '', '[launcher]']
     lines += [f'{k} = {toml_value(launcher[k])}' for k in LAUNCHER_LISTS if k in launcher]
     lines.append('')
     for entry in entries:
@@ -286,8 +301,10 @@ def compose(launcher: dict, entries: Iterable[CheckerEntry], rules: Iterable[dic
             f'file = {toml_value(entry.file)}',
             f'sha256 = {toml_value(entry.sha256)}',
             f'budget_ms = {toml_value(entry.budget_ms)}',
-            '',
         ]
+        if entry.records:
+            lines.append(f'records = {toml_value(list(entry.records))}')
+        lines.append('')
     for rule in rules:
         lines.append('[[rule]]')
         lines += [f'{k} = {toml_value(rule[k])}' for k in RULE_ORDER if k in rule]
@@ -324,7 +341,8 @@ def verify_checkers(items: Iterable[Checker]) -> str | None:
     Each load waits at most the checker's `budget_ms` on a daemon thread, with
     descriptors 1 and 2 at the null device for the load only and restored
     after it. Return None when every checker executes and defines a callable
-    `check`, else the ASCII reason of the first one that does not.
+    `check`, and a recording one a callable `record`, else the ASCII reason
+    of the first one that does not.
     """
     for checker in items:
         reason = checkers.try_load(checker)
@@ -376,9 +394,9 @@ def add_parser(sub) -> None:
     )
     b = policy_sub.add_parser(
         'build',
-        help='write a version 2 policy from a base policy and rule packs; refusals exit 64',
+        help='write a version 2 or 3 policy from a base policy and rule packs; refusals exit 64',
     )
-    b.add_argument('--base', metavar='FILE', required=True, help='version 1 or 2 base policy')
+    b.add_argument('--base', metavar='FILE', required=True, help='version 1, 2 or 3 base policy')
     b.add_argument(
         '--pack', metavar='DIR', required=True, action='append', help='pack folder (repeatable)'
     )

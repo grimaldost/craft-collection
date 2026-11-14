@@ -1,6 +1,7 @@
-"""Checkers of policy version 2: load one, call it within its budget, keep its output away.
+"""Checkers of policy versions 2 and 3: load one, call it within its budget, keep its output away.
 
-A checker is a Python file that defines `check(act, observation)`. The judge
+A checker is a Python file that defines `check(act, observation)`; one that
+declares `records` (version 3) also defines `record(note, facts)`. The judge
 compiles and executes the very bytes the policy load hashed, with no second
 read of the file and no bytecode cache, under a module name that no package
 module can have, with `__file__` set to the checker's path and the module
@@ -144,17 +145,26 @@ def _run(target, wait_s: float) -> tuple[str, object]:
     return box[0]
 
 
-def try_load(checker: Checker) -> str | None:
-    """Test that a checker executes and defines a callable `check`, without calling it.
+def _sound_functions(checker: Checker) -> None:
+    """Raise CheckerLoadError unless the checker defines `check`, and `record` when it records."""
+    _check_function(checker)
+    if checker.records and not callable(getattr(execute(checker), 'record', None)):
+        raise CheckerLoadError(f'checker {checker.id!a} defines no callable record')
 
-    The load goes through `execute`, as the judge's does, on a daemon thread
-    waited on for at most the checker's `budget_ms`: a load still running then
-    counts as not executing and does not hold the process open. Descriptors 1
-    and 2 and `sys.stdout`/`sys.stderr` point at the null device for the wait
-    only. Return None when the checker is sound, else an ASCII reason.
+
+def try_load(checker: Checker) -> str | None:
+    """Test that a checker executes and defines its callables, without calling them.
+
+    A checker defines a callable `check`; one with `records` (policy version 3)
+    also defines a callable `record`. The load goes through `execute`, as the
+    judge's does, on a daemon thread waited on for at most the checker's
+    `budget_ms`: a load still running then counts as not executing and does
+    not hold the process open. Descriptors 1 and 2 and `sys.stdout`/
+    `sys.stderr` point at the null device for the wait only. Return None when
+    the checker is sound, else an ASCII reason.
     """
     with quiet():
-        state, value = _run(lambda: _check_function(checker), checker.budget_ms / 1000)
+        state, value = _run(lambda: _sound_functions(checker), checker.budget_ms / 1000)
     if state == _RETURNED:
         return None
     if state == _RUNNING:
