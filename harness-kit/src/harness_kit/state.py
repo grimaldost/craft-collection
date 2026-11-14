@@ -16,7 +16,8 @@ launched, else `not-launched/<16 hex of sha256(session id)>/journal.ndjson`, or
 payload hash and the verdict, never the command text or a path. Each append
 holds one exclusive lock on `journal.ndjson.lock` beside the journal (one byte
 at offset 0 through `msvcrt.locking` on Windows, `fcntl.flock` on POSIX; nothing
-is written to that file), taken with retries for at most one second.
+is written to that file), taken with retries for at most one second. The same
+primitive (`open_lock`, `acquire`, `release`) guards the session facts.
 
 Every note (`kit note`) appends one line to `notes.ndjson` in the folder its
 event would use, under the same lock, so the readers of `journal.ndjson` count
@@ -149,6 +150,11 @@ def _sharing_error(exc: OSError) -> bool:
     return isinstance(exc, PermissionError) or getattr(exc, 'winerror', None) in (5, 32, 33)
 
 
+def json_bytes(obj: object) -> bytes:
+    """The bytes `write_json_atomic` writes for `obj`: indented ASCII JSON and a newline."""
+    return (json.dumps(obj, ensure_ascii=True, indent=2) + '\n').encode('ascii')
+
+
 def write_json_atomic(
     path: Path,
     obj: object,
@@ -163,7 +169,7 @@ def write_json_atomic(
     `deadline` seconds have passed, then raised.
     """
     path = Path(path)
-    data = (json.dumps(obj, ensure_ascii=True, indent=2) + '\n').encode('ascii')
+    data = json_bytes(obj)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
     try:
         with os.fdopen(fd, 'wb') as fh:
@@ -350,6 +356,29 @@ def _unlock(fd: int) -> None:
         fcntl.flock(fd, fcntl.LOCK_UN)
 
 
+_BINARY = getattr(os, 'O_BINARY', 0)
+
+
+def open_lock(path: Path) -> int:
+    """Open (and create) a lock file; return its descriptor. Nothing is written to it."""
+    return os.open(path, os.O_RDWR | os.O_CREAT | _BINARY, 0o666)
+
+
+def acquire(fd: int, timeout: float = LOCK_TIMEOUT) -> bool:
+    """Take the exclusive lock on an open lock file, retrying for at most `timeout` seconds."""
+    end = time.monotonic() + timeout
+    while not _try_lock(fd):
+        if time.monotonic() >= end:
+            return False
+        time.sleep(_RETRY_SLEEP)
+    return True
+
+
+def release(fd: int) -> None:
+    """Release the lock `acquire` took."""
+    _unlock(fd)
+
+
 def append_journal(path: Path, record: dict, timeout: float = LOCK_TIMEOUT) -> None:
     """Append one ASCII JSON line while holding the lock beside the journal.
 
@@ -358,18 +387,15 @@ def append_journal(path: Path, record: dict, timeout: float = LOCK_TIMEOUT) -> N
     """
     path = Path(path)
     line = (json.dumps(record, ensure_ascii=True) + '\n').encode('ascii')
-    binary = getattr(os, 'O_BINARY', 0)
+    binary = _BINARY
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        lock_fd = os.open(path.with_name(JOURNAL_LOCK), os.O_RDWR | os.O_CREAT | binary, 0o666)
+        lock_fd = open_lock(path.with_name(JOURNAL_LOCK))
     except OSError as exc:
         raise JournalError(f'journal folder or lock not opened: {type(exc).__name__}') from None
     try:
-        end = time.monotonic() + timeout
-        while not _try_lock(lock_fd):
-            if time.monotonic() >= end:
-                raise JournalError(f'journal lock not obtained within {timeout:g} s')
-            time.sleep(_RETRY_SLEEP)
+        if not acquire(lock_fd, timeout):
+            raise JournalError(f'journal lock not obtained within {timeout:g} s')
         try:
             fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | binary, 0o666)
             try:
