@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from harness_kit import __version__, checkers, notes, packs, state
+from harness_kit import __version__, checkers, facts, notes, packs, state
 from harness_kit.event import InvalidEventError, check_event, parse_event
 from harness_kit.policy import Policy, PolicyError, load_policy
 from harness_kit.verdict import CANARY_DENY_RULE, judge_bytes, unknown_verdict
@@ -115,7 +115,9 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
     A journal that cannot be written, a refused state root among its forms,
     turns the verdict into `unknown`, governed. Inside a canary run (its nonce
     in `KIT_CANARY_NONCE`) a refusal by `canary.deny` of a launched event is
-    recorded by the refused marker in the run's canary folder.
+    recorded by the refused marker in the run's canary folder. A valid,
+    launched event with a root key hands its recording checkers their session
+    facts, read without any lock; a judgement writes no facts.
     """
     try:
         root = state.state_root(env)
@@ -128,9 +130,14 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
     run_id = run_id if launched else None
     nonce = state.canary_nonce(env)
 
-    verdict = judge_bytes(data, policy, launched, nonce)
+    event = _valid_event(data) if root is not None else None
+    reader = None
+    if launched and event is not None:
+        key = facts.root_key(event)
+        if key is not None:
+            reader = facts.judge_reader(root, run_id, key)
+    verdict = judge_bytes(data, policy, launched, nonce, facts=reader)
     if root is not None:
-        event = _valid_event(data)
         now = datetime.now(timezone.utc)
         record = state.journal_record(verdict, event, run_id, launched, now)
         try:
@@ -180,20 +187,30 @@ def run_judge(policy_path: str | None) -> int:
         os._exit(0)
 
 
-def _receipt(outcome: str, reason: str | None) -> dict:
+def _receipt(outcome: str, reason: str | None, recorders: list | None = None) -> dict:
     if reason is not None:
         reason = reason.encode('ascii', 'backslashreplace').decode('ascii')
-    return {'kit_note_receipt': 1, 'outcome': outcome, 'reason': reason, 'recorders': []}
+    return {
+        'kit_note_receipt': 1,
+        'outcome': outcome,
+        'reason': reason,
+        'recorders': list(recorders or []),
+    }
 
 
-def note_and_journal(data: bytes, policy_path: str | None, env) -> dict:
+def note_and_journal(data: bytes, policy_path: str | None, env, sink: list | None = None) -> dict:
     """Take one note under the run identity the environment names, journal it, return the receipt.
 
     In order: an invalid note is `invalid`; a refused state root is `failed` and
     writes nothing; a note outside a minted run is `outside-run`; an unreadable
-    policy is `dropped`, `policy-unreadable`; else `dropped`, `no-recorder`. No
-    checker is loaded. A journal line that cannot be written turns the receipt
-    into `failed`.
+    policy is `dropped`, `policy-unreadable`; a policy with no checker that
+    records the note's kind is `dropped`, `no-recorder`; a note with no root
+    key is `dropped`, `no-root`. Otherwise the output sink is put in place
+    before the first checker loads, its duplicate of descriptor 1 is appended
+    to `sink` when one is given, each recorder runs (`notes.record_note`) and
+    the note is `recorded`. The journal line is appended after the last
+    recorder, with no facts lock held; one that cannot be written turns the
+    receipt into `failed`.
     """
     try:
         note = notes.check_note(notes.parse_note(data))
@@ -208,35 +225,66 @@ def note_and_journal(data: bytes, policy_path: str | None, env) -> dict:
     launched = state.is_launched(root, run_id)
     run_id = run_id if launched else None
 
+    results: list[dict] = []
     if note is None:
         outcome, reason = 'invalid', None
     elif not launched:
         outcome, reason = 'outside-run', None
-    elif isinstance(_load(policy_path), PolicyError):
-        outcome, reason = 'dropped', 'policy-unreadable'
     else:
-        outcome, reason = 'dropped', 'no-recorder'
+        outcome, reason = _drop_or_record(note, _load(policy_path), root, run_id, sink, results)
 
     now = datetime.now(timezone.utc)
-    record = state.note_record(note, run_id, launched, outcome, reason, [], now)
+    record = state.note_record(note, run_id, launched, outcome, reason, results, now)
     try:
         state.append_journal(state.notes_path(root, run_id, note), record)
     except state.JournalError as exc:
-        return _receipt('failed', f'journal not written: {exc}')
-    return _receipt(outcome, invalid if note is None else reason)
+        return _receipt('failed', f'journal not written: {exc}', results)
+    return _receipt(outcome, invalid if note is None else reason, results)
+
+
+def _drop_or_record(note: dict, policy, root, run_id: str, sink, results: list):
+    """(outcome, reason) of a valid, launched note; the recorders' results go to `results`."""
+    if isinstance(policy, PolicyError):
+        return 'dropped', 'policy-unreadable'
+    recorders = notes.recorders_for(note, policy.checkers)
+    if not recorders:
+        return 'dropped', 'no-recorder'
+    key = facts.root_key(note)
+    if key is None:
+        return 'dropped', 'no-root'
+    out_fd = checkers.install_sink()
+    if sink is not None:
+        sink.append(out_fd)
+    results.extend(notes.record_note(note, recorders, root, run_id, key))
+    return 'recorded', None
 
 
 def run_note(policy_path: str | None) -> int:
-    """Print exactly one receipt line; exit 0 whatever the note and whatever failed."""
+    """Print exactly one receipt line; exit 0 whatever the note and whatever failed.
+
+    Once a recorder is about to load, the output sink is in place and the
+    receipt goes to its duplicate of descriptor 1; the process then ends
+    through `os._exit(0)` right after that line, as `kit judge` does, since a
+    recorder thread still writing could otherwise abort the interpreter's
+    shutdown.
+    """
+    sink: list[int] = []
     try:
         receipt = note_and_journal(
-            sys.stdin.buffer.read(), policy_path or os.environ.get(POLICY_ENV), os.environ
+            sys.stdin.buffer.read(), policy_path or os.environ.get(POLICY_ENV), os.environ, sink
         )
     except Exception as exc:  # a receipt is owed whatever failed; a note never decides
         receipt = _receipt('failed', f'note failed: {type(exc).__name__}')
-    sys.stdout.write(json.dumps(receipt, ensure_ascii=True) + '\n')
-    sys.stdout.flush()
-    return 0
+    line = json.dumps(receipt, ensure_ascii=True) + '\n'
+    if not sink:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        return 0
+    try:
+        checkers.write_all(sink[0], line.encode('ascii'))
+        os.close(sink[0])
+    finally:
+        os._exit(0)
 
 
 def _fail(code: int, message: str) -> int:
