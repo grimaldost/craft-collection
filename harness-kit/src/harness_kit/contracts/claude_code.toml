@@ -110,9 +110,45 @@ mark = "measured"
 evidence = "Claude Code 2.1.316, 2026-11-08: with a read deny on settings.json the run exited 0, the hook did not run and Bash executed, in 3 of 3 sets."
 text = "An unreadable settings.json leaves exit 0, no hook run and the tool executed; caught at launch by the canary, not during a run."
 
+[[loss]]
+id = "prompt-origin-unproved"
+objective = "run_identity"
+mark = "measured"
+evidence = "Claude Code 2.1.316, 2026-11-13: in headless runs against a stub model, UserPromptSubmit fired for a typed prompt and for the harness's own task-notification prompt, with nothing but the text to tell them apart."
+text = "A prompt note cannot tell a typed prompt from the harness's task-notification prompt; only the owner-acts core's lexical rule can, so who typed a prompt is not proved."
+
+[[loss]]
+id = "prompt-note-lost-keeps-earlier"
+objective = "prevention"
+mark = "inferred"
+evidence = "Claude Code 2.1.316, 2026-11-15: inferred from the design of kit note and the facts store, nothing run."
+text = "A prompt note that is not recorded (the shell's deadline, a lock not obtained, a conflict, a failed recorder) leaves the earlier owner prompt in force until the next prompt that is recorded, so an act the earlier prompt named stays allowed meanwhile."
+
 # Rules a pack carries, by rule id: tested when the rule's three cells of conformance/test_rules.py
 # held on this harness, as its rules-results.json recorded them.
 [rules.uv-project-uses-uv]
 state = "tested"
 mark = "measured"
 evidence = "Rule cells uv-deny, uv-allow-outside and uv-allow-mention passed on Claude Code 2.1.316, 2026-11-12."
+
+[rules.series-second-pr-declared]
+state = "tested"
+mark = "measured"
+evidence = "Guard cell series-guard passed on Claude Code 2.1.316, 2026-11-15."
+
+[rules.owner-acts-named-by-owner]
+state = "tested"
+mark = "measured"
+evidence = "Guard cells owner-acts-deny and owner-acts-allow passed on Claude Code 2.1.316, 2026-11-15."
+
+# Notes a shell forwards, by kind: tested when the guard cells of conformance/test_guards.py that
+# need that kind held on this harness, as its guards-results.json recorded them.
+[notes.prompt]
+state = "tested"
+mark = "measured"
+evidence = "Guard cell owner-acts-allow passed on Claude Code 2.1.316, 2026-11-15: its session's prompt note was recorded."
+
+[notes.outcome]
+state = "tested"
+mark = "measured"
+evidence = "Guard cell series-guard passed on Claude Code 2.1.316, 2026-11-15: its session's outcome note was recorded."
