@@ -1,0 +1,20 @@
+# The owner-acts rule: an act only the owner authorizes needs a sentence of the owner's latest
+# prompt that names it. The logic is the session-workflow plugin's own core, called by
+# owner_acts_rule.py, which records the owner's latest prompt and judges each act from it.
+# `reason` is the core's instruction with the list of families left out; the detail names the act.
+pack = 1
+name = "owner-acts"
+
+[[checker]]
+id = "owner-acts-check"
+file = "owner_acts_rule.py"
+budget_ms = 250
+records = ["prompt"]
+
+[[rule]]
+id = "owner-acts-named-by-owner"
+effect = "deny"
+governed = true
+kinds = ["shell", "file_write"]
+check = "owner-acts-check"
+reason = "This is an act only the owner authorizes, and no sentence of the owner's latest prompt names it with an act verb. A general go-ahead does not cover it. Do not retry it or route around it (another tool, a wrapper, a script). Put it to the owner in your final block, framed: what the act is and why, the exact command or edit, and its side effects. The owner authorizes it with a sentence naming the object and the act."
