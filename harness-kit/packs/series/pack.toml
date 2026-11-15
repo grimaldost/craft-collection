@@ -1,0 +1,20 @@
+# The series rule: a second `gh pr create` in one repository and session names its series.
+# The logic is the session-workflow plugin's own core, called by series_rule.py, which records the
+# pull requests a create printed and judges the next create from them. `reason` is, character for
+# character, the core's deny text from "The owner's rule:" to the end of its next-to-last sentence.
+pack = 1
+name = "series"
+
+[[checker]]
+id = "series-check"
+file = "series_rule.py"
+budget_ms = 250
+records = ["outcome"]
+
+[[rule]]
+id = "series-second-pr-declared"
+effect = "deny"
+governed = false
+kinds = ["shell"]
+check = "series-check"
+reason = "The owner's rule: a series of two or more PR-sized changes goes through keel's Definition of Ready and runs with convoy's gate as the judge of each change. To satisfy it, name the series file or spec that governs this change in the command: in Bash, `KEEL_SERIES=<path> gh pr create ...`; in PowerShell, `$env:KEEL_SERIES='<path>'; gh pr create ...` (a relative path resolves against the command's working directory). If this PR is not part of a series, say why with `KEEL_SERIES=none:<reason>` (for example `none:hotfix`)."
