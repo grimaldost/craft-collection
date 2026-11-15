@@ -21,16 +21,23 @@ whose binary is found, in a scratch home under DIR (which must lie under a
 loss for that objective and to `tested` where it holds none; a failed one sets
 them to `absent`.
 
-When `KIT_POLICY` names a readable version 2 policy with a `<policy>.packs.json`
-beside it whose `policy_sha256` is the policy's, the report gains a section
-`rules`: per rule with a checker, its pack, `governed`, a state per harness from
-the contract's `[rules]` table (`unknown` when the binary is absent or its
-version differs) and the pack's declared preventing layer. A policy that does
-not load gives the one line `policy unreadable: <reason>` (a file that is TOML
-with `version = 1` gives no section), a sidecar of another policy gives
+When `KIT_POLICY` names a readable version 2 or 3 policy with a
+`<policy>.packs.json` beside it whose `policy_sha256` is the policy's, the report
+gains a section `rules`: per rule with a checker, its pack, `governed`, a state
+per harness from the contract's `[rules]` table (`unknown` when the binary is
+absent or its version differs) and the pack's declared preventing layer. A policy
+that does not load gives the one line `policy unreadable: <reason>` (a file that
+is TOML with `version = 1` gives no section), a sidecar of another policy gives
 `sidecar stale`. With a version 1 policy, with no `KIT_POLICY` and with a
-version 2 policy that has no sidecar the report has no such section. The
+version 2 or 3 policy that has no sidecar the report has no such section. The
 section reads files only: it runs no checker and starts no program.
+
+When `KIT_POLICY` names a readable policy with at least one recording checker (a
+`records` key, version 3 only), the report also gains a section `notes`: per
+recording checker, its kinds and, per harness and kind, a state from the
+contract's `[notes]` table (`unknown` when the binary is absent, its version
+differs or the contract has no entry for the kind). It stands after `rules` and
+reads files only, as `rules` does. Any other policy gives no such section.
 """
 
 from __future__ import annotations
@@ -74,6 +81,7 @@ READ_DEADLINE_S = 1.0
 UTC_FORMS = ('%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S.%fZ')
 NOT_LAUNCHED_TEXT = 'not launched, guarantees unknown'
 RULES_KEY = 'rules'
+NOTES_KEY = 'notes'
 UNREADABLE_TEXT = 'policy unreadable: '
 STALE_TEXT = 'sidecar stale'
 DECLARED_TEXT = 'declared by the pack, not checked by the kit'
@@ -363,7 +371,7 @@ def rules_section(environ: Mapping[str, str], harness_rows: Mapping[str, dict]):
             return None
         return UNREADABLE_TEXT + _ascii(exc)
     version = _toml_version(path)
-    if not _is_version(version, 2):
+    if not (_is_version(version, 2) or _is_version(version, 3)):
         return None
     sidecar_file = packs.sidecar_path(path)
     if not sidecar_file.exists():
@@ -372,6 +380,56 @@ def rules_section(environ: Mapping[str, str], harness_rows: Mapping[str, dict]):
     if sidecar.get('policy_sha256') != policy.sha256:
         return STALE_TEXT
     return _rule_rows(policy, sidecar, harness_rows)
+
+
+# ---- notes from a policy that records
+
+
+def _note_state(contract: dict, found: object, kind: str) -> tuple[str, str]:
+    """A harness's state for a recorded kind and its evidence text, as the rules follow."""
+    if found is None or found != contract['harness']['version']:
+        return 'unknown', ''
+    entry = (contract.get(NOTES_KEY) or {}).get(kind)
+    if not isinstance(entry, dict):
+        return 'unknown', ''
+    if entry.get('state') == 'tested':
+        return 'tested', _ascii(entry.get('evidence', ''))
+    if entry.get('state') == 'absent':
+        return 'absent', ''
+    return 'unknown', ''
+
+
+def notes_section(environ: Mapping[str, str], harness_rows: Mapping[str, dict]) -> list | None:
+    """The `notes` value for the report: a row per recording checker, or None for no section."""
+    policy_file = environ.get('KIT_POLICY')
+    if not policy_file:
+        return None
+    try:
+        policy = load_policy(Path(os.path.abspath(policy_file)))
+    except PolicyError:
+        return None
+    recording = [c for c in policy.checkers if c.records]
+    if not recording:
+        return None
+    contracts = {name: load_contract(name) for name in harness_rows}
+    rows = []
+    for checker in recording:
+        states: dict[str, dict] = {}
+        evidence: dict[str, dict] = {}
+        for name, entry in harness_rows.items():
+            states[name], evidence[name] = {}, {}
+            for kind in checker.records:
+                value, proof = _note_state(contracts[name], entry['version_found'], kind)
+                states[name][kind], evidence[name][kind] = value, proof
+        rows.append(
+            {
+                'checker': _ascii(checker.id),
+                'records': list(checker.records),
+                'states': states,
+                'evidence': evidence,
+            }
+        )
+    return rows
 
 
 # ---- the live canary
@@ -497,6 +555,9 @@ def build_report(environ: Mapping[str, str], live_root: str | None = None) -> di
     rules = rules_section(environ, report_harnesses)
     if rules is not None:
         report[RULES_KEY] = rules
+    notes = notes_section(environ, report_harnesses)
+    if notes is not None:
+        report[NOTES_KEY] = notes
     return report
 
 
@@ -516,6 +577,18 @@ def _rules_lines(rules: object) -> list[str]:
     return lines
 
 
+def _notes_lines(rows: list[dict]) -> list[str]:
+    lines = ['notes:']
+    for row in rows:
+        lines.append(f'  {row["checker"]} records {", ".join(row["records"])}')
+        for name, kinds in row['states'].items():
+            for kind in row['records']:
+                proof = row['evidence'][name][kind]
+                suffix = f' ({proof})' if kinds[kind] == 'tested' else ''
+                lines.append(f'    {name} {kind} {kinds[kind]}{suffix}')
+    return lines
+
+
 def render_text(report: dict) -> str:
     lines = ['kit doctor']
     for name, entry in report['harnesses'].items():
@@ -529,6 +602,8 @@ def render_text(report: dict) -> str:
             )
     if RULES_KEY in report:
         lines.extend(_rules_lines(report[RULES_KEY]))
+    if NOTES_KEY in report:
+        lines.extend(_notes_lines(report[NOTES_KEY]))
     lines.append('runs:')
     for run in report['runs'] or [{'run_id': '(none)', 'harness': '', 'status': ''}]:
         lines.append(f'  {run["run_id"]} {run["harness"] or ""} {run["status"]}'.rstrip())

@@ -39,7 +39,10 @@ Beside the act-time hooks sits a mechanism kept outside the harness: the
 presence canary, and reports what was tested per harness. A shell's refusal there
 is feedback to the model, not prevention, and the doctor reports `prevention` as
 `absent`. A tool's own rule reaches that judge through a rule pack that calls the
-tool's core. See `harness-kit/README.md`, which also describes packs.
+tool's core. A guard that decides from an earlier event, such as a second pull
+request in one session, reaches the judge through notes that the shells send
+after the fact (`kit note`). See `harness-kit/README.md`, which also describes
+packs and notes.
 
 ## Commands and output styles, by hand
 
