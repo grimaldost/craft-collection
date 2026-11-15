@@ -6,7 +6,7 @@ Contract under test, with a fake harness named through `KIT_HARNESS_ARGV_*`:
   64 with one stderr line naming it, before the canary (no folder under
   `runs/`) and before any harness process (the fake's marker is absent);
 - a recording checker that defines both `check` and `record` lets the harness
-  start.
+  start, in a home rendered with that policy (`kit home render --policy`).
 
 Stdlib-runnable: `python test_launch_recording.py`.
 """
@@ -74,6 +74,21 @@ def test_a_recording_checker_with_record_lets_the_harness_start():
         try:
             case = tl.Case(base, harness)
             write_v3_policy(case, RECORDING)
+            case.home = base / f'home-notes-{harness}'
+            render = tl.kit(
+                case,
+                'home',
+                'render',
+                '--harness',
+                harness,
+                '--dir',
+                str(case.home),
+                '--endpoint',
+                tl.ENDPOINT,
+                '--policy',
+                str(case.policy),
+            )
+            assert render.returncode == 0, render.stderr
             proc = case.run()
             child = tl.assert_started(case, proc)
             assert child['args'] == tl.SESSION_ARGS[harness], child['args']
