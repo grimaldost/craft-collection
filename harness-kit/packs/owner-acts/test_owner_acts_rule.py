@@ -383,7 +383,8 @@ def test_listed_rows_have_their_shape_and_the_second_dialect_finds_the_act():
         command, dialect, reason = row
         assert isinstance(command, str) and dialect in ('bash', 'powershell'), row
         assert isinstance(reason, str) and reason.strip() and reason.isascii(), row
-        acts = owner_acts_gate.shell_acts(command, dialect, None)
+        with _case():
+            acts = owner_acts_gate.shell_acts(command, dialect, None)
         assert [a for a in acts if a.arm != 'shell-write'], row
 
 
@@ -547,9 +548,9 @@ def test_only_the_denied_acts_are_named():
 def test_an_act_either_reading_finds_counts():
     # The bash reading blanks the heredoc body; the PowerShell reading reads its lines.
     script = "cat > fix.ps1 <<'EOF'\nsetx FOO 1\nEOF"
-    assert owner_acts_gate.shell_acts(script, 'bash', None) == []
-    assert owner_acts_gate.shell_acts(script, 'powershell', None)
     with _case():
+        assert owner_acts_gate.shell_acts(script, 'bash', None) == []
+        assert owner_acts_gate.shell_acts(script, 'powershell', None)
         assert _check(_shell(script), {})['result'] == 'match'
 
 
