@@ -83,7 +83,7 @@ def test_each_unreadable_form_is_refused():
     forms = {
         'toml syntax': 'version = = 1\n',
         'no version': RULE,
-        'version 3': 'version = 3\n',
+        'version 4': 'version = 4\n',
         'version string': 'version = "1"\n',
         'version boolean': 'version = true\n',
         'unknown top key': 'version = 1\nrules = []\n',
@@ -215,7 +215,7 @@ def test_case_folds_on_windows_only():
 
 
 def test_a_version_that_is_neither_1_nor_2_names_both():
-    reason = _unreadable('version = 3\n')
+    reason = _unreadable('version = 4\n')
     assert '1' in reason and '2' in reason, reason
 
 

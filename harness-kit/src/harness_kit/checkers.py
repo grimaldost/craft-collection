@@ -1,6 +1,7 @@
-"""Checkers of policy version 2: load one, call it within its budget, keep its output away.
+"""Checkers of policy versions 2 and 3: load one, call it within its budget, keep its output away.
 
-A checker is a Python file that defines `check(act, observation)`. The judge
+A checker is a Python file that defines `check(act, observation)`; one that
+declares `records` (version 3) also defines `record(note, facts)`. The judge
 compiles and executes the very bytes the policy load hashed, with no second
 read of the file and no bytecode cache, under a module name that no package
 module can have, with `__file__` set to the checker's path and the module
@@ -18,6 +19,13 @@ returned when the wait ends reads `cannot-tell`. The budget is cooperative: a
 call that never yields the interpreter, or one that ends the process, is
 outside this contract.
 
+A recording checker is judged as `check(act, observation, facts)`, its session
+facts read once per judgement before its wait starts (`Judgement`). A note's
+recorders are called as `record(note, facts)` in the same way (`Recording`),
+under a total budget of their own that only the waits on `record` draw on; a
+return other than `{"result": "unchanged"}` or `{"facts": OBJECT}` with a
+JSON-clean OBJECT reads `failed`.
+
 The output sink works at the file-descriptor level: `install_sink` points
 descriptors 1 and 2 and `sys.stdout` and `sys.stderr` at the null device for
 the rest of the process and returns a duplicate of descriptor 1 for the
@@ -28,12 +36,13 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import os
 import sys
 import threading
 import time
 import types
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from harness_kit.policy import BUDGET_MIN_MS, Checker
@@ -144,17 +153,26 @@ def _run(target, wait_s: float) -> tuple[str, object]:
     return box[0]
 
 
-def try_load(checker: Checker) -> str | None:
-    """Test that a checker executes and defines a callable `check`, without calling it.
+def _sound_functions(checker: Checker) -> None:
+    """Raise CheckerLoadError unless the checker defines `check`, and `record` when it records."""
+    _check_function(checker)
+    if checker.records and not callable(getattr(execute(checker), 'record', None)):
+        raise CheckerLoadError(f'checker {checker.id!a} defines no callable record')
 
-    The load goes through `execute`, as the judge's does, on a daemon thread
-    waited on for at most the checker's `budget_ms`: a load still running then
-    counts as not executing and does not hold the process open. Descriptors 1
-    and 2 and `sys.stdout`/`sys.stderr` point at the null device for the wait
-    only. Return None when the checker is sound, else an ASCII reason.
+
+def try_load(checker: Checker) -> str | None:
+    """Test that a checker executes and defines its callables, without calling them.
+
+    A checker defines a callable `check`; one with `records` (policy version 3)
+    also defines a callable `record`. The load goes through `execute`, as the
+    judge's does, on a daemon thread waited on for at most the checker's
+    `budget_ms`: a load still running then counts as not executing and does
+    not hold the process open. Descriptors 1 and 2 and `sys.stdout`/
+    `sys.stderr` point at the null device for the wait only. Return None when
+    the checker is sound, else an ASCII reason.
     """
     with quiet():
-        state, value = _run(lambda: _check_function(checker), checker.budget_ms / 1000)
+        state, value = _run(lambda: _sound_functions(checker), checker.budget_ms / 1000)
     if state == _RETURNED:
         return None
     if state == _RUNNING:
@@ -182,12 +200,43 @@ def read_return(value: object) -> tuple[str, str | None]:
     return result, None if detail is None else reduce_detail(detail)
 
 
-class Judgement:
-    """The checkers of one judgement and what is left of its total budget."""
+_UNREAD = object()
 
-    def __init__(self, checkers: tuple[Checker, ...], total_ms: int = TOTAL_BUDGET_MS) -> None:
+
+class Judgement:
+    """The checkers of one judgement and what is left of its total budget.
+
+    `facts` maps a checker id to its session facts (a dict) or None; a
+    recording checker is called as `check(act, observation, facts)` with a deep
+    copy of what it gave, read once per checker per judgement before the wait
+    starts. Without `facts` a recording checker receives None. A checker
+    without `records` is called as `check(act, observation)`.
+    """
+
+    def __init__(
+        self,
+        checkers: tuple[Checker, ...],
+        total_ms: int = TOTAL_BUDGET_MS,
+        facts: Callable[[str], dict | None] | None = None,
+    ) -> None:
         self.checkers = {c.id: c for c in checkers}
         self.left_ms = float(total_ms)
+        self.facts = facts
+        self._read: dict[str, object] = {}
+
+    def _facts_of(self, checker_id: str) -> dict | None:
+        value = self._read.get(checker_id, _UNREAD)
+        if value is _UNREAD:
+            value = None
+            if self.facts is not None:
+                try:
+                    value = self.facts(checker_id)
+                except Exception:  # an unreadable store is None facts
+                    value = None
+            if not isinstance(value, dict):
+                value = None
+            self._read[checker_id] = value
+        return copy.deepcopy(value)
 
     def call(self, checker_id: str, act: dict, observation: dict) -> tuple[str, str | None]:
         """Load and call one checker on copies of `act` and `observation`; (result, detail)."""
@@ -195,13 +244,79 @@ class Judgement:
         if checker is None or self.left_ms < BUDGET_MIN_MS:
             return CANNOT_TELL, None
         act, observation = copy.deepcopy(act), copy.deepcopy(observation)
+        args: tuple = (act, observation)
+        if checker.records:
+            args = (act, observation, self._facts_of(checker.id))
         wait_ms = min(checker.budget_ms, self.left_ms)
         start = time.monotonic()
-        state, value = _run(lambda: _check_function(checker)(act, observation), wait_ms / 1000)
+        state, value = _run(lambda: _check_function(checker)(*args), wait_ms / 1000)
         self.left_ms -= (time.monotonic() - start) * 1000
         if state != _RETURNED:
             return CANNOT_TELL, None
         return read_return(value)
+
+
+RECORD_FACTS = 'facts'
+RECORD_UNCHANGED = 'unchanged'
+RECORD_FAILED = 'failed'
+
+
+def _record_function(checker: Checker):
+    fn = getattr(execute(checker), 'record', None)
+    if not callable(fn):
+        raise CheckerLoadError(f'checker {checker.id!a} defines no callable record')
+    return fn
+
+
+def read_record_return(value: object) -> tuple[str, dict | None]:
+    """What `record` returned: (`unchanged`, None), (`facts`, a fresh value) or (`failed`, None).
+
+    `{"result": "unchanged"}` is unchanged; `{"facts": OBJECT}` is a new value
+    when OBJECT is a dict that survives a JSON round trip (ASCII, no NaN)
+    unchanged; anything else failed.
+    """
+    if not isinstance(value, dict) or len(value) != 1:
+        return RECORD_FAILED, None
+    if 'result' in value:
+        result = value['result']
+        ok = isinstance(result, str) and result == RECORD_UNCHANGED
+        return (RECORD_UNCHANGED, None) if ok else (RECORD_FAILED, None)
+    facts = value.get('facts')
+    if not isinstance(facts, dict):
+        return RECORD_FAILED, None
+    try:
+        again = json.loads(json.dumps(facts, ensure_ascii=True, allow_nan=False))
+        same = again == facts
+    except Exception:  # not JSON: a type, a cycle, a NaN, a depth
+        return RECORD_FAILED, None
+    return (RECORD_FACTS, again) if same else (RECORD_FAILED, None)
+
+
+class Recording:
+    """The recorders of one note and what is left of its total budget.
+
+    Only the time spent waiting on `record` calls is drawn from the budget.
+    """
+
+    def __init__(self, total_ms: int = TOTAL_BUDGET_MS) -> None:
+        self.left_ms = float(total_ms)
+
+    def can_call(self) -> bool:
+        """False once less than `BUDGET_MIN_MS` is left: the recorder is skipped."""
+        return self.left_ms >= BUDGET_MIN_MS
+
+    def call(self, checker: Checker, note: dict, facts: dict) -> tuple[str, dict | None]:
+        """Load and call `record(note, facts)` on copies, waited for its cut budget."""
+        wait_ms = min(checker.budget_ms, self.left_ms)
+        if wait_ms <= 0:
+            return RECORD_FAILED, None
+        note, facts = copy.deepcopy(note), copy.deepcopy(facts)
+        start = time.monotonic()
+        state, value = _run(lambda: _record_function(checker)(note, facts), wait_ms / 1000)
+        self.left_ms -= (time.monotonic() - start) * 1000
+        if state != _RETURNED:
+            return RECORD_FAILED, None
+        return read_record_return(value)
 
 
 def _flush_std() -> None:

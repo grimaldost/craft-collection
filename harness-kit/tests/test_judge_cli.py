@@ -100,7 +100,7 @@ def test_judge_denies_on_a_matching_deny_rule():
 def test_judge_falls_back_to_kit_policy_and_the_flag_wins():
     with tempfile.TemporaryDirectory() as td:
         good = _policy_file(td)
-        bad = _policy_file(td, 'version = 3\n', 'bad.toml')
+        bad = _policy_file(td, 'version = 4\n', 'bad.toml')
         v = _judge(_ev(event()), KIT_POLICY=str(good))
         assert v['verdict'] == 'allow' and v['policy_sha256'] == _sha(good), v
         v = _judge(_ev(event()), '--policy', str(good), KIT_POLICY=str(bad))

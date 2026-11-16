@@ -1,4 +1,8 @@
-"""Claude Code driver: a home whose user settings register the kit shell as a PreToolUse hook."""
+"""Claude Code driver: a home whose user settings register the kit shell as a PreToolUse hook.
+
+When the policy records notes, the same shell file is also registered, with `--note`, for
+UserPromptSubmit and for PostToolUse and PostToolUseFailure.
+"""
 
 from __future__ import annotations
 
@@ -20,9 +24,13 @@ from harness_kit.harnesses import (
     read_version,
     set_var,
     write_json,
+    write_note_config,
 )
 
 MATCHER = 'Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit'
+# The note entries: a submitted prompt, and a shell call that succeeded or exited non-zero
+# (PostToolUseFailure fires for the latter, never PostToolUse). They carry no `onFailure`.
+RESULT_MATCHER = 'Bash|PowerShell'
 MODEL = 'claude-sonnet-5-5'
 CONFIG_NAMES = ('CLAUDE_CONFIG_DIR',)
 
@@ -53,11 +61,12 @@ class ClaudeCode:
     def version(self, env: Mapping[str, str]) -> str | None:
         return read_version(self.binary_argv(env), env, CONFIG_NAMES)
 
-    def render_home(self, home: Path, endpoint: str) -> dict:
+    def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict:
         check_endpoint(endpoint)
         folder = prepare_dir(home)
         source = SHELLS_DIR / 'claude_code' / 'kit_hook.py'
         entry, shell_config = materialize_shell(source, folder / 'kit-shell', self.pinned_version)
+        write_note_config(shell_config.parent, records)
         config = folder / 'claude-config' / 'settings.json'
         hook = {
             'type': 'command',
@@ -66,7 +75,15 @@ class ClaudeCode:
             'timeout': 30,
             'onFailure': 'block',
         }
-        write_json(config, {'hooks': {'PreToolUse': [{'matcher': MATCHER, 'hooks': [hook]}]}})
+        hooks = {'PreToolUse': [{'matcher': MATCHER, 'hooks': [hook]}]}
+        note = {k: v for k, v in hook.items() if k != 'onFailure'}
+        note['args'] = [*hook['args'], '--note']
+        if 'prompt' in records:
+            hooks['UserPromptSubmit'] = [{'hooks': [dict(note)]}]
+        if 'outcome' in records:
+            for name in ('PostToolUse', 'PostToolUseFailure'):
+                hooks[name] = [{'matcher': RESULT_MATCHER, 'hooks': [dict(note)]}]
+        write_json(config, {'hooks': hooks})
         return finish_home(self.name, folder, endpoint, config, entry, shell_config)
 
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]:

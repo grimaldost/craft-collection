@@ -28,6 +28,16 @@ folder (up to the top of its work tree, or to the filesystem root, and from
 `runs/` under the state root to that root, as the driver's walk says) is a
 refusal; one found in the working folder is recorded in `run.json`.
 
+For a policy with a recording checker three more refusals apply. A recorded
+kind whose `[notes]` entry in the harness's contract reads `absent` is refused
+(a missing entry launches, with one line on stderr); after the home check, a
+home whose `note_config.json` is missing, malformed or lacks a recorded kind,
+or a Claude Code home whose `settings.json` lacks a note entry for one, is
+refused; and a `SESSION_WORKFLOW_GOVERNED_HOME` that lies under no test root
+of the policy is refused, while one under a test root is passed into the
+session. A policy that records nothing launches as before and the variable is
+not passed. The cores' switches are never passed.
+
 Exit codes: 64 a refusal, 65 a failed canary, 70 an internal error, else the
 harness's own.
 """
@@ -89,6 +99,18 @@ NO_PUSH = ('no_push', 'DISABLED', '')
 REMOTE_KEYS = r'^remote\..*\.(url|pushurl)$'
 GIT_TIMEOUT_S = 30
 USERINFO = re.compile(r'^([a-z][a-z0-9+.-]*://)[^/@]*@', re.IGNORECASE)
+# The governed-home override a recording policy may pass into a session under a test root.
+GOVERNED_HOME = 'SESSION_WORKFLOW_GOVERNED_HOME'
+RENDER_HINT = 'render the home with kit home render --policy'
+# The note entries a Claude Code home registers per recorded kind; a result entry's matcher
+# is the shell tools' or every tool's.
+CLAUDE_NOTE_EVENTS = {
+    'prompt': {'UserPromptSubmit': (None,)},
+    'outcome': {
+        'PostToolUse': ('Bash|PowerShell', '*'),
+        'PostToolUseFailure': ('Bash|PowerShell', '*'),
+    },
+}
 
 
 class RefusalError(Exception):
@@ -115,6 +137,9 @@ class Plan:
     project_config: list[str] = field(default_factory=list)
     scrubbed: list[str] = field(default_factory=list)
     binary: list[str] = field(default_factory=list)
+    # Variables passed into the session beside the allow list, and stderr lines for a launch.
+    extra_env: dict[str, str] = field(default_factory=dict)
+    notices: list[str] = field(default_factory=list)
 
 
 def _ascii(text: object) -> str:
@@ -280,6 +305,99 @@ def check_project_layer(
     return [e for e in driver.project_config_paths if os.path.lexists(workdir / e)]
 
 
+# ---- a policy that records notes
+
+
+def check_note_states(policy: Policy, driver: harnesses.Driver, records: tuple) -> list[str]:
+    """Refuse a recorded kind the contract gives as `absent`; a line per kind it does not name."""
+    try:
+        entries = doctor.load_contract(driver.name).get('notes')
+    except (OSError, ValueError, KeyError) as exc:
+        raise RefusalError(f'the contract of {driver.name} is unreadable: {_ascii(exc)}') from None
+    entries = entries if isinstance(entries, dict) else {}
+    notices = []
+    for kind in records:
+        entry = entries.get(kind)
+        if not isinstance(entry, dict) or 'state' not in entry:
+            notices.append(
+                f'kit: the contract of {driver.name} records no state for {kind} notes; starting it'
+            )
+            continue
+        if entry['state'] != 'absent':
+            continue
+        for checker in policy.checkers:
+            if kind in checker.records:
+                rules = [r.id for r in policy.rules if r.check == checker.id]
+                raise RefusalError(
+                    f'checker {checker.id!a} (rules {", ".join(rules) or "none"}) records '
+                    f'{kind} notes, whose state on {driver.name} is absent'
+                )
+    return notices
+
+
+def _read_object(path: Path) -> dict | None:
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _note_config_ok(config: dict | None, records: tuple) -> bool:
+    if config is None or config.get('kit_note_config') != 1:
+        return False
+    argv, timeout, kinds = config.get('note_argv'), config.get('timeout_s'), config.get('records')
+    ok = isinstance(argv, list) and bool(argv) and all(isinstance(a, str) for a in argv)
+    ok = ok and type(timeout) in (int, float) and timeout > 0
+    ok = ok and isinstance(kinds, list) and all(k in harnesses.NOTE_KINDS for k in kinds)
+    return ok and all(kind in kinds for kind in records)
+
+
+def _has_note_entry(groups: object, matchers: tuple) -> bool:
+    """True when a hook group with an allowed matcher holds a `--note` command entry."""
+    for group in groups if isinstance(groups, list) else []:
+        if not isinstance(group, dict) or group.get('matcher') not in matchers:
+            continue
+        hooks = group.get('hooks')
+        for hook in hooks if isinstance(hooks, list) else []:
+            if not isinstance(hook, dict) or hook.get('type') != 'command':
+                continue
+            args = hook.get('args')
+            if isinstance(args, list) and args[-1:] == ['--note']:
+                return True
+    return False
+
+
+def check_note_home(home: dict, driver: harnesses.Driver, records: tuple) -> None:
+    """Refuse a home whose note configuration does not carry every recorded kind."""
+    config = _read_object(Path(home['shell_config']).parent / harnesses.NOTE_CONFIG)
+    if not _note_config_ok(config, records):
+        raise RefusalError(
+            f'the home has no {harnesses.NOTE_CONFIG} for {", ".join(records)} notes; {RENDER_HINT}'
+        )
+    if driver.name != CLAUDE_CODE:
+        return
+    settings = _read_object(Path(home['config_file']))
+    hooks = settings.get('hooks') if settings is not None else None
+    hooks = hooks if isinstance(hooks, dict) else {}
+    for kind in records:
+        for event, matchers in CLAUDE_NOTE_EVENTS[kind].items():
+            if not _has_note_entry(hooks.get(event), matchers):
+                raise RefusalError(f'settings.json has no {event} note entry; {RENDER_HINT}')
+
+
+def governed_home(policy: Policy, environ: dict) -> dict[str, str]:
+    """The governed-home override to pass into the session; refused outside the test roots."""
+    found = [(k, v) for k, v in environ.items() if _key(k) == _key(GOVERNED_HOME)]
+    if not found:
+        return {}
+    value = found[0][1]
+    roots = policy.launcher.get('test_roots', [])
+    if not value or not any(root and _within(value, root) for root in roots):
+        raise RefusalError(f'{GOVERNED_HOME} lies under no test root of the policy')
+    return {GOVERNED_HOME: value}
+
+
 # ---- the environment
 
 
@@ -382,14 +500,16 @@ def build_env(
     policy_path: Path,
     workdir: Path,
     pins=None,
+    extra: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], list[str]]:
-    """The child's environment and the names dropped from kit's own."""
+    """The child's environment and the names dropped from kit's own; `extra` is passed as well."""
     allow = {_key(n) for n in ALLOW}
+    passed = {_key(n) for n in extra or {}}
     base, scrubbed = {}, []
     for name, value in environ.items():
         if _key(name) in allow:
             base[name] = value
-        else:
+        elif _key(name) not in passed:
             scrubbed.append(name)
     env = driver.session_env(home, base)
     tmp = str(run_dir / 'tmp')
@@ -404,6 +524,7 @@ def build_env(
         state.STATE_ROOT_ENV: str(root),
         'KIT_POLICY': str(policy_path),
         'PWD': str(workdir),
+        **(extra or {}),
     }
     for name, value in values.items():
         harnesses.set_var(env, name, value)
@@ -446,7 +567,13 @@ def preflight(
     broken = packs.verify_checkers(policy.checkers)
     if broken is not None:
         raise RefusalError(f'policy checker unusable: {_ascii(broken)}')
+    records = harnesses.recorded_kinds(policy.checkers)
+    notices = check_note_states(policy, driver, records) if records else []
     home = check_home(Path(home_dir), driver)
+    extra: dict[str, str] = {}
+    if records:
+        check_note_home(home, driver, records)
+        extra = governed_home(policy, environ)
     if state.RUN_ID_ENV in environ:
         raise RefusalError(f'nested launch: {state.RUN_ID_ENV} is already set')
     try:
@@ -476,6 +603,7 @@ def preflight(
         root=root,
         policy_path=policy_path,
         workdir=folder,
+        extra=extra,
     )
     return Plan(
         driver=driver,
@@ -491,6 +619,8 @@ def preflight(
         project_config=project_config,
         scrubbed=scrubbed,
         binary=list(binary),
+        extra_env=extra,
+        notices=notices,
     )
 
 
@@ -511,6 +641,7 @@ def run_plan_canary(plan: Plan, environ: dict) -> dict:
             root=plan.root,
             policy_path=plan.policy_path,
             workdir=work,
+            extra=plan.extra_env,
         )
         return env
 
@@ -619,6 +750,9 @@ def main(argv: list[str]) -> int:
         )
     except RefusalError as exc:
         return _fail(EXIT_REFUSED, f'run refused: {exc}')
+    for line in plan.notices:
+        sys.stderr.write(line + '\n')
+    sys.stderr.flush()
     try:
         return launch(plan, dict(os.environ))
     except Exception as exc:  # the record says what happened; exit 70 names an internal error

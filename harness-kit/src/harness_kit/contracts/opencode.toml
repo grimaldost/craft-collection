@@ -96,9 +96,52 @@ mark = "inferred"
 evidence = "opencode 2.2.5, 2026-11-08: inferred from the design, nothing run; a start outside kit run whose configuration lacks the plugin calls no kit code."
 text = "opencode started without kit run and without the plugin loaded reaches no kit check at all, so the launcher requirement cannot catch it."
 
+[[loss]]
+id = "prompt-origin-unproved"
+objective = "run_identity"
+mark = "measured"
+evidence = "opencode 2.2.5, 2026-11-13: in runs against a stub model, a child session's first message fired the prompt hook with a harness-written first line and no flag marking it."
+text = "A prompt note carries no flag for who wrote it: a child's first prompt carries a harness-written line and no mark, so who typed a prompt is not proved beyond the child session that a lookup shows."
+
+[[loss]]
+id = "prompt-note-lost-keeps-earlier"
+objective = "prevention"
+mark = "inferred"
+evidence = "opencode 2.2.5, 2026-11-15: inferred from the design of kit note and the facts store, nothing run."
+text = "A prompt note that is not recorded (the shell's deadline, a lock not obtained, a conflict, a failed recorder) leaves the earlier owner prompt in force until the next prompt that is recorded, so an act the earlier prompt named stays allowed meanwhile."
+
+[[loss]]
+id = "patch-refused-under-owner-acts"
+objective = "prevention"
+mark = "read"
+evidence = "opencode 2.2.5, 2026-11-15: read in the kit's opencode shell, which does not observe the paths of a patch call; nothing run."
+text = "With the owner-acts rule in the policy a patch call is refused: the shell does not observe its paths, so the governed rule cannot tell and the verdict is unknown."
+
 # Rules a pack carries, by rule id: tested when the rule's three cells of conformance/test_rules.py
 # held on this harness, as its rules-results.json recorded them.
 [rules.uv-project-uses-uv]
 state = "tested"
 mark = "measured"
 evidence = "Rule cells uv-deny, uv-allow-outside and uv-allow-mention passed on opencode 2.2.5, 2026-11-12."
+
+[rules.series-second-pr-declared]
+state = "tested"
+mark = "measured"
+evidence = "Guard cell series-guard passed on opencode 2.2.5, 2026-11-15."
+
+[rules.owner-acts-named-by-owner]
+state = "tested"
+mark = "measured"
+evidence = "Guard cells owner-acts-deny and owner-acts-allow passed on opencode 2.2.5, 2026-11-15."
+
+# Notes a shell forwards, by kind: tested when the guard cells of conformance/test_guards.py that
+# need that kind held on this harness, as its guards-results.json recorded them.
+[notes.prompt]
+state = "tested"
+mark = "measured"
+evidence = "Guard cell owner-acts-allow passed on opencode 2.2.5, 2026-11-15: its session's prompt note was recorded."
+
+[notes.outcome]
+state = "tested"
+mark = "measured"
+evidence = "Guard cell series-guard passed on opencode 2.2.5, 2026-11-15: its session's outcome note was recorded."

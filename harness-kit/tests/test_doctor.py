@@ -197,7 +197,9 @@ def test_contract_rows_carry_the_marks_the_spec_gives():
     claude = doctor.load_contract('claude-code')
     marks = {loss['id']: loss['mark'] for loss in claude['loss']}
     assert marks['no-origin-field'] == 'read', marks
-    assert all(m == 'measured' for k, m in marks.items() if k != 'no-origin-field'), marks
+    exempt = ('no-origin-field', 'prompt-note-lost-keeps-earlier')
+    assert all(m == 'measured' for k, m in marks.items() if k not in exempt), marks
+    assert marks['prompt-note-lost-keeps-earlier'] == 'inferred', marks
     malformed = next(x for x in claude['loss'] if x['id'] == 'settings-malformed-silent')
     assert 'by construction' in malformed['text'], malformed
     unreadable = next(x for x in claude['loss'] if x['id'] == 'settings-unreadable-silent')

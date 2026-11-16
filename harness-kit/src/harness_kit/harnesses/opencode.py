@@ -20,6 +20,7 @@ from harness_kit.harnesses import (
     read_version,
     set_var,
     write_json,
+    write_note_config,
 )
 
 MODEL = 'stub/stub-model'
@@ -65,12 +66,13 @@ class OpenCode:
     def version(self, env: Mapping[str, str]) -> str | None:
         return read_version(self.binary_argv(env), env, CONFIG_NAMES)
 
-    def render_home(self, home: Path, endpoint: str) -> dict:
+    def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict:
         check_endpoint(endpoint)
         folder = prepare_dir(home)
         plugin = folder / 'kit-shell' / 'opencode-plugin'
         source = SHELLS_DIR / 'opencode' / 'index.js'
         entry, shell_config = materialize_shell(source, plugin, self.pinned_version)
+        write_note_config(shell_config.parent, records)
         (folder / 'xdg').mkdir()
         config = folder / 'conf' / 'opencode.jsonc'
         stub = {

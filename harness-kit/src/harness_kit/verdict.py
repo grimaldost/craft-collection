@@ -21,9 +21,15 @@ other than Claude Code that was not launched is denied by `launcher.required`.
 Then, when the caller passes the canary's nonce, a shell act whose command
 names `deny-<nonce>.marker` is denied by `canary.deny`, and one that names
 `allow-<nonce>.marker` is allowed by `canary.allow`.
+
+A checker that records notes (policy version 3) is called with its session
+facts as a third argument: what the caller's `facts` function gives for its
+id, or None without one. A judgement reads facts and never writes them.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 from harness_kit import checkers
 from harness_kit.event import InvalidEventError, check_event, parse_event
@@ -170,12 +176,16 @@ def judge(
     policy: Policy | PolicyError,
     launched: bool | None = None,
     nonce: str | None = None,
+    *,
+    facts: Callable[[str], dict | None] | None = None,
 ) -> dict:
     """Judge one event (parsed JSON) against a loaded policy or the error that loading raised.
 
     `launched` is whether the event belongs to a run the launcher minted; None
     leaves the launcher rule out (a caller that judges outside the CLI).
     `nonce` is the canary's, when the CLI judges inside a canary run.
+    `facts` maps a recording checker's id to its session facts or None; without
+    it every recording checker receives None.
     """
     if isinstance(policy, PolicyError):
         return unknown_verdict(f'unreadable policy: {policy}', policy.sha256)
@@ -199,7 +209,7 @@ def judge(
             policy_sha256=sha,
         )
 
-    checks = checkers.Judgement(policy.checkers) if policy.checkers else None
+    checks = checkers.Judgement(policy.checkers, facts=facts) if policy.checkers else None
     remembered: Rule | None = None
     for rule in policy.rules:
         result, detail = _rule_outcome(rule, ev, policy.windows, checks)
@@ -251,6 +261,8 @@ def judge_bytes(
     policy: Policy | PolicyError,
     launched: bool | None = None,
     nonce: str | None = None,
+    *,
+    facts: Callable[[str], dict | None] | None = None,
 ) -> dict:
     """Judge the raw bytes of one event; bytes that are not one JSON object are invalid."""
     if isinstance(policy, PolicyError):
@@ -259,4 +271,4 @@ def judge_bytes(
         event = parse_event(data)
     except InvalidEventError as exc:
         return unknown_verdict(f'invalid event: {exc}', policy.sha256)
-    return judge(event, policy, launched, nonce)
+    return judge(event, policy, launched, nonce, facts=facts)
