@@ -20,8 +20,9 @@ your contributions are licensed under the project's [MIT License](LICENSE).
 
 Prerequisites: **Python 3.13+** and **[uv](https://docs.astral.sh/uv/)** (used to
 run the pinned tooling without polluting your environment). 3.13 is the CI and uv
-baseline; the scripts are stdlib-first and `ruff` targets 3.10, so they also run on
-older interpreters.
+baseline, and `ruff` lints for 3.10. The hooks avoid `tomllib` on purpose, so they stay
+importable on older interpreters; some skill scripts import `tomllib` and need 3.11 or
+later.
 
 ```bash
 git clone https://github.com/grimaldost/craft-collection
