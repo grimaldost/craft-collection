@@ -6,6 +6,45 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.31.1] - 2026-11-17
+
+Six corrections from the 2026-11-17 triage. An installed copy notices a rebuilt feedback
+`INDEX.md` whose empty Untriaged section has no list item, an untriaged count on the line the
+index builder prints, a triage coverage audit that no longer fails a cluster heading that only
+mentions a route-out, fewer owner-acts log lines for copies out of a governed file, and three
+corrected sentences in skill text. Patch bump: corrections only, nothing added.
+
+### Fixed
+
+- **An empty Untriaged list is a sentence, and the builder prints its count**
+  (2026-11-17 triage: T411a). `build_feedback_index.py` rendered an empty `### Untriaged` as
+  `- (none)`, which a list-item count reads as one report. The empty case is now a sentence
+  with no list marker under the same heading, and the printed line adds `<n> untriaged`.
+- **A cluster heading is a route-out only by its disposition** (2026-11-17 triage: T411b).
+  `triage_audit.py coverage` took any `###`/`####` heading mentioning "routed out" as a ROUTE
+  OUT row, so a cause written in prose failed as an undelivered route-out. Only a heading
+  parenthesis that opens with ROUTE OUT counts now.
+- **The owner-acts gate's shell-write arm logs a copy only at its destination**
+  (2026-11-17 triage: T415a). `cp`, `scp`, `rsync` and `Copy-Item` of a governed file were
+  logged as writes when the file was the source. A governed file now counts as written only
+  as the copy's destination: the last positional, or the `-t`, `--target-directory` or
+  `-Destination` value. A move out of a governed file still counts, since it removes the
+  file. The arm stays observe-only; only its log lines change.
+- **context-handoff's phase briefs say the owner starts evaluate-skill** (2026-11-17 triage:
+  T423a). The Measurement phase cited `session-workflow:evaluate-skill` as a skill the
+  receiver loads; it is manual-only. The line now says the owner runs `/evaluate-skill`, and
+  `scripts/test_phase_briefs_text.py` fails a cited manual-only skill whose line does not
+  say the owner runs or starts it.
+- **review-panel names the convener as the writer of a script's output** (2026-11-17
+  triage: T436a). `references/running-a-panel.md` said the Workflow script writes each
+  reviewer's output to disk; a Workflow script has no filesystem access. The convener writes
+  the outputs the script returns, and the run's `journal.jsonl` holds them if that return is
+  lost.
+- **tool-feedback states how a set `$FEEDBACK_TARGETS_FILE` resolves** (2026-11-17 triage:
+  T437a). "First hit wins" read as a fall-through, but the scripts stop at a set override
+  even when it names a missing file, as `test_feedback_nudge.py` pins. The prose now says
+  so; no behaviour changes, and the body stays within its word budget.
+
 ## [0.31.0] - 2026-11-01
 
 Every anchor hook run now leaves one record naming its session and its outcome, in a log
