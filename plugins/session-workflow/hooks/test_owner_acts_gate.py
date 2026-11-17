@@ -649,6 +649,50 @@ def test_authorizing_sentence_rule():
     assert ok(reminder, edit) is None
 
 
+def test_a_copy_writes_a_governed_file_only_as_its_destination():
+    """T415a: a copy out of a governed file reads it. The shell-write arm logged
+    `cp <home>/settings.json /tmp/x` and `scp <home>/CLAUDE.md host:/x` as writes."""
+    with tempfile.TemporaryDirectory() as td:
+        home = Path(td).as_posix()
+        saved = os.environ.get('SESSION_WORKFLOW_GOVERNED_HOME')
+        os.environ['SESSION_WORKFLOW_GOVERNED_HOME'] = home
+        try:
+
+            def writes(command: str, shell: str = 'bash') -> list[str | None]:
+                acts = gate.shell_acts(command, shell, cwd=td)
+                return [a.key for a in acts if a.arm == 'shell-write']
+
+            g, o = f'{home}/settings.json', '/c/tmp/settings.bak'
+            for source_form in (
+                f'cp {g} {o}',
+                f'cp -p "{g}" {o}',
+                f'cp -t /c/tmp {g}',
+                f'scp {home}/CLAUDE.md host:/tmp/x.md',
+                f'rsync -a {g} host:/tmp/',
+                f'sudo cp {g} {o} 2>&1',
+            ):
+                assert writes(source_form) == [], source_form
+            for dest_form in (
+                f'cp {o} {g}',
+                f'cp -f {o} "{g}"',
+                f'scp host:/tmp/x.md {home}/CLAUDE.md',
+                f'rsync -a host:/tmp/settings.json {g}',
+                f'cp {g} {g}.bak && cp {o} {g}',
+                f'cp {g} {o} > {g}',
+                f'mv {g} {o}',  # a move out removes the governed file
+            ):
+                assert writes(dest_form) != [], dest_form
+            assert writes(f"Copy-Item -Path '{g}' -Destination '{o}'", 'powershell') == []
+            assert writes(f"Copy-Item '{g}' '{o}'", 'powershell') == []
+            assert writes(f"Copy-Item -Destination '{g}' -Path '{o}'", 'powershell') != []
+            assert writes(f"Copy-Item '{o}' '{g}'", 'powershell') != []
+        finally:
+            if saved is None:
+                os.environ.pop('SESSION_WORKFLOW_GOVERNED_HOME', None)
+            else:
+                os.environ['SESSION_WORKFLOW_GOVERNED_HOME'] = saved
+
+
 if __name__ == '__main__':
     test_a_generic_go_on_denies_each_family_and_logs_each()
     test_a_sentence_naming_the_claude_md_edit_allows_only_the_edit()
@@ -671,6 +715,7 @@ if __name__ == '__main__':
     test_a_cli_call_without_a_flag_dispatches_on_the_event_name()
     test_acts_found_in_commands()
     test_authorizing_sentence_rule()
+    test_a_copy_writes_a_governed_file_only_as_its_destination()
     test_the_deny_example_names_the_denied_file()
     test_the_deny_example_names_the_denied_variable()
     test_the_example_sentence_fed_back_allows_the_same_call()

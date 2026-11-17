@@ -272,9 +272,9 @@ carried survives as the on-demand `scan_toolkit.py --check-serving <transcript>`
   environment variable (`setx`, `[Environment]::SetEnvironmentVariable` with a User or
   Machine target); (4) `git config --global` with a value. A program counts only at
   program position, outside quotes, heredoc bodies and comments, and read-only forms
-  (`--get`, `--list`, `marketplace list`, `cat`, `type`, `Get-Content`) are not acts; a
-  `bash -c`, `powershell`/`pwsh -Command` or `cmd /c` wrapper is read as the command it
-  runs. The act is allowed only when one sentence of the recorded prompt names its
+  (`--get`, `--list`, `marketplace list`, `cat`, `type`, `Get-Content`, the source of a
+  `cp`, `scp`, `rsync` or `Copy-Item`) are not acts; a `bash -c`, `powershell`/`pwsh
+  -Command` or `cmd /c` wrapper is read as the command it runs. The act is allowed only when one sentence of the recorded prompt names its
   object (the file's name; `claude plugin` or the `plugin@marketplace` id; "variavel de
   ambiente", "environment variable", "env var" or the variable's name; `git config`)
   with an act verb from that family's closed list (edit, update, install, set, editar,

@@ -720,16 +720,53 @@ def governed_target(value: str, cwd: str | None) -> str | None:
     return None
 
 
+# Copies read every path but the destination. A move is left out: moving a governed
+# file away removes it, which changes it.
+_COPY_PROGRAMS = frozenset({'cp', 'scp', 'rsync', 'copy-item', 'copy', 'cpi'})
+
+
+def _copy_sources(tokens: list[Token], index: int) -> set[int]:
+    """The ids of a copy's source arguments: every positional but the destination,
+    which is the `-t`/`--target-directory`/`-Destination` value or the last positional."""
+    args = _args(tokens, index)
+    positional: list[Token] = []
+    destination: Token | None = None
+    k = 0
+    while k < len(args):
+        token, low = args[k], args[k].value.lower()
+        named = not token.quoted and (
+            low in ('-t', '--target-directory')
+            or (low.startswith('-de') and 'destination'.startswith(low[1:]))
+        )
+        if named and k + 1 < len(args):
+            destination = args[k + 1]
+            k += 2
+            continue
+        if not token.quoted and low.startswith('--target-directory='):
+            destination = token
+        elif token.quoted or not token.value.startswith('-'):
+            positional.append(token)
+        k += 1
+    if destination is None and positional:
+        destination = positional.pop()
+    return {id(t) for t in positional if t is not destination}
+
+
 def _shell_write(tokens: list[Token], index: int | None, cwd: str | None) -> Act | None:
     """A shell command that names a governed file and is not a read-only form."""
     program = None if index is None else program_name(tokens[index].value)
     if program == 'sed' and not any(t.value.startswith(('-i', '--in-place')) for t in tokens):
         program = 'cat'  # sed without -i only prints
+    sources = (
+        _copy_sources(tokens, index) if index is not None and program in _COPY_PROGRAMS else set()
+    )
     after_redirect = False
     for token in tokens:
         if token.op:
             after_redirect = token.value.startswith(('>', '&>')) or '>' in token.value
             continue
+        if id(token) in sources and not after_redirect:
+            continue  # a copy's source is read, not written (T415a)
         for m in _PATH_CANDIDATE.finditer(token.value):
             name = governed_target(m.group(0), cwd)
             if name and (after_redirect or program not in _READ_ONLY):
