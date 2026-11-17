@@ -87,8 +87,8 @@ on.
 1. `experiment-discipline:experiment-rigor`: the plan is frozen before the run,
    rates carry their numerator and denominator, and small samples get exact
    intervals.
-2. `session-workflow:evaluate-skill`, when what is measured is a skill's
-   triggering or its output.
+2. `session-workflow:evaluate-skill` is manual-only: the owner runs `/evaluate-skill`
+   when what is measured is a skill's triggering or its output.
 3. `humblepowers:verification-before-completion`: every number in the result
    comes from a counting command read whole.
 
