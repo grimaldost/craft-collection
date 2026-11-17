@@ -515,6 +515,21 @@ def test_a_route_out_cluster_or_status_row_needs_its_delivered_path():
             assert proc.returncode == want, (body, proc.stdout, proc.stderr)
 
 
+def test_a_heading_that_mentions_a_route_out_in_prose_is_not_a_routed_row():
+    """T411b: only a disposition that opens the heading's parenthesis with ROUTE OUT
+    makes a cluster a routed row; a cause that says "routed out" in prose does not."""
+    prose = '#### SW61 - the router half was routed out to craft earlier (ATTACK; 1)\n'
+    assert ta.routed_rows(prose + '\nEvidence.\n') == []
+    for disposition in ('### T5 - x (ROUTE OUT; 2)\n', '### T4 - y (route out -> keel; 1)\n'):
+        assert len(ta.routed_rows(disposition)) == 1, disposition
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        registry, _ = _registry(root)
+        doc, _ = _corpus(root, COVERED + '\n' + prose + '\n## Routed out\n\n- None.\n')
+        proc = _coverage(doc, root, registry)
+        assert proc.returncode == 0, (proc.stdout, proc.stderr)
+
+
 if __name__ == '__main__':
     test_covered_doc_passes()
     test_an_undispositioned_finding_reddens_coverage()
@@ -541,4 +556,5 @@ if __name__ == '__main__':
     test_an_undelivered_route_out_reddens_coverage()
     test_a_delivered_route_out_passes()
     test_a_route_out_cluster_or_status_row_needs_its_delivered_path()
+    test_a_heading_that_mentions_a_route_out_in_prose_is_not_a_routed_row()
     print('ok: all triage_audit tests passed')
