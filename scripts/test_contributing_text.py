@@ -5,6 +5,8 @@
   rebase. The earlier text promised no rebase in every case.
 - The hook counts the release check compares are the root README's summaries
   only; a hooks.json description carries no count word.
+- The prerequisites paragraph does not claim the scripts run on older interpreters
+  while a bundled script imports `tomllib` (3.11+); it names 3.11.
 
 Stdlib-runnable: `python scripts/test_contributing_text.py` prints `ok:`.
 """
@@ -39,9 +41,29 @@ def test_the_hook_counts_checked_are_the_root_readme_summaries_only():
     assert 'hook counts in a `hooks.json` description' not in _text()
 
 
+def _prerequisites() -> str:
+    text = _text()
+    start = text.index('Prerequisites:')
+    end = text.find('```', start)
+    return text[start : end if end > 0 else len(text)]
+
+
+def test_the_interpreter_claim_matches_the_scripts_that_import_tomllib():
+    needing = [
+        path
+        for path in (ROOT / 'plugins').rglob('*.py')
+        if 'import tomllib' in path.read_text(encoding='utf-8')
+    ]
+    assert needing, 'no script imports tomllib any more; retire this test'
+    paragraph = _prerequisites()
+    assert 'also run on older interpreters' not in paragraph, paragraph
+    assert '3.11' in paragraph, paragraph
+
+
 if __name__ == '__main__':
     test_the_stacked_pr_bullet_states_both_outcomes()
     test_the_hook_counts_checked_are_the_root_readme_summaries_only()
+    test_the_interpreter_claim_matches_the_scripts_that_import_tomllib()
     print(
         'ok: CONTRIBUTING states both stacked-PR outcomes and the root README as the only hook-count source'
     )
