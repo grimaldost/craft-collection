@@ -230,10 +230,12 @@ _ROUTED_SECTION = re.compile(r'^##\s+routed\s+out\b', re.IGNORECASE)
 # ROUTE OUT is an item of the heading's parenthesis, alone, first or after `+ ; , &`
 # (`(ROUTE OUT -> keel; 1)`, `(ATTACK + ROUTE OUT; 3)`, `(HIGH; **routed out**)`); a cause
 # or a section title that says "routed out" in prose is not a routed row (T411b).
-_ROUTE_OUT_HEADING = re.compile(
-    r'^#{3,4}\s.*\(\s*(?:[^()]*?[+;,&]\s*)?(?:\*+\s*|an?\s+)*route[ds]?[\s-]+out\b',
-    re.IGNORECASE,
-)
+# Read by `_is_route_out_heading` in one pass: a single regex over the whole heading
+# backtracked exponentially on a run of `*` (CodeQL py/redos).
+_CLUSTER_HEADING = re.compile(r'#{3,4}\s')
+_ITEM_SEPARATOR = re.compile(r'[+;,&]')
+_ITEM_LEAD = re.compile(r'[\s*]+|an?\s', re.IGNORECASE)  # bold markers, spaces, an article
+_ROUTE_OUT_ITEM = re.compile(r'route[ds]?[\s-]+out\b', re.IGNORECASE)
 _ROUTED_STATUS = re.compile(r'^rout(?:ed|e)[\s-]+out\b|^routed\b', re.IGNORECASE)
 _NOTHING_ROUTED = re.compile(r'^[-*\s]*(?:nothing|none)\b', re.IGNORECASE)
 _TABLE_RULE = re.compile(r'^\|[\s:|-]+\|$')
@@ -266,6 +268,22 @@ def registered_feedback_dirs(targets: Path | None = None) -> dict[str, Path]:
     return out
 
 
+def _is_route_out_heading(heading: str) -> bool:
+    """A `###`/`####` heading one of whose parenthesis items names a route-out. An
+    item is the text after a `(`, up to the next parenthesis, split on `+ ; , &`;
+    its leading `*`, spaces and articles are skipped. Linear in the heading."""
+    if not _CLUSTER_HEADING.match(heading):
+        return False
+    for chunk in heading.split('(')[1:]:
+        for item in _ITEM_SEPARATOR.split(chunk.split(')', 1)[0]):
+            pos = 0
+            while lead := _ITEM_LEAD.match(item, pos):
+                pos = lead.end()
+            if _ROUTE_OUT_ITEM.match(item, pos):
+                return True
+    return False
+
+
 def routed_rows(text: str) -> list[str]:
     """The ROUTE OUT rows of a triage doc, each as its own text (see the module
     docstring for the three shapes). Fence-aware."""
@@ -286,7 +304,7 @@ def routed_rows(text: str) -> list[str]:
         if stripped.startswith('#'):
             block = item = None
             in_routed = bool(_ROUTED_SECTION.match(stripped))
-            if _ROUTE_OUT_HEADING.match(stripped):
+            if _is_route_out_heading(stripped):
                 block = [stripped]
                 rows.append(block)
             continue
