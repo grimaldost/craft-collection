@@ -6,18 +6,27 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from harness_kit import __version__, checkers, facts, notes, packs, state
 from harness_kit.event import InvalidEventError, check_event, parse_event
 from harness_kit.policy import Policy, PolicyError, load_policy
-from harness_kit.verdict import CANARY_DENY_RULE, judge, judge_bytes, unknown_verdict
+from harness_kit.verdict import (
+    CANARY_DENY_RULE,
+    UNREADABLE_RUN,
+    judge,
+    judge_bytes,
+    unknown_verdict,
+)
 
 POLICY_ENV = 'KIT_POLICY'
 EXIT_REFUSED = 64
 EXIT_INTERNAL = 70
 MAX_ENVELOPE = 16 * 1024 * 1024
+# How long a judgement retries a run record it meets while kit replaces it.
+RUN_READ_S = 1.0
 FROM_HELP = (
     'read one envelope of the shell of harness NAME instead, which its driver translates; '
     f'one over {MAX_ENVELOPE} bytes is invalid'
@@ -154,6 +163,27 @@ def from_envelope(data: bytes | None, source: str) -> tuple[dict, tuple[str, str
     return event, driver.refused_tool(envelope)
 
 
+def read_run(root: Path, run_id: str) -> dict | str:
+    """The run record of a launched event, or UNREADABLE_RUN when it is not one JSON object.
+
+    kit replaces `run.json` only before and after a session, so a read that meets the
+    replacement is retried for a short while.
+    """
+    path = Path(root) / 'runs' / run_id / 'run.json'
+    end = time.monotonic() + RUN_READ_S
+    while True:
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except PermissionError:
+            if time.monotonic() >= end:
+                return UNREADABLE_RUN
+            time.sleep(0.02)
+            continue
+        except (OSError, ValueError):
+            return UNREADABLE_RUN
+        return data if isinstance(data, dict) else UNREADABLE_RUN
+
+
 def judge_and_journal(data: bytes | None, policy, env, source: str | None = None) -> dict:
     """Judge one event under the run identity the environment names, and journal it.
 
@@ -191,13 +221,18 @@ def judge_and_journal(data: bytes | None, policy, env, source: str | None = None
         key = facts.root_key(event)
         if key is not None:
             reader = facts.judge_reader(root, run_id, key)
+    run, run_dir = (
+        (read_run(root, run_id), str(root / 'runs' / run_id)) if launched else (None, None)
+    )
     if source is None:
-        verdict = judge_bytes(data, policy, launched, nonce, facts=reader)
+        verdict = judge_bytes(data, policy, launched, nonce, facts=reader, run=run, run_dir=run_dir)
     elif isinstance(doc, InvalidEventError) and not isinstance(policy, PolicyError):
         verdict = unknown_verdict(f'invalid event: {doc}', policy.sha256)
     else:
         doc = None if isinstance(doc, InvalidEventError) else doc
-        verdict = judge(doc, policy, launched, nonce, facts=reader, refused=refused)
+        verdict = judge(
+            doc, policy, launched, nonce, facts=reader, refused=refused, run=run, run_dir=run_dir
+        )
     if root is not None:
         now = datetime.now(timezone.utc)
         record = state.journal_record(verdict, event, run_id, launched, now)

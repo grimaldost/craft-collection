@@ -23,7 +23,12 @@ names `deny-<nonce>.marker` is denied by `canary.deny`, and one that names
 `allow-<nonce>.marker` is allowed by `canary.allow`. Then an event whose tool
 its harness's driver refuses by name (the caller passes the driver's answer) is
 denied by `<harness>.refused-tool` with the reason the driver gives, whatever
-the policy's rules say.
+the policy's rules say. Then, for a launched event of a harness other than
+Claude Code whose run record (the caller passes it) holds `workdir`, an act
+whose `cwd` is empty, relative, or outside each of the run's `workdir`, its
+`work_tree_top` and its canary's `work` folder is denied by
+`launcher.workdir`; a run record that could not be read gives `unknown` there.
+Paths are compared as the policy compares them, with a folder boundary.
 
 A checker that records notes (policy version 3) is called with its session
 facts as a third argument: what the caller's `facts` function gives for its
@@ -32,6 +37,8 @@ id, or None without one. A judgement reads facts and never writes them.
 
 from __future__ import annotations
 
+import posixpath
+import re
 from collections.abc import Callable
 
 from harness_kit import checkers
@@ -69,6 +76,16 @@ CANARY_DENY_REASON = 'kit canary: this call is refused on purpose'
 CANARY_ALLOW_REASON = 'kit canary: this call is allowed on purpose'
 
 REFUSED_TOOL_SUFFIX = '.refused-tool'
+
+WORKDIR_RULE = 'launcher.workdir'
+WORKDIR_REASON = (
+    "this session's tool calls start only in the folder kit run launched; "
+    'start another kit run for another folder'
+)
+WORKDIR_UNREADABLE = 'cannot tell where the call may start: the run record could not be read'
+# What a caller passes as the run record when `run.json` could not be read.
+UNREADABLE_RUN = 'unreadable'
+_DRIVE_ROOT = re.compile(r'[a-z]:/')
 
 
 def make_verdict(
@@ -176,6 +193,47 @@ def canary_rule(event: dict, nonce: str | None) -> str | None:
     return None
 
 
+def _absolute(path: str, windows: bool) -> bool:
+    if windows:
+        return bool(_DRIVE_ROOT.match(path)) or path.startswith('//')
+    return path.startswith('/')
+
+
+def _folder_form(path: str, windows: bool) -> str:
+    """A path in the policy's form with its `.` and `..` parts resolved; '' for an empty one."""
+    path = normalize_path(path, windows)
+    return posixpath.normpath(path) if path else ''
+
+
+def _inside(path: str, folder: str) -> bool:
+    base = folder.rstrip('/')
+    return path == folder or path.startswith(base + '/')
+
+
+def workdir_result(
+    event: dict, run: dict | str | None, run_dir: str | None, windows: bool
+) -> str | None:
+    """`deny` or `unknown` from `launcher.workdir` for one launched event, or None when the
+    rule does not apply or the act starts in one of the run's folders."""
+    if run is None or event['harness']['name'] == LAUNCHER_FREE_HARNESS:
+        return None
+    if run == UNREADABLE_RUN:
+        return 'unknown'
+    if not isinstance(run, dict) or 'workdir' not in run:
+        return None
+    cwd = _folder_form(event['act']['cwd'] or '', windows)
+    if not cwd or not _absolute(cwd, windows):
+        return 'deny'
+    folders = [run.get('workdir'), run.get('work_tree_top')]
+    if run_dir:
+        folders.append(str(run_dir) + '/canary/work')
+    for folder in folders:
+        form = _folder_form(folder, windows) if isinstance(folder, str) else ''
+        if form and _absolute(form, windows) and _inside(cwd, form):
+            return None
+    return 'deny'
+
+
 def judge(
     event: object,
     policy: Policy | PolicyError,
@@ -184,6 +242,8 @@ def judge(
     *,
     facts: Callable[[str], dict | None] | None = None,
     refused: tuple[str, str] | None = None,
+    run: dict | str | None = None,
+    run_dir: str | None = None,
 ) -> dict:
     """Judge one event (parsed JSON) against a loaded policy or the error that loading raised.
 
@@ -193,6 +253,8 @@ def judge(
     `facts` maps a recording checker's id to its session facts or None; without
     it every recording checker receives None.
     `refused` is the driver's (tool, reason) for a tool it refuses by name.
+    `run` is the run record of a launched event (`UNREADABLE_RUN` when it could not be read)
+    and `run_dir` its folder; without a record `launcher.workdir` is left out.
     """
     if isinstance(policy, PolicyError):
         return unknown_verdict(f'unreadable policy: {policy}', policy.sha256)
@@ -221,6 +283,15 @@ def judge(
             governed=True,
             rule=ev['harness']['name'] + REFUSED_TOOL_SUFFIX,
             reason=refused[1],
+            policy_sha256=sha,
+        )
+    bound = workdir_result(ev, run, run_dir, policy.windows) if launched is True else None
+    if bound is not None:
+        return make_verdict(
+            bound,
+            governed=True,
+            rule=WORKDIR_RULE,
+            reason=WORKDIR_REASON if bound == 'deny' else WORKDIR_UNREADABLE,
             policy_sha256=sha,
         )
 
@@ -278,6 +349,8 @@ def judge_bytes(
     nonce: str | None = None,
     *,
     facts: Callable[[str], dict | None] | None = None,
+    run: dict | str | None = None,
+    run_dir: str | None = None,
 ) -> dict:
     """Judge the raw bytes of one event; bytes that are not one JSON object are invalid."""
     if isinstance(policy, PolicyError):
@@ -286,4 +359,4 @@ def judge_bytes(
         event = parse_event(data)
     except InvalidEventError as exc:
         return unknown_verdict(f'invalid event: {exc}', policy.sha256)
-    return judge(event, policy, launched, nonce, facts=facts)
+    return judge(event, policy, launched, nonce, facts=facts, run=run, run_dir=run_dir)

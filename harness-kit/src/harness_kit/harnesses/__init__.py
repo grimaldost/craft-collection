@@ -25,10 +25,12 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 import harness_kit
+from harness_kit.watch import RENDERED_KEY
 
 WINDOWS = os.name == 'nt'
 FAKE_KEY = 'stub-not-a-key'
@@ -36,6 +38,8 @@ SHELL_TIMEOUT_S = 3
 NOTE_KINDS = ('prompt', 'outcome')
 NOTE_CONFIG = 'note_config.json'
 VERSION_TIMEOUT_S = 30
+SCRATCH_TMP = 'tmp'
+NO_PROXY = '127.0.0.1,localhost,::1'
 VERSION_RE = re.compile(r'\d+\.\d+\.\d+')
 ENDPOINT_RE = re.compile(r'http://(127\.0\.0\.1|localhost):[0-9]{1,5}')
 BATCH_SUFFIXES = ('.cmd', '.bat')
@@ -48,6 +52,27 @@ class HomeError(Exception):
     """A home that cannot be rendered or copied; the message is ASCII."""
 
 
+@dataclass(frozen=True)
+class Grammar:
+    """The arguments a session mode accepts; the launcher checks them, never parses them.
+
+    Without `flags` (headless): the arguments start with `leading`, carry `required` as
+    adjacent tokens with each required flag exactly once, and every token that starts with
+    `-` is in `allowed`; other tokens pass. With `flags`, a table of flag to arity: every
+    token is a flag of the table or the value a flag of arity 1 takes, and each flag of
+    `required` appears exactly once.
+    """
+
+    leading: tuple[str, ...] = ()
+    required: tuple[str, ...] = ()
+    allowed: tuple[str, ...] = ()
+    flags: tuple[tuple[str, int], ...] | None = None
+
+
+HEADLESS, INTERACTIVE = 'headless', 'interactive'
+MODES = (HEADLESS, INTERACTIVE)
+
+
 class Driver(Protocol):
     name: str
     pinned_version: str
@@ -56,6 +81,10 @@ class Driver(Protocol):
     allowed_session_flags: tuple[str, ...]
     project_config_paths: tuple[str, ...]
     project_walk: str
+    modes: Mapping[str, Grammar]
+    watched_folders: tuple[str, ...]
+    watched_files: tuple[str, ...]
+    excluded_names: tuple[str, ...]
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]: ...
     def version(self, env: Mapping[str, str]) -> str | None: ...
@@ -112,41 +141,51 @@ def is_batch(path: str) -> bool:
 
 
 def scratch_env(env: Mapping[str, str], scratch: Path, extra_names: tuple[str, ...]) -> dict:
-    """`env` with every home variable, and the driver's configuration names, inside `scratch`."""
+    """`env` with every home variable, the driver's configuration names and the temporary
+    folder (`TEMP` and `TMP`, its `tmp` folder) inside `scratch`."""
     out = dict(env)
     for key in ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', *extra_names):
         set_var(out, key, str(scratch))
     drive, rest = os.path.splitdrive(str(scratch))
     set_var(out, 'HOMEDRIVE', drive)
     set_var(out, 'HOMEPATH', rest)
+    for key in ('TEMP', 'TMP'):
+        set_var(out, key, str(scratch / SCRATCH_TMP))
     return out
 
 
 def read_version(
     argv: list[str], env: Mapping[str, str], extra_names: tuple[str, ...]
 ) -> str | None:
-    """The first dotted triple `argv --version` prints, run from an empty scratch home."""
+    """The first dotted triple `argv --version` prints, run from an empty scratch home.
+
+    The binary's temporary folder lies inside the scratch folder too (opencode's runtime
+    unpacks a library there even for `--version`), and the scratch folder is removed
+    afterwards, ignoring errors.
+    """
     if not argv:
         return None
-    with tempfile.TemporaryDirectory(prefix='kit-version-') as td:
-        scratch = Path(td)
+    scratch = Path(tempfile.mkdtemp(prefix='kit-version-'))
+    try:
+        (scratch / SCRATCH_TMP).mkdir()
         extra = {'creationflags': NO_WINDOW} if WINDOWS else {}
-        try:
-            proc = subprocess.run(  # noqa: S603 - argv from the driver, no shell
-                [*argv, '--version'],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
-                env=scratch_env(env, scratch, extra_names),
-                cwd=str(scratch),
-                timeout=VERSION_TIMEOUT_S,
-                check=False,
-                **extra,
-            )
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return None
+        proc = subprocess.run(  # noqa: S603 - argv from the driver, no shell
+            [*argv, '--version'],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            env=scratch_env(env, scratch, extra_names),
+            cwd=str(scratch),
+            timeout=VERSION_TIMEOUT_S,
+            check=False,
+            **extra,
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
     found = VERSION_RE.search(proc.stdout or '')
     return found.group(0) if found else None
 
@@ -159,7 +198,12 @@ def set_var(env: dict, key: str, value: str) -> None:
 
 
 def home_env(home: dict, base: Mapping[str, str]) -> dict[str, str]:
-    """`base` with the home variables inside the home and every proxy at the endpoint."""
+    """`base` with the home variables inside the home and every proxy at the endpoint.
+
+    Only the loopback is exempt from the proxy. opencode 2.2.5 sets `NO_PROXY` at every start
+    to the union of its value and `127.0.0.1,localhost,::1`, so with this value its session
+    sees exactly what this function set.
+    """
     env = dict(base)
     profile = Path(home['dir']) / 'home'
     set_var(env, 'HOME', str(profile))
@@ -171,7 +215,7 @@ def home_env(home: dict, base: Mapping[str, str]) -> dict[str, str]:
     set_var(env, 'LOCALAPPDATA', str(profile / 'Local'))
     for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY'):
         set_var(env, key, home['endpoint'])
-    set_var(env, 'NO_PROXY', '127.0.0.1,localhost')
+    set_var(env, 'NO_PROXY', NO_PROXY)
     return env
 
 
@@ -264,9 +308,15 @@ def materialize_shell(
 
 
 def finish_home(
-    name: str, folder: Path, endpoint: str, config: Path, entry: Path, shell_config: Path
+    name: str,
+    folder: Path,
+    endpoint: str,
+    config: Path,
+    entry: Path,
+    shell_config: Path,
+    rendered: dict[str, str] | None = None,
 ) -> dict:
-    """Write `home.json` and return it."""
+    """Write `home.json` and return it; `rendered` is the render's record of its files."""
     home = dict(
         zip(
             HOME_KEYS,
@@ -274,6 +324,8 @@ def finish_home(
             strict=True,
         )
     )
+    if rendered is not None:
+        home[RENDERED_KEY] = dict(rendered)
     write_json(folder / 'home.json', home)
     return home
 

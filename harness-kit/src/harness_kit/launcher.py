@@ -38,7 +38,29 @@ of the policy is refused, while one under a test root is passed into the
 session. A policy that records nothing launches as before and the variable is
 not passed. The cores' switches are never passed.
 
-Exit codes: 64 a refusal, 65 a failed canary, 70 an internal error, else the
+Session modes (`--mode`, default `headless`): a driver declares a grammar per
+mode it offers. Interactive mode is refused for a driver without it, on any
+platform but Windows, and when the harness's contract records the mode
+`absent` (a missing entry launches, with one line on stderr). In interactive
+mode the session also gets the terminal names kit's environment holds, and a
+home is refused when its rendered files differ from the render's record in
+`home.json` or when it holds `run-open.json`, the mark of a run whose end kit
+did not record.
+
+After the mint the launcher writes the home's watched files to
+`runs/<id>/home-hashes.json`; after the canary passed it reads them again, and
+a difference sets `outcome` to `refused-home-changed`, exits 65 and starts no
+session. In interactive mode it writes `run-open.json` beside `home.json` right
+before the session starts and removes it once it recorded the session's end.
+On Windows the session is created suspended, joins a new Job Object that kills
+its processes when closed, and only then resumes; kit ends the job after its
+wait. On POSIX the session starts in a new session and its process group is
+killed after the wait. A Ctrl+C or Ctrl+Break during preflight exits 130 with
+no run; one after the mint and before the session sets `outcome` to
+`interrupted` and exits 130; during the session kit ignores it.
+
+Exit codes: 64 a refusal, 65 a failed canary or a home changed before the
+session, 70 an internal error, 130 an interrupt before the session, else the
 harness's own.
 """
 
@@ -48,18 +70,39 @@ import argparse
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from harness_kit import canary, doctor, harnesses, packs, state
+import harness_kit
+from harness_kit import canary, doctor, harnesses, packs, state, watch
 from harness_kit.policy import Policy, PolicyError, load_policy
 
 EXIT_REFUSED = 64
 EXIT_CANARY = 65
 EXIT_INTERNAL = 70
+EXIT_INTERRUPTED = 130
 WINDOWS = os.name == 'nt'
+HEADLESS, INTERACTIVE = harnesses.HEADLESS, harnesses.INTERACTIVE
+# Names an interactive session also receives from kit's environment, when it has them.
+TERMINAL_NAMES = (
+    'TERM',
+    'COLORTERM',
+    'TERM_PROGRAM',
+    'TERM_PROGRAM_VERSION',
+    'WT_SESSION',
+    'WT_PROFILE_ID',
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'TZ',
+    'NO_COLOR',
+)
+# How long kit waits for the session's tree to be gone once it ended it.
+TREE_WAIT_S = 10.0
 CLAUDE_CODE = 'claude-code'
 FAKE_KEY = 'stub-not-a-key'
 
@@ -140,6 +183,12 @@ class Plan:
     # Variables passed into the session beside the allow list, and stderr lines for a launch.
     extra_env: dict[str, str] = field(default_factory=dict)
     notices: list[str] = field(default_factory=list)
+    # The session mode, the top of the working folder's work tree, the terminal names passed
+    # into an interactive session, and the folder that holds `home.json`.
+    mode: str = HEADLESS
+    top: Path | None = None
+    terminal: dict[str, str] = field(default_factory=dict)
+    home_dir: Path | None = None
 
 
 def _ascii(text: object) -> str:
@@ -259,22 +308,127 @@ def check_folder(workdir: Path, top: Path | None, remotes: list[dict], policy: P
         raise RefusalError(f'working folder {_ascii(workdir)} is outside the test roots')
 
 
-def check_session_args(args: list[str], driver: harnesses.Driver) -> None:
-    lead = tuple(driver.required_leading_tokens)
+def grammar_of(driver: harnesses.Driver, mode: str) -> harnesses.Grammar | None:
+    """The driver's grammar for `mode`, or None when it offers no such mode."""
+    modes = getattr(driver, 'modes', None)
+    if modes is not None:
+        return modes.get(mode)
+    if mode != HEADLESS:
+        return None
+    return harnesses.Grammar(
+        leading=tuple(driver.required_leading_tokens),
+        required=tuple(driver.required_session_args),
+        allowed=tuple(driver.allowed_session_flags),
+    )
+
+
+def check_session_args(args: list[str], driver: harnesses.Driver, mode: str = HEADLESS) -> None:
+    """Refuse arguments outside the driver's grammar for `mode`; the harness's own is not parsed."""
+    grammar = grammar_of(driver, mode)
+    if grammar is None:
+        raise RefusalError(f'harness {driver.name} offers no {_ascii(mode)} mode')
+    if grammar.flags is not None:
+        _check_flag_table(args, grammar, driver.name, mode)
+        return
+    lead = tuple(grammar.leading)
     if tuple(args[: len(lead)]) != lead:
         raise RefusalError(f'harness arguments must start with {" ".join(lead)}')
-    need = tuple(driver.required_session_args)
+    need = tuple(grammar.required)
     if not any(tuple(args[i : i + len(need)]) == need for i in range(len(args))):
         raise RefusalError(f'harness arguments lack {" ".join(need)}')
     for token in need:
         if token.startswith('-') and args.count(token) != 1:
             raise RefusalError(f'harness arguments give {token} more than once')
     for token in args:
-        if token.startswith('-') and token not in driver.allowed_session_flags:
+        if token.startswith('-') and token not in grammar.allowed:
             raise RefusalError(
                 f'flag {_ascii(token)} is not in the allow list of {driver.name}: '
-                + ' '.join(driver.allowed_session_flags)
+                + ' '.join(grammar.allowed)
             )
+
+
+def _check_flag_table(args: list[str], grammar: harnesses.Grammar, name: str, mode: str) -> None:
+    """Walk the arguments in order: each is a flag of the table or the value its flag takes."""
+    table = dict(grammar.flags or ())
+    seen: dict[str, int] = {}
+    i = 0
+    while i < len(args):
+        token = args[i]
+        if token not in table:
+            raise RefusalError(
+                f'harness argument {_ascii(token)} is not in the {mode} grammar of {name}: '
+                + ' '.join(table)
+            )
+        if table[token]:
+            if i + 1 >= len(args):
+                raise RefusalError(f'flag {token} of the {mode} grammar takes a value')
+            i += 1
+        seen[token] = seen.get(token, 0) + 1
+        i += 1
+    for token in grammar.required:
+        if not seen.get(token):
+            raise RefusalError(f'harness arguments lack {token}')
+        if seen[token] > 1:
+            raise RefusalError(f'harness arguments give {token} more than once')
+
+
+def check_mode(driver: harnesses.Driver, mode: str, windows: bool | None = None) -> list[str]:
+    """Refuse a mode the driver does not offer, interactive mode off Windows, or a mode the
+    harness's contract records `absent`; a line per mode the contract does not name."""
+    if grammar_of(driver, mode) is None:
+        raise RefusalError(f'harness {driver.name} offers no {_ascii(mode)} mode')
+    if mode == HEADLESS:
+        return []
+    if not (WINDOWS if windows is None else windows):
+        raise RefusalError(f'{mode} mode runs on Windows only')
+    try:
+        entries = doctor.load_contract(driver.name).get('modes')
+    except (OSError, ValueError, KeyError) as exc:
+        raise RefusalError(f'the contract of {driver.name} is unreadable: {_ascii(exc)}') from None
+    entry = entries.get(mode) if isinstance(entries, dict) else None
+    if not isinstance(entry, dict) or 'state' not in entry:
+        return [f'kit: the contract of {driver.name} records no state for {mode} mode; starting it']
+    if entry['state'] == 'absent':
+        raise RefusalError(f'the contract of {driver.name} records {mode} mode as absent')
+    return []
+
+
+def check_open_run(home_dir: Path) -> None:
+    """Refuse a home that holds `run-open.json`: a run whose end kit did not record."""
+    path = home_dir / watch.RUN_OPEN
+    if not os.path.lexists(path):
+        return
+    data = _read_object(path)
+    run_id = data.get('run_id') if data is not None else None
+    named = _ascii(run_id) if isinstance(run_id, str) and run_id else 'unknown'
+    raise RefusalError(
+        f'the home holds {watch.RUN_OPEN} of run {named}: kit did not record its end (kit was '
+        'ended or its terminal closed), so a change in its last poll may be unread; render a '
+        'new home'
+    )
+
+
+def check_render_record(home_dir: Path, home: dict, driver: harnesses.Driver) -> None:
+    """Refuse a home whose rendered files differ from the record of its render."""
+    record = home.get(watch.RENDERED_KEY)
+    if not isinstance(record, dict):
+        raise RefusalError(
+            'home.json holds no record of the rendered files; render the home again into an '
+            'empty folder'
+        )
+    changed = watch.differences(record, watch.hash_files(home_dir, driver, rendered=True))
+    if changed:
+        more = f' and {len(changed) - 1} more' if len(changed) > 1 else ''
+        raise RefusalError(
+            f'the home differs from its render at {_ascii(changed[0])}{more}; render the home '
+            'again into an empty folder'
+        )
+
+
+def terminal_env(environ: dict) -> dict[str, str]:
+    """The terminal names kit's environment holds, in the order of TERMINAL_NAMES."""
+    found = {_key(k): v for k, v in environ.items()}
+    return {name: found[_key(name)] for name in TERMINAL_NAMES if _key(name) in found}
 
 
 def project_walk(driver: harnesses.Driver, workdir: Path, top: Path | None, root: Path) -> list:
@@ -553,12 +707,14 @@ def preflight(
     policy_file: str,
     harness_args: list[str],
     environ: dict,
+    mode: str = HEADLESS,
 ) -> Plan:
     """Every check of `kit run`, in order; raise RefusalError on the first that fails."""
     try:
         driver = harnesses.get(harness)
     except KeyError as exc:
         raise RefusalError(_ascii(exc.args[0])) from None
+    notices = check_mode(driver, mode)
     policy_path = Path(os.path.abspath(policy_file))
     try:
         policy = load_policy(policy_path)
@@ -568,8 +724,12 @@ def preflight(
     if broken is not None:
         raise RefusalError(f'policy checker unusable: {_ascii(broken)}')
     records = harnesses.recorded_kinds(policy.checkers)
-    notices = check_note_states(policy, driver, records) if records else []
-    home = check_home(Path(home_dir), driver)
+    notices += check_note_states(policy, driver, records) if records else []
+    home_folder = Path(os.path.abspath(home_dir))
+    home = check_home(home_folder, driver)
+    if mode == INTERACTIVE:
+        check_open_run(home_folder)
+        check_render_record(home_folder, home, driver)
     extra: dict[str, str] = {}
     if records:
         check_note_home(home, driver, records)
@@ -587,13 +747,14 @@ def preflight(
     remotes = read_remotes(folder) if top is not None else []
     if driver.name != CLAUDE_CODE:
         check_folder(folder, top, remotes, policy)
-    check_session_args(harness_args, driver)
+    check_session_args(harness_args, driver, mode)
     project_config = check_project_layer(driver, folder, top, root)
     binary = driver.binary_argv(environ)
     if not binary:
         raise RefusalError(f'the {driver.name} binary was not found')
     run_id = state.new_run_id()
     run_dir = root / 'runs' / run_id
+    terminal = terminal_env(environ) if mode == INTERACTIVE else {}
     env, scrubbed = build_env(
         driver,
         home,
@@ -603,7 +764,7 @@ def preflight(
         root=root,
         policy_path=policy_path,
         workdir=folder,
-        extra=extra,
+        extra={**extra, **terminal},
     )
     return Plan(
         driver=driver,
@@ -621,6 +782,10 @@ def preflight(
         binary=list(binary),
         extra_env=extra,
         notices=notices,
+        mode=mode,
+        top=top,
+        terminal=terminal,
+        home_dir=home_folder,
     )
 
 
@@ -656,6 +821,127 @@ def run_plan_canary(plan: Plan, environ: dict) -> dict:
     )
 
 
+def run_canary_for_plan(plan: Plan, environ: dict) -> dict:
+    """The canary for a minted run, ended at once with its whole tree by an interrupt.
+
+    On Windows a wait for a process is not interrupted by Ctrl+C or Ctrl+Break, so a canary
+    harness that ignores them would hold kit until it ends by itself. There the canary runs in
+    a child process of kit, inside a Job Object kit holds and waits on in short steps; an
+    interrupt ends that job. Elsewhere the interrupt reaches the canary's own wait, which ends
+    its tree, so it runs in kit's process.
+    """
+    if not WINDOWS:
+        return run_plan_canary(plan, environ)
+    return _canary_in_child(plan, environ)
+
+
+CANARY_CHILD_POLL_S = 0.1
+# The canary's own deadline, its kill wait, and room for the child's start and stop.
+CANARY_CHILD_DEADLINE_S = canary.TIMEOUT_S + canary.KILL_WAIT_S + 30
+
+
+def _canary_failure(reason: str) -> dict:
+    return {
+        'passed': False,
+        'reason': reason,
+        'refused_marker': False,
+        'deny_marker': False,
+        'allow_marker': False,
+        'stub_requests': 0,
+    }
+
+
+def _canary_in_child(plan: Plan, environ: dict) -> dict:
+    """Run `run_plan_canary` in a child process inside a kill-on-close Job Object."""
+    spec = {
+        'driver': plan.driver.name,
+        'home': plan.home,
+        'binary': plan.binary,
+        'run_dir': str(plan.run_dir),
+        'run_id': plan.run_id,
+        'root': str(plan.root),
+        'policy_path': str(plan.policy_path),
+        'workdir': str(plan.workdir),
+        'project_config': plan.project_config,
+        'extra_env': plan.extra_env,
+        'environ': environ,
+    }
+    data = json.dumps(spec, ensure_ascii=True).encode('ascii')
+    parent = str(Path(harness_kit.__file__).resolve().parent.parent)
+    boot = (
+        f'import sys; sys.path.insert(0, {parent!a}); '
+        'from harness_kit.launcher import canary_child; sys.exit(canary_child())'
+    )
+    proc = subprocess.Popen(  # noqa: S603 - this interpreter, a fixed bootstrap, no shell
+        [sys.executable, '-I', '-c', boot],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        creationflags=CREATE_SUSPENDED,
+    )
+    job = None
+    try:
+        try:
+            job = _Job()
+            job.assign(int(proc._handle))  # type: ignore[attr-defined]
+            _resume(proc.pid)
+        except OSError as exc:
+            proc.kill()
+            return _canary_failure(f'the canary process did not start: {_ascii(exc)}')
+        proc.stdin.write(data)
+        proc.stdin.close()
+        end = time.monotonic() + CANARY_CHILD_DEADLINE_S
+        while proc.poll() is None:
+            if time.monotonic() >= end:
+                return _canary_failure('the canary process did not end')
+            try:
+                proc.wait(timeout=CANARY_CHILD_POLL_S)
+            except subprocess.TimeoutExpired:
+                continue
+        found = proc.stdout.read().decode('ascii', 'replace').strip().splitlines()
+        try:
+            result = json.loads(found[-1]) if found else None
+        except ValueError:
+            result = None
+        if not isinstance(result, dict) or not isinstance(result.get('passed'), bool):
+            return _canary_failure(f'the canary process gave no result (exit {proc.returncode})')
+        return result
+    finally:
+        if job is not None:
+            job.terminate()
+            job.wait_empty(TREE_WAIT_S)
+            job.close()
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait()
+        for stream in (proc.stdin, proc.stdout):
+            if stream is not None and not stream.closed:
+                stream.close()
+
+
+def canary_child() -> int:
+    """The child that `_canary_in_child` starts: one canary, its record printed as JSON."""
+    spec = json.loads(sys.stdin.buffer.read().decode('ascii'))
+    plan = Plan(
+        driver=harnesses.get(spec['driver']),
+        home=spec['home'],
+        workdir=Path(spec['workdir']),
+        policy_path=Path(spec['policy_path']),
+        root=Path(spec['root']),
+        run_id=spec['run_id'],
+        run_dir=Path(spec['run_dir']),
+        argv=[],
+        env={},
+        project_config=list(spec['project_config']),
+        binary=list(spec['binary']),
+        extra_env=dict(spec['extra_env']),
+    )
+    result = run_plan_canary(plan, dict(spec['environ']))
+    sys.stdout.write(json.dumps(result, ensure_ascii=True) + '\n')
+    sys.stdout.flush()
+    return 0
+
+
 def launch(plan: Plan, environ: dict) -> int:
     """Mint the run, record it, run the canary, start the harness, wait, record the end.
 
@@ -672,22 +958,46 @@ def launch(plan: Plan, environ: dict) -> int:
         beat.stop()
 
 
+def _home_dir(plan: Plan) -> Path:
+    return plan.home_dir if plan.home_dir is not None else Path(plan.home['dir'])
+
+
 def _launch_minted(plan: Plan, environ: dict) -> int:
+    run_json = plan.run_dir / 'run.json'
+    record = json.loads(run_json.read_text(encoding='utf-8'))
+    try:
+        ready = _before_session(plan, environ, record)
+    except KeyboardInterrupt:
+        record.update(outcome='interrupted')
+        state.write_json_atomic(run_json, record)
+        return _fail(EXIT_INTERRUPTED, 'run interrupted before the session started')
+    if isinstance(ready, int):
+        return ready
+    return _run_session(plan, record)
+
+
+def _before_session(plan: Plan, environ: dict, record: dict) -> int | None:
+    """Hashes, version, canary and the second read; an exit code when the session must not start."""
+    run_json = plan.run_dir / 'run.json'
     (plan.run_dir / 'tmp').mkdir()
     (plan.run_dir / 'gh-config').mkdir()
     (plan.run_dir / 'gitconfig-empty').write_bytes(b'')
-    run_json = plan.run_dir / 'run.json'
-    record = json.loads(run_json.read_text(encoding='utf-8'))
+    home_dir = _home_dir(plan)
+    hashes = watch.hash_files(home_dir, plan.driver)
+    state.write_json_atomic(plan.run_dir / watch.HOME_HASHES, hashes)
     found = plan.driver.version(environ)
     record.update(
         home=str(plan.home['dir']),
         workdir=str(plan.workdir),
+        work_tree_top=str(plan.top) if plan.top is not None else None,
         remotes=plan.remotes,
         project_config=plan.project_config,
         kit_pid=os.getpid(),
         harness_version_found=found,
         scrubbed=plan.scrubbed,
     )
+    if plan.mode == INTERACTIVE:
+        record.update(terminal_names=list(plan.terminal))
     state.write_json_atomic(run_json, record)
     if found != plan.driver.pinned_version:
         sys.stderr.write(
@@ -695,29 +1005,374 @@ def _launch_minted(plan: Plan, environ: dict) -> int:
             f'{plan.driver.pinned_version}; starting it\n'
         )
         sys.stderr.flush()
-    result = run_plan_canary(plan, environ)
+    result = run_canary_for_plan(plan, environ)
     state.write_json_atomic(plan.run_dir / state.CANARY_DIR / canary.CANARY_JSON, result)
     if not result['passed']:
         record.update(outcome='refused-canary')
         state.write_json_atomic(run_json, record)
         return _fail(EXIT_CANARY, f'canary failed: {_ascii(result["reason"])}')
-    try:
-        proc = subprocess.Popen(plan.argv, env=plan.env, cwd=str(plan.workdir))  # noqa: S603
-    except OSError as exc:
-        record.update(outcome='ended', exit_code=None, error=_ascii(type(exc).__name__))
+    # The second read is the baseline of the session; a difference refuses the start.
+    baseline = watch.read_files(home_dir, plan.driver)
+    changed = watch.differences(hashes, {rel: v['sha256'] for rel, v in baseline.items()})
+    if changed:
+        record.update(outcome='refused-home-changed')
         state.write_json_atomic(run_json, record)
-        return _fail(EXIT_INTERNAL, f'the harness did not start: {_ascii(exc)}')
-    record.update(outcome='launched')
-    state.write_json_atomic(run_json, record)
-    while True:
+        more = f' and {len(changed) - 1} more' if len(changed) > 1 else ''
+        return _fail(
+            EXIT_CANARY,
+            f'the home changed before the session started: {_ascii(changed[0])}{more}',
+        )
+    if plan.mode == INTERACTIVE:
+        state.write_json_atomic(home_dir / watch.RUN_OPEN, {'run_id': plan.run_id})
+    return None
+
+
+def _run_session(plan: Plan, record: dict) -> int:
+    """Start the session in its own tree, wait for it, end the tree and record the end."""
+    run_json = plan.run_dir / 'run.json'
+    restore = _ignore_interrupts()
+    try:
         try:
-            code = proc.wait()
-            break
-        except KeyboardInterrupt:
+            session = _Session.start(plan.argv, plan.env, plan.workdir)
+        except OSError as exc:
+            record.update(outcome='ended', exit_code=None, error=_ascii(type(exc).__name__))
+            state.write_json_atomic(run_json, record)
+            _close_run(plan)
+            return _fail(EXIT_INTERNAL, f'the harness did not start: {_ascii(exc)}')
+        record.update(outcome='launched')
+        state.write_json_atomic(run_json, record)
+        code = session.wait()
+        session.end()
+        record.update(outcome='ended', exit_code=code)
+        state.write_json_atomic(run_json, record)
+        _close_run(plan)
+        return _exit_code(code)
+    finally:
+        restore()
+
+
+def _close_run(plan: Plan) -> None:
+    """Remove `run-open.json` once the session's end is recorded."""
+    if plan.mode != INTERACTIVE:
+        return
+    try:
+        (_home_dir(plan) / watch.RUN_OPEN).unlink()
+    except FileNotFoundError:
+        pass
+
+
+# ---- interrupts and the session's tree
+
+
+def _ignore(signum, frame) -> None:
+    """During the session an interrupt is the harness's; kit keeps waiting."""
+
+
+def _interrupt_signals() -> list:
+    return [signal.SIGINT] + ([signal.SIGBREAK] if WINDOWS else [])
+
+
+def _ignore_interrupts():
+    """Set a handler that does nothing for Ctrl+C and Ctrl+Break; return what restores them.
+
+    A Python handler, not SIG_IGN, so the session inherits no ignored signal.
+    """
+    saved = {}
+    for sig in _interrupt_signals():
+        try:
+            saved[sig] = signal.signal(sig, _ignore)
+        except (ValueError, OSError):  # not the main thread: nothing to set
             continue
-    record.update(outcome='ended', exit_code=code)
-    state.write_json_atomic(run_json, record)
-    return _exit_code(code)
+
+    def restore() -> None:
+        for sig, handler in saved.items():
+            signal.signal(sig, handler)
+
+    return restore
+
+
+def _break_as_interrupt() -> None:
+    """On Windows, Ctrl+Break raises KeyboardInterrupt as Ctrl+C does; its default ends kit."""
+    if not WINDOWS:
+        return
+    try:
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
+    except (ValueError, OSError):  # not the main thread
+        pass
+
+
+class _Session:
+    """The session's process and its tree: a Job Object on Windows, a process group on POSIX."""
+
+    def __init__(self, proc: subprocess.Popen, job: _Job | None) -> None:
+        self.proc = proc
+        self.job = job
+
+    @classmethod
+    def start(cls, argv: list[str], env: dict, cwd: Path) -> _Session:
+        """Start the session; raise OSError when it did not start inside its tree."""
+        if not WINDOWS:
+            proc = subprocess.Popen(argv, env=env, cwd=str(cwd), start_new_session=True)  # noqa: S603
+            return cls(proc, None)
+        proc = subprocess.Popen(  # noqa: S603 - the checked argv, no shell
+            argv, env=env, cwd=str(cwd), creationflags=CREATE_SUSPENDED
+        )
+        job = None
+        try:
+            job = _Job()
+            job.assign(int(proc._handle))  # type: ignore[attr-defined]
+            _resume(proc.pid)
+        except OSError:
+            proc.kill()
+            proc.wait()
+            if job is not None:
+                job.close()
+            raise
+        return cls(proc, job)
+
+    def wait(self) -> int:
+        while True:
+            try:
+                return self.proc.wait()
+            except KeyboardInterrupt:
+                continue
+
+    def end(self) -> None:
+        """End every process left in the session's tree and wait until they are gone."""
+        if self.job is not None:
+            self.job.terminate()
+            self.job.wait_empty(TREE_WAIT_S)
+            self.job.close()
+            return
+        if not WINDOWS:
+            try:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+            except OSError:
+                return
+            _wait_group_gone(self.proc.pid, TREE_WAIT_S)
+
+
+def _group_members(pgid: int) -> list[tuple[int, str]]:
+    """(pid, state) of each process of a group, read from /proc; [] where there is none."""
+    found = []
+    try:
+        entries = os.listdir('/proc')
+    except OSError:
+        return []
+    for entry in entries:
+        if not entry.isdigit():
+            continue
+        try:
+            with open(f'/proc/{entry}/stat', encoding='ascii', errors='replace') as fh:
+                fields = fh.read().rsplit(')', 1)[1].split()
+        except (OSError, IndexError):
+            continue
+        if len(fields) > 2 and fields[2] == str(pgid):
+            found.append((int(entry), fields[0]))
+    return found
+
+
+def _wait_group_gone(pgid: int, timeout_s: float) -> None:
+    """Wait until no process of the group is alive, then briefly for its zombies to be reaped."""
+    end = time.monotonic() + timeout_s
+    while time.monotonic() < end:
+        members = _group_members(pgid)
+        if not members:
+            return
+        if all(st == 'Z' for _, st in members):
+            end = min(end, time.monotonic() + 1.0)
+        time.sleep(0.02)
+
+
+# Windows: the Job Object and the first thread of a suspended process.
+CREATE_SUSPENDED = 0x00000004
+_JOB_KILL_ON_CLOSE = 0x00002000
+_JOB_EXTENDED_LIMITS = 9
+_JOB_ACCOUNTING = 1
+_SNAP_THREAD = 0x00000004
+_THREAD_SUSPEND_RESUME = 0x0002
+
+
+def _kernel32():
+    import ctypes
+    from ctypes import wintypes
+
+    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    k32.CreateJobObjectW.argtypes = (ctypes.c_void_p, wintypes.LPCWSTR)
+    k32.CreateJobObjectW.restype = ctypes.c_void_p
+    k32.SetInformationJobObject.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    )
+    k32.SetInformationJobObject.restype = wintypes.BOOL
+    k32.QueryInformationJobObject.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+    )
+    k32.QueryInformationJobObject.restype = wintypes.BOOL
+    k32.AssignProcessToJobObject.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+    k32.AssignProcessToJobObject.restype = wintypes.BOOL
+    k32.TerminateJobObject.argtypes = (ctypes.c_void_p, wintypes.UINT)
+    k32.TerminateJobObject.restype = wintypes.BOOL
+    k32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    k32.CloseHandle.restype = wintypes.BOOL
+    k32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+    k32.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+    k32.Thread32First.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+    k32.Thread32First.restype = wintypes.BOOL
+    k32.Thread32Next.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+    k32.Thread32Next.restype = wintypes.BOOL
+    k32.OpenThread.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.OpenThread.restype = ctypes.c_void_p
+    k32.ResumeThread.argtypes = (ctypes.c_void_p,)
+    k32.ResumeThread.restype = wintypes.DWORD
+    return k32
+
+
+def _job_structs():
+    import ctypes
+    from ctypes import wintypes
+
+    class Basic(ctypes.Structure):
+        _fields_ = (
+            ('PerProcessUserTimeLimit', ctypes.c_int64),
+            ('PerJobUserTimeLimit', ctypes.c_int64),
+            ('LimitFlags', wintypes.DWORD),
+            ('MinimumWorkingSetSize', ctypes.c_size_t),
+            ('MaximumWorkingSetSize', ctypes.c_size_t),
+            ('ActiveProcessLimit', wintypes.DWORD),
+            ('Affinity', ctypes.c_size_t),
+            ('PriorityClass', wintypes.DWORD),
+            ('SchedulingClass', wintypes.DWORD),
+        )
+
+    class Io(ctypes.Structure):
+        _fields_ = tuple(
+            (name, ctypes.c_uint64)
+            for name in ('Read', 'Write', 'Other', 'ReadBytes', 'WriteBytes', 'OtherBytes')
+        )
+
+    class Extended(ctypes.Structure):
+        _fields_ = (
+            ('BasicLimitInformation', Basic),
+            ('IoInfo', Io),
+            ('ProcessMemoryLimit', ctypes.c_size_t),
+            ('JobMemoryLimit', ctypes.c_size_t),
+            ('PeakProcessMemoryUsed', ctypes.c_size_t),
+            ('PeakJobMemoryUsed', ctypes.c_size_t),
+        )
+
+    class Accounting(ctypes.Structure):
+        _fields_ = (
+            ('TotalUserTime', ctypes.c_int64),
+            ('TotalKernelTime', ctypes.c_int64),
+            ('ThisPeriodTotalUserTime', ctypes.c_int64),
+            ('ThisPeriodTotalKernelTime', ctypes.c_int64),
+            ('TotalPageFaultCount', wintypes.DWORD),
+            ('TotalProcesses', wintypes.DWORD),
+            ('ActiveProcesses', wintypes.DWORD),
+            ('TotalTerminatedProcesses', wintypes.DWORD),
+        )
+
+    class ThreadEntry(ctypes.Structure):
+        _fields_ = (
+            ('dwSize', wintypes.DWORD),
+            ('cntUsage', wintypes.DWORD),
+            ('th32ThreadID', wintypes.DWORD),
+            ('th32OwnerProcessID', wintypes.DWORD),
+            ('tpBasePri', wintypes.LONG),
+            ('tpDeltaPri', wintypes.LONG),
+            ('dwFlags', wintypes.DWORD),
+        )
+
+    return Extended, Accounting, ThreadEntry
+
+
+class _Job:
+    """A Job Object whose processes end when it is closed (kill-on-close)."""
+
+    def __init__(self) -> None:
+        import ctypes
+
+        self._k32 = _kernel32()
+        extended, self._accounting, _ = _job_structs()
+        handle = self._k32.CreateJobObjectW(None, None)
+        if not handle:
+            raise OSError(ctypes.get_last_error(), 'CreateJobObjectW failed')
+        self.handle = handle
+        info = extended()
+        info.BasicLimitInformation.LimitFlags = _JOB_KILL_ON_CLOSE
+        size = ctypes.sizeof(info)
+        if not self._k32.SetInformationJobObject(
+            handle, _JOB_EXTENDED_LIMITS, ctypes.byref(info), size
+        ):
+            error = ctypes.get_last_error()
+            self.close()
+            raise OSError(error, 'SetInformationJobObject failed')
+
+    def assign(self, process_handle: int) -> None:
+        import ctypes
+
+        if not self._k32.AssignProcessToJobObject(self.handle, process_handle):
+            raise OSError(ctypes.get_last_error(), 'AssignProcessToJobObject failed')
+
+    def active(self) -> int | None:
+        import ctypes
+
+        info = self._accounting()
+        if not self._k32.QueryInformationJobObject(
+            self.handle, _JOB_ACCOUNTING, ctypes.byref(info), ctypes.sizeof(info), None
+        ):
+            return None
+        return int(info.ActiveProcesses)
+
+    def terminate(self) -> None:
+        self._k32.TerminateJobObject(self.handle, 1)
+
+    def wait_empty(self, timeout_s: float) -> None:
+        end = time.monotonic() + timeout_s
+        while time.monotonic() < end:
+            if not self.active():
+                return
+            time.sleep(0.02)
+
+    def close(self) -> None:
+        if self.handle:
+            self._k32.CloseHandle(self.handle)
+            self.handle = None
+
+
+def _resume(pid: int) -> None:
+    """Resume the threads of a process created suspended, found by a thread snapshot."""
+    import ctypes
+
+    k32 = _kernel32()
+    _, _, thread_entry = _job_structs()
+    snapshot = k32.CreateToolhelp32Snapshot(_SNAP_THREAD, 0)
+    if not snapshot or snapshot == ctypes.c_void_p(-1).value:
+        raise OSError(ctypes.get_last_error(), 'CreateToolhelp32Snapshot failed')
+    resumed = 0
+    try:
+        entry = thread_entry()
+        entry.dwSize = ctypes.sizeof(entry)
+        more = k32.Thread32First(snapshot, ctypes.byref(entry))
+        while more:
+            if entry.th32OwnerProcessID == pid:
+                thread = k32.OpenThread(_THREAD_SUSPEND_RESUME, False, entry.th32ThreadID)
+                if thread:
+                    if k32.ResumeThread(thread) != 0xFFFFFFFF:
+                        resumed += 1
+                    k32.CloseHandle(thread)
+            more = k32.Thread32Next(snapshot, ctypes.byref(entry))
+    finally:
+        k32.CloseHandle(snapshot)
+    if not resumed:
+        raise OSError(f'no thread of process {pid} was resumed')
 
 
 def _fail(code: int, message: str) -> int:
@@ -735,25 +1390,42 @@ def build_parser() -> _Parser:
     parser.add_argument('--home', metavar='DIR', required=True, help='a home from kit home render')
     parser.add_argument('--workdir', metavar='DIR', required=True, help='the session folder')
     parser.add_argument('--policy', metavar='FILE', required=True, help='the policy file')
+    parser.add_argument(
+        '--mode',
+        choices=harnesses.MODES,
+        default=HEADLESS,
+        help='headless (default) or interactive (opencode on Windows)',
+    )
     return parser
 
 
 def main(argv: list[str]) -> int:
     """`kit run`; `argv` follows the word `run`."""
+    _break_as_interrupt()
     try:
         if '--' not in argv:
             raise RefusalError('arguments: put -- before the harness arguments')
         cut = argv.index('--')
         args = build_parser().parse_args(argv[:cut])
         plan = preflight(
-            args.harness, args.home, args.workdir, args.policy, argv[cut + 1 :], dict(os.environ)
+            args.harness,
+            args.home,
+            args.workdir,
+            args.policy,
+            argv[cut + 1 :],
+            dict(os.environ),
+            mode=args.mode,
         )
     except RefusalError as exc:
         return _fail(EXIT_REFUSED, f'run refused: {exc}')
-    for line in plan.notices:
-        sys.stderr.write(line + '\n')
-    sys.stderr.flush()
+    except KeyboardInterrupt:
+        return _fail(EXIT_INTERRUPTED, 'run interrupted during preflight; no run was minted')
     try:
+        for line in plan.notices:
+            sys.stderr.write(line + '\n')
+        sys.stderr.flush()
         return launch(plan, dict(os.environ))
+    except KeyboardInterrupt:
+        return _fail(EXIT_INTERRUPTED, 'run interrupted before the session started')
     except Exception as exc:  # the record says what happened; exit 70 names an internal error
         return _fail(EXIT_INTERNAL, f'run failed: {type(exc).__name__}: {_ascii(exc)}')

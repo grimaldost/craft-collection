@@ -145,3 +145,10 @@ evidence = "Guard cell owner-acts-allow passed on opencode 2.2.5, 2026-11-15: it
 state = "tested"
 mark = "measured"
 evidence = "Guard cell series-guard passed on opencode 2.2.5, 2026-11-15: its session's outcome note was recorded."
+
+# Session modes beside headless, by name: tested when the cells of conformance/test_interactive.py
+# held on this harness, as its interactive-results.json recorded them.
+[modes.interactive]
+state = "tested"
+mark = "measured"
+evidence = "Interactive cells interactive-guard, interactive-identity, interactive-subfolder and interactive-switch-denied passed on opencode 2.2.5, 2026-11-18."
