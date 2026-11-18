@@ -686,6 +686,25 @@ def test_a_copy_writes_a_governed_file_only_as_its_destination():
             assert writes(f"Copy-Item '{g}' '{o}'", 'powershell') == []
             assert writes(f"Copy-Item -Destination '{g}' -Path '{o}'", 'powershell') != []
             assert writes(f"Copy-Item '{o}' '{g}'", 'powershell') != []
+            # A trailing redirection or switch is not the destination: when the last
+            # token is not a plausible path, every governed path counts (recall first).
+            for shell, trailing in (
+                ('bash', f'cp {o} {g} &>> /c/tmp/log'),
+                ('bash', f'cp {o} {g} &> /c/tmp/log'),
+                ('bash', f'cp {o} {g} 0</dev/null'),
+                ('bash', f'cp {o} {g} 2>>/c/tmp/log'),
+                ('powershell', f"Copy-Item x '{g}' *> C:/tmp/log"),
+                ('cmd', f'copy x {g} /Y'),
+                ('powershell', f'cmd /c copy x {g} /Y'),
+                ('bash', f'rsync -a --remove-source-files {g} host:/x'),
+                ('bash', f'rsync -a --remove-sent-files {g} host:/x'),
+            ):
+                assert writes(trailing, shell) != [], trailing
+            # A redirection's target is written even when it sits among a copy's sources.
+            assert writes(f'cp {o} /c/tmp/y &>> {g}') != []
+            assert writes(f'cp {g} {o} 2>/dev/null') == []
+            # The arguments every arm reads drop a `&>>` target too: this is a read.
+            assert gate.shell_acts('git config --global user.name &>> /c/tmp/l', 'bash', td) == []
         finally:
             if saved is None:
                 os.environ.pop('SESSION_WORKFLOW_GOVERNED_HOME', None)
