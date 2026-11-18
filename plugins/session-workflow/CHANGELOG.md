@@ -22,8 +22,11 @@ corrected sentences in skill text. Patch bump: corrections only, nothing added.
   with no list marker under the same heading, and the printed line adds `<n> untriaged`.
 - **A cluster heading is a route-out only by its disposition** (2026-11-17 triage: T411b).
   `triage_audit.py coverage` took any `###`/`####` heading mentioning "routed out" as a ROUTE
-  OUT row, so a cause written in prose failed as an undelivered route-out. Only a heading
-  parenthesis that opens with ROUTE OUT counts now.
+  OUT row, so a cause written in prose failed as an undelivered route-out. A heading counts
+  now when the route-out is an item of its parenthesis: alone or first, bold or past tense
+  (`(ROUTE OUT -> keel; 1)`, `(**ROUTED OUT** -> keel)`), or after `+`, `;`, `,` or `&`
+  (`(ATTACK + ROUTE OUT; 3 reports)`, `(HIGH; ROUTE OUT -> convoy)`, `(ATTACK + a
+  route-out)`). A cause or a section title that says "routed out" elsewhere does not.
 - **The owner-acts gate's shell-write arm logs a copy only at its destination**
   (2026-11-17 triage: T415a). `cp`, `scp`, `rsync` and `Copy-Item` of a governed file were
   logged as writes when the file was the source. A governed file now counts as written only

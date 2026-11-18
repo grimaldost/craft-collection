@@ -516,11 +516,30 @@ def test_a_route_out_cluster_or_status_row_needs_its_delivered_path():
 
 
 def test_a_heading_that_mentions_a_route_out_in_prose_is_not_a_routed_row():
-    """T411b: only a disposition that opens the heading's parenthesis with ROUTE OUT
-    makes a cluster a routed row; a cause that says "routed out" in prose does not."""
+    """T411b: a cluster is a routed row when ROUTE OUT is an item of its heading's
+    parenthesis (alone, first, or after `+`, `;`, `,` or `&`); a cause or a section
+    title that says "routed out" in prose is not."""
     prose = '#### SW61 - the router half was routed out to craft earlier (ATTACK; 1)\n'
-    assert ta.routed_rows(prose + '\nEvidence.\n') == []
-    for disposition in ('### T5 - x (ROUTE OUT; 2)\n', '### T4 - y (route out -> keel; 1)\n'):
+    for heading in (
+        prose,
+        '#### T412 - A run triages a destination before the route-outs others will deliver'
+        ' to it (ATTACK; watch; 1 report)\n',
+        '### T13 - Routed out & declined\n',
+        '#### Routed out & declined\n',
+        '### T6 - x (ATTACK; the half that was routed out stays; 1)\n',
+    ):
+        assert ta.routed_rows(heading + '\nEvidence.\n') == [], heading
+    for disposition in (
+        '### T5 - x (ROUTE OUT; 2)\n',
+        '### T4 - y (route out -> keel; 1)\n',
+        '### T54 - x (ATTACK + ROUTE OUT; 3 reports)\n',
+        '### N9 - x (keel-as-a-repo) *(ATTACK keel + ROUTE OUT the scaffold half; NET-NEW)*\n',
+        '### D7 - x (ATTACK + a route-out; 1 report, 68 findings)\n',
+        '### T7 - x (**ROUTE OUT** -> keel; 1)\n',
+        '### T8 - x (ATTACK + **ROUTE OUT**; 1)\n',
+        '#### T9 - x (HIGH; ROUTE OUT -> convoy; 2)\n',
+        '#### T10 - x (ROUTED OUT -> keel; 1)\n',
+    ):
         assert len(ta.routed_rows(disposition)) == 1, disposition
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -528,6 +547,10 @@ def test_a_heading_that_mentions_a_route_out_in_prose_is_not_a_routed_row():
         doc, _ = _corpus(root, COVERED + '\n' + prose + '\n## Routed out\n\n- None.\n')
         proc = _coverage(doc, root, registry)
         assert proc.returncode == 0, (proc.stdout, proc.stderr)
+        combined = COVERED + '\n### T54 - x (ATTACK + ROUTE OUT; 3 reports)\n\nEvidence.\n'
+        doc, _ = _corpus(root, combined)
+        proc = _coverage(doc, root, registry)
+        assert proc.returncode == 1, (proc.stdout, proc.stderr)
 
 
 if __name__ == '__main__':

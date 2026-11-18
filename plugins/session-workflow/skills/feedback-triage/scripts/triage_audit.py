@@ -227,9 +227,13 @@ _TARGET_HEADER = re.compile(r'^\s*\[targets\.([^\]]+)\]\s*$')
 _FEEDBACK_DIR = re.compile(r'^\s*feedback_dir\s*=\s*[\'"](.+?)[\'"]\s*$')
 _FENCE = re.compile(r'^\s*(```|~~~)')
 _ROUTED_SECTION = re.compile(r'^##\s+routed\s+out\b', re.IGNORECASE)
-# The disposition opens the heading's parenthesis (`### T4 - cause (ROUTE OUT -> keel; 1)`);
-# a cause that says "routed out" in prose is not a routed row (T411b).
-_ROUTE_OUT_HEADING = re.compile(r'^#{3,4}\s.*\(\s*route[\s-]+out\b', re.IGNORECASE)
+# ROUTE OUT is an item of the heading's parenthesis, alone, first or after `+ ; , &`
+# (`(ROUTE OUT -> keel; 1)`, `(ATTACK + ROUTE OUT; 3)`, `(HIGH; **routed out**)`); a cause
+# or a section title that says "routed out" in prose is not a routed row (T411b).
+_ROUTE_OUT_HEADING = re.compile(
+    r'^#{3,4}\s.*\(\s*(?:[^()]*?[+;,&]\s*)?(?:\*+\s*|an?\s+)*route[ds]?[\s-]+out\b',
+    re.IGNORECASE,
+)
 _ROUTED_STATUS = re.compile(r'^rout(?:ed|e)[\s-]+out\b|^routed\b', re.IGNORECASE)
 _NOTHING_ROUTED = re.compile(r'^[-*\s]*(?:nothing|none)\b', re.IGNORECASE)
 _TABLE_RULE = re.compile(r'^\|[\s:|-]+\|$')
