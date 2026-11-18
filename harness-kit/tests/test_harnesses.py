@@ -10,12 +10,18 @@ Contract under test:
   `home.json`, and refuses a non-empty folder with exit 64, writing nothing;
 - the rendered `cli_argv` reaches this package whatever `PYTHONPATH` says;
 - `session_env` points the home variables inside the home and the proxies at
-  the endpoint;
+  the endpoint, and exempts exactly `127.0.0.1,localhost,::1` from the proxy;
+- each driver declares its session modes: both `headless`, with the leading
+  tokens, required arguments and allow list of the driver's attributes; only
+  opencode `interactive`, with no leading token, `--standalone` required and a
+  flag table with arities;
 - `copy_home_for_canary` copies byte for byte; on opencode it swaps the
   endpoint text without parsing, so a malformed file stays malformed, and it
   raises when the text is absent;
 - `version` reads the first dotted triple from `--version`, run from an empty
-  scratch home; a missing binary gives None;
+  scratch home whose `TEMP` and `TMP` lie inside it too, and the scratch folder
+  is removed afterwards; nothing lands in the caller's temporary folder; a
+  missing binary gives None;
 - on Windows a `.cmd` or `.bat` binary is never run: opencode's own shim is
   resolved to the native binary beside it, anything else reads as missing.
 
@@ -41,7 +47,17 @@ ENDPOINT = 'http://127.0.0.1:43210'
 CANARY_ENDPOINT = 'http://127.0.0.1:43299'
 FAKE_KEY = 'stub-not-a-key'
 HOME_KEYS = ['kit_home', 'harness', 'endpoint', 'dir', 'config_file', 'shell_entry', 'shell_config']
+# The render's record of its files follows the earlier keys.
+RENDERED_KEYS = [*HOME_KEYS, 'rendered_sha256']
 HOME_VARS = ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')
+INTERACTIVE_FLAGS = {
+    '--standalone': 0,
+    '--continue': 0,
+    '-c': 0,
+    '--session': 1,
+    '-s': 1,
+    '--prompt': 1,
+}
 
 
 def _env(**extra: str) -> dict:
@@ -99,6 +115,8 @@ def test_claude_code_driver_members():
     )
     assert d.project_config_paths == ('.claude/settings.json', '.claude/settings.local.json')
     assert d.project_walk == 'work_tree'
+    assert tuple(d.modes) == ('headless',), tuple(d.modes)
+    _assert_headless(d)
 
 
 def test_opencode_driver_members():
@@ -110,6 +128,19 @@ def test_opencode_driver_members():
     assert d.allowed_session_flags == ('--standalone', '--format', '--auto', '--model')
     assert d.project_config_paths == ('opencode.json', 'opencode.jsonc', '.opencode')
     assert d.project_walk == 'root'
+    assert tuple(d.modes) == ('headless', 'interactive'), tuple(d.modes)
+    _assert_headless(d)
+    grammar = d.modes['interactive']
+    assert grammar.leading == () and grammar.required == ('--standalone',), grammar
+    assert dict(grammar.flags) == INTERACTIVE_FLAGS, grammar.flags
+
+
+def _assert_headless(d) -> None:
+    grammar = d.modes['headless']
+    assert grammar.leading == d.required_leading_tokens, grammar
+    assert grammar.required == d.required_session_args, grammar
+    assert grammar.allowed == d.allowed_session_flags, grammar
+    assert grammar.flags is None, grammar
 
 
 def test_unknown_harness_is_refused():
@@ -166,7 +197,7 @@ def test_claude_code_home_contents():
     with tempfile.TemporaryDirectory() as td:
         folder = Path(td) / 'home-cc'
         home = _render('claude-code', folder)
-        assert list(home) == HOME_KEYS, list(home)
+        assert list(home) == RENDERED_KEYS, list(home)
         assert home['kit_home'] == 1 and home['harness'] == 'claude-code'
         assert home['endpoint'] == ENDPOINT
         assert Path(home['dir']).resolve() == folder.resolve()
@@ -196,7 +227,7 @@ def test_opencode_home_contents():
     with tempfile.TemporaryDirectory() as td:
         folder = Path(td) / 'home-oc'
         home = _render('opencode', folder)
-        assert list(home) == HOME_KEYS, list(home)
+        assert list(home) == RENDERED_KEYS, list(home)
         assert home['harness'] == 'opencode'
         assert Path(home['config_file']) == folder / 'conf' / 'opencode.jsonc'
         plugin = folder / 'kit-shell' / 'opencode-plugin'
@@ -316,7 +347,7 @@ def test_session_env_isolates_the_home():
             for var in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY'):
                 assert env[var] == ENDPOINT, var
             assert 'http_proxy' not in env
-            assert env['NO_PROXY'] == '127.0.0.1,localhost'
+            assert env['NO_PROXY'] == '127.0.0.1,localhost,::1'
 
 
 def test_claude_code_session_env():
@@ -357,7 +388,7 @@ def test_claude_code_copy_is_byte_for_byte():
         assert Path(copy['dir']) == dest and copy['endpoint'] == CANARY_ENDPOINT
         assert Path(copy['config_file']) == dest / 'claude-config' / 'settings.json'
         assert Path(copy['config_file']).read_bytes() == Path(home['config_file']).read_bytes()
-        assert copy['harness'] == 'claude-code' and list(copy) == HOME_KEYS
+        assert copy['harness'] == 'claude-code' and list(copy) == RENDERED_KEYS
         env = harnesses.get('claude-code').session_env(copy, {})
         assert env['ANTHROPIC_BASE_URL'] == CANARY_ENDPOINT
         assert _inside(env['HOME'], dest)
@@ -431,6 +462,54 @@ def test_version_parses_both_printed_forms():
             assert args == '--version'
             assert Path(home).resolve() == Path(cwd).resolve(), (home, cwd)
             assert not _inside(cwd, base), cwd
+
+
+def _unpacking_binary(base: Path) -> list[str]:
+    """A binary that, like opencode's runtime, unpacks a file into TEMP even for `--version`."""
+    script = base / 'unpacking_harness.py'
+    script.write_text(
+        'import json, os, sys\n'
+        'from pathlib import Path\n'
+        'temp = Path(os.environ["TEMP"])\n'
+        '(temp / ".bun-kit-test.dll").write_bytes(b"x")\n'
+        '(temp / "opencode").mkdir(exist_ok=True)\n'
+        'seen = {k: os.environ.get(k) for k in ("TEMP", "TMP", "HOME", "USERPROFILE")}\n'
+        'Path(os.environ["FAKE_SEEN"]).write_text(json.dumps(seen), encoding="utf-8")\n'
+        'print("opencode v2.2.5")\n',
+        encoding='utf-8',
+    )
+    return [sys.executable, str(script)]
+
+
+def test_version_probe_keeps_temp_inside_its_scratch_folder():
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        caller_temp = base / 'caller-temp'
+        caller_temp.mkdir()
+        seen = base / 'seen.json'
+        env = {
+            **os.environ,
+            'KIT_HARNESS_ARGV_OPENCODE': json.dumps(_unpacking_binary(base)),
+            'FAKE_SEEN': str(seen),
+            'TEMP': str(caller_temp),
+            'TMP': str(caller_temp),
+        }
+        assert harnesses.get('opencode').version(env) == '2.2.5'
+        got = json.loads(seen.read_text(encoding='utf-8'))
+        scratch = Path(got['HOME'])
+        for var in ('TEMP', 'TMP'):
+            assert _inside(got[var], scratch), (var, got[var], scratch)
+        assert not scratch.exists(), f'the scratch folder {scratch} was left'
+        assert list(caller_temp.iterdir()) == [], list(caller_temp.iterdir())
+
+
+def test_scratch_env_moves_the_temporary_folder():
+    with tempfile.TemporaryDirectory() as td:
+        scratch = Path(td)
+        env = harnesses.scratch_env({'TEMP': '/elsewhere', 'tmp': '/elsewhere'}, scratch, ())
+        assert 'tmp' not in env
+        for var in ('TEMP', 'TMP'):
+            assert _inside(env[var], scratch), (var, env[var])
 
 
 def test_version_without_a_triple_is_none():

@@ -152,3 +152,10 @@ evidence = "Guard cell owner-acts-allow passed on Claude Code 2.1.316, 2026-11-1
 state = "tested"
 mark = "measured"
 evidence = "Guard cell series-guard passed on Claude Code 2.1.316, 2026-11-15: its session's outcome note was recorded."
+
+# Session modes beside headless, by name. The driver declares no interactive grammar, so the mode
+# is absent here.
+[modes.interactive]
+state = "absent"
+mark = "read"
+evidence = "The Claude Code driver offers no interactive mode (ADR-0012), so kit run refuses one."

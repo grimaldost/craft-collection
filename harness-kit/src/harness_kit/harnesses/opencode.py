@@ -16,11 +16,16 @@ import os
 import re
 from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 
+from harness_kit import watch
 from harness_kit.event import InvalidEventError, parse_event
 from harness_kit.harnesses import (
     FAKE_KEY,
+    HEADLESS,
+    INTERACTIVE,
     SHELLS_DIR,
+    Grammar,
     HomeError,
     check_endpoint,
     configured_argv,
@@ -308,8 +313,37 @@ class OpenCode:
     required_session_args = ('--standalone',)
     allowed_session_flags = ('--standalone', '--format', '--auto', '--model')
     project_config_paths = ('opencode.json', 'opencode.jsonc', '.opencode')
+    # The interface (no subcommand) runs through its private server: `--standalone` exactly
+    # once, and only the flags of this table; a positional, a subcommand, `--server`, `--auto`
+    # and every `--flag=value` form are refused.
+    modes = MappingProxyType(
+        {
+            HEADLESS: Grammar(
+                leading=required_leading_tokens,
+                required=required_session_args,
+                allowed=allowed_session_flags,
+            ),
+            INTERACTIVE: Grammar(
+                required=('--standalone',),
+                flags=(
+                    ('--standalone', 0),
+                    ('--continue', 0),
+                    ('-c', 0),
+                    ('--session', 1),
+                    ('-s', 1),
+                    ('--prompt', 1),
+                ),
+            ),
+        }
+    )
     # opencode's project walk has no stop before the filesystem root.
     project_walk = 'root'
+    # The files the guard is read from. opencode 2.2.5 wrote nothing under `conf/` or
+    # `kit-shell/` in an interactive or a headless session, so no name is excluded; it writes
+    # `conf/cli.json` when a setting changes in the interface, which stays watched.
+    watched_folders = ('conf', 'kit-shell')
+    watched_files = ('home.json',)
+    excluded_names: tuple[str, ...] = ()
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]:
         """The `opencode` argv; [] when missing. Its `.cmd` shim becomes the native binary."""
@@ -347,7 +381,8 @@ class OpenCode:
                 'plugins': [plugin.as_posix()],
             },
         )
-        return finish_home(self.name, folder, endpoint, config, entry, shell_config)
+        rendered = watch.hash_files(folder, self, rendered=True)
+        return finish_home(self.name, folder, endpoint, config, entry, shell_config, rendered)
 
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]:
         env = home_env(home, base)
