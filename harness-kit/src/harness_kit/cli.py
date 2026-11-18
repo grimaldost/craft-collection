@@ -100,6 +100,26 @@ def build_parser() -> argparse.ArgumentParser:
         help='folder for the live scratch homes, under a test root of KIT_POLICY',
     )
     packs.add_parser(sub)
+    relay = sub.add_parser(
+        'relay', help='the local relay that holds a provider key for one daily run, and its ledger'
+    )
+    relay_sub = relay.add_subparsers(dest='relay_command', metavar='RELAY_COMMAND', required=True)
+    serve = relay_sub.add_parser(
+        'serve',
+        help="read the key and capability as one JSON line on stdin, then forward the run's "
+        'chat requests on 127.0.0.1 within the ceilings; stop at end of stdin',
+    )
+    serve.add_argument('--config', metavar='FILE', required=True, help='the daily file')
+    serve.add_argument(
+        '--state-root', metavar='ROOT', required=True, help='state root holding relay/ledger.ndjson'
+    )
+    serve.add_argument(
+        '--run-id', metavar='ID', required=True, help='the run the requests count to'
+    )
+    summary = relay_sub.add_parser(
+        'summary', help="print the relay ledger's totals of the state root; start nothing"
+    )
+    summary.add_argument('--json', action='store_true', help='print the totals as one JSON line')
     sub.add_parser(
         'run',
         help='check a session, then start the harness: run --harness NAME --home DIR '
@@ -479,5 +499,11 @@ def main(argv: list[str] | None = None) -> int:
         from harness_kit import stubmodel
 
         return stubmodel.run(args.log, args.script, args.port)
+    if args.command == 'relay':
+        from harness_kit import relay
+
+        if args.relay_command == 'serve':
+            return relay.serve_main(args.config, args.state_root, args.run_id)
+        return relay.summary_main(args.json)
     parser.print_help()
     return 0
