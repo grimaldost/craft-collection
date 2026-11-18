@@ -8,12 +8,11 @@ tagged.
 
 ## [0.31.1] - 2026-11-17
 
-Six corrections from the 2026-11-17 triage. An installed copy notices a rebuilt feedback
+Five corrections from the 2026-11-17 triage. An installed copy notices a rebuilt feedback
 `INDEX.md` whose empty Untriaged section has no list item, an untriaged count on the line the
 index builder prints, a triage coverage audit that no longer fails a cluster heading that only
-mentions a route-out, fewer owner-acts log lines for copies out of a governed file, a
-`git config --global` read followed by `&>>` no longer denied, and three corrected sentences
-in skill text. Patch bump: corrections only, nothing added.
+mentions a route-out, and three corrected sentences in skill text (the phase briefs, the
+review-panel run notes and tool-feedback). Patch bump: corrections only, nothing added.
 
 ### Fixed
 
@@ -23,23 +22,10 @@ in skill text. Patch bump: corrections only, nothing added.
   with no list marker under the same heading, and the printed line adds `<n> untriaged`.
 - **A cluster heading is a route-out only by its disposition** (2026-11-17 triage: T411b).
   `triage_audit.py coverage` took any `###`/`####` heading mentioning "routed out" as a ROUTE
-  OUT row, so a cause written in prose failed as an undelivered route-out. A heading counts
-  now when the route-out is an item of its parenthesis: alone or first, bold or past tense
-  (`(ROUTE OUT -> keel; 1)`, `(**ROUTED OUT** -> keel)`), or after `+`, `;`, `,` or `&`
-  (`(ATTACK + ROUTE OUT; 3 reports)`, `(HIGH; ROUTE OUT -> convoy)`, `(ATTACK + a
-  route-out)`). A cause or a section title that says "routed out" elsewhere does not.
-- **The owner-acts gate's shell-write arm logs a copy only at its destination**
-  (2026-11-17 triage: T415a). `cp`, `scp`, `rsync` and `Copy-Item` of a governed file were
-  logged as writes when the file was the source. A governed source is now skipped when the
-  copy's destination is a plain path: the `-t`, `--target-directory` or `-Destination`
-  value, or the last positional once every redirection and its target are dropped (`&>>`
-  included). When the last token is a cmd switch (`copy x <file> /Y`) or a redirection kept
-  in a word (`0</dev/null`, PowerShell's `*>`), every governed path still counts. A move
-  out of a governed file, and an `rsync --remove-source-files`, still count, since they
-  remove the file. The arm stays observe-only; its log lines change. One deny decision
-  changes with it: the arguments every arm reads now drop the target of a three-character
-  redirection such as `&>>`, so `git config --global user.name &>> log`, a read, is no
-  longer denied as a write.
+  OUT row, so a cause written in prose failed as an undelivered route-out. A cluster
+  heading counts now when its disposition parenthesis names a route-out, alone or combined
+  (`(ROUTE OUT -> keel; 1)`, `(ATTACK + ROUTE OUT; 3 reports)`, `(HIGH; ROUTE OUT ->
+  convoy)`).
 - **context-handoff's phase briefs say the owner starts evaluate-skill** (2026-11-17 triage:
   T423a). The Measurement phase cited `session-workflow:evaluate-skill` as a skill the
   receiver loads; it is manual-only. The line now says the owner runs `/evaluate-skill`, and

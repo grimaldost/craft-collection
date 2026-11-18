@@ -510,12 +510,8 @@ def _program_of(tokens: list[Token]) -> str | None:
     return None if index is None else program_name(tokens[index].value)
 
 
-_DUP_REDIRECT = re.compile(r'&\d+$')  # `2>&1`: a descriptor copy, no file target
-
-
 def _args(tokens: list[Token], index: int) -> list[Token]:
-    """The argument tokens after the program, redirections and their targets dropped
-    (the target of every operator but a descriptor copy, `&>>` included: T415a)."""
+    """The argument tokens after the program, redirections and their targets dropped."""
     out: list[Token] = []
     skip_next = False
     for token in tokens[index + 1 :]:
@@ -523,7 +519,7 @@ def _args(tokens: list[Token], index: int) -> list[Token]:
             skip_next = False
             continue
         if token.op:
-            skip_next = not _DUP_REDIRECT.search(token.value)
+            skip_next = len(token.value) <= 2 and not token.value.endswith(('&1', '&2'))
             continue
         out.append(token)
     return out
@@ -724,63 +720,16 @@ def governed_target(value: str, cwd: str | None) -> str | None:
     return None
 
 
-# Copies read every path but the destination. A move is left out: moving a governed
-# file away removes it, which changes it; so is an rsync that removes its sources.
-_COPY_PROGRAMS = frozenset({'cp', 'scp', 'rsync', 'copy-item', 'copy', 'cpi'})
-_REMOVES_SOURCES = frozenset({'--remove-source-files', '--remove-sent-files'})
-# A last token that is not a plausible destination path: a cmd switch (`/Y`), a
-# redirection the tokenizer kept in a word (`0</dev/null`, PowerShell's `*>`).
-_NOT_A_DESTINATION = re.compile(r'^/-?[a-z]$|[<>]|^\*$', re.IGNORECASE)
-
-
-def _copy_sources(tokens: list[Token], index: int) -> set[int]:
-    """The ids of a copy's source arguments: every positional but the destination,
-    which is the `-t`/`--target-directory`/`-Destination` value or the last positional.
-    Empty when the copy removes its sources or the destination is not a plausible path,
-    so the arm logs every governed path it names: it is observe-only, recall first."""
-    args = _args(tokens, index)
-    if any(not t.quoted and t.value.lower() in _REMOVES_SOURCES for t in args):
-        return set()
-    positional: list[Token] = []
-    destination: Token | None = None
-    k = 0
-    while k < len(args):
-        token, low = args[k], args[k].value.lower()
-        named = not token.quoted and (
-            low in ('-t', '--target-directory')
-            or (low.startswith('-de') and 'destination'.startswith(low[1:]))
-        )
-        if named and k + 1 < len(args):
-            destination = args[k + 1]
-            k += 2
-            continue
-        if not token.quoted and low.startswith('--target-directory='):
-            destination = token
-        elif token.quoted or not token.value.startswith('-'):
-            positional.append(token)
-        k += 1
-    if destination is None and positional:
-        destination = positional.pop()
-    if destination is None or _NOT_A_DESTINATION.search(destination.value):
-        return set()
-    return {id(t) for t in positional if t is not destination}
-
-
 def _shell_write(tokens: list[Token], index: int | None, cwd: str | None) -> Act | None:
     """A shell command that names a governed file and is not a read-only form."""
     program = None if index is None else program_name(tokens[index].value)
     if program == 'sed' and not any(t.value.startswith(('-i', '--in-place')) for t in tokens):
         program = 'cat'  # sed without -i only prints
-    sources = (
-        _copy_sources(tokens, index) if index is not None and program in _COPY_PROGRAMS else set()
-    )
     after_redirect = False
     for token in tokens:
         if token.op:
             after_redirect = token.value.startswith(('>', '&>')) or '>' in token.value
             continue
-        if id(token) in sources:
-            continue  # a copy's source is read, not written (T415a)
         for m in _PATH_CANDIDATE.finditer(token.value):
             name = governed_target(m.group(0), cwd)
             if name and (after_redirect or program not in _READ_ONLY):
