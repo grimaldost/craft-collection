@@ -12,11 +12,16 @@ from pathlib import Path
 from harness_kit import __version__, checkers, facts, notes, packs, state
 from harness_kit.event import InvalidEventError, check_event, parse_event
 from harness_kit.policy import Policy, PolicyError, load_policy
-from harness_kit.verdict import CANARY_DENY_RULE, judge_bytes, unknown_verdict
+from harness_kit.verdict import CANARY_DENY_RULE, judge, judge_bytes, unknown_verdict
 
 POLICY_ENV = 'KIT_POLICY'
 EXIT_REFUSED = 64
 EXIT_INTERNAL = 70
+MAX_ENVELOPE = 16 * 1024 * 1024
+FROM_HELP = (
+    'read one envelope of the shell of harness NAME instead, which its driver translates; '
+    f'one over {MAX_ENVELOPE} bytes is invalid'
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     judge.add_argument('--policy', metavar='PATH', help=f'policy file (default: ${POLICY_ENV})')
+    judge.add_argument('--from', dest='source', metavar='NAME', help=FROM_HELP)
     note = sub.add_parser(
         'note',
         help='take one session note read from stdin; print one receipt line; exit 0',
@@ -42,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     note.add_argument('--policy', metavar='PATH', help=f'policy file (default: ${POLICY_ENV})')
+    note.add_argument('--from', dest='source', metavar='NAME', help=FROM_HELP)
     st = sub.add_parser('state', help='the state root and run identity')
     st_sub = st.add_subparsers(dest='state_command', metavar='STATE_COMMAND', required=True)
     st_sub.add_parser('path', help='print the state root')
@@ -109,7 +116,45 @@ def _valid_event(data: bytes) -> dict | None:
         return None
 
 
-def judge_and_journal(data: bytes, policy, env) -> dict:
+def read_input(source: str | None) -> bytes | None:
+    """Standard input whole; with `--from`, at most MAX_ENVELOPE bytes, None when longer."""
+    if source is None:
+        return sys.stdin.buffer.read()
+    data = sys.stdin.buffer.read(MAX_ENVELOPE + 1)
+    return data if len(data) <= MAX_ENVELOPE else None
+
+
+def _driver(source: str, method: str, error: type[ValueError]):
+    """The bound `method` of the driver of `source`; `error` when there is none."""
+    from harness_kit import harnesses
+
+    try:
+        driver = harnesses.get(source)
+    except KeyError as exc:
+        raise error(str(exc.args[0])) from None
+    found = getattr(driver, method, None)
+    if found is None:
+        raise error(f'harness {source!a} sends no envelope')
+    return driver, found
+
+
+def from_envelope(data: bytes | None, source: str) -> tuple[dict, tuple[str, str] | None]:
+    """(neutral event, the driver's refused tool or None) of one envelope of `source`.
+
+    The envelope goes whole to the driver of `source`; this module names no key
+    of it and no tool. InvalidEventError for an envelope that is too long,
+    unreadable or refused by the driver, a name no driver has, or a driver that
+    translates no envelope.
+    """
+    if data is None:
+        raise InvalidEventError(f'envelope is longer than {MAX_ENVELOPE} bytes')
+    driver, translate = _driver(source, 'translate_event', InvalidEventError)
+    envelope = parse_event(data)
+    event = translate(envelope)
+    return event, driver.refused_tool(envelope)
+
+
+def judge_and_journal(data: bytes | None, policy, env, source: str | None = None) -> dict:
     """Judge one event under the run identity the environment names, and journal it.
 
     A journal that cannot be written, a refused state root among its forms,
@@ -117,7 +162,9 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
     in `KIT_CANARY_NONCE`) a refusal by `canary.deny` of a launched event is
     recorded by the refused marker in the run's canary folder. A valid,
     launched event with a root key hands its recording checkers their session
-    facts, read without any lock; a judgement writes no facts.
+    facts, read without any lock; a judgement writes no facts. With `source`,
+    `data` is an envelope of that harness's shell, judged as the neutral event
+    its driver translates it into, with the driver's refused tool.
     """
     try:
         root = state.state_root(env)
@@ -130,13 +177,27 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
     run_id = run_id if launched else None
     nonce = state.canary_nonce(env)
 
-    event = _valid_event(data) if root is not None else None
+    doc, refused = None, None
+    if source is None:
+        event = _valid_event(data) if root is not None else None
+    else:
+        try:
+            doc, refused = from_envelope(data, source)
+            event = check_event(doc) if root is not None else None
+        except InvalidEventError as exc:
+            doc, event = exc, None
     reader = None
     if launched and event is not None:
         key = facts.root_key(event)
         if key is not None:
             reader = facts.judge_reader(root, run_id, key)
-    verdict = judge_bytes(data, policy, launched, nonce, facts=reader)
+    if source is None:
+        verdict = judge_bytes(data, policy, launched, nonce, facts=reader)
+    elif isinstance(doc, InvalidEventError) and not isinstance(policy, PolicyError):
+        verdict = unknown_verdict(f'invalid event: {doc}', policy.sha256)
+    else:
+        doc = None if isinstance(doc, InvalidEventError) else doc
+        verdict = judge(doc, policy, launched, nonce, facts=reader, refused=refused)
     if root is not None:
         now = datetime.now(timezone.utc)
         record = state.journal_record(verdict, event, run_id, launched, now)
@@ -158,7 +219,7 @@ def judge_and_journal(data: bytes, policy, env) -> dict:
     return verdict
 
 
-def run_judge(policy_path: str | None) -> int:
+def run_judge(policy_path: str | None, source: str | None = None) -> int:
     """Print exactly one verdict line; exit 0 whenever it was printed.
 
     A policy that declares checkers puts the output sink in place before any
@@ -172,7 +233,7 @@ def run_judge(policy_path: str | None) -> int:
         policy = _load(policy_path or os.environ.get(POLICY_ENV))
         if isinstance(policy, Policy) and policy.checkers:
             verdict_fd = checkers.install_sink()
-        verdict = judge_and_journal(sys.stdin.buffer.read(), policy, os.environ)
+        verdict = judge_and_journal(read_input(source), policy, os.environ, source)
     except Exception as exc:  # a verdict is owed whatever failed; unknown denies
         verdict = unknown_verdict(f'judge failed: {type(exc).__name__}')
     line = json.dumps(verdict, ensure_ascii=True) + '\n'
@@ -198,7 +259,13 @@ def _receipt(outcome: str, reason: str | None, recorders: list | None = None) ->
     }
 
 
-def note_and_journal(data: bytes, policy_path: str | None, env, sink: list | None = None) -> dict:
+def note_and_journal(
+    data: bytes | None,
+    policy_path: str | None,
+    env,
+    sink: list | None = None,
+    source: str | None = None,
+) -> dict:
     """Take one note under the run identity the environment names, journal it, return the receipt.
 
     In order: an invalid note is `invalid`; a refused state root is `failed` and
@@ -210,10 +277,12 @@ def note_and_journal(data: bytes, policy_path: str | None, env, sink: list | Non
     to `sink` when one is given, each recorder runs (`notes.record_note`) and
     the note is `recorded`. The journal line is appended after the last
     recorder, with no facts lock held; one that cannot be written turns the
-    receipt into `failed`.
+    receipt into `failed`. With `source`, `data` is an envelope of that
+    harness's shell, taken as the note its driver translates it into.
     """
     try:
-        note = notes.check_note(notes.parse_note(data))
+        doc = notes.parse_note(data) if source is None else note_from_envelope(data, source)
+        note = notes.check_note(doc)
         invalid = None
     except notes.InvalidNoteError as exc:
         note, invalid = None, str(exc)
@@ -242,6 +311,14 @@ def note_and_journal(data: bytes, policy_path: str | None, env, sink: list | Non
     return _receipt(outcome, invalid if note is None else reason, results)
 
 
+def note_from_envelope(data: bytes | None, source: str) -> dict:
+    """The note one envelope of `source` stands for; InvalidNoteError as `from_envelope` refuses."""
+    if data is None:
+        raise notes.InvalidNoteError(f'envelope is longer than {MAX_ENVELOPE} bytes')
+    _, translate = _driver(source, 'translate_note', notes.InvalidNoteError)
+    return translate(notes.parse_note(data))
+
+
 def _drop_or_record(note: dict, policy, root, run_id: str, sink, results: list):
     """(outcome, reason) of a valid, launched note; the recorders' results go to `results`."""
     if isinstance(policy, PolicyError):
@@ -259,7 +336,7 @@ def _drop_or_record(note: dict, policy, root, run_id: str, sink, results: list):
     return 'recorded', None
 
 
-def run_note(policy_path: str | None) -> int:
+def run_note(policy_path: str | None, source: str | None = None) -> int:
     """Print exactly one receipt line; exit 0 whatever the note and whatever failed.
 
     Once a recorder is about to load, the output sink is in place and the
@@ -271,7 +348,7 @@ def run_note(policy_path: str | None) -> int:
     sink: list[int] = []
     try:
         receipt = note_and_journal(
-            sys.stdin.buffer.read(), policy_path or os.environ.get(POLICY_ENV), os.environ, sink
+            read_input(source), policy_path or os.environ.get(POLICY_ENV), os.environ, sink, source
         )
     except Exception as exc:  # a receipt is owed whatever failed; a note never decides
         receipt = _receipt('failed', f'note failed: {type(exc).__name__}')
@@ -350,9 +427,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == 'judge':
-        return run_judge(args.policy)
+        return run_judge(args.policy, args.source)
     if args.command == 'note':
-        return run_note(args.policy)
+        return run_note(args.policy, args.source)
     if args.command == 'state':
         return run_state(args)
     if args.command == 'home':

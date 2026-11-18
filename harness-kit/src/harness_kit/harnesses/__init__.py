@@ -5,7 +5,9 @@ test home (the shell, its `shell_config.json`, the harness configuration and
 `home.json`), builds the session environment over that home, copies the home
 for the canary, and names the arguments the launcher checks. Given the kinds
 of note a policy records, a render also writes `note_config.json` beside
-`shell_config.json`: how a shell's note mode starts `kit note`.
+`shell_config.json`: how a shell's note mode starts `kit note`. A shell that
+sends its harness's own event objects (an envelope) gets `--from NAME` after
+`judge` and `note`, so the CLI hands each envelope to that harness's driver.
 
 `binary_argv` returns an empty list when the binary is missing; a caller never
 runs an empty argv. On Windows a `.cmd` or `.bat` file is never run, from the
@@ -173,19 +175,27 @@ def home_env(home: dict, base: Mapping[str, str]) -> dict[str, str]:
     return env
 
 
-def cli_argv() -> list[str]:
-    """The kit CLI as the shells start it: this interpreter, isolated, this package first on its path."""
+def _kit_argv(command: str, source: str | None) -> list[str]:
     parent = str(Path(harness_kit.__file__).resolve().parent.parent)
     bootstrap = (
         f'import sys; sys.path.insert(0, {parent!a}); '
         'from harness_kit.cli import main; sys.exit(main())'
     )
-    return [sys.executable, '-I', '-c', bootstrap, 'judge']
+    tail = [] if source is None else ['--from', source]
+    return [sys.executable, '-I', '-c', bootstrap, command, *tail]
 
 
-def note_argv() -> list[str]:
-    """The kit CLI as a shell's note mode starts it: `cli_argv` with `note` last."""
-    return [*cli_argv()[:-1], 'note']
+def cli_argv(source: str | None = None) -> list[str]:
+    """The kit CLI as the shells start it: this interpreter, isolated, this package first on its path.
+
+    With `source`, `judge --from SOURCE`: the shell sends envelopes of that harness.
+    """
+    return _kit_argv('judge', source)
+
+
+def note_argv(source: str | None = None) -> list[str]:
+    """The kit CLI as a shell's note mode starts it: `cli_argv` with `note` in place of `judge`."""
+    return _kit_argv('note', source)
 
 
 def recorded_kinds(checkers) -> tuple[str, ...]:
@@ -194,13 +204,13 @@ def recorded_kinds(checkers) -> tuple[str, ...]:
     return tuple(kind for kind in NOTE_KINDS if kind in found)
 
 
-def write_note_config(dest_dir: Path, records: tuple[str, ...]) -> None:
+def write_note_config(dest_dir: Path, records: tuple[str, ...], source: str | None = None) -> None:
     """Write `note_config.json` into `dest_dir` when `records` is not empty."""
     if not records:
         return
     value = {
         'kit_note_config': 1,
-        'note_argv': note_argv(),
+        'note_argv': note_argv(source),
         'timeout_s': SHELL_TIMEOUT_S,
         'records': [kind for kind in NOTE_KINDS if kind in records],
     }
@@ -230,8 +240,13 @@ def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, ensure_ascii=True) + '\n', encoding='utf-8')
 
 
-def materialize_shell(source: Path, dest_dir: Path, pinned_version: str) -> tuple[Path, Path]:
-    """Copy one shell file into `dest_dir` beside its `shell_config.json`."""
+def materialize_shell(
+    source: Path, dest_dir: Path, pinned_version: str, envelope_of: str | None = None
+) -> tuple[Path, Path]:
+    """Copy one shell file into `dest_dir` beside its `shell_config.json`.
+
+    `envelope_of` names the harness whose envelopes the shell sends, if it sends any.
+    """
     dest_dir.mkdir(parents=True, exist_ok=True)
     entry = dest_dir / source.name
     shutil.copyfile(source, entry)
@@ -240,7 +255,7 @@ def materialize_shell(source: Path, dest_dir: Path, pinned_version: str) -> tupl
         config,
         {
             'kit_shell_config': 1,
-            'cli_argv': cli_argv(),
+            'cli_argv': cli_argv(envelope_of),
             'timeout_s': SHELL_TIMEOUT_S,
             'harness_version': pinned_version,
         },

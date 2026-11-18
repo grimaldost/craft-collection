@@ -20,7 +20,10 @@ Ahead of the policy's rules and after the policy loads, an event of a harness
 other than Claude Code that was not launched is denied by `launcher.required`.
 Then, when the caller passes the canary's nonce, a shell act whose command
 names `deny-<nonce>.marker` is denied by `canary.deny`, and one that names
-`allow-<nonce>.marker` is allowed by `canary.allow`.
+`allow-<nonce>.marker` is allowed by `canary.allow`. Then an event whose tool
+its harness's driver refuses by name (the caller passes the driver's answer) is
+denied by `<harness>.refused-tool` with the reason the driver gives, whatever
+the policy's rules say.
 
 A checker that records notes (policy version 3) is called with its session
 facts as a third argument: what the caller's `facts` function gives for its
@@ -64,6 +67,8 @@ CANARY_DENY_RULE = 'canary.deny'
 CANARY_ALLOW_RULE = 'canary.allow'
 CANARY_DENY_REASON = 'kit canary: this call is refused on purpose'
 CANARY_ALLOW_REASON = 'kit canary: this call is allowed on purpose'
+
+REFUSED_TOOL_SUFFIX = '.refused-tool'
 
 
 def make_verdict(
@@ -178,6 +183,7 @@ def judge(
     nonce: str | None = None,
     *,
     facts: Callable[[str], dict | None] | None = None,
+    refused: tuple[str, str] | None = None,
 ) -> dict:
     """Judge one event (parsed JSON) against a loaded policy or the error that loading raised.
 
@@ -186,6 +192,7 @@ def judge(
     `nonce` is the canary's, when the CLI judges inside a canary run.
     `facts` maps a recording checker's id to its session facts or None; without
     it every recording checker receives None.
+    `refused` is the driver's (tool, reason) for a tool it refuses by name.
     """
     if isinstance(policy, PolicyError):
         return unknown_verdict(f'unreadable policy: {policy}', policy.sha256)
@@ -206,6 +213,14 @@ def judge(
             governed=True,
             rule=canary,
             reason=CANARY_DENY_REASON if deny else CANARY_ALLOW_REASON,
+            policy_sha256=sha,
+        )
+    if refused is not None:
+        return make_verdict(
+            'deny',
+            governed=True,
+            rule=ev['harness']['name'] + REFUSED_TOOL_SUFFIX,
+            reason=refused[1],
             policy_sha256=sha,
         )
 
