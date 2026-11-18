@@ -247,5 +247,39 @@ def test_paths_fold_case_when_the_policy_was_loaded_for_windows():
     _expect(judge(write_event(['/w/SECRET.TXT']), policy), 'allow', False, None)
 
 
+REFUSED = ('some_tool', 'refused on purpose')
+
+
+def _other(name: str = 'opencode') -> dict:
+    return event(
+        **{
+            'harness.name': name,
+            'act.kind': 'other',
+            'act.command': None,
+            'observation.command': 'not_applicable',
+        }
+    )
+
+
+def test_a_refused_tool_is_denied_ahead_of_every_policy_rule():
+    allow_other = _policy(_rule('allow-other', effect='allow', kinds='kinds = ["other"]'))
+    v = judge(_other(), allow_other, True, refused=REFUSED)
+    _expect(v, 'deny', True, 'opencode.refused-tool')
+    assert v['reason'] == 'refused on purpose' and v['policy_sha256'] == SHA, v
+    _expect(judge(_other(), allow_other, True), 'allow', True, 'allow-other')
+
+
+def test_a_refused_tool_comes_after_the_launcher_rule():
+    v = judge(_other(), _policy(), False, refused=REFUSED)
+    _expect(v, 'deny', True, 'launcher.required')
+
+
+def test_a_refused_tool_on_an_invalid_event_or_policy_stays_unknown():
+    v = judge({'kit_event': 1}, _policy(), True, refused=REFUSED)
+    _expect(v, 'unknown', True, None)
+    v = judge(_other(), PolicyError('broken', 'c' * 64), True, refused=REFUSED)
+    _expect(v, 'unknown', True, None, sha='c' * 64)
+
+
 if __name__ == '__main__':
     run_module(globals(), 'three-state verdict')

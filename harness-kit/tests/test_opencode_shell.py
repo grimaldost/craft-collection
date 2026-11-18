@@ -3,14 +3,18 @@
 
 Contract under test:
 - the module exports id `harness-kit` and registers one `execute.before` hook;
-- the neutral event it sends to the CLI: tool mapping, paths, parent and origin from the session
-  lookup in its four outcomes (no parent, a parent, a throw, a lookup that never resolves);
+- it sends the CLI one envelope with exactly the keys `kit_raw`, `hook`, `run_id`, `harness`,
+  `session`, `origin`, `observation`, `location` and `payload` (the event's JSON text, whole);
+- the neutral event the driver translates that envelope into: tool mapping, paths, parent and
+  origin from the session lookup in its four outcomes (no parent, a parent, a throw, a lookup that
+  never resolves);
 - effect allow returns, effect deny throws the reason;
 - each failure class throws a reason that starts `kit could not judge:`;
 - a hung CLI settles within 4.5 seconds and its grandchild never writes its late marker (Windows);
 - the plugin settles only once the killer has exited (a slow killer is waited for, up to a second);
 - the file names no bare kill command, has an error handler on the killer, imports only Node
-  built-ins and holds at most 240 non-blank lines.
+  built-ins, holds at most 210 non-blank lines (the ceiling of every shell is 240) and names no
+  tool but `shell`.
 
 Stdlib-runnable: `python test_opencode_shell.py`.
 """
@@ -29,6 +33,22 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / 'src'))
+
+from harness_kit.harnesses import get  # noqa: E402
+
+OPENCODE = get('opencode')
+ENVELOPE_KEYS = [
+    'kit_raw',
+    'hook',
+    'run_id',
+    'harness',
+    'session',
+    'origin',
+    'observation',
+    'location',
+    'payload',
+]
 SHELL_SRC = HERE.parent / 'src' / 'harness_kit' / 'shells' / 'opencode' / 'index.js'
 DRIVER = HERE / 'opencode_driver.mjs'
 STANDIN = HERE / 'opencode_standin_cli.py'
@@ -96,8 +116,14 @@ class Scene:
         assert proc.returncode == 0, f'driver failed: {err}'
         return json.loads(out.strip().splitlines()[-1])
 
+    def envelope(self) -> dict:
+        envelope = json.loads(self.record.read_text(encoding='utf-8'))
+        assert list(envelope) == ENVELOPE_KEYS, envelope
+        return envelope
+
     def sent(self) -> dict:
-        return json.loads(self.record.read_text(encoding='utf-8'))
+        """The neutral event the driver translates the envelope into."""
+        return OPENCODE.translate_event(self.envelope())
 
 
 def shell_event(command: str = 'echo hi') -> dict:
@@ -129,6 +155,33 @@ def test_registers_one_execute_before_hook_under_the_shell_id():
     out, _ = judged(shell_event())
     assert out['id'] == 'harness-kit', out
     assert out['hooks'] == ['execute.before'], out
+
+
+def test_the_envelope_carries_the_hook_the_place_and_the_whole_payload():
+    ev = shell_event('echo caf\xe9 ' + 'x' * 70000)
+    scene = Scene('allow')
+    try:
+        out = scene.run(ev)
+        assert out['threw'] is False, out
+        raw = scene.record.read_bytes()
+        assert raw.isascii(), raw[:200]
+        envelope = scene.envelope()
+    finally:
+        scene.close()
+    assert envelope['kit_raw'] == 1 and envelope['hook'] == 'execute.before', envelope
+    assert envelope['run_id'] is None and envelope['location'] == '/w', envelope
+    assert envelope['harness'] == {'name': 'opencode', 'version': '2.2.5'}, envelope
+    assert envelope['session'] == {'id': 's1', 'parent_id': None, 'root_id': 's1'}, envelope
+    assert envelope['origin'] == 'unknown', envelope
+    place = {
+        'session': 'observed',
+        'parent': 'observed',
+        'root': 'observed',
+        'origin': 'unavailable',
+    }
+    assert envelope['observation'] == place, envelope
+    assert isinstance(envelope['payload'], str) and json.loads(envelope['payload']) == ev
+    assert envelope['payload'] == json.dumps(ev, separators=(',', ':'), ensure_ascii=False)
 
 
 def test_shell_event_without_a_parent_is_exactly_the_neutral_event():
@@ -349,14 +402,22 @@ def test_source_has_no_bare_kill_command_and_an_error_handler_on_the_killer():
     assert '.on("error"' in src, 'the killer has no error handler'
 
 
-def test_source_imports_only_node_built_ins_and_stays_within_240_lines():
+def test_source_imports_only_node_built_ins_and_stays_within_210_lines():
     src = _source()
     specs = re.findall(r'(?:from|import)\s*\(?\s*["\']([^"\']+)["\']', src)
     assert specs and all(s.startswith('node:') for s in specs), specs
     assert 'harness_kit' not in src
     assert 'shell: true' not in src
     lines = [ln for ln in src.splitlines() if ln.strip()]
-    assert len(lines) <= 240, len(lines)
+    assert len(lines) <= 240, len(lines)  # the ceiling of every shell
+    assert len(lines) <= 210, len(lines)  # this shell's own bound
+
+
+def test_source_names_no_tool_but_shell():
+    src = _source()
+    for tool in ('write', 'edit', 'patch', 'opencode_worktree_remove', 'execute', 'read', 'grep'):
+        assert not re.search(r'["\'`]' + tool + r'["\'`]', src), tool
+    assert re.search(r'["\']shell["\']', src)
 
 
 def test_source_is_ascii():

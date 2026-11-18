@@ -22,13 +22,13 @@ With `KIT_CANARY_NONCE` it plays the canary's harness. It asks the endpoint in
   pid to `OUT.pid` and sleeps N seconds before it exits.
 The guard of a Claude Code home is the hook its `settings.json` registers; the
 guard of an opencode home is the kit CLI that the plugin folder's
-`shell_config.json` names. A call is `echo WORD > FILE`, run as a file write.
+`shell_config.json` names, sent the envelope the opencode shell sends for a
+shell call. A call is `echo WORD > FILE`, run as a file write.
 Then it exits CODE.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -93,26 +93,17 @@ def _opencode_guard(command: str) -> bool | None:
     except (OSError, ValueError, KeyError, IndexError, TypeError):
         return None
     observed = dict.fromkeys(('parent', 'root', 'origin'), 'unavailable')
+    payload = {'tool': 'shell', 'sessionID': 'fake-session', 'input': {'command': command}}
     event = {
-        'kit_event': 1,
+        'kit_raw': 1,
+        'hook': 'execute.before',
         'run_id': os.environ.get('KIT_RUN_ID') or None,
         'harness': {'name': 'opencode', 'version': config['harness_version']},
         'session': {'id': 'fake-session', 'parent_id': None, 'root_id': None},
         'origin': 'unknown',
-        'observation': {
-            'session': 'observed',
-            **observed,
-            'command': 'observed',
-            'paths': 'not_applicable',
-        },
-        'act': {
-            'kind': 'shell',
-            'command': command,
-            'argv': None,
-            'paths': [],
-            'cwd': os.getcwd(),
-            'payload_sha256': hashlib.sha256(command.encode('utf-8')).hexdigest(),
-        },
+        'observation': {'session': 'observed', **observed},
+        'location': os.getcwd(),
+        'payload': json.dumps(payload),
     }
     proc = subprocess.run(  # noqa: S603 - argv from the home, no shell
         argv, input=json.dumps(event).encode('ascii'), capture_output=True, timeout=30

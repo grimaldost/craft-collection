@@ -221,7 +221,8 @@ def test_shell_config_names_the_pin_and_the_cli():
             assert config['kit_shell_config'] == 1 and config['timeout_s'] == 3
             assert config['harness_version'] == pin
             argv = config['cli_argv']
-            assert argv[1:3] == ['-I', '-c'] and argv[-1] == 'judge' and len(argv) == 5, argv
+            tail = ['judge', '--from', 'opencode'] if name == 'opencode' else ['judge']
+            assert argv[1:3] == ['-I', '-c'] and argv[4:] == tail, argv
             assert Path(argv[0]).is_absolute()
 
 
