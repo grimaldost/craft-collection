@@ -58,9 +58,9 @@ from harness_kit import daily, state
 WINDOWS = os.name == 'nt'
 HARNESS_ROUTE = '/v1/chat/completions'
 MAX_BODY = 32 * 1024 * 1024
-# A larger body is read and dropped up to this size before its refusal, within DRAIN_READ_S a read.
+# A larger body is read and dropped up to this size after its refusal, within DRAIN_READ_S a read.
 MAX_DRAIN = 4 * MAX_BODY
-DRAIN_READ_S = 30.0
+DRAIN_READ_S = 5.0
 MAX_LINE = 4096
 MAX_REQUEST_LINE = 65536
 KEY_RE = re.compile(r'[\x21-\x7e]{1,512}')
@@ -304,7 +304,10 @@ class Relay:
 
 
 def settlement(usage: object, model: daily.Model, reserved: float) -> tuple[float, str]:
-    """(amount, source): the larger of the reported cost and the priced usage, else the reservation."""
+    """(amount, source): the larger of the reported cost and the priced usage, else the reservation.
+
+    The usage is priced from whichever of its two token counts are readable.
+    """
     usage = usage if isinstance(usage, dict) else {}
     cost = usage.get('cost')
     reported = float(cost) if _amount(cost) else None
@@ -313,10 +316,10 @@ def settlement(usage: object, model: daily.Model, reserved: float) -> tuple[floa
         _tokens(usage.get('completion_tokens')),
     )
     priced = None
-    if prompt is not None and completion is not None:
-        priced = (
-            prompt * model.input_usd_per_mtok / 1e6 + completion * model.output_usd_per_mtok / 1e6
-        )
+    if prompt is not None or completion is not None:
+        priced = (prompt or 0) * model.input_usd_per_mtok / 1e6 + (
+            completion or 0
+        ) * model.output_usd_per_mtok / 1e6
     if reported is None and priced is None:
         return reserved, 'reservation'
     if priced is None or (reported is not None and reported >= priced):
@@ -404,6 +407,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         started = time.monotonic()
         self.started = False
         self.body_read = False
+        self.unread = 0
         # A request the library rejects before its headers keeps no earlier request's headers.
         self.headers = None  # type: ignore[assignment]
         self.usage: dict | None = None
@@ -469,8 +473,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def refuse(self, status: int, reason: str) -> None:
         self.record['decision'], self.record['reason'] = 'refused', reason
-        self.drain_body()
         self.reply_error(status, reason)
+        self.drain_body()
 
     def key_found(self) -> None:
         self.server.relay.stop('key_in_request')
@@ -524,14 +528,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.refuse(403, 'server_tool')
         if model is None:
             return self.refuse(403, 'unpriced_model')
-        body = self.rewrite(doc, model)
+        body, limit = self.rewrite(doc, model)
         if relay.holds_key(body):
             return self.key_found()
-        self.forward_reserved(body, model, len(data))
+        self.forward_reserved(body, model, limit)
 
     def read_body(self) -> tuple[bytes, str | None]:
         """The request body, or a reason. A body over MAX_BODY is read and dropped up to
-        MAX_DRAIN, so a client that sends it whole before reading still gets the answer."""
+        MAX_DRAIN after the refusal, so a client that sends it whole before reading still gets
+        the answer."""
         self.body_read = True
         coding = (self.headers.get('Transfer-Encoding') or '').strip().lower()
         if coding:
@@ -567,8 +572,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if count < 0:
             return b'', 'bad_body'
         if count > MAX_BODY:
-            if count <= MAX_DRAIN:
-                self._discard(count)
+            # Left unread: the refusal answers first, then drops it (`drain_body`).
+            self.unread = count if count <= MAX_DRAIN else 0
             return b'', 'too_large'
         raw = self.rfile.read(count)
         return (raw, None) if len(raw) == count else (b'', 'bad_body')
@@ -581,18 +586,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
             count -= len(piece)
 
     def drain_body(self) -> None:
-        """Read and drop a body no step read, before a refusal closes the connection.
+        """Read and drop, after a refusal answered, a body no step read, before the connection
+        closes.
 
         A connection closed with unread data is reset, and a client that sends its whole
-        body before it reads would lose the answer.
+        body before it reads would lose the answer; a client that sends no body has its
+        answer already, since the refusal is written first.
         """
-        if getattr(self, 'body_read', True) or self.headers is None:
+        if self.headers is None:
             return
         try:
             self.connection.settimeout(DRAIN_READ_S)
-            self.read_body()
+            if not self.body_read:
+                self.read_body()
+            self._discard(self.unread)
         except (OSError, ValueError):
             pass
+        self.unread = 0
 
     def decode_body(self, raw: bytes) -> tuple[bytes, str | None]:
         coding = (self.headers.get('Content-Encoding') or '').strip().lower()
@@ -605,29 +615,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return b'', 'bad_body' if len(raw) <= MAX_BODY else 'too_large'
         return data, None
 
-    def rewrite(self, doc: dict, model: daily.Model) -> bytes:
+    def rewrite(self, doc: dict, model: daily.Model) -> tuple[bytes, int]:
+        """(the body to forward, its output limit once capped at the model's)."""
         s = self.server.relay.settings
-        limit, named = model.max_output_tokens, False
+        cap, limits = model.max_output_tokens, []
         for name in ('max_tokens', 'max_completion_tokens'):
             if name in doc:
-                doc[name] = _cap_tokens(doc[name], limit)
-                named = True
-        if not named:
-            doc['max_tokens'] = limit
+                doc[name] = _cap_tokens(doc[name], cap)
+                limits.append(doc[name])
+        if not limits:
+            doc['max_tokens'] = cap
+            limits.append(cap)
         if s.provider is not None:
             doc['provider'] = json.loads(json.dumps(s.provider))
         if s.usage_include:
             doc['usage'] = {'include': True}
-        return json.dumps(doc, separators=(',', ':'), ensure_ascii=True).encode('ascii')
+        body = json.dumps(doc, separators=(',', ':'), ensure_ascii=True).encode('ascii')
+        return body, max(limits)
 
-    def forward_reserved(self, body: bytes, model: daily.Model, received: int) -> None:
-        """Reserve the worst cost, forward `body`, settle. The reservation prices the `received`
-        bytes of the body as the harness sent it (decoded) and the model's output limit."""
+    def forward_reserved(self, body: bytes, model: daily.Model, limit: int) -> None:
+        """Reserve the worst cost, forward `body`, settle. The reservation prices the bytes of
+        the body as forwarded and its output limit."""
         relay, record = self.server.relay, self.record
-        usd = (
-            received * model.input_usd_per_mtok / 1e6
-            + model.max_output_tokens * model.output_usd_per_mtok / 1e6
-        )
+        usd = len(body) * model.input_usd_per_mtok / 1e6 + limit * model.output_usd_per_mtok / 1e6
         rid, reason = relay.reserve(model, usd)
         if reason is not None:
             return self.refuse(403, reason)

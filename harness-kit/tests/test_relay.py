@@ -165,6 +165,7 @@ class UpstreamHandler(http.server.BaseHTTPRequestHandler):
                 'path': self.path,
                 'headers': [(k.lower(), v) for k, v in self.headers.items()],
                 'body': json.loads(body),
+                'size': len(body),
                 'ledger': [json.loads(x) for x in lines if x.strip()],
             }
         )
@@ -462,9 +463,8 @@ def test_a_forwarded_request_reaches_the_upstream_rewritten_after_its_reservatio
         [reserve] = seen['ledger']
         assert set(reserve) == LEDGER_KEYS and reserve['kind'] == 'reserve', reserve
         assert reserve['run_id'] == RUN and reserve['model'] == MODEL, reserve
-        # The reservation prices the body's bytes as the relay received them.
-        nbytes = len(json.dumps(chat_body()).encode())
-        assert abs(reserve['usd'] - reservation(nbytes)) < 1e-12, (reserve, nbytes)
+        # The reservation prices the body's bytes as forwarded and its capped output limit.
+        assert abs(reserve['usd'] - reservation(seen['size'])) < 1e-12, (reserve, seen['size'])
     reserve, settle = ledger_lines(child.root)
     assert settle['kind'] == 'settle' and settle['id'] == reserve['id'], settle
     assert set(settle) == LEDGER_KEYS, settle
@@ -487,6 +487,19 @@ def test_the_output_limit_is_set_when_absent_and_kept_when_smaller():
     assert third['max_tokens'] == 10, third
 
 
+def test_the_reservation_prices_the_forwarded_body_and_its_output_limit():
+    with session() as (child, upstream):
+        post(child.port, chat_body(max_tokens=10))
+        post(child.port, chat_body(max_tokens=..., max_completion_tokens=20))
+    for seen, limit in zip(upstream.seen, (10, 20), strict=True):
+        [reserve] = [x for x in seen['ledger'] if x['kind'] == 'reserve'][-1:]
+        want = seen['size'] * 2.0 / 1e6 + limit * 8.0 / 1e6
+        assert abs(reserve['usd'] - want) < 1e-12, (reserve, seen['size'], limit)
+    assert [x['reserved_usd'] for x in log_lines(child)] == [
+        x['usd'] for x in ledger_lines(child.root) if x['kind'] == 'reserve'
+    ]
+
+
 def test_a_streamed_answer_passes_byte_for_byte_and_settles_from_its_usage():
     chunks = sse({'prompt_tokens': 1000, 'completion_tokens': 1000, 'cost': 0.0001})
     with session(stream(chunks)) as (child, _upstream):
@@ -505,6 +518,9 @@ def test_settlement_takes_the_larger_of_reported_and_priced_else_the_reservation
         ({'prompt_tokens': 100, 'completion_tokens': 50, 'cost': 0.5}, 'reported', 0.5),
         ({'cost': 0.25}, 'reported', 0.25),
         ({'prompt_tokens': 1000, 'completion_tokens': 0}, 'priced', 0.002),
+        # Each readable count is priced on its own.
+        ({'prompt_tokens': 1000}, 'priced', 0.002),
+        ({'prompt_tokens': 'n/a', 'completion_tokens': 250, 'cost': 0.001}, 'priced', 0.002),
         ({}, 'reservation', None),
         (None, 'reservation', None),
     )
@@ -582,6 +598,22 @@ def test_each_refusal_answers_its_status_and_reason_without_the_upstream():
     assert len(refused) == len(cases) + 2, len(refused)
     assert all(x['reserved_usd'] is None and x['settled_usd'] is None for x in refused), refused
     assert {x['model'] for x in refused} == {None, MODEL}, refused
+
+
+def test_a_refusal_answers_before_a_body_the_client_has_not_sent():
+    head = (
+        'POST %s HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer %s\r\n'
+        'Content-Type: application/json\r\nContent-Length: %d\r\n\r\n'
+    )
+    with session() as (child, upstream):
+        for path, size, status in ((PATH, 32 * 1024 * 1024 + 1, 413), ('/v1/models', 100, 404)):
+            with socket.create_connection(('127.0.0.1', child.port), timeout=10) as s:
+                s.sendall((head % (path, CAP, size)).encode())
+                started = time.monotonic()
+                got = s.recv(65536)
+                assert got.startswith(b'HTTP/1.1 %d' % status), got
+                assert time.monotonic() - started < 3, path
+        assert not upstream.seen
 
 
 def test_proxy_requests_are_refused_naming_the_host():
