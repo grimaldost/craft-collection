@@ -825,6 +825,89 @@ def test_a_leading_redirect_before_a_governed_act_is_denied_on_a_go_on():
         ], box.log()
 
 
+def test_a_descriptor_close_glued_to_the_next_word_ends_at_the_dash():
+    """Bash's lexer ends `>&-` and `<&-` at the dash: `>&-git` is `>&-` then the word `git`.
+
+    `scan` closed the operator at the dash only when the word ended there, so it read
+    `-git` as a file target and no deny arm ran (2026-11-17 verification, third round).
+    """
+    f = _bash_families
+    # before the program
+    assert f('>&-git config --global user.name foo') == [(4, 'user.name')]
+    assert f('2>&-setx FOO bar') == [(3, 'FOO')]
+    assert f('<&-claude plugin install x@y') == [(2, 'x@y')]
+    assert f('10>&-git config --global user.name foo') == [(4, 'user.name')]
+    assert f('{fd}>&-setx FOO bar') == [(3, 'FOO')]
+    # after a prefix word, an assignment and a separator
+    assert f('env >&-git config --global user.name foo') == [(4, 'user.name')]
+    assert f('env 2>&-setx FOO bar') == [(3, 'FOO')]
+    assert f('VAR=x >&-git config --global user.name foo') == [(4, 'user.name')]
+    assert f('VAR=x <&-claude plugin install x@y') == [(2, 'x@y')]
+    assert f('true; >&-setx FOO bar') == [(3, 'FOO')]
+    assert f('true; 2>&-claude plugin install x@y') == [(2, 'x@y')]
+    # between the program and its arguments
+    assert f('git >&-config --global user.name foo') == [(4, 'user.name')]
+    assert f('claude >&-plugin install x@y') == [(2, 'x@y')]
+    assert f('claude plugin >&-install x@y') == [(2, 'x@y')]
+    assert f('git config >&---global user.name foo') == [(4, 'user.name')]
+    # a digit after `>&` still makes a file target unless the word ends: bash writes
+    # to `1-git` or `2git` and runs `config`, which is no act
+    assert f('>&1-git config --global user.name foo') == []
+    assert f('>&2git config --global user.name foo') == []
+    assert f('2>&1-git config --global user.name foo') == []
+    # ordinary closes stay allowed
+    assert f('exec 3>&-') == []
+    assert f('ls >&-') == []
+
+
+def test_a_redirection_between_an_option_and_its_value_does_not_spend_the_value():
+    """Bash removes a redirection wherever it stands; the option still takes the next word.
+
+    `_program_index` let the option-value counter consume the operator, so the operator's
+    target read as the program (2026-11-17 verification, third round). The forms with
+    `<<<` and `env -C >f .` were denied at 065f5d6 and allowed at 3231ee4: a regression.
+    """
+    f = _bash_families
+    assert f('env -u >f X git config --global user.name foo') == [(4, 'user.name')]
+    assert f('exec -a >f n setx FOO bar') == [(3, 'FOO')]
+    assert f('timeout -s >f KILL 5 claude plugin install x@y') == [(2, 'x@y')]
+    assert f('nice -n 2>&1 5 git config --global user.name foo') == [(4, 'user.name')]
+    assert f('env --unset >f X setx FOO bar') == [(3, 'FOO')]
+    assert f('stdbuf -o >f L git config --global user.name foo') == [(4, 'user.name')]
+    assert f('xargs -I >f {} git config --global user.name foo') == [(4, 'user.name')]
+    assert f('sudo -u >f root git config --global user.name foo') == [(4, 'user.name')]
+    assert f('if env -u >f X git config --global user.name foo; then :; fi') == [(4, 'user.name')]
+    assert f('true; env -u >f X git config --global user.name foo') == [(4, 'user.name')]
+    # a redirection target spends no operand either: the duration is still the next word
+    assert f('timeout >f 5 setx FOO bar') == [(3, 'FOO')]
+    # the regression from 3231ee4
+    assert f('env -C >f . git config --global user.name foo') == [(4, 'user.name')]
+    assert f('env -u <<< x X git config --global user.name foo') == [(4, 'user.name')]
+    assert f('exec -a <<< x n setx FOO bar') == [(3, 'FOO')]
+    assert f('sudo -u <<< x root claude plugin install x@y') == [(2, 'x@y')]
+    # ordinary commands stay allowed
+    assert f('env -u >f X uv run pytest') == []
+    assert f('timeout -s >f KILL 5 uv run pytest') == []
+
+
+def test_the_third_round_bypasses_are_denied_on_a_go_on():
+    tmp, box = _sandbox()
+    with tmp:
+        box.prompt(GO_ON)
+        _denied(box.bash('>&-git config --global user.name foo'))
+        _denied(box.bash('claude plugin >&-install x@y'))
+        _denied(box.bash('env -u >f X setx FOO bar'))
+        _denied(box.bash('sudo -u <<< x root claude plugin install x@y'))
+        _allowed_silently(box.bash('>&1-git config --global user.name foo'))
+        _allowed_silently(box.bash('timeout -s >f KILL 5 uv run pytest'))
+        assert [(e['family'], e['decision']) for e in box.log()] == [
+            (4, 'deny'),
+            (2, 'deny'),
+            (3, 'deny'),
+            (2, 'deny'),
+        ], box.log()
+
+
 def test_authorizing_sentence_rule():
     edit = gate.Act(family=1, arm='edit', key='CLAUDE.md', summary='Edit CLAUDE.md')
     plugin = gate.Act(family=2, arm='shell', key='x@y', summary='claude plugin update x@y')
@@ -887,6 +970,9 @@ if __name__ == '__main__':
     test_cmd_written_with_the_git_bash_double_slash_is_a_wrapper()
     test_a_user_environment_variable_set_through_the_registry_or_start_process()
     test_the_verification_bypasses_are_denied_on_a_go_on()
+    test_a_descriptor_close_glued_to_the_next_word_ends_at_the_dash()
+    test_a_redirection_between_an_option_and_its_value_does_not_spend_the_value()
+    test_the_third_round_bypasses_are_denied_on_a_go_on()
     test_authorizing_sentence_rule()
     test_the_deny_example_names_the_denied_file()
     test_the_deny_example_names_the_denied_variable()

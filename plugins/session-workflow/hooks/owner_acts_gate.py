@@ -572,11 +572,15 @@ def scan(text: str, shell: str) -> Scan:
                     stop += 1
                 if text[stop - 1] == '&':
                     # `>&2`, `<&0`, `>&-` copy or close a descriptor only when the operand
-                    # ends the word; `>&2f` sends both streams to the file `2f`.
+                    # ends the word; `>&2f` sends both streams to the file `2f`. In bash a
+                    # `-` right after the `&` always ends the operator: its lexer reads
+                    # `>&-git` as `>&-` then the word `git`.
                     end = stop
                     while end < n and text[end].isdigit():
                         end += 1
                     if end == stop and end < n and text[end] == '-':
+                        if posix:
+                            stop = end + 1
                         end += 1
                     if end > stop and (end == n or text[end] in _WORD_END):
                         stop = end
@@ -604,16 +608,22 @@ def _takes_target(op: Token) -> bool:
 
 def _program_index(tokens: list[Token]) -> int | None:
     """The index of the program word: assignments, prefix words with their options and
-    operands, and every redirection target before it skipped."""
+    operands, and every redirection target before it skipped. A redirection and its target
+    spend neither an option's value nor an operand: bash removes them wherever they stand,
+    so in `env -u >f X git` the `-u` still takes `X`."""
     skip = 0
+    target = False
     value_opts: frozenset[str] = frozenset()
     operands = 0
     for index, token in enumerate(tokens):
-        if skip:
-            skip -= 1
+        if target:
+            target = False
             continue
         if token.op:
-            skip = 1 if _takes_target(token) else 0
+            target = _takes_target(token)
+            continue
+        if skip:
+            skip -= 1
             continue
         if _ASSIGNMENT.match(token.value):
             continue  # quoted or not: `VAR="a b" git ...` runs git

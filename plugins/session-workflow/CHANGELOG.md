@@ -66,7 +66,13 @@ tool-feedback). Patch bump: corrections only, nothing added.
   redirection's target before and after the program (a descriptor copy or close takes
   none), and `test_owner_acts_gate.py` pins every form above as a deny, with ordinary
   commands using the same forms (`cat <<< x`, `timeout 5 uv run pytest`,
-  `Get-ChildItem *> out.txt`, `reg query HKCU\Environment`) still allowed.
+  `Get-ChildItem *> out.txt`, `reg query HKCU\Environment`) still allowed. A third round
+  closed two more forms: a descriptor close glued to the next word (`>&-git config ...`,
+  `claude plugin >&-install x@y`) now ends at the dash, as bash's lexer ends it, while
+  `>&1-git` and `>&2git` stay file targets; and a redirection between a prefix word's option
+  and its value (`env -u >f X git ...`, `sudo -u <<< x root ...`, `env -C >f . ...`; the
+  last two were denied before this item's first version) no longer spends that value or the
+  timeout's duration.
 
 ## [0.31.0] - 2026-11-01
 
