@@ -616,6 +616,53 @@ def test_a_refusal_answers_before_a_body_the_client_has_not_sent():
         assert not upstream.seen
 
 
+def whole_answer(s: socket.socket) -> bytes:
+    """One answer read from `s` up to the end of its Content-Length body, the socket kept open."""
+    got = b''
+    while b'\r\n\r\n' not in got:
+        part = s.recv(65536)
+        assert part, got
+        got += part
+    head, _, body = got.partition(b'\r\n\r\n')
+    length = next(
+        int(line.split(b':', 1)[1])
+        for line in head.split(b'\r\n')
+        if line.lower().startswith(b'content-length:')
+    )
+    while len(body) < length:
+        part = s.recv(65536)
+        assert part, got
+        body += part
+    return head + b'\r\n\r\n' + body
+
+
+def test_a_refusal_is_logged_by_the_time_its_answer_arrives():
+    head = (
+        f'POST {PATH} HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {CAP}\r\n'
+        f'Content-Type: application/json\r\nContent-Length: {32 * 1024 * 1024 + 1}\r\n\r\n'
+    )
+
+    def too_large(lines: list[dict]) -> list[dict]:
+        return [
+            x
+            for x in lines
+            if (x['decision'], x['reason'], x['status']) == ('refused', 'too_large', 413)
+        ]
+
+    with session() as (child, upstream):
+        with socket.create_connection(('127.0.0.1', child.port), timeout=10) as s:
+            s.sendall(head.encode())
+            answer = whole_answer(s)
+            assert answer.startswith(b'HTTP/1.1 413'), answer
+            # The socket is still open and no body byte was sent.
+            lines = log_lines(child)
+            assert len(too_large(lines)) == 1, lines
+        assert len(too_large(log_lines(child))) == 1, log_lines(child)
+        assert not upstream.seen
+    lines = log_lines(child)
+    assert len(too_large(lines)) == 1 and len(lines) == 1, lines
+
+
 def test_proxy_requests_are_refused_naming_the_host():
     with session() as (child, upstream):
         got = raw(child.port, b'CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n')

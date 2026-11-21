@@ -386,6 +386,11 @@ def proxy_host(command: str, target: str) -> str:
     return _ascii(host.strip('[]').lower())[:255]
 
 
+def _error_body(status: int, reason: str) -> bytes:
+    body = {'error': {'message': f'kit relay: {reason}', 'type': 'kit_relay', 'code': status}}
+    return json.dumps(body).encode('ascii')
+
+
 def _cap_tokens(value: object, limit: int) -> int:
     ok = isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= limit
     return value if ok else limit
@@ -404,8 +409,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.close_connection = True
             return
         relay = self.server.relay
-        started = time.monotonic()
+        self.t0 = time.monotonic()
         self.started = False
+        self.logged = False
         self.body_read = False
         self.unread = 0
         # A request the library rejects before its headers keeps no earlier request's headers.
@@ -440,10 +446,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.close_connection = True
             raised = False
         finally:
-            self.record['duration_ms'] = int((time.monotonic() - started) * 1000)
             try:
-                if raised or self.record['status'] is not None:
-                    relay.log(self.record)
+                if not self.logged and (raised or self.record['status'] is not None):
+                    self.log_record()
             finally:
                 with relay.idle:
                     relay.busy -= 1
@@ -455,9 +460,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.key_found()
         self.refuse(400, 'bad_request')
 
+    def log_record(self) -> None:
+        """Append this request's line to the run's log; the request is logged once."""
+        self.record['duration_ms'] = int((time.monotonic() - self.t0) * 1000)
+        self.server.relay.log(self.record)
+        self.logged = True
+
     def reply_error(self, status: int, reason: str, extra=(), close: bool = True) -> None:
-        body = {'error': {'message': f'kit relay: {reason}', 'type': 'kit_relay', 'code': status}}
-        data = json.dumps(body).encode('ascii')
+        data = _error_body(status, reason)
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(data)))
@@ -472,7 +482,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def refuse(self, status: int, reason: str) -> None:
-        self.record['decision'], self.record['reason'] = 'refused', reason
+        """Log the refusal, then answer it, then drop the body no step read.
+
+        The line is in the log before the answer leaves, so a client holding the answer finds it.
+        """
+        record = self.record
+        record['decision'], record['reason'] = 'refused', reason
+        record['status'], record['resp_bytes'] = status, len(_error_body(status, reason))
+        self.log_record()
         self.reply_error(status, reason)
         self.drain_body()
 
