@@ -72,12 +72,22 @@ def build_parser() -> argparse.ArgumentParser:
     home = sub.add_parser('home', help='test homes a harness runs in')
     home_sub = home.add_subparsers(dest='home_command', metavar='HOME_COMMAND', required=True)
     render = home_sub.add_parser(
-        'render', help='render a test home into an absent or empty folder; print home.json'
+        'render',
+        help='render a test home, or an opencode daily home, into an absent or empty folder; '
+        'print home.json',
     )
     render.add_argument('--harness', metavar='NAME', required=True, help='claude-code or opencode')
     render.add_argument('--dir', metavar='DIR', required=True, help='absent or empty folder')
     render.add_argument(
-        '--endpoint', metavar='URL', required=True, help='model endpoint, http://127.0.0.1:PORT'
+        '--endpoint',
+        metavar='URL',
+        help='model endpoint of a test home, http://127.0.0.1:PORT; refused with --daily',
+    )
+    render.add_argument(
+        '--daily',
+        metavar='FILE',
+        help='render an opencode daily home for this daily file: its provider is the relay '
+        "kit run starts on the file's port",
     )
     render.add_argument(
         '--policy',
@@ -450,21 +460,50 @@ def run_home(args: argparse.Namespace) -> int:
 
     With `--policy`, the policy must load, else the render exits 64 and writes
     nothing; the kinds of note its checkers record go to `note_config.json`.
+    With `--daily FILE` the opencode driver renders a daily home for that daily
+    file; `--endpoint` is then refused, and so is `--daily` for a driver that
+    renders no daily home, a daily file that does not read and a refused state
+    root, each with exit 64 and nothing written. Without either, the endpoint
+    is missing (exit 2, as the parser exits).
     """
-    from harness_kit import harnesses
+    from harness_kit import daily, harnesses
 
     try:
         driver = harnesses.get(args.harness)
     except KeyError as exc:
         return _fail(EXIT_REFUSED, str(exc.args[0]))
+    if args.daily is None and args.endpoint is None:
+        return _fail(2, 'home not rendered: pass --endpoint, or --daily for an opencode daily home')
+    render_daily = getattr(driver, 'render_daily_home', None)
+    if args.daily is not None and render_daily is None:
+        return _fail(
+            EXIT_REFUSED,
+            f'home not rendered: --daily is refused for {driver.name}, '
+            'whose driver renders no daily home',
+        )
+    if args.daily is not None and args.endpoint is not None:
+        return _fail(
+            EXIT_REFUSED,
+            "home not rendered: --endpoint is refused with --daily; the daily file's port "
+            'gives the endpoint',
+        )
     records: tuple[str, ...] = ()
     if args.policy is not None:
         try:
             records = harnesses.recorded_kinds(load_policy(args.policy).checkers)
         except PolicyError as exc:
             return _fail(EXIT_REFUSED, f'home not rendered: policy unreadable: {exc}')
+    found = None
+    if args.daily is not None:
+        try:
+            found = daily.load_daily(args.daily, state.state_root())
+        except (daily.DailyError, state.StateRootError) as exc:
+            return _fail(EXIT_REFUSED, f'home not rendered: {exc}')
     try:
-        home = driver.render_home(Path(args.dir), args.endpoint, records)
+        if found is not None:
+            home = render_daily(Path(args.dir), found, records)
+        else:
+            home = driver.render_home(Path(args.dir), args.endpoint, records)
     except harnesses.HomeError as exc:
         return _fail(EXIT_REFUSED, f'home not rendered: {exc}')
     except OSError as exc:

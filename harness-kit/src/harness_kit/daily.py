@@ -17,10 +17,19 @@ folder, where every test keeps its state root, so a daily file built in a test n
 the network. `key_env` must be a name the launcher's secret-name rule matches, and never
 `PATH`, a name of the launcher's allow list or a name the launcher or a driver sets in a
 session, so preflight's copy of kit's environment never passes the key's variable into one.
+
+`load_daily(path, state_root)` reads the daily file whole: exactly `daily = 1`, the `[relay]`
+table and a `[git]` table with exactly `name` and `email`, non-empty strings without a line
+break. It gives the file's absolute path, the SHA-256 of its bytes, its tables as parsed (`relay`
+and `git`, which hold no key, since `key_env` names a variable), the relay settings and the
+identity. `changed_keys` names the dotted keys whose value differs between two parsed files, and
+`gitconfig_text` writes a daily home's `gitconfig`: the identity and an empty
+`credential.helper`.
 """
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 import re
@@ -314,3 +323,110 @@ def load_relay(path: Path | str, state_root: Path | str) -> RelaySettings:
     if 'relay' not in doc:
         raise DailyError('daily file has no [relay] table')
     return check_relay(doc['relay'], state_root)
+
+
+# ---- the daily file as a whole
+
+DAILY_KEYS = ('daily', 'relay', 'git')
+GIT_KEYS = ('name', 'email')
+# A gitconfig value written without quotes: no space at either end, no quote, backslash, `#` or `;`.
+PLAIN_GIT_VALUE = re.compile(r'[^\s"\\#;]([^"\\#;]*[^\s"\\#;])?')
+
+
+@dataclass(frozen=True)
+class Daily:
+    """A daily file read whole: its path, the SHA-256 of its bytes, its tables, its settings."""
+
+    path: Path
+    sha256: str
+    settings: dict
+    relay: RelaySettings
+    git_name: str
+    git_email: str
+
+    @property
+    def endpoint(self) -> str:
+        """The endpoint a daily home's harness reaches: the relay on 127.0.0.1."""
+        return f'http://127.0.0.1:{self.relay.listen_port}'
+
+
+def _identity(value: object, name: str) -> str:
+    text = _text(value, name)
+    # Any character str.splitlines() breaks a line at is a line break.
+    if len(f'.{text}.'.splitlines()) != 1:
+        raise DailyError(f'{name} holds a line break')
+    return text
+
+
+def check_daily(doc: object, state_root: Path | str) -> tuple[RelaySettings, str, str]:
+    """(relay settings, git name, git email) of a parsed daily file; DailyError naming the key."""
+    top = _keys(doc, 'the daily file', DAILY_KEYS)
+    if type(top['daily']) is not int or top['daily'] != 1:
+        raise DailyError('daily is not 1')
+    git = _keys(top['git'], 'git', GIT_KEYS)
+    name = _identity(git['name'], 'git.name')
+    email = _identity(git['email'], 'git.email')
+    return check_relay(top['relay'], state_root), name, email
+
+
+def load_daily(path: Path | str, state_root: Path | str) -> Daily:
+    """The daily file at `path`, read and checked whole."""
+    absolute = Path(os.path.abspath(str(path)))
+    try:
+        data = absolute.read_bytes()
+    except OSError as exc:
+        raise DailyError(
+            f'daily file {_ascii(str(absolute))} not read: {type(exc).__name__}'
+        ) from None
+    try:
+        doc = tomllib.loads(data.decode('utf-8'))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise DailyError(f'daily file is not TOML: {_ascii(str(exc))}') from None
+    relay, name, email = check_daily(doc, state_root)
+    return Daily(
+        path=absolute,
+        sha256=hashlib.sha256(data).hexdigest(),
+        settings={'relay': doc['relay'], 'git': doc['git']},
+        relay=relay,
+        git_name=name,
+        git_email=email,
+    )
+
+
+def changed_keys(old: object, new: object, prefix: str = '') -> list[str]:
+    """The dotted keys whose value differs between two parsed documents, sorted.
+
+    A key present on one side only differs. A list of tables is compared table by table
+    (`relay.model[1].id`) when both sides hold as many; any other list is one value.
+    """
+    if isinstance(old, dict) and isinstance(new, dict):
+        found: list[str] = []
+        for key in sorted(set(old) | set(new), key=str):
+            name = f'{prefix}.{key}' if prefix else str(key)
+            if key not in old or key not in new:
+                found.append(name)
+            else:
+                found += changed_keys(old[key], new[key], name)
+        return sorted(found)
+    tables = isinstance(old, list) and isinstance(new, list) and len(old) == len(new)
+    if tables and all(isinstance(x, dict) for x in [*old, *new]):
+        found = []
+        for i, (a, b) in enumerate(zip(old, new, strict=True)):
+            found += changed_keys(a, b, f'{prefix}[{i}]')
+        return sorted(found)
+    same = type(old) is type(new) or {type(old), type(new)} <= {int, float}
+    return [] if same and old == new else [prefix]
+
+
+def _git_value(text: str) -> str:
+    if PLAIN_GIT_VALUE.fullmatch(text):
+        return text
+    escaped = text.replace('\\', '\\\\').replace('"', '\\"').replace('\t', '\\t')
+    return f'"{escaped}"'
+
+
+def gitconfig_text(name: str, email: str) -> str:
+    """A daily home's `gitconfig`: the identity and an empty `credential.helper`."""
+    return (
+        f'[user]\nname = {_git_value(name)}\nemail = {_git_value(email)}\n[credential]\nhelper =\n'
+    )

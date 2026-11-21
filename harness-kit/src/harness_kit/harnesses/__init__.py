@@ -9,6 +9,11 @@ of note a policy records, a render also writes `note_config.json` beside
 sends its harness's own event objects (an envelope) gets `--from NAME` after
 `judge` and `note`, so the CLI hands each envelope to that harness's driver.
 
+A home is a test home or a daily home (`home.json`'s `kind`; a home without it
+is a test home). A daily home's provider is the relay `kit run` starts, which
+the session reaches with the capability in `KIT_RELAY_CAPABILITY`; its model,
+and the canary's, is the home's `canary_model`.
+
 `binary_argv` returns an empty list when the binary is missing; a caller never
 runs an empty argv. On Windows a `.cmd` or `.bat` file is never run, from the
 `KIT_HARNESS_ARGV_*` variable or from `PATH`, because its `%*` passes a prompt
@@ -44,6 +49,10 @@ VERSION_RE = re.compile(r'\d+\.\d+\.\d+')
 ENDPOINT_RE = re.compile(r'http://(127\.0\.0\.1|localhost):[0-9]{1,5}')
 BATCH_SUFFIXES = ('.cmd', '.bat')
 HOME_KEYS = ('kit_home', 'harness', 'endpoint', 'dir', 'config_file', 'shell_entry', 'shell_config')
+TEST_HOME, DAILY_HOME = 'test', 'daily'
+HOME_KINDS = (TEST_HOME, DAILY_HOME)
+# The variable that carries a daily session's capability to the relay; it is no provider key.
+RELAY_CAPABILITY_ENV = 'KIT_RELAY_CAPABILITY'
 SHELLS_DIR = Path(__file__).resolve().parent.parent / 'shells'
 NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW
 
@@ -91,8 +100,13 @@ class Driver(Protocol):
     def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict: ...
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]: ...
     def copy_home_for_canary(self, home: dict, dest: Path, canary_endpoint: str) -> dict: ...
-    def canary_argv(self, prompt: str) -> list[str]: ...
+    def canary_argv(self, prompt: str, home: dict | None = None) -> list[str]: ...
     def canary_step(self, command: str) -> dict: ...
+
+
+def home_kind(home: Mapping) -> str:
+    """The home's kind as `home.json` gives it; a home without `kind` is a test home."""
+    return home.get('kind', TEST_HOME)
 
 
 def names() -> tuple[str, ...]:
@@ -315,8 +329,12 @@ def finish_home(
     entry: Path,
     shell_config: Path,
     rendered: dict[str, str] | None = None,
+    extra: Mapping[str, object] | None = None,
 ) -> dict:
-    """Write `home.json` and return it; `rendered` is the render's record of its files."""
+    """Write `home.json` and return it; `rendered` is the render's record of its files.
+
+    `extra` holds the keys that follow the record, in order (a home's kind and canary model).
+    """
     home = dict(
         zip(
             HOME_KEYS,
@@ -326,6 +344,7 @@ def finish_home(
     )
     if rendered is not None:
         home[RENDERED_KEY] = dict(rendered)
+    home.update(extra or {})
     write_json(folder / 'home.json', home)
     return home
 

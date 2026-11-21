@@ -450,6 +450,44 @@ def _alive(pid: int) -> bool:
     return code.value == 259  # STILL_ACTIVE
 
 
+def test_the_canary_model_is_the_homes_canary_model():
+    from harness_kit import canary
+
+    base = scratch()
+    try:
+        driver = harnesses.get('opencode')
+        home = driver.render_home(base / 'home', 'http://127.0.0.1:9')
+        seen = []
+
+        def fake_run(argv, env, work, folder, timeout_s):
+            seen.append(argv)
+            return False
+
+        saved = canary.run_harness
+        canary.run_harness = fake_run
+        try:
+            for model in ('stub/stub-model', 'relay/vendor/model-a'):
+                home['canary_model'] = model
+                run_dir = base / 'runs' / model.replace('/', '-')
+                (base / 'work').mkdir(exist_ok=True)
+                canary.run_canary(
+                    driver,
+                    home,
+                    ['fake-harness'],
+                    run_dir=run_dir,
+                    workdir=base / 'work',
+                    project_config=[],
+                    make_env=lambda copy, work: dict(os.environ),
+                )
+                assert seen[-1][0] == 'fake-harness', seen[-1]
+                assert seen[-1][1:] == driver.canary_argv(canary.PROMPT, home), seen[-1]
+                assert seen[-1][-3:-1] == ['--model', model], seen[-1]
+        finally:
+            canary.run_harness = saved
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
 def test_canary_deadline_is_sixty_seconds_by_default():
     import inspect
 
