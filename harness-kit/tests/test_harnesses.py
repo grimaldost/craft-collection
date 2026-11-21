@@ -15,9 +15,11 @@ Contract under test:
   tokens, required arguments and allow list of the driver's attributes; only
   opencode `interactive`, with no leading token, `--standalone` required and a
   flag table with arities;
-- an opencode test home's `home.json` ends with `kind` `test` and `canary_model`
-  `stub/stub-model`, and the canary's model is the home's `canary_model` (a test home's
-  when no home is given); `gitconfig` is among opencode's watched files;
+- an opencode test home's `home.json` holds `kind` `test` and `canary_model`
+  `stub/stub-model` (stated keys and values, not a closed set: later homes gain
+  keys), and the canary copy keeps the home's keys; the canary's model is the
+  home's `canary_model` (a test home's when no home is given); `gitconfig` is
+  among opencode's watched files;
 - `copy_home_for_canary` copies byte for byte on Claude Code; on opencode it copies
   only the watched files, with empty `xdg/` and `home/` folders, and swaps the
   endpoint text without parsing, so a malformed file stays malformed, and it
@@ -53,8 +55,6 @@ FAKE_KEY = 'stub-not-a-key'
 HOME_KEYS = ['kit_home', 'harness', 'endpoint', 'dir', 'config_file', 'shell_entry', 'shell_config']
 # The render's record of its files follows the earlier keys.
 RENDERED_KEYS = [*HOME_KEYS, 'rendered_sha256']
-# An opencode home names its kind and its canary's model after the record.
-OPENCODE_KEYS = [*RENDERED_KEYS, 'kind', 'canary_model']
 HOME_VARS = ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')
 INTERACTIVE_FLAGS = {
     '--standalone': 0,
@@ -237,7 +237,8 @@ def test_opencode_home_contents():
     with tempfile.TemporaryDirectory() as td:
         folder = Path(td) / 'home-oc'
         home = _render('opencode', folder)
-        assert list(home) == OPENCODE_KEYS, list(home)
+        assert list(home)[: len(HOME_KEYS)] == HOME_KEYS, list(home)
+        assert 'rendered_sha256' in home, list(home)
         assert home['kind'] == 'test' and home['canary_model'] == 'stub/stub-model', home
         assert home['harness'] == 'opencode'
         assert Path(home['config_file']) == folder / 'conf' / 'opencode.jsonc'
@@ -246,7 +247,6 @@ def test_opencode_home_contents():
         assert Path(home['shell_config']) == plugin / 'shell_config.json'
         cfg = json.loads(Path(home['config_file']).read_text(encoding='utf-8'))
         assert cfg['update'] == 'disable' and cfg['model'] == 'stub/stub-model'
-        assert list(cfg) == ['update', 'model', 'providers', 'plugins'], list(cfg)
         assert [Path(p) for p in cfg['plugins']] == [plugin], cfg['plugins']
         stub = cfg['providers']['stub']
         assert stub['settings']['baseURL'] == ENDPOINT + '/v1', stub
@@ -452,7 +452,11 @@ def test_opencode_copy_holds_only_the_watched_files():
         assert (dest / 'gitconfig').read_bytes() == planted['gitconfig']
         assert (dest / 'home.json').read_bytes() == (source / 'home.json').read_bytes()
         assert copy['endpoint'] == CANARY_ENDPOINT and Path(copy['dir']) == dest
-        assert list(copy) == OPENCODE_KEYS, list(copy)
+        moved = ('dir', 'config_file', 'endpoint')
+        assert list(copy) == list(home), list(copy)
+        kept = {k: v for k, v in copy.items() if k not in moved}
+        assert kept == {k: v for k, v in home.items() if k not in moved}, copy
+        assert copy['kind'] == 'test' and copy['canary_model'] == 'stub/stub-model', copy
 
 
 def test_opencode_copy_without_the_endpoint_text_raises():
