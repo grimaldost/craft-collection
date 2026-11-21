@@ -85,6 +85,7 @@ Python 3.11 or later, no dependencies.
 | `kit run --harness NAME --home DIR --workdir DIR --policy FILE -- HARNESS_ARGS...` | Check the session, run the presence canary, then start the harness and return its exit code. |
 | `kit doctor [--json] [--live --live-root DIR]` | Report what was tested, the runs and the sessions that were not launched. |
 | `kit policy build --base FILE --pack DIR [--pack DIR ...] --out FILE [--force]` | Write a version 2 policy from a base policy and rule packs, or a version 3 policy when a checker records notes, with `<out>.packs.json` beside it; a refused input exits 64 and writes nothing. |
+| `kit relay serve --config FILE --state-root ROOT --run-id ID`, `kit relay summary [--json]` | Serve one daily run's chat requests on 127.0.0.1 with the provider key and the run's capability read from the first line of stdin, forwarding a request only after its worst cost is reserved within the run, day and month ceilings of the daily file's `[relay]` table in `relay/ledger.ndjson` under the state root; print that ledger's totals. |
 
 In this slice `kit run` accepts only a home rendered by `kit home render`, and
 only a headless session (`claude -p`, `opencode run`): the canary ran nothing
