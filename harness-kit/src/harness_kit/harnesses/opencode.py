@@ -12,6 +12,14 @@ starts for the session on the daily file's port, which the session reaches with 
 capability. Its `gitconfig` holds the daily file's identity and joins the watched files.
 The canary's copy of any home holds only the watched files, with empty `xdg/` and `home/`
 folders, so a home's history is never copied.
+
+Every home's configuration carries `policies` that load no plugin but the kit's, no MCP
+server and no provider or integration but the home's own, then a `tool.use` deny for each
+tool that runs code or moves the session outside the tools the driver translates; its
+`permissions` end with a switch that turns each of those tools off, and the image tool's
+configuration key is off. The session's file watcher is off, so a configuration write does
+not reload the running process. `system_config_dir()` names opencode's system configuration
+folder, which `kit run` refuses and protects.
 """
 
 from __future__ import annotations
@@ -119,6 +127,51 @@ REFUSED_TOOLS = {
         'which kit judges'
     ),
 }
+
+# Tools that run code or move the session outside the tools the driver translates, which every
+# home switches off, in this order.
+SWITCHED_OFF = (
+    'execute',
+    'opencode_worktree_create',
+    'opencode_session_move',
+    'experimental_image_generate',
+)
+WATCHER_OFF = ('OPENCODE_DISABLE_FILEWATCHER', 'OPENCODE_FILEWATCHER_DISABLE')
+SYSTEM_FOLDER_POSIX = '/etc/opencode'
+
+
+def _statement(action: str, resource: str, effect: str) -> dict:
+    return {'action': action, 'resource': resource, 'effect': effect}
+
+
+def rendered_policies(kit: str, provider: str) -> list[dict]:
+    """The `policies` of a home whose kit plugin is `kit` and whose provider is `provider`."""
+    return [
+        _statement('plugin.use', '*', 'deny'),
+        _statement('plugin.use', kit, 'allow'),
+        _statement('mcp.use', '*', 'deny'),
+        _statement('provider.use', '*', 'deny'),
+        _statement('provider.use', provider, 'allow'),
+        _statement('integration.connect', '*', 'deny'),
+        _statement('integration.use', '*', 'deny'),
+        _statement('integration.use', provider, 'allow'),
+        *(_statement('tool.use', f'{tool}:*', 'deny') for tool in SWITCHED_OFF),
+    ]
+
+
+def switches() -> list[dict]:
+    """The `permissions` rules that turn each switched-off tool off; they end `permissions`."""
+    return [_statement(tool, '*', 'deny') for tool in SWITCHED_OFF]
+
+
+def system_config_dir() -> Path:
+    """opencode's system configuration folder: ProgramData, as the operating system gives it,
+    plus `opencode` on Windows; `/etc/opencode` elsewhere."""
+    if os.name != 'nt':
+        return Path(SYSTEM_FOLDER_POSIX)
+    from harness_kit.launcher import windows_pins
+
+    return Path(windows_pins()['PROGRAMDATA']) / 'opencode'
 
 
 def ecma_trim(text: str) -> str:
@@ -357,6 +410,13 @@ class OpenCode:
     watched_folders = ('conf', 'kit-shell')
     watched_files = ('home.json', GITCONFIG)
     excluded_names: tuple[str, ...] = ()
+    # The home's configuration and shell folders, which kit protects from the session's tools,
+    # and the folder whose files the check during the run also reads. A `.agents` root feeds
+    # only its `skills` folder, so it is no project-config name: in the working folder it is
+    # protected, not refused.
+    protected_folders = ('conf', 'kit-shell', 'xdg/config')
+    run_watched_folders = ('xdg/config',)
+    protected_workdir_names = ('.agents',)
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]:
         """The `opencode` argv; [] when missing. Its `.cmd` shim becomes the native binary."""
@@ -380,7 +440,7 @@ class OpenCode:
         }
         settings = {'update': 'disable', 'model': MODEL, 'providers': {'stub': stub}}
         extra = {'kind': TEST_HOME, 'canary_model': MODEL}
-        return self._render(home, endpoint, records, settings, extra)
+        return self._render(home, endpoint, records, settings, extra, 'stub')
 
     def render_daily_home(self, home: Path, found, records: tuple[str, ...] = ()) -> dict:
         """A daily home for the daily file `found` (`daily.Daily`): its provider is the relay."""
@@ -410,9 +470,9 @@ class OpenCode:
             'canary_model': model,
         }
         gitconfig = gitconfig_text(found.git_name, found.git_email)
-        return self._render(home, endpoint, records, settings, extra, gitconfig)
+        return self._render(home, endpoint, records, settings, extra, RELAY_PROVIDER, gitconfig)
 
-    def _render(self, home, endpoint, records, settings, extra, gitconfig=None) -> dict:
+    def _render(self, home, endpoint, records, settings, extra, provider, gitconfig=None) -> dict:
         folder = prepare_dir(home)
         plugin = folder / 'kit-shell' / 'opencode-plugin'
         source = SHELLS_DIR / 'opencode' / 'index.js'
@@ -420,7 +480,14 @@ class OpenCode:
         write_note_config(shell_config.parent, records, self.name)
         (folder / 'xdg').mkdir()
         config = folder / 'conf' / 'opencode.jsonc'
-        write_json(config, {**settings, 'plugins': [plugin.as_posix()]})
+        kit = plugin.as_posix()
+        governed = {
+            'plugins': [kit],
+            'policies': rendered_policies(kit, provider),
+            'permissions': switches(),
+            'experimental': {'image_generate': False},
+        }
+        write_json(config, {**settings, **governed})
         if gitconfig is not None:
             (folder / GITCONFIG).write_bytes(gitconfig.encode('utf-8'))
         rendered = watch.hash_files(folder, self, rendered=True)
@@ -446,10 +513,16 @@ class OpenCode:
             'XDG_DATA_HOME': str(xdg / 'data'),
             'XDG_STATE_HOME': str(xdg / 'state'),
             'XDG_CACHE_HOME': str(xdg / 'cache'),
+            **dict.fromkeys(WATCHER_OFF, '1'),
         }
         for key, value in values.items():
             set_var(env, key, value)
         return env
+
+    def system_config_dir(self) -> Path:
+        """opencode's system configuration folder; kit run refuses it, protects it and reads
+        its presence during a run."""
+        return system_config_dir()
 
     def copy_home_for_canary(self, home: dict, dest: Path, canary_endpoint: str) -> dict:
         """Copy the home's watched files, with empty `xdg/` and `home/` folders, then swap the

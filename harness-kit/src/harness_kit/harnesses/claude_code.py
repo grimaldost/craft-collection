@@ -71,6 +71,10 @@ class ClaudeCode:
     watched_folders = ('kit-shell',)
     watched_files = ('claude-config/settings.json', 'home.json')
     excluded_names: tuple[str, ...] = ()
+    # The home's configuration and shell folders, which kit protects from the session's tools.
+    protected_folders = ('claude-config', 'kit-shell')
+    run_watched_folders: tuple[str, ...] = ()
+    protected_workdir_names: tuple[str, ...] = ()
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]:
         """The `claude` argv; [] when missing. A `.cmd` or `.bat` is missing, never run."""

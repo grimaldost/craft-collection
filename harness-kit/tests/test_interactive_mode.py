@@ -50,7 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 from harness_kit import harnesses, launcher, watch
 from kit_fixtures import SRC, run_module
-from test_launcher import OPENCODE_ARGS, PINNED, Case, git, kit, scratch
+from test_launcher import ENDPOINT, OPENCODE_ARGS, PINNED, Case, git, kit, scratch
 
 WINDOWS = os.name == 'nt'
 FAKE = Path(__file__).resolve().parent / 'session_fake_harness.py'
@@ -296,6 +296,25 @@ def scratch_package(base: Path, state: str | None) -> Path:
     return src
 
 
+def render_with(case: Case, package: Path, name: str) -> Path:
+    """A home rendered by the kit of `package`, so its judge is that package's."""
+    home = case.base / name
+    proc = kit(
+        case,
+        'home',
+        'render',
+        '--harness',
+        'opencode',
+        '--dir',
+        str(home),
+        '--endpoint',
+        ENDPOINT,
+        PYTHONPATH=str(package),
+    )
+    assert proc.returncode == 0, proc.stderr
+    return home
+
+
 def test_the_contract_entry_decides_an_interactive_launch():
     if not WINDOWS:
         return
@@ -304,12 +323,15 @@ def test_the_contract_entry_decides_an_interactive_launch():
         absent = scratch_package(case.base / 'absent', 'absent')
         proc = run(case, INTERACTIVE_ARGS, mode='interactive', PYTHONPATH=str(absent))
         refused(case, proc, 'absent')
+        # An interactive start runs only a home whose judge is the kit that starts it.
         missing = scratch_package(case.base / 'missing', None)
+        case.home = render_with(case, missing, 'home-missing')
         proc = run(case, INTERACTIVE_ARGS, mode='interactive', PYTHONPATH=str(missing))
         assert proc.returncode == 0, (proc.returncode, proc.stderr)
         lines = proc.stderr.splitlines()
         assert len(lines) == 1 and 'interactive' in lines[0], lines
         tested = scratch_package(case.base / 'tested', 'tested')
+        case.home = render_with(case, tested, 'home-tested')
         proc = run(case, INTERACTIVE_ARGS, mode='interactive', PYTHONPATH=str(tested))
         assert proc.returncode == 0 and proc.stderr == '', (proc.returncode, proc.stderr)
     finally:

@@ -18,6 +18,8 @@ policy is `unknown`. `unknown` has effect deny.
 
 Ahead of the policy's rules and after the policy loads, an event of a harness
 other than Claude Code that was not launched is denied by `launcher.required`.
+Then, for a launched event whose run record holds `policy_sha256`, a loaded
+policy whose bytes hash otherwise is a governed `unknown` by `config.protected`.
 Then, when the caller passes the canary's nonce, a shell act whose command
 names `deny-<nonce>.marker` is denied by `canary.deny`, and one that names
 `allow-<nonce>.marker` is allowed by `canary.allow`. Then an event whose tool
@@ -28,7 +30,12 @@ Claude Code whose run record (the caller passes it) holds `workdir`, an act
 whose `cwd` is empty, relative, or outside each of the run's `workdir`, its
 `work_tree_top` and its canary's `work` folder is denied by
 `launcher.workdir`; a run record that could not be read gives `unknown` there.
-Paths are compared as the policy compares them, with a folder boundary.
+Then, for a launched `file_write` act whose run record holds `protected`, a
+path at or under one of its paths and under none of `protected_except` is
+denied by `config.protected`; paths the act did not observe, or a run record
+that could not be read, give `unknown` there. Every harness's run record is
+read for this rule and the policy hash. Paths are compared as the policy
+compares them, with a folder boundary.
 
 A checker that records notes (policy version 3) is called with its session
 facts as a third argument: what the caller's `facts` function gives for its
@@ -83,6 +90,17 @@ WORKDIR_REASON = (
     'start another kit run for another folder'
 )
 WORKDIR_UNREADABLE = 'cannot tell where the call may start: the run record could not be read'
+PROTECTED_RULE = 'config.protected'
+PROTECTED_REASON = "this file governs the session; kit protects it from the session's tools"
+PROTECTED_UNAVAILABLE = (
+    'cannot tell whether the write reaches a file that governs the session: '
+    'its paths were not observed'
+)
+PROTECTED_UNREADABLE = (
+    'cannot tell whether the write reaches a file that governs the session: '
+    'the run record could not be read'
+)
+POLICY_CHANGED_REASON = 'the policy changed after kit run read it'
 # What a caller passes as the run record when `run.json` could not be read.
 UNREADABLE_RUN = 'unreadable'
 _DRIVE_ROOT = re.compile(r'[a-z]:/')
@@ -234,6 +252,51 @@ def workdir_result(
     return 'deny'
 
 
+def _forms(paths: object, windows: bool) -> list[str]:
+    """The absolute paths of a list in the policy's form; others are left out."""
+    out = []
+    for path in paths if isinstance(paths, list) else []:
+        form = _folder_form(path, windows) if isinstance(path, str) else ''
+        if form and _absolute(form, windows):
+            out.append(form)
+    return out
+
+
+def policy_changed(run: dict | str | None, policy: Policy) -> bool:
+    """True when the run record holds `policy_sha256` and the loaded policy hashes otherwise."""
+    if not isinstance(run, dict) or 'policy_sha256' not in run:
+        return False
+    return run['policy_sha256'] != policy.sha256
+
+
+def protected_result(event: dict, run: dict | str | None, windows: bool) -> str | None:
+    """`deny` or `unknown` from `config.protected` for one launched event, or None when the
+    rule does not apply or no path of the write is protected."""
+    act = event['act']
+    if run is None or act['kind'] != 'file_write':
+        return None
+    if run == UNREADABLE_RUN:
+        return 'unknown'
+    if not isinstance(run, dict) or 'protected' not in run:
+        return None
+    if event['observation']['paths'] != 'observed':
+        return 'unknown'
+    protected = _forms(run.get('protected'), windows)
+    excepted = _forms(run.get('protected_except'), windows)
+    cwd = _folder_form(act['cwd'] or '', windows)
+    for path in act['paths']:
+        form = _folder_form(path, windows)
+        if form and not _absolute(form, windows):
+            if not cwd or not _absolute(cwd, windows):
+                return 'unknown'
+            form = posixpath.normpath(posixpath.join(cwd, form))
+        if any(_inside(form, f) for f in excepted):
+            continue
+        if any(_inside(form, f) for f in protected):
+            return 'deny'
+    return None
+
+
 def judge(
     event: object,
     policy: Policy | PolicyError,
@@ -267,6 +330,14 @@ def judge(
         return make_verdict(
             'deny', governed=True, rule=LAUNCHER_RULE, reason=LAUNCHER_REASON, policy_sha256=sha
         )
+    if launched is True and policy_changed(run, policy):
+        return make_verdict(
+            'unknown',
+            governed=True,
+            rule=PROTECTED_RULE,
+            reason=POLICY_CHANGED_REASON,
+            policy_sha256=sha,
+        )
     canary = canary_rule(ev, nonce)
     if canary is not None:
         deny = canary == CANARY_DENY_RULE
@@ -293,6 +364,17 @@ def judge(
             rule=WORKDIR_RULE,
             reason=WORKDIR_REASON if bound == 'deny' else WORKDIR_UNREADABLE,
             policy_sha256=sha,
+        )
+    guarded = protected_result(ev, run, policy.windows) if launched is True else None
+    if guarded is not None:
+        if guarded == 'deny':
+            reason = PROTECTED_REASON
+        elif run == UNREADABLE_RUN:
+            reason = PROTECTED_UNREADABLE
+        else:
+            reason = PROTECTED_UNAVAILABLE
+        return make_verdict(
+            guarded, governed=True, rule=PROTECTED_RULE, reason=reason, policy_sha256=sha
         )
 
     checks = checkers.Judgement(policy.checkers, facts=facts) if policy.checkers else None
