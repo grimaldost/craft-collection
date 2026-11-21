@@ -617,6 +617,57 @@ def test_acts_found_in_commands():
     assert families('bash <<EOF\nclaude plugin update x@y\nEOF') == [(2, 'x@y')]
 
 
+def test_a_redirect_before_the_program_does_not_hide_it():
+    """Bash runs the command after a leading redirect; its target is not the program.
+
+    A three-character operator such as `&>>` once made its target read as the
+    program, so no deny arm ran (2026-11-17-craft-verificacao-owner-acts-gate#1).
+    """
+
+    def families(command: str) -> list[tuple[int, str | None]]:
+        return [(a.family, a.key) for a in gate.shell_acts(command, 'bash', cwd=None)]
+
+    assert families('&>> /c/tmp/f git config --global user.name foo') == [(4, 'user.name')]
+    assert families('&>> f setx FOO bar') == [(3, 'FOO')]
+    assert families('&>> f claude plugin install x@y') == [(2, 'x@y')]
+    assert families('&>>f setx FOO bar') == [(3, 'FOO')]
+    assert families('&> f setx FOO bar') == [(3, 'FOO')]
+    assert families('>| f setx FOO bar') == [(3, 'FOO')]
+    assert families('2>> f setx FOO bar') == [(3, 'FOO')]
+    assert families('<> f setx FOO bar') == [(3, 'FOO')]
+    assert families('3> f setx FOO bar') == [(3, 'FOO')]
+    assert families('2>> f &>> g claude plugin install x@y') == [(2, 'x@y')]
+    # a descriptor copy or close takes no file target: the next word is still the program
+    assert families('2>&1 setx FOO bar') == [(3, 'FOO')]
+    assert families('>&2 setx FOO bar') == [(3, 'FOO')]
+    assert families('<&0 setx FOO bar') == [(3, 'FOO')]
+    assert families('2>&- setx FOO bar') == [(3, 'FOO')]
+    # separators still start a new command
+    assert families('echo a &>> f; setx FOO bar') == [(3, 'FOO')]
+    assert families('echo a 2>&1 | claude plugin install x@y') == [(2, 'x@y')]
+    # ordinary commands with redirects before and after stay allowed
+    assert families('&>> log.txt uv run pytest') == []
+    assert families('ls 2>&1 > out.txt') == []
+    assert families('cmd >&2') == []
+    assert families('2>&1 uv run pytest &>> log.txt') == []
+    assert families('&>> log.txt git config --global --get user.name') == []
+
+
+def test_a_leading_redirect_before_a_governed_act_is_denied_on_a_go_on():
+    tmp, box = _sandbox()
+    with tmp:
+        box.prompt(GO_ON)
+        _denied(box.bash('&>> /c/tmp/f git config --global user.name foo'))
+        _denied(box.bash('&>> f setx FOO bar'))
+        _denied(box.bash('&>> f claude plugin install x@y'))
+        _allowed_silently(box.bash('&>> log.txt uv run pytest'))
+        assert [(e['family'], e['decision']) for e in box.log()] == [
+            (4, 'deny'),
+            (3, 'deny'),
+            (2, 'deny'),
+        ], box.log()
+
+
 def test_authorizing_sentence_rule():
     edit = gate.Act(family=1, arm='edit', key='CLAUDE.md', summary='Edit CLAUDE.md')
     plugin = gate.Act(family=2, arm='shell', key='x@y', summary='claude plugin update x@y')
@@ -670,6 +721,8 @@ if __name__ == '__main__':
     test_a_deny_with_a_character_outside_cp1252_reaches_a_cp1252_stdout()
     test_a_cli_call_without_a_flag_dispatches_on_the_event_name()
     test_acts_found_in_commands()
+    test_a_redirect_before_the_program_does_not_hide_it()
+    test_a_leading_redirect_before_a_governed_act_is_denied_on_a_go_on()
     test_authorizing_sentence_rule()
     test_the_deny_example_names_the_denied_file()
     test_the_deny_example_names_the_denied_variable()

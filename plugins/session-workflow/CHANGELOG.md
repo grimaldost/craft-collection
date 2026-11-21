@@ -8,11 +8,13 @@ tagged.
 
 ## [0.31.1] - 2026-11-17
 
-Five corrections from the 2026-11-17 triage. An installed copy notices a rebuilt feedback
-`INDEX.md` whose empty Untriaged section has no list item, an untriaged count on the line the
-index builder prints, a triage coverage audit that no longer fails a cluster heading that only
-mentions a route-out, and three corrected sentences in skill text (the phase briefs, the
-review-panel run notes and tool-feedback). Patch bump: corrections only, nothing added.
+Six corrections from the 2026-11-17 triage and verification round. An installed copy notices a
+rebuilt feedback `INDEX.md` whose empty Untriaged section has no list item, an untriaged count
+on the line the index builder prints, a triage coverage audit that no longer fails a cluster
+heading that only mentions a route-out, an owner-acts gate that no longer takes a leading
+redirection's target for the program, and three corrected sentences in skill text (the phase
+briefs, the review-panel run notes and tool-feedback). Patch bump: corrections only, nothing
+added.
 
 ### Fixed
 
@@ -40,6 +42,15 @@ review-panel run notes and tool-feedback). Patch bump: corrections only, nothing
   T437a). "First hit wins" read as a fall-through, but the scripts stop at a set override
   even when it names a missing file, as `test_feedback_nudge.py` pins. The prose now says
   so; no behaviour changes, and the body stays within its word budget.
+- **The owner-acts gate skips every redirection target before the program**
+  (`2026-11-17-craft-verificacao-owner-acts-gate#1`). `_program_index` skipped a
+  redirection's target only when the operator had at most two characters, so a leading
+  `&>> f` made `f` the program and no deny arm ran: `&>> f setx FOO bar`,
+  `&>> f claude plugin install x@y` and `&>> f git config --global user.name foo` were
+  allowed on a generic go-on. Every operator now takes the next word as its target unless it
+  is a descriptor copy (`2>&1`, `<&0`), whose operand is inside the operator; separators and
+  descriptor copies or closes are read as before, and `test_owner_acts_gate.py` pins the
+  three commands and the `&>`, `>|`, `2>>`, `<>` and `3>` forms as denies.
 
 ## [0.31.0] - 2026-11-01
 
