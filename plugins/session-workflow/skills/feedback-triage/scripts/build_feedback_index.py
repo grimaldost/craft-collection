@@ -468,6 +468,22 @@ def index_counts(text: str) -> tuple[int, int]:
     return reports, findings
 
 
+def untriaged_count(text: str) -> int:
+    """List items under an index's `### Untriaged` heading: the reports no triage
+    doc's Inputs name. The heading is matched at a line start, since the header
+    prose also mentions it."""
+    _, sep, rest = text.partition('\n### Untriaged')
+    if not sep:
+        return 0
+    count = 0
+    for line in rest.splitlines()[1:]:
+        if line.startswith('#'):
+            break
+        if line.startswith('- `'):
+            count += 1
+    return count
+
+
 def index_stems(text: str) -> list[str]:
     """Report stems an index names — the identity the counts cannot show."""
     return [
@@ -498,12 +514,13 @@ def delta_line(old_text: str, new_text: str) -> str:
     """One line naming what the write changed. Versions matching is not enough: a
     parser change can drop findings while the stamp stays identical."""
     reports, findings = index_counts(new_text)
+    untriaged = f', {untriaged_count(new_text)} untriaged'
     if not old_text.strip():
-        return f'{reports} report(s), {findings} finding(s) (new index)'
+        return f'{reports} report(s), {findings} finding(s){untriaged} (new index)'
     was_reports, was_findings = index_counts(old_text)
     return (
         f'{reports} report(s) ({reports - was_reports:+d}), '
-        f'{findings} finding(s) ({findings - was_findings:+d})'
+        f'{findings} finding(s) ({findings - was_findings:+d}){untriaged}'
         f'{_named_delta(old_text, new_text)}'
     )
 
@@ -575,7 +592,11 @@ def build_index(feedback_dir: Path) -> str:
         covered.update(stems)
     untriaged = [s for s in report_stems if s not in covered]
     lines += ['### Untriaged', '']
-    lines += [f'- `{s}`' for s in untriaged] or ['- (none)']
+    # The empty case is a sentence, not a list item: a `- (none)` line reads as one
+    # untriaged report to anything that counts list items (T411a).
+    lines += [f'- `{s}`' for s in untriaged] or [
+        "None: every report is named in a triage doc's Inputs."
+    ]
     lines.append('')
     return '\n'.join(lines)
 

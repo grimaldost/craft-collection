@@ -515,6 +515,81 @@ def test_a_route_out_cluster_or_status_row_needs_its_delivered_path():
             assert proc.returncode == want, (body, proc.stdout, proc.stderr)
 
 
+def test_a_heading_that_mentions_a_route_out_in_prose_is_not_a_routed_row():
+    """T411b: a cluster is a routed row when ROUTE OUT is an item of its heading's
+    parenthesis (alone, first, or after `+`, `;`, `,` or `&`); a cause or a section
+    title that says "routed out" in prose is not."""
+    prose = '#### SW61 - the router half was routed out to craft earlier (ATTACK; 1)\n'
+    for heading in (
+        prose,
+        '#### T412 - A run triages a destination before the route-outs others will deliver'
+        ' to it (ATTACK; watch; 1 report)\n',
+        '### T13 - Routed out & declined\n',
+        '#### Routed out & declined\n',
+        '### T6 - x (ATTACK; the half that was routed out stays; 1)\n',
+    ):
+        assert ta.routed_rows(heading + '\nEvidence.\n') == [], heading
+    for disposition in (
+        '### T5 - x (ROUTE OUT; 2)\n',
+        '### T4 - y (route out -> keel; 1)\n',
+        '### T54 - x (ATTACK + ROUTE OUT; 3 reports)\n',
+        '### N9 - x (keel-as-a-repo) *(ATTACK keel + ROUTE OUT the scaffold half; NET-NEW)*\n',
+        '### D7 - x (ATTACK + a route-out; 1 report, 68 findings)\n',
+        '### T7 - x (**ROUTE OUT** -> keel; 1)\n',
+        '### T8 - x (ATTACK + **ROUTE OUT**; 1)\n',
+        '#### T9 - x (HIGH; ROUTE OUT -> convoy; 2)\n',
+        '#### T10 - x (ROUTED OUT -> keel; 1)\n',
+    ):
+        assert len(ta.routed_rows(disposition)) == 1, disposition
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        registry, _ = _registry(root)
+        doc, _ = _corpus(root, COVERED + '\n' + prose + '\n## Routed out\n\n- None.\n')
+        proc = _coverage(doc, root, registry)
+        assert proc.returncode == 0, (proc.stdout, proc.stderr)
+        combined = COVERED + '\n### T54 - x (ATTACK + ROUTE OUT; 3 reports)\n\nEvidence.\n'
+        doc, _ = _corpus(root, combined)
+        proc = _coverage(doc, root, registry)
+        assert proc.returncode == 1, (proc.stdout, proc.stderr)
+
+
+_HOSTILE_TIMING = """
+import sys, time
+sys.path.insert(0, sys.argv[1])
+import triage_audit as ta
+for heading in (
+    '### T1 (' + '*' * 5000 + 'x',
+    '### T1 (' + 'a ' * 5000 + 'x',
+    '### ' + '(' * 3000 + 'x',
+    '### T1 (' + 'ATTACK + HIGH; ' * 2000 + 'x)',
+    '### T1 (' + ('+' + '*' * 20) * 200 + 'x',
+):
+    start = time.perf_counter()
+    ta.routed_rows(heading + '\\n')
+    print(f'{heading[:12]!r} {time.perf_counter() - start:.4f}', flush=True)
+"""
+
+
+def test_a_hostile_heading_is_read_in_linear_time():
+    """CodeQL py/redos: a heading of many `*`, articles, parentheses or separators
+    must not backtrack. Each is read in a child process so a hang is a red, not a
+    stalled suite."""
+    try:
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, '-c', _HOSTILE_TIMING, str(SCRIPT.parent)],
+            capture_output=True,
+            encoding='utf-8',
+            timeout=20,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError(f'hostile headings did not finish in 20 s: {exc.stdout!r}') from exc
+    assert proc.returncode == 0, proc.stderr
+    lines = proc.stdout.splitlines()
+    assert len(lines) == 5, proc.stdout
+    for line in lines:
+        assert float(line.rsplit(' ', 1)[1]) < 0.5, line
+
+
 if __name__ == '__main__':
     test_covered_doc_passes()
     test_an_undispositioned_finding_reddens_coverage()
@@ -541,4 +616,6 @@ if __name__ == '__main__':
     test_an_undelivered_route_out_reddens_coverage()
     test_a_delivered_route_out_passes()
     test_a_route_out_cluster_or_status_row_needs_its_delivered_path()
+    test_a_heading_that_mentions_a_route_out_in_prose_is_not_a_routed_row()
+    test_a_hostile_heading_is_read_in_linear_time()
     print('ok: all triage_audit tests passed')

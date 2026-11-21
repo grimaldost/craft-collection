@@ -630,6 +630,41 @@ def test_write_prints_the_report_and_finding_delta():
     assert '+1' in second and '-1' in second, second
 
 
+def test_an_empty_untriaged_list_has_no_list_item_and_the_line_counts_it():
+    # T411a: an empty `### Untriaged` rendered `- (none)`, which a list-item count
+    # reads as one untriaged report, and the printed line carried no untriaged
+    # count. The empty case is a sentence with no list marker, and the printed
+    # line names the count.
+    with tempfile.TemporaryDirectory() as d:
+        dd = Path(d)
+        (dd / '2026-01-01-covered.md').write_text(
+            '# foo feedback - a\n## Proposed promotions / changes\n1. **[MED]** x.\n',
+            encoding='utf-8',
+        )
+        (dd / '2026-01-02-triage-pass.md').write_text(
+            '# Triage - foo backlog (1 report)\n## Inputs\n1. `2026-01-01-covered.md`\n',
+            encoding='utf-8',
+        )
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert main([str(dd)]) == 0
+        idx = (dd / 'INDEX.md').read_text(encoding='utf-8')
+        untriaged = idx.split('\n### Untriaged', 1)[1]
+        assert not [ln for ln in untriaged.splitlines() if ln.startswith('- ')], untriaged
+        assert untriaged.strip(), 'the empty case still says so'
+        assert '0 untriaged' in buf.getvalue(), buf.getvalue()
+        # One uncovered report: one list item, and the line says 1.
+        (dd / '2026-01-03-orphan.md').write_text('# bar feedback - b\n', encoding='utf-8')
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert main([str(dd)]) == 0
+        idx = (dd / 'INDEX.md').read_text(encoding='utf-8')
+        untriaged = idx.split('\n### Untriaged', 1)[1]
+        items = [ln for ln in untriaged.splitlines() if ln.startswith('- ')]
+        assert items == ['- `2026-01-03-orphan`'], untriaged
+        assert '1 untriaged' in buf.getvalue(), buf.getvalue()
+
+
 def test_help_flag_returns_zero_not_swallowed_as_dir():
     # --help / -h must print usage and exit 0, not be read as a positional dir arg
     # (regression: `--help` -> `Path('--help')` -> "not a directory: --help", exit 1).
@@ -810,6 +845,7 @@ if __name__ == '__main__':
     test_force_permits_a_deliberate_rollback()
     test_older_or_unstamped_index_is_rebuilt_without_complaint()
     test_write_prints_the_report_and_finding_delta()
+    test_an_empty_untriaged_list_has_no_list_item_and_the_line_counts_it()
     test_triage_coverage_and_untriaged_sections()
     test_coverage_stem_match_is_boundary_aware()
     test_fragmented_stems_read_as_zero_coverage()

@@ -95,6 +95,16 @@ def test_fallback_names_the_workflow_tools_opt_in_gate():
     assert FALLBACK in text
 
 
+def test_the_convener_writes_the_output_a_workflow_script_returns():
+    # T436a: a Workflow script has no filesystem access, so it cannot write a
+    # reviewer's output; it returns the outputs and the convener writes them.
+    text = re.sub(r'\s+', ' ', PANEL_REFERENCE.read_text(encoding='utf-8'))
+    section = text.split('## Persisting raw output', 1)[1].split(' ## ', 1)[0]
+    assert not re.search(r'Workflow script[^.]*\bwrites\b', section), section
+    assert re.search(r'\bconvener writes\b', section), section
+    assert 'journal.jsonl' in section, section
+
+
 if __name__ == '__main__':
     test_description_keeps_the_handoff_trigger_verbatim()
     test_description_keeps_the_draft_negative_verbatim()
@@ -103,4 +113,5 @@ if __name__ == '__main__':
     test_no_reference_calls_the_quartet_the_skill_default()
     test_rubric_grades_the_rung_by_stakes()
     test_fallback_names_the_workflow_tools_opt_in_gate()
+    test_the_convener_writes_the_output_a_workflow_script_returns()
     print('ok: review-panel keeps its hand-off trigger and its one-reviewer default')

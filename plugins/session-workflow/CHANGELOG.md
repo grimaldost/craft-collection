@@ -6,6 +6,74 @@ All notable changes to this plugin are documented here. Bump the `version` in
 Tags start at 0.23.0; earlier versions were released before this plugin's releases were
 tagged.
 
+## [0.31.1] - 2026-11-17
+
+Seven corrections from the 2026-11-17 triage and its verification rounds. An installed copy
+notices a rebuilt feedback `INDEX.md` whose empty Untriaged section has no list item, an
+untriaged count on the line the index builder prints, a triage coverage audit that no longer
+fails a cluster heading that only mentions a route-out, an owner-acts gate that no longer
+takes a redirection's target for the program or one of its arguments and no longer loses a
+governed act behind a command prefix, a wrapper form or the environment's registry key, and
+three corrected sentences in skill text (the phase briefs, the review-panel run notes and
+tool-feedback). Patch bump: corrections only, nothing added.
+
+### Fixed
+
+- **An empty Untriaged list is a sentence, and the builder prints its count**
+  (2026-11-17 triage: T411a). `build_feedback_index.py` rendered an empty `### Untriaged` as
+  `- (none)`, which a list-item count reads as one report. The empty case is now a sentence
+  with no list marker under the same heading, and the printed line adds `<n> untriaged`.
+- **A cluster heading is a route-out only by its disposition** (2026-11-17 triage: T411b).
+  `triage_audit.py coverage` took any `###`/`####` heading mentioning "routed out" as a ROUTE
+  OUT row, so a cause written in prose failed as an undelivered route-out. A cluster
+  heading counts now when its disposition parenthesis names a route-out, alone or combined
+  (`(ROUTE OUT -> keel; 1)`, `(ATTACK + ROUTE OUT; 3 reports)`, `(HIGH; ROUTE OUT ->
+  convoy)`).
+- **context-handoff's phase briefs say the owner starts evaluate-skill** (2026-11-17 triage:
+  T423a). The Measurement phase cited `session-workflow:evaluate-skill` as a skill the
+  receiver loads; it is manual-only. The line now says the owner runs `/evaluate-skill`, and
+  `scripts/test_phase_briefs_text.py` fails a cited manual-only skill whose line does not
+  say the owner runs or starts it.
+- **review-panel names the convener as the writer of a script's output** (2026-11-17
+  triage: T436a). `references/running-a-panel.md` said the Workflow script writes each
+  reviewer's output to disk; a Workflow script has no filesystem access. The convener writes
+  the outputs the script returns, and the run's `journal.jsonl` holds them if that return is
+  lost.
+- **tool-feedback states how a set `$FEEDBACK_TARGETS_FILE` resolves** (2026-11-17 triage:
+  T437a). "First hit wins" read as a fall-through, but the scripts stop at a set override
+  even when it names a missing file, as `test_feedback_nudge.py` pins. The prose now says
+  so; no behaviour changes, and the body stays within its word budget.
+- **The owner-acts gate skips every redirection target before the program**
+  (`2026-11-17-craft-verificacao-owner-acts-gate#1`). `_program_index` skipped a
+  redirection's target only when the operator had at most two characters, so a leading
+  `&>> f` made `f` the program and no deny arm ran: `&>> f setx FOO bar`,
+  `&>> f claude plugin install x@y` and `&>> f git config --global user.name foo` were
+  allowed on a generic go-on. Every operator now takes the next word as its target unless it
+  is a descriptor copy (`2>&1`, `<&0`), whose operand is inside the operator; separators and
+  descriptor copies or closes are read as before, and `test_owner_acts_gate.py` pins the
+  three commands and the `&>`, `>|`, `2>>`, `<>` and `3>` forms as denies.
+- **The owner-acts gate reads a governed act past every redirection, prefix and wrapper
+  form** (verification of the fix above). Independent checks found the same defect class
+  elsewhere on the program-position path, each allowed on a generic go-on before this fix:
+  `_args` kept the old rule, so `git &>> f config --global ...` read `f` as git's
+  subcommand; the tokenizer read `{v}>f`, `<<< x`, `>&2f` and `0<f` (bash) and `*>`, `*>>`
+  and `*>&1` (PowerShell) as words or as the wrong operator; a quoted assignment
+  (`VAR="a b" git ...`), a prefix word's option value (`env -u X`, `exec -a n`,
+  `sudo -u u`, `timeout 5`) and reserved words (`!`, `if`, `do`, `while`) hid the program;
+  `cmd //c` (the Git Bash spelling of `/c`) and `eval` were not read as wrappers; and a
+  user environment variable set through `reg add HKCU\Environment`, `Set-ItemProperty
+  HKCU:\Environment` or `Start-Process setx` was not family 3. One rule now decides a
+  redirection's target before and after the program (a descriptor copy or close takes
+  none), and `test_owner_acts_gate.py` pins every form above as a deny, with ordinary
+  commands using the same forms (`cat <<< x`, `timeout 5 uv run pytest`,
+  `Get-ChildItem *> out.txt`, `reg query HKCU\Environment`) still allowed. A third round
+  closed two more forms: a descriptor close glued to the next word (`>&-git config ...`,
+  `claude plugin >&-install x@y`) now ends at the dash, as bash's lexer ends it, while
+  `>&1-git` and `>&2git` stay file targets; and a redirection between a prefix word's option
+  and its value (`env -u >f X git ...`, `sudo -u <<< x root ...`, `env -C >f . ...`; the
+  last two were denied before this item's first version) no longer spends that value or the
+  timeout's duration.
+
 ## [0.31.0] - 2026-11-01
 
 Every anchor hook run now leaves one record naming its session and its outcome, in a log

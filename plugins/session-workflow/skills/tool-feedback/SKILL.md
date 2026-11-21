@@ -33,9 +33,10 @@ quality bar: a maintainer can act on it cold.
 ## Registered tools — the feedback-targets binding
 
 First hit wins: `$FEEDBACK_TARGETS_FILE` → `~/.claude/feedback-targets.toml`
-(absolute-pathed, so it survives being copied between environments) → a
-`feedback-targets` table in loaded context → **ask once**. **Never hunt the
-filesystem.** Either shape carries the same fields:
+(absolute-pathed, so it survives copying between environments) → a
+`feedback-targets` table in loaded context → **ask once**. A set
+`$FEEDBACK_TARGETS_FILE` wins even when missing. **Never hunt the filesystem.**
+Either shape carries these fields:
 
 | tool | repo | feedback dir | extras |
 |------|------|--------------|--------|
@@ -43,8 +44,8 @@ filesystem.** Either shape carries the same fields:
 
 - `extras` carries per-tool obligations — a format README that stays authoritative
   for that directory, a registered triage template, "include cost table for engine
-  runs". Read and honor it; if it cites a README that does not exist, fall back to
-  this skill's template and note the gap in the report.
+  runs". Read and honor it; if a cited README is missing, fall back to this
+  skill's template and note the gap in the report.
 - The session **used** a tool if it invoked any of its skills/agents/commands, ran
   its engine or CLI, or substantively applied its templates/doctrine.
   **Design-only use, authoring-only use, and maintaining the tool's own repo all
