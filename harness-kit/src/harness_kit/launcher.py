@@ -59,26 +59,59 @@ killed after the wait. A Ctrl+C or Ctrl+Break during preflight exits 130 with
 no run; one after the mint and before the session sets `outcome` to
 `interrupted` and exits 130; during the session kit ignores it.
 
+A daily home (`home.json`'s `kind` is `daily`) reaches its provider only
+through the relay, `kit relay serve`, the one child of `kit run` given the
+provider key. Before any child starts, `kit run` reads the variable the daily
+file's `key_env` names, keeps its value only for the relay's first line of
+standard input and removes it from its own environment; preflight's `git` and
+the version probe also lose every other variable the secret-name rule would
+refuse. Preflight refuses a daily home whose daily file is absent or differs
+from the one it was rendered with (naming each key whose value differs), an
+invalid daily file, an absent or empty key variable, a listen port already
+bound on 127.0.0.1, a relay lock already held and a day or month total already
+at its ceiling; and, in either mode, a home whose rendered files differ from
+the render's record or that holds `run-open.json`. A capability (32 random
+bytes as hex) goes into the session as `KIT_RELAY_CAPABILITY`, another into
+the canary. After the canary passed, the relay starts (this interpreter,
+isolated, its environment from the allow list, the key and capability as its
+first line of standard input, its standard error into
+`runs/<id>/relay-stderr.txt`, its tree in a Job Object on Windows and a new
+session on POSIX) and its ready line is awaited for at most 10 seconds; a
+relay that is not ready sets `outcome` to `refused-relay`, exits 70 and
+starts no session. Then the home is read again and the session starts. However
+it ended, the relay's standard input is closed, it gets at most 40 seconds to
+end, its tree is ended, and `run.json` gets `relay` with `requests`, `refused`,
+`settled_usd` and `stopped`. The session's git reads the run's copy of the
+home's `gitconfig`.
+
 Exit codes: 64 a refusal, 65 a failed canary or a home changed before the
-session, 70 an internal error, 130 an interrupt before the session, else the
-harness's own.
+session, 70 an internal error or a relay that did not get ready, 130 an
+interrupt before the session, else the harness's own.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import secrets
+import shutil
 import signal
+import socket
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
+import tomllib
+
 import harness_kit
-from harness_kit import canary, doctor, harnesses, packs, state, watch
+from harness_kit import canary, daily, doctor, harnesses, packs, relay, state, watch
 from harness_kit.policy import Policy, PolicyError, load_policy
 
 EXIT_REFUSED = 64
@@ -103,6 +136,14 @@ TERMINAL_NAMES = (
 )
 # How long kit waits for the session's tree to be gone once it ended it.
 TREE_WAIT_S = 10.0
+# The relay of a daily run: how long kit awaits its ready line, and its end once its standard
+# input is closed; where its standard error goes; the session's capability variable.
+RELAY_READY_S = 10.0
+RELAY_STOP_S = 40.0
+RELAY_STDERR = 'relay-stderr.txt'
+RELAY_POLL_S = 0.05
+CAPABILITY_ENV = harnesses.RELAY_CAPABILITY_ENV
+NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW: the relay gets no console, so no console interrupt
 CLAUDE_CODE = 'claude-code'
 FAKE_KEY = 'stub-not-a-key'
 
@@ -166,6 +207,17 @@ class _Parser(argparse.ArgumentParser):
 
 
 @dataclass
+class DailyRun:
+    """What a daily run holds besides its plan: the daily file, the key until the relay read it,
+    and the two capabilities, the session's and the canary's."""
+
+    found: daily.Daily
+    key: str | None
+    capability: str
+    canary_capability: str
+
+
+@dataclass
 class Plan:
     driver: harnesses.Driver
     home: dict
@@ -189,6 +241,9 @@ class Plan:
     top: Path | None = None
     terminal: dict[str, str] = field(default_factory=dict)
     home_dir: Path | None = None
+    # A daily run's file, key and capabilities, and the variables only the canary gets.
+    daily: DailyRun | None = None
+    canary_extra: dict[str, str] = field(default_factory=dict)
 
 
 def _ascii(text: object) -> str:
@@ -212,8 +267,14 @@ def _within(path: Path | str, base: Path | str) -> bool:
 # ---- git
 
 
-def _git(folder: Path, *args: str) -> subprocess.CompletedProcess | None:
-    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('GIT_')}
+def child_environ(environ: dict) -> dict:
+    """`environ` without the names the secret-name rule would refuse in a session."""
+    return {k: v for k, v in environ.items() if not SECRET_NAME.search(k)}
+
+
+def _git(folder: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess | None:
+    base = os.environ if env is None else env
+    env = {k: v for k, v in base.items() if not k.upper().startswith('GIT_')}
     try:
         return subprocess.run(  # noqa: S603 - fixed argv, no shell
             ['git', '-C', str(folder), *args],  # noqa: S607 - PATH git
@@ -230,13 +291,14 @@ def _git(folder: Path, *args: str) -> subprocess.CompletedProcess | None:
         return None
 
 
-def work_tree_top(folder: Path) -> Path | None:
+def work_tree_top(folder: Path, env: dict | None = None) -> Path | None:
     """The top of the git work tree holding `folder`, or None outside any.
 
     A `.git` entry in the folder or an ancestor that git does not answer for
     is a refusal: the launcher cannot tell which remotes it would push to.
+    git takes `env` (kit's own environment when None), less the `GIT_` names.
     """
-    proc = _git(folder, 'rev-parse', '--show-toplevel')
+    proc = _git(folder, 'rev-parse', '--show-toplevel', env=env)
     if proc is not None and proc.returncode == 0 and proc.stdout.strip():
         return Path(os.path.realpath(proc.stdout.strip()))
     for place in (folder, *folder.parents):
@@ -245,9 +307,9 @@ def work_tree_top(folder: Path) -> Path | None:
     return None
 
 
-def read_remotes(folder: Path) -> list[dict]:
+def read_remotes(folder: Path, env: dict | None = None) -> list[dict]:
     """Every remote with its `url` and `pushurl` values, and whether it can push."""
-    proc = _git(folder, 'config', '--get-regexp', REMOTE_KEYS)
+    proc = _git(folder, 'config', '--get-regexp', REMOTE_KEYS, env=env)
     if proc is None or proc.returncode not in (0, 1):
         raise RefusalError(f'git could not read the remotes of {_ascii(folder)}')
     if proc.returncode == 1 and not proc.stdout.strip():
@@ -540,6 +602,121 @@ def check_note_home(home: dict, driver: harnesses.Driver, records: tuple) -> Non
                 raise RefusalError(f'settings.json has no {event} note entry; {RENDER_HINT}')
 
 
+# ---- a daily home
+
+
+def take_key(environ: dict, name: str) -> str | None:
+    """The value of `name` in kit's environment, removed from it and from `environ`."""
+    value = None
+    for key in [k for k in environ if _key(k) == _key(name)]:
+        found = environ.pop(key)
+        value = value or found
+    for key in [k for k in os.environ if _key(k) == _key(name)]:
+        found = os.environ.pop(key)
+        value = value or found
+    return value
+
+
+def port_free(port: int) -> bool:
+    """True when nothing is bound on 127.0.0.1:`port`, bound as the relay binds it."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('127.0.0.1', port))
+    except OSError:
+        return False
+    finally:
+        sock.close()
+    return True
+
+
+def relay_lock_holder(root: Path) -> str | None:
+    """The pid that holds the relay lock of the state root (`unknown` when unnamed), or None."""
+    path = root / 'relay' / relay.LOCK
+    try:
+        fd = os.open(path, os.O_RDWR | getattr(os, 'O_BINARY', 0))
+    except FileNotFoundError:
+        return None
+    try:
+        if relay._try_lock(fd):
+            relay._unlock(fd)
+            return None
+        return relay._holder(fd)
+    finally:
+        os.close(fd)
+
+
+def _daily_differs(path: str, data: bytes, settings: dict) -> str:
+    """The refusal of a daily file whose bytes differ from the render's: the keys that differ."""
+    tail = 'read the file before rendering the home again'
+    try:
+        doc = tomllib.loads(data.decode('utf-8'))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return f'the daily file {_ascii(path)} differs from its render and is not TOML; {tail}'
+    keys = daily.changed_keys(settings, {k: v for k, v in doc.items() if k != 'daily'})
+    if doc.get('daily') != 1:
+        keys = ['daily', *keys]
+    named = ', '.join(_ascii(k) for k in keys) if keys else 'no value, only its bytes'
+    return f'the daily file {_ascii(path)} differs from its render at {named}; {tail}'
+
+
+def check_daily(home: dict, root: Path, environ: dict) -> DailyRun:
+    """Every check of a daily home but its render; the key is taken out of kit's environment."""
+    path, sha, settings = (
+        home.get('daily_file'),
+        home.get('daily_sha256'),
+        home.get('daily_settings'),
+    )
+    if not (isinstance(path, str) and path and isinstance(sha, str) and isinstance(settings, dict)):
+        raise RefusalError(
+            'home.json of a daily home lacks daily_file, daily_sha256 or daily_settings; render '
+            'the home again into an empty folder'
+        )
+    try:
+        data = Path(path).read_bytes()
+    except FileNotFoundError:
+        raise RefusalError(
+            f'the daily file {_ascii(path)} is absent; restore it, or render a new home'
+        ) from None
+    except OSError as exc:
+        raise RefusalError(
+            f'the daily file {_ascii(path)} is not readable: {_ascii(exc)}'
+        ) from None
+    if hashlib.sha256(data).hexdigest() != sha:
+        raise RefusalError(_daily_differs(path, data, settings))
+    try:
+        found = daily.load_daily(path, root)
+    except daily.DailyError as exc:
+        raise RefusalError(f'daily file refused: {_ascii(exc)}') from None
+    name, port = found.relay.key_env, found.relay.listen_port
+    key = take_key(environ, name)
+    if not key:
+        raise RefusalError(f'the key variable {name} of the daily file is absent or empty')
+    if not port_free(port):
+        raise RefusalError(f'the relay port 127.0.0.1:{port} is already bound')
+    holder = relay_lock_holder(root)
+    if holder is not None:
+        raise RefusalError(f'the relay lock of the state root is held by pid {holder}')
+    try:
+        totals = relay.fold(relay.read_ledger(root))
+    except OSError as exc:
+        raise RefusalError(f'the relay ledger is not readable: {_ascii(exc)}') from None
+    now, held = datetime.now(timezone.utc), totals.open_usd()
+    for label, total, ceiling in (
+        ('day', totals.day.get(now.strftime('%Y-%m-%d'), 0.0), found.relay.day_usd),
+        ('month', totals.month.get(now.strftime('%Y-%m'), 0.0), found.relay.month_usd),
+    ):
+        if total + held >= ceiling - relay.EPSILON_USD:
+            raise RefusalError(
+                f'the relay ledger holds {total + held:.6f} USD this {label}, at its ceiling of '
+                f'{ceiling} USD'
+            )
+    return DailyRun(found, key, secrets.token_hex(32), secrets.token_hex(32))
+
+
 def governed_home(policy: Policy, environ: dict) -> dict[str, str]:
     """The governed-home override to pass into the session; refused outside the test roots."""
     found = [(k, v) for k, v in environ.items() if _key(k) == _key(GOVERNED_HOME)]
@@ -671,7 +848,7 @@ def build_env(
         'TEMP': tmp,
         'TMP': tmp,
         'GH_CONFIG_DIR': str(run_dir / 'gh-config'),
-        'GIT_CONFIG_GLOBAL': str(run_dir / 'gitconfig-empty'),
+        'GIT_CONFIG_GLOBAL': str(run_dir / _gitconfig_name(home)),
         'GIT_CONFIG_NOSYSTEM': '1',
         'GIT_TERMINAL_PROMPT': '0',
         state.RUN_ID_ENV: run_id,
@@ -695,6 +872,12 @@ def build_env(
         if name.upper() in GUARD_DROPPERS:
             raise RefusalError(f'the session environment would carry {_ascii(name)}')
     return env, sorted(set(scrubbed))
+
+
+def _gitconfig_name(home: dict) -> str:
+    """The run's copy of a daily home's `gitconfig`; an empty file for a test home."""
+    daily_home = harnesses.home_kind(home) == harnesses.DAILY_HOME
+    return 'gitconfig' if daily_home else 'gitconfig-empty'
 
 
 # ---- preflight, mint, launch
@@ -727,7 +910,11 @@ def preflight(
     notices += check_note_states(policy, driver, records) if records else []
     home_folder = Path(os.path.abspath(home_dir))
     home = check_home(home_folder, driver)
-    if mode == INTERACTIVE:
+    kind = harnesses.home_kind(home)
+    if kind not in harnesses.HOME_KINDS:
+        raise RefusalError(f'home.json names the kind {_ascii(kind)}, not test or daily')
+    is_daily = kind == harnesses.DAILY_HOME
+    if mode == INTERACTIVE or is_daily:
         check_open_run(home_folder)
         check_render_record(home_folder, home, driver)
     extra: dict[str, str] = {}
@@ -740,11 +927,14 @@ def preflight(
         root = state.state_root(environ)
     except state.StateRootError as exc:
         raise RefusalError(_ascii(exc)) from None
+    # The key leaves kit's environment before the first child, preflight's git, starts.
+    daily_run = check_daily(home, root, environ) if is_daily else None
+    child = child_environ(environ) if is_daily else None
     folder = Path(os.path.realpath(workdir))
     if not folder.is_dir():
         raise RefusalError(f'working folder {_ascii(folder)} is not a folder')
-    top = work_tree_top(folder)
-    remotes = read_remotes(folder) if top is not None else []
+    top = work_tree_top(folder, env=child)
+    remotes = read_remotes(folder, env=child) if top is not None else []
     if driver.name != CLAUDE_CODE:
         check_folder(folder, top, remotes, policy)
     check_session_args(harness_args, driver, mode)
@@ -755,6 +945,7 @@ def preflight(
     run_id = state.new_run_id()
     run_dir = root / 'runs' / run_id
     terminal = terminal_env(environ) if mode == INTERACTIVE else {}
+    capability = {CAPABILITY_ENV: daily_run.capability} if daily_run else {}
     env, scrubbed = build_env(
         driver,
         home,
@@ -764,7 +955,7 @@ def preflight(
         root=root,
         policy_path=policy_path,
         workdir=folder,
-        extra={**extra, **terminal},
+        extra={**extra, **terminal, **capability},
     )
     return Plan(
         driver=driver,
@@ -786,6 +977,8 @@ def preflight(
         top=top,
         terminal=terminal,
         home_dir=home_folder,
+        daily=daily_run,
+        canary_extra={CAPABILITY_ENV: daily_run.canary_capability} if daily_run else {},
     )
 
 
@@ -806,7 +999,7 @@ def run_plan_canary(plan: Plan, environ: dict) -> dict:
             root=plan.root,
             policy_path=plan.policy_path,
             workdir=work,
-            extra=plan.extra_env,
+            extra={**plan.extra_env, **plan.canary_extra},
         )
         return env
 
@@ -864,6 +1057,7 @@ def _canary_in_child(plan: Plan, environ: dict) -> dict:
         'workdir': str(plan.workdir),
         'project_config': plan.project_config,
         'extra_env': plan.extra_env,
+        'canary_extra': plan.canary_extra,
         'environ': environ,
     }
     data = json.dumps(spec, ensure_ascii=True).encode('ascii')
@@ -935,6 +1129,7 @@ def canary_child() -> int:
         project_config=list(spec['project_config']),
         binary=list(spec['binary']),
         extra_env=dict(spec['extra_env']),
+        canary_extra=dict(spec['canary_extra']),
     )
     result = run_plan_canary(plan, dict(spec['environ']))
     sys.stdout.write(json.dumps(result, ensure_ascii=True) + '\n')
@@ -965,27 +1160,34 @@ def _home_dir(plan: Plan) -> Path:
 def _launch_minted(plan: Plan, environ: dict) -> int:
     run_json = plan.run_dir / 'run.json'
     record = json.loads(run_json.read_text(encoding='utf-8'))
+    held = _Held()
     try:
-        ready = _before_session(plan, environ, record)
-    except KeyboardInterrupt:
-        record.update(outcome='interrupted')
-        state.write_json_atomic(run_json, record)
-        return _fail(EXIT_INTERRUPTED, 'run interrupted before the session started')
-    if isinstance(ready, int):
-        return ready
-    return _run_session(plan, record)
+        try:
+            ready = _before_session(plan, environ, record, held)
+        except KeyboardInterrupt:
+            record.update(outcome='interrupted')
+            state.write_json_atomic(run_json, record)
+            return _fail(EXIT_INTERRUPTED, 'run interrupted before the session started')
+        if isinstance(ready, int):
+            return ready
+        return _run_session(plan, record, held)
+    finally:
+        held.stop_relay(plan, record)
 
 
-def _before_session(plan: Plan, environ: dict, record: dict) -> int | None:
-    """Hashes, version, canary and the second read; an exit code when the session must not start."""
+def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int | None:
+    """Hashes, version, canary, the relay and the second read; an exit code when the session
+    must not start."""
     run_json = plan.run_dir / 'run.json'
     (plan.run_dir / 'tmp').mkdir()
     (plan.run_dir / 'gh-config').mkdir()
     (plan.run_dir / 'gitconfig-empty').write_bytes(b'')
     home_dir = _home_dir(plan)
+    if plan.daily is not None:
+        shutil.copyfile(home_dir / 'gitconfig', plan.run_dir / 'gitconfig')
     hashes = watch.hash_files(home_dir, plan.driver)
     state.write_json_atomic(plan.run_dir / watch.HOME_HASHES, hashes)
-    found = plan.driver.version(environ)
+    found = plan.driver.version(child_environ(environ) if plan.daily else environ)
     record.update(
         home=str(plan.home['dir']),
         workdir=str(plan.workdir),
@@ -1011,6 +1213,12 @@ def _before_session(plan: Plan, environ: dict, record: dict) -> int | None:
         record.update(outcome='refused-canary')
         state.write_json_atomic(run_json, record)
         return _fail(EXIT_CANARY, f'canary failed: {_ascii(result["reason"])}')
+    if plan.daily is not None:
+        not_ready = held.start_relay(plan, environ)
+        if not_ready is not None:
+            record.update(outcome='refused-relay')
+            state.write_json_atomic(run_json, record)
+            return _fail(EXIT_INTERNAL, f'the relay did not get ready: {not_ready}')
     # The second read is the baseline of the session; a difference refuses the start.
     baseline = watch.read_files(home_dir, plan.driver)
     changed = watch.differences(hashes, {rel: v['sha256'] for rel, v in baseline.items()})
@@ -1022,12 +1230,17 @@ def _before_session(plan: Plan, environ: dict, record: dict) -> int | None:
             EXIT_CANARY,
             f'the home changed before the session started: {_ascii(changed[0])}{more}',
         )
-    if plan.mode == INTERACTIVE:
+    if _marks_open(plan):
         state.write_json_atomic(home_dir / watch.RUN_OPEN, {'run_id': plan.run_id})
     return None
 
 
-def _run_session(plan: Plan, record: dict) -> int:
+def _marks_open(plan: Plan) -> bool:
+    """An interactive run, and any run on a daily home, holds `run-open.json` during its session."""
+    return plan.mode == INTERACTIVE or plan.daily is not None
+
+
+def _run_session(plan: Plan, record: dict, held: _Held) -> int:
     """Start the session in its own tree, wait for it, end the tree and record the end."""
     run_json = plan.run_dir / 'run.json'
     restore = _ignore_interrupts()
@@ -1037,6 +1250,7 @@ def _run_session(plan: Plan, record: dict) -> int:
         except OSError as exc:
             record.update(outcome='ended', exit_code=None, error=_ascii(type(exc).__name__))
             state.write_json_atomic(run_json, record)
+            held.stop_relay(plan, record)
             _close_run(plan)
             return _fail(EXIT_INTERNAL, f'the harness did not start: {_ascii(exc)}')
         record.update(outcome='launched')
@@ -1045,6 +1259,7 @@ def _run_session(plan: Plan, record: dict) -> int:
         session.end()
         record.update(outcome='ended', exit_code=code)
         state.write_json_atomic(run_json, record)
+        held.stop_relay(plan, record)
         _close_run(plan)
         return _exit_code(code)
     finally:
@@ -1053,12 +1268,200 @@ def _run_session(plan: Plan, record: dict) -> int:
 
 def _close_run(plan: Plan) -> None:
     """Remove `run-open.json` once the session's end is recorded."""
-    if plan.mode != INTERACTIVE:
+    if not _marks_open(plan):
         return
     try:
         (_home_dir(plan) / watch.RUN_OPEN).unlink()
     except FileNotFoundError:
         pass
+
+
+# ---- the relay of a daily run
+
+
+def relay_env(environ: dict) -> dict[str, str]:
+    """The relay's environment: the allow list of kit's own, with the system's pinned names."""
+    allow = {_key(n) for n in ALLOW}
+    env = {k: v for k, v in environ.items() if _key(k) in allow}
+    if WINDOWS:
+        try:
+            pinned = windows_pins()
+        except OSError:
+            return env
+        for name in WINDOWS_PINNED:
+            harnesses.set_var(env, name, pinned[name])
+    return env
+
+
+def relay_record(root: Path, run_id: str) -> dict:
+    """`run.json`'s `relay`: the run's requests and refusals, its settled total and its stop."""
+    lines = []
+    try:
+        text = (root / 'runs' / run_id / relay.LOG).read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        text = ''
+    for raw in text.splitlines():
+        try:
+            line = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(line, dict):
+            lines.append(line)
+    try:
+        totals = relay.fold(relay.read_ledger(root))
+    except OSError:
+        totals = relay.Totals()
+    return {
+        'requests': len(lines),
+        'refused': sum(1 for line in lines if line.get('decision') == 'refused'),
+        'settled_usd': totals.run.get(run_id, 0.0),
+        'stopped': run_id in totals.stops,
+    }
+
+
+class _RelayProcess:
+    """The relay's process and its tree, its standard input kept open until the run ends."""
+
+    def __init__(self, proc: subprocess.Popen, job: _Job | None) -> None:
+        self.proc = proc
+        self.job = job
+        self.line: bytes | None = None
+        self.reader = threading.Thread(target=self._read_ready, daemon=True)
+        self.reader.start()
+
+    @classmethod
+    def start(cls, plan: Plan, environ: dict) -> _RelayProcess:
+        """Start `kit relay serve` for the run; raise OSError when it did not start in its tree."""
+        parent = str(Path(harness_kit.__file__).resolve().parent.parent)
+        boot = (
+            f'import sys; sys.path.insert(0, {parent!a}); '
+            'from harness_kit.cli import main; sys.exit(main())'
+        )
+        found = plan.daily.found
+        argv = [sys.executable, '-I', '-c', boot, 'relay', 'serve', '--config', str(found.path)]
+        argv += ['--state-root', str(plan.root), '--run-id', plan.run_id]
+        extra = (
+            {'creationflags': CREATE_SUSPENDED | NO_WINDOW}
+            if WINDOWS
+            else {'start_new_session': True}
+        )
+        with open(plan.run_dir / RELAY_STDERR, 'wb') as err:
+            proc = subprocess.Popen(  # noqa: S603 - this interpreter, a fixed bootstrap, no shell
+                argv,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=err,
+                env=relay_env(environ),
+                cwd=str(plan.run_dir),
+                **extra,
+            )
+        job = None
+        if WINDOWS:
+            try:
+                job = _Job()
+                job.assign(int(proc._handle))  # type: ignore[attr-defined]
+                _resume(proc.pid)
+            except OSError:
+                proc.kill()
+                proc.wait()
+                if job is not None:
+                    job.close()
+                raise
+        return cls(proc, job)
+
+    def _read_ready(self) -> None:
+        try:
+            self.line = self.proc.stdout.readline(4096)
+        except (OSError, ValueError):
+            self.line = b''
+
+    def hand(self, key: str, capability: str) -> None:
+        """Write the relay's first line of standard input; the pipe stays open."""
+        line = json.dumps({'key': key, 'capability': capability}, ensure_ascii=True) + '\n'
+        try:
+            self.proc.stdin.write(line.encode('ascii'))
+            self.proc.stdin.flush()
+        except (OSError, ValueError):
+            pass  # a relay that already ended is not ready
+
+    def wait_ready(self, port: int, timeout_s: float) -> str | None:
+        """None once the relay printed its ready line for `port`, else why it is not ready."""
+        end = time.monotonic() + timeout_s
+        while self.line is None:
+            if time.monotonic() >= end:
+                return f'no ready line within {timeout_s:g} s'
+            time.sleep(RELAY_POLL_S)
+        try:
+            ready = json.loads(self.line.decode('ascii'))
+        except (UnicodeDecodeError, ValueError):
+            ready = None
+        ok = isinstance(ready, dict) and ready.get('relay') == 1 and ready.get('port') == port
+        if ok:
+            return None
+        if not self.line:
+            code = self.proc.poll()
+            return (
+                f'it ended with exit {code} before its ready line'
+                if code is not None
+                else ('it closed its standard output before its ready line')
+            )
+        return 'its ready line is not {"relay": 1, "port": N, "pid": P} for its port'
+
+    def stop(self, timeout_s: float = RELAY_STOP_S) -> None:
+        """Close its standard input, wait at most `timeout_s` for its end, then end its tree."""
+        try:
+            self.proc.stdin.close()
+        except (OSError, ValueError):
+            pass
+        end = time.monotonic() + timeout_s
+        while self.proc.poll() is None and time.monotonic() < end:
+            time.sleep(RELAY_POLL_S)
+        if self.job is not None:
+            self.job.terminate()
+            self.job.wait_empty(TREE_WAIT_S)
+            self.job.close()
+        elif not WINDOWS:
+            try:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            _wait_group_gone(self.proc.pid, TREE_WAIT_S)
+        if self.proc.poll() is None:
+            self.proc.kill()
+        try:
+            self.proc.wait(timeout=TREE_WAIT_S)
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            self.proc.stdout.close()
+        except (OSError, ValueError):
+            pass
+
+
+class _Held:
+    """The relay a minted run started, stopped and recorded once, however the run ended."""
+
+    def __init__(self) -> None:
+        self.relay: _RelayProcess | None = None
+
+    def start_relay(self, plan: Plan, environ: dict) -> str | None:
+        """Start the relay and hand it the key; None once it is ready, else why it is not."""
+        try:
+            self.relay = _RelayProcess.start(plan, environ)
+        except OSError as exc:
+            return f'it did not start: {_ascii(type(exc).__name__)}'
+        key, plan.daily.key = plan.daily.key, None
+        self.relay.hand(key or '', plan.daily.capability)
+        port = plan.daily.found.relay.listen_port
+        return self.relay.wait_ready(port, RELAY_READY_S)
+
+    def stop_relay(self, plan: Plan, record: dict) -> None:
+        if self.relay is None:
+            return
+        found, self.relay = self.relay, None
+        found.stop()
+        record.update(relay=relay_record(plan.root, plan.run_id))
+        state.write_json_atomic(plan.run_dir / 'run.json', record)
 
 
 # ---- interrupts and the session's tree

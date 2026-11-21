@@ -6,11 +6,15 @@ stub scripts two shell calls and a final text: `echo probe > deny-<nonce>.marker
 and then `echo probe > allow-<nonce>.marker`. The harness runs in
 `runs/<id>/canary/work/`, a folder of the kit's own that holds only a byte for
 byte copy of the project-config paths found in the session's working folder,
-with a byte for byte copy of the home pointed at the private stub, under the
-session's environment builder with `KIT_CANARY_NONCE`, `PWD`, `TEMP` and `TMP`
-added. With that nonce the CLI denies the first call by `canary.deny`, writing
+with the driver's copy of the home pointed at the private stub (opencode's
+holds only the home's watched files, with empty `xdg/` and `home/` folders),
+under the session's environment builder with `KIT_CANARY_NONCE`, `PWD`, `TEMP`
+and `TMP` added. The harness's model is the home's `canary_model`. With that
+nonce the CLI denies the first call by `canary.deny`, writing
 `runs/<id>/canary/refused-<nonce>.marker`, and allows the second by
-`canary.allow`.
+`canary.allow`. The canary of a daily home never reaches the relay or the
+provider: its endpoint is the private stub too, and the relay starts only
+after the canary passed.
 
 The proof is three files, in this order: the refused marker exists, the deny
 marker does not, the allow marker does. The harness's exit code is never read.
@@ -292,10 +296,13 @@ def _run(driver, home, binary, stub, nonce, folder, workdir, project_config, mak
         harnesses.set_var(env, name, value)
     if not binary:
         return f'the {driver.name} binary was not found'
+    # The model is the home's `canary_model`; a home without one is a test home of an
+    # earlier render, whose driver's own test model the one-argument call gives.
+    args = (
+        driver.canary_argv(PROMPT, home) if 'canary_model' in home else driver.canary_argv(PROMPT)
+    )
     try:
-        timed_out = run_harness(
-            [*binary, *driver.canary_argv(PROMPT)], env, work, folder, timeout_s
-        )
+        timed_out = run_harness([*binary, *args], env, work, folder, timeout_s)
     except (OSError, ValueError) as exc:
         return f'the harness did not start: {_ascii(exc)}'
     return REASON_TIMEOUT if timed_out else None

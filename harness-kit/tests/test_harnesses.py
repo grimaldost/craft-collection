@@ -15,7 +15,13 @@ Contract under test:
   tokens, required arguments and allow list of the driver's attributes; only
   opencode `interactive`, with no leading token, `--standalone` required and a
   flag table with arities;
-- `copy_home_for_canary` copies byte for byte; on opencode it swaps the
+- an opencode test home's `home.json` holds `kind` `test` and `canary_model`
+  `stub/stub-model` (stated keys and values, not a closed set: later homes gain
+  keys), and the canary copy keeps the home's keys; the canary's model is the
+  home's `canary_model` (a test home's when no home is given); `gitconfig` is
+  among opencode's watched files;
+- `copy_home_for_canary` copies byte for byte on Claude Code; on opencode it copies
+  only the watched files, with empty `xdg/` and `home/` folders, and swaps the
   endpoint text without parsing, so a malformed file stays malformed, and it
   raises when the text is absent;
 - `version` reads the first dotted triple from `--version`, run from an empty
@@ -188,6 +194,10 @@ def test_opencode_canary_argv_and_step():
         'go',
     ]
     assert d.canary_step('echo x') == {'tool': 'shell', 'args': {'command': 'echo x'}}
+    model = {'canary_model': 'relay/vendor/model-a'}
+    assert d.canary_argv('go', model)[5:] == ['--model', 'relay/vendor/model-a', 'go']
+    assert d.canary_argv('go', {}) == d.canary_argv('go')
+    assert d.watched_files == ('home.json', 'gitconfig'), d.watched_files
 
 
 # ---- home render
@@ -227,7 +237,9 @@ def test_opencode_home_contents():
     with tempfile.TemporaryDirectory() as td:
         folder = Path(td) / 'home-oc'
         home = _render('opencode', folder)
-        assert list(home) == RENDERED_KEYS, list(home)
+        assert list(home)[: len(HOME_KEYS)] == HOME_KEYS, list(home)
+        assert 'rendered_sha256' in home, list(home)
+        assert home['kind'] == 'test' and home['canary_model'] == 'stub/stub-model', home
         assert home['harness'] == 'opencode'
         assert Path(home['config_file']) == folder / 'conf' / 'opencode.jsonc'
         plugin = folder / 'kit-shell' / 'opencode-plugin'
@@ -408,6 +420,43 @@ def test_opencode_copy_keeps_a_malformed_file_and_swaps_the_endpoint():
         assert CANARY_ENDPOINT.encode() in out and ENDPOINT.encode() not in out
         assert cfg.read_bytes() == broken, 'the original changed'
         assert copy['endpoint'] == CANARY_ENDPOINT and Path(copy['dir']) == dest
+
+
+def test_opencode_copy_holds_only_the_watched_files():
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        home = _render('opencode', base / 'h')
+        source = Path(home['dir'])
+        planted = {
+            'xdg/data/opencode/history.db': b'history',
+            'xdg/config/opencode/x.json': b'{}',
+            'home/Roaming/notes.txt': b'notes',
+            'home/.opencode/plan/p.md': b'plan',
+            'other/file.txt': b'other',
+            'gitconfig': b'[user]\nname = x\n',
+        }
+        for rel, data in planted.items():
+            (source / rel).parent.mkdir(parents=True, exist_ok=True)
+            (source / rel).write_bytes(data)
+        dest = base / 'canary' / 'home'
+        copy = harnesses.get('opencode').copy_home_for_canary(home, dest, CANARY_ENDPOINT)
+        files = sorted(p.relative_to(dest).as_posix() for p in dest.rglob('*') if p.is_file())
+        watched = sorted(
+            p.relative_to(source).as_posix()
+            for p in source.rglob('*')
+            if p.is_file() and p.relative_to(source).parts[0] in ('conf', 'kit-shell')
+        )
+        assert files == sorted([*watched, 'gitconfig', 'home.json']), files
+        for name in ('xdg', 'home'):
+            assert (dest / name).is_dir() and not any((dest / name).iterdir()), name
+        assert (dest / 'gitconfig').read_bytes() == planted['gitconfig']
+        assert (dest / 'home.json').read_bytes() == (source / 'home.json').read_bytes()
+        assert copy['endpoint'] == CANARY_ENDPOINT and Path(copy['dir']) == dest
+        moved = ('dir', 'config_file', 'endpoint')
+        assert list(copy) == list(home), list(copy)
+        kept = {k: v for k, v in copy.items() if k not in moved}
+        assert kept == {k: v for k, v in home.items() if k not in moved}, copy
+        assert copy['kind'] == 'test' and copy['canary_model'] == 'stub/stub-model', copy
 
 
 def test_opencode_copy_without_the_endpoint_text_raises():

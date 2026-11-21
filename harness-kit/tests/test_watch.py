@@ -3,7 +3,8 @@
 
 Contract under test:
 - each driver names its watched folders and files and the names it excludes:
-  opencode every file under `conf/` and `kit-shell/` and `home.json`; Claude
+  opencode every file under `conf/` and `kit-shell/`, `home.json` and a daily
+  home's `gitconfig`; Claude
   Code `claude-config/settings.json`, every file under `kit-shell/` and
   `home.json`; neither excludes a name;
 - `hash_files` maps each watched file, by its path relative to the home with
@@ -72,7 +73,7 @@ def _sha(path: Path) -> str:
 def test_each_driver_names_its_watched_files():
     oc = harnesses.get('opencode')
     assert oc.watched_folders == ('conf', 'kit-shell'), oc.watched_folders
-    assert oc.watched_files == ('home.json',), oc.watched_files
+    assert oc.watched_files == ('home.json', 'gitconfig'), oc.watched_files
     assert oc.excluded_names == (), oc.excluded_names
     cc = harnesses.get('claude-code')
     assert cc.watched_folders == ('kit-shell',), cc.watched_folders

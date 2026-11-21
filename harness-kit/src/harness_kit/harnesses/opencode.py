@@ -6,6 +6,12 @@ as the shell's lookups found it and the folder the session runs in. This
 driver translates an envelope into the neutral event (`translate_event`) or
 the note (`translate_note`), and names the tools the kit refuses by name
 (`refused_tool`).
+
+A daily home (`render_daily_home`) names one provider, `relay`: the relay `kit run`
+starts for the session on the daily file's port, which the session reaches with its
+capability. Its `gitconfig` holds the daily file's identity and joins the watched files.
+The canary's copy of any home holds only the watched files, with empty `xdg/` and `home/`
+folders, so a home's history is never copied.
 """
 
 from __future__ import annotations
@@ -14,6 +20,7 @@ import functools
 import hashlib
 import os
 import re
+import shutil
 from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
@@ -21,15 +28,17 @@ from types import MappingProxyType
 from harness_kit import watch
 from harness_kit.event import InvalidEventError, parse_event
 from harness_kit.harnesses import (
+    DAILY_HOME,
     FAKE_KEY,
     HEADLESS,
     INTERACTIVE,
+    RELAY_CAPABILITY_ENV,
     SHELLS_DIR,
+    TEST_HOME,
     Grammar,
     HomeError,
     check_endpoint,
     configured_argv,
-    copy_home,
     finish_home,
     home_env,
     is_batch,
@@ -42,6 +51,9 @@ from harness_kit.harnesses import (
 )
 
 MODEL = 'stub/stub-model'
+PROVIDER_PACKAGE = '@opencode/ai/providers/openai-compatible'
+RELAY_PROVIDER = 'relay'
+GITCONFIG = 'gitconfig'
 NATIVE = ('node_modules', '@opencode', 'cli', 'bin', 'opencode.exe')
 CONFIG_NAMES = (
     'OPENCODE_CONFIG_DIR',
@@ -341,8 +353,9 @@ class OpenCode:
     # The files the guard is read from. opencode 2.2.5 wrote nothing under `conf/` or
     # `kit-shell/` in an interactive or a headless session, so no name is excluded; it writes
     # `conf/cli.json` when a setting changes in the interface, which stays watched.
+    # A daily home's `gitconfig` is watched too; a test home has none.
     watched_folders = ('conf', 'kit-shell')
-    watched_files = ('home.json',)
+    watched_files = ('home.json', GITCONFIG)
     excluded_names: tuple[str, ...] = ()
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]:
@@ -358,6 +371,48 @@ class OpenCode:
 
     def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict:
         check_endpoint(endpoint)
+        stub = {
+            'name': 'Stub',
+            'env': ['STUB_API_KEY'],
+            'package': PROVIDER_PACKAGE,
+            'settings': {'baseURL': endpoint + '/v1'},
+            'models': {'stub-model': {'name': 'Stub Model'}},
+        }
+        settings = {'update': 'disable', 'model': MODEL, 'providers': {'stub': stub}}
+        extra = {'kind': TEST_HOME, 'canary_model': MODEL}
+        return self._render(home, endpoint, records, settings, extra)
+
+    def render_daily_home(self, home: Path, found, records: tuple[str, ...] = ()) -> dict:
+        """A daily home for the daily file `found` (`daily.Daily`): its provider is the relay."""
+        from harness_kit.daily import gitconfig_text
+
+        endpoint = found.endpoint
+        check_endpoint(endpoint)
+        model = f'{RELAY_PROVIDER}/{found.relay.default_model}'
+        relay = {
+            'name': 'Relay',
+            'env': [RELAY_CAPABILITY_ENV],
+            'package': PROVIDER_PACKAGE,
+            'settings': {'baseURL': endpoint + '/v1'},
+            'models': {m.id: {'name': m.id} for m in found.relay.models},
+        }
+        settings = {
+            'update': 'disable',
+            'model': model,
+            'small_model': model,
+            'providers': {RELAY_PROVIDER: relay},
+        }
+        extra = {
+            'kind': DAILY_HOME,
+            'daily_file': str(found.path),
+            'daily_sha256': found.sha256,
+            'daily_settings': found.settings,
+            'canary_model': model,
+        }
+        gitconfig = gitconfig_text(found.git_name, found.git_email)
+        return self._render(home, endpoint, records, settings, extra, gitconfig)
+
+    def _render(self, home, endpoint, records, settings, extra, gitconfig=None) -> dict:
         folder = prepare_dir(home)
         plugin = folder / 'kit-shell' / 'opencode-plugin'
         source = SHELLS_DIR / 'opencode' / 'index.js'
@@ -365,24 +420,13 @@ class OpenCode:
         write_note_config(shell_config.parent, records, self.name)
         (folder / 'xdg').mkdir()
         config = folder / 'conf' / 'opencode.jsonc'
-        stub = {
-            'name': 'Stub',
-            'env': ['STUB_API_KEY'],
-            'package': '@opencode/ai/providers/openai-compatible',
-            'settings': {'baseURL': endpoint + '/v1'},
-            'models': {'stub-model': {'name': 'Stub Model'}},
-        }
-        write_json(
-            config,
-            {
-                'update': 'disable',
-                'model': MODEL,
-                'providers': {'stub': stub},
-                'plugins': [plugin.as_posix()],
-            },
-        )
+        write_json(config, {**settings, 'plugins': [plugin.as_posix()]})
+        if gitconfig is not None:
+            (folder / GITCONFIG).write_bytes(gitconfig.encode('utf-8'))
         rendered = watch.hash_files(folder, self, rendered=True)
-        return finish_home(self.name, folder, endpoint, config, entry, shell_config, rendered)
+        return finish_home(
+            self.name, folder, endpoint, config, entry, shell_config, rendered, extra
+        )
 
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]:
         env = home_env(home, base)
@@ -408,9 +452,25 @@ class OpenCode:
         return env
 
     def copy_home_for_canary(self, home: dict, dest: Path, canary_endpoint: str) -> dict:
-        """Copy the home, then swap the endpoint text in the configuration without parsing it."""
-        copy = copy_home(home, dest, canary_endpoint)
+        """Copy the home's watched files, with empty `xdg/` and `home/` folders, then swap the
+        endpoint text in the configuration without parsing it."""
+        source = Path(home['dir'])
+        target = Path(os.path.abspath(str(dest)))
+        try:
+            relative = Path(home['config_file']).relative_to(source)
+        except ValueError:
+            raise HomeError('config_file is outside the home folder') from None
+        target.mkdir(parents=True, exist_ok=True)
+        for rel in watch.watched_paths(source, self):
+            (target / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source / rel, target / rel)
+        for name in ('xdg', 'home'):
+            (target / name).mkdir(exist_ok=True)
+        copy = dict(home)
+        copy.update(dir=str(target), config_file=str(target / relative), endpoint=canary_endpoint)
         config = Path(copy['config_file'])
+        if not config.is_file():
+            raise HomeError('the opencode configuration is absent from the copied home')
         data = config.read_bytes()
         old = home['endpoint'].encode('ascii')
         if not old or old not in data:
@@ -418,8 +478,10 @@ class OpenCode:
         config.write_bytes(data.replace(old, canary_endpoint.encode('ascii')))
         return copy
 
-    def canary_argv(self, prompt: str) -> list[str]:
-        return ['run', '--standalone', '--format', 'json', '--auto', '--model', MODEL, prompt]
+    def canary_argv(self, prompt: str, home: dict | None = None) -> list[str]:
+        """The canary's arguments; the model is the home's `canary_model`, else a test home's."""
+        model = (home or {}).get('canary_model') or MODEL
+        return ['run', '--standalone', '--format', 'json', '--auto', '--model', model, prompt]
 
     def canary_step(self, command: str) -> dict:
         return {'tool': 'shell', 'args': {'command': command}}
