@@ -653,6 +653,163 @@ def test_a_redirect_before_the_program_does_not_hide_it():
     assert families('&>> log.txt git config --global --get user.name') == []
 
 
+def _bash_families(command: str) -> list[tuple[int, str | None]]:
+    return [(a.family, a.key) for a in gate.shell_acts(command, 'bash', cwd=None)]
+
+
+def _ps_families(command: str) -> list[tuple[int, str | None]]:
+    return [(a.family, a.key) for a in gate.shell_acts(command, 'powershell', cwd=None)]
+
+
+def test_a_redirect_after_the_program_does_not_shift_its_arguments():
+    """A redirection may sit anywhere in a simple command; its target is never an argument.
+
+    `_args` kept the old two-character rule after the leading-redirect fix, so
+    `git &>> f config ...` read `f` as git's subcommand and no act was found.
+    """
+    f = _bash_families
+    assert f('git &>> f config --global user.name foo') == [(4, 'user.name')]
+    assert f('claude &>> f plugin install x@y') == [(2, 'x@y')]
+    assert f('claude plugin &>> f install x@y') == [(2, 'x@y')]
+    assert f('claude plugin marketplace &>> f add o/r') == [(2, 'o/r')]
+    assert f('git >f &>> f config --global user.name foo') == [(4, 'user.name')]
+    assert f('git config --global &>>f user.name foo') == [(4, 'user.name')]
+
+
+def test_every_bash_redirection_form_is_read_as_a_redirection():
+    """The `{name}>`, `<<<`, `>&word` and digit-led `<` forms are redirections in bash."""
+    f = _bash_families
+    # a {varname} redirection, before or after the program
+    assert f('{v}>f git config --global user.name foo') == [(4, 'user.name')]
+    assert f('{v}>> f setx FOO bar') == [(3, 'FOO')]
+    assert f('{v}<> f claude plugin install x@y') == [(2, 'x@y')]
+    assert f('git {v}>f config --global user.name foo') == [(4, 'user.name')]
+    # a here-string takes the next word as its operand; a heredoc is read as before
+    assert f('<<< x git config --global user.name foo') == [(4, 'user.name')]
+    assert f('<<<"a b" setx FOO bar') == [(3, 'FOO')]
+    assert f('git <<< x config --global user.name foo') == [(4, 'user.name')]
+    assert f('bash <<EOF\nsetx FOO bar\nEOF') == [(3, 'FOO')]
+    # `>&word` with a word that is not all digits names a file: `2f` is the target
+    assert f('>&2f git config --global user.name foo') == [(4, 'user.name')]
+    assert f('>&2f setx FOO bar') == [(3, 'FOO')]
+    assert f('>& f setx FOO bar') == [(3, 'FOO')]
+    assert f('>&2 setx FOO bar') == [(3, 'FOO')]
+    # a digit-led input redirection
+    assert f('0<f git config --global user.name foo') == [(4, 'user.name')]
+    assert f('git 0< f config --global user.name foo') == [(4, 'user.name')]
+    assert f('setx<f FOO bar') == [(3, 'FOO')]
+    # ordinary uses stay allowed
+    assert f('cat <<< x') == []
+    assert f('0<f cat') == []
+    assert f('echo a {fd}>f') == []
+    assert f('echo ${v}>f') == []
+    assert f('echo x >&2f') == []
+
+
+def test_bash_command_prefixes_do_not_hide_the_program():
+    """Assignments, prefix words with option values, reserved words and eval run the command."""
+    f = _bash_families
+    assert f('VAR="a b" git config --global user.name foo') == [(4, 'user.name')]
+    assert f("VAR='x' setx FOO bar") == [(3, 'FOO')]
+    assert f('env -u X git config --global user.name foo') == [(4, 'user.name')]
+    assert f('env -C /tmp setx FOO bar') == [(3, 'FOO')]
+    assert f('exec -a n claude plugin install x@y') == [(2, 'x@y')]
+    assert f('sudo -u u git config --global user.name foo') == [(4, 'user.name')]
+    assert f('nice -n 5 setx FOO bar') == [(3, 'FOO')]
+    assert f('timeout 5 git config --global user.name foo') == [(4, 'user.name')]
+    assert f('timeout -s KILL 5 setx FOO bar') == [(3, 'FOO')]
+    assert f('stdbuf -o0 setx FOO bar') == [(3, 'FOO')]
+    assert f('xargs -n 1 setx FOO') == [(3, 'FOO')]
+    assert f('eval git config --global user.name foo') == [(4, 'user.name')]
+    assert f('eval "setx FOO bar"') == [(3, 'FOO')]
+    assert f('! git config --global user.name foo') == [(4, 'user.name')]
+    assert f('if git config --global user.name foo; then :; fi') == [(4, 'user.name')]
+    assert f('while setx FOO bar; do :; done') == [(3, 'FOO')]
+    assert f('until setx FOO bar; do :; done') == [(3, 'FOO')]
+    assert f('coproc claude plugin install x@y') == [(2, 'x@y')]
+    assert f('for i in 1; do git config --global user.name foo; done') == [(4, 'user.name')]
+    assert f('if true; then :; else setx FOO bar; fi') == [(3, 'FOO')]
+    assert f('case a in a) git config --global user.name foo;; esac') == [(4, 'user.name')]
+    # ordinary uses stay allowed
+    assert f('nice -n 5 uv run pytest') == []
+    assert f('timeout 5 uv run pytest') == []
+    assert f('if true; then echo ok; fi') == []
+    assert f('env -u X git config --global --get user.name') == []
+
+
+def test_powershell_stream_redirections_are_read_as_redirections():
+    """`*>`, `*>>` and `*>&1` redirect every PowerShell stream; `*` is not a word there."""
+    f = _ps_families
+    assert f('claude plugin *>> r.txt install x@y') == [(2, 'x@y')]
+    assert f('git *> r.txt config --global user.name foo') == [(4, 'user.name')]
+    assert f('claude plugin marketplace *>&1 add owner/repo') == [(2, 'owner/repo')]
+    assert f('*>> r.txt setx FOO bar') == [(3, 'FOO')]
+    assert f('cmd /c *>> r.txt setx FOO bar') == [(3, 'FOO')]
+    assert f('cmd /c claude plugin *> r.txt install x@y') == [(2, 'x@y')]
+    assert f('Get-ChildItem *> out.txt') == []
+    # in bash `*` is a glob word before a redirection, as before
+    assert _bash_families('ls *> f') == []
+
+
+def test_cmd_written_with_the_git_bash_double_slash_is_a_wrapper():
+    """Git Bash turns `/c` into a drive path, so cmd is called with `//c` from it."""
+    for f in (_bash_families, _ps_families):
+        assert f('cmd //c setx FOO bar') == [(3, 'FOO')]
+        assert f('cmd //c git config --global user.name foo') == [(4, 'user.name')]
+        assert f('cmd //c claude plugin install x@y') == [(2, 'x@y')]
+        assert f('cmd.exe //C setx FOO bar') == [(3, 'FOO')]
+        assert f('cmd //c dir') == []
+
+
+def test_a_user_environment_variable_set_through_the_registry_or_start_process():
+    """Family 3 covers the registry key behind the user environment and a started setx."""
+    f = _ps_families
+    assert f('reg add HKCU\\Environment /v FOO /d bar /f') == [(3, 'FOO')]
+    assert f('reg delete "HKCU\\Environment" /v FOO /f') == [(3, 'FOO')]
+    assert f(
+        'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" '
+        '/v FOO /d bar'
+    ) == [(3, 'FOO')]
+    assert _bash_families("reg add 'HKCU\\Environment' //v FOO //d bar //f") == [(3, 'FOO')]
+    assert f('Set-ItemProperty -Path HKCU:\\Environment -Name FOO -Value bar') == [(3, 'FOO')]
+    assert f("New-ItemProperty 'HKCU:\\Environment' -Name FOO -Value bar") == [(3, 'FOO')]
+    assert f('Remove-ItemProperty -Path HKCU:\\Environment -Name FOO') == [(3, 'FOO')]
+    assert f("Start-Process setx -ArgumentList 'FOO','bar'") == [(3, 'FOO')]
+    assert f("Start-Process -FilePath git -ArgumentList 'config --global user.name foo'") == [
+        (4, 'user.name')
+    ]
+    # reads and other keys stay allowed
+    assert f('reg query HKCU\\Environment /v FOO') == []
+    assert f('Get-ItemProperty -Path HKCU:\\Environment -Name FOO') == []
+    assert f('reg add HKCU\\Software\\App /v FOO /d bar') == []
+    assert f('Set-ItemProperty -Path HKCU:\\Software\\App -Name FOO -Value bar') == []
+    assert f('Start-Process notepad') == []
+
+
+def test_the_verification_bypasses_are_denied_on_a_go_on():
+    tmp, box = _sandbox()
+    with tmp:
+        box.prompt(GO_ON)
+        _denied(box.bash('git &>> f config --global user.name foo'))
+        _denied(box.bash('{v}>f setx FOO bar'))
+        _denied(box.bash('<<< x claude plugin install x@y'))
+        _denied(box.bash('>&2f git config --global user.name foo'))
+        _denied(box.bash('cmd //c setx FOO bar'))
+        _denied(box.powershell('claude plugin *>> r.txt install x@y'))
+        _denied(box.powershell('reg add HKCU\\Environment /v FOO /d bar /f'))
+        _allowed_silently(box.bash('timeout 5 uv run pytest 2>&1 >&2'))
+        _allowed_silently(box.powershell('Get-ChildItem *> out.txt'))
+        assert [(e['family'], e['decision']) for e in box.log()] == [
+            (4, 'deny'),
+            (3, 'deny'),
+            (2, 'deny'),
+            (4, 'deny'),
+            (3, 'deny'),
+            (2, 'deny'),
+            (3, 'deny'),
+        ], box.log()
+
+
 def test_a_leading_redirect_before_a_governed_act_is_denied_on_a_go_on():
     tmp, box = _sandbox()
     with tmp:
@@ -723,6 +880,13 @@ if __name__ == '__main__':
     test_acts_found_in_commands()
     test_a_redirect_before_the_program_does_not_hide_it()
     test_a_leading_redirect_before_a_governed_act_is_denied_on_a_go_on()
+    test_a_redirect_after_the_program_does_not_shift_its_arguments()
+    test_every_bash_redirection_form_is_read_as_a_redirection()
+    test_bash_command_prefixes_do_not_hide_the_program()
+    test_powershell_stream_redirections_are_read_as_redirections()
+    test_cmd_written_with_the_git_bash_double_slash_is_a_wrapper()
+    test_a_user_environment_variable_set_through_the_registry_or_start_process()
+    test_the_verification_bypasses_are_denied_on_a_go_on()
     test_authorizing_sentence_rule()
     test_the_deny_example_names_the_denied_file()
     test_the_deny_example_names_the_denied_variable()

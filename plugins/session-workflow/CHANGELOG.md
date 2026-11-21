@@ -8,13 +8,14 @@ tagged.
 
 ## [0.31.1] - 2026-11-17
 
-Six corrections from the 2026-11-17 triage and verification round. An installed copy notices a
-rebuilt feedback `INDEX.md` whose empty Untriaged section has no list item, an untriaged count
-on the line the index builder prints, a triage coverage audit that no longer fails a cluster
-heading that only mentions a route-out, an owner-acts gate that no longer takes a leading
-redirection's target for the program, and three corrected sentences in skill text (the phase
-briefs, the review-panel run notes and tool-feedback). Patch bump: corrections only, nothing
-added.
+Seven corrections from the 2026-11-17 triage and its verification rounds. An installed copy
+notices a rebuilt feedback `INDEX.md` whose empty Untriaged section has no list item, an
+untriaged count on the line the index builder prints, a triage coverage audit that no longer
+fails a cluster heading that only mentions a route-out, an owner-acts gate that no longer
+takes a redirection's target for the program or one of its arguments and no longer loses a
+governed act behind a command prefix, a wrapper form or the environment's registry key, and
+three corrected sentences in skill text (the phase briefs, the review-panel run notes and
+tool-feedback). Patch bump: corrections only, nothing added.
 
 ### Fixed
 
@@ -51,6 +52,21 @@ added.
   is a descriptor copy (`2>&1`, `<&0`), whose operand is inside the operator; separators and
   descriptor copies or closes are read as before, and `test_owner_acts_gate.py` pins the
   three commands and the `&>`, `>|`, `2>>`, `<>` and `3>` forms as denies.
+- **The owner-acts gate reads a governed act past every redirection, prefix and wrapper
+  form** (verification of the fix above). Independent checks found the same defect class
+  elsewhere on the program-position path, each allowed on a generic go-on before this fix:
+  `_args` kept the old rule, so `git &>> f config --global ...` read `f` as git's
+  subcommand; the tokenizer read `{v}>f`, `<<< x`, `>&2f` and `0<f` (bash) and `*>`, `*>>`
+  and `*>&1` (PowerShell) as words or as the wrong operator; a quoted assignment
+  (`VAR="a b" git ...`), a prefix word's option value (`env -u X`, `exec -a n`,
+  `sudo -u u`, `timeout 5`) and reserved words (`!`, `if`, `do`, `while`) hid the program;
+  `cmd //c` (the Git Bash spelling of `/c`) and `eval` were not read as wrappers; and a
+  user environment variable set through `reg add HKCU\Environment`, `Set-ItemProperty
+  HKCU:\Environment` or `Start-Process setx` was not family 3. One rule now decides a
+  redirection's target before and after the program (a descriptor copy or close takes
+  none), and `test_owner_acts_gate.py` pins every form above as a deny, with ordinary
+  commands using the same forms (`cat <<< x`, `timeout 5 uv run pytest`,
+  `Get-ChildItem *> out.txt`, `reg query HKCU\Environment`) still allowed.
 
 ## [0.31.0] - 2026-11-01
 

@@ -23,16 +23,20 @@ finds four families of act:
 2. `claude plugin` install, update, uninstall, enable, disable, or marketplace
    add, remove, update;
 3. setting a user or machine environment variable (`setx`,
-   `[Environment]::SetEnvironmentVariable` with a User or Machine target);
+   `[Environment]::SetEnvironmentVariable` with a User or Machine target, or a
+   `reg add|delete|copy` or `*-ItemProperty` write to the registry key that holds it);
 4. `git config --global` with a value.
 
 Shell text is read with heredoc bodies (unless a shell runs them), PowerShell
 here-strings and comments blanked; a program is recognised only at program
-position, on the tokens outside quotes, and its discriminating arguments (the
-path, the plugin id, the variable name and scope, the git key) are read with their
-quotes removed. Read-only forms (`--get`, `--list`, `marketplace list`, `cat`,
-`type`, `Get-Content`) are not acts. A `bash -c`, `powershell`/`pwsh` `-Command`
-or `cmd /c` wrapper has its argument read as a command, and a wrapper whose quoted
+position, on the tokens outside quotes, after assignments, prefix words (`sudo`,
+`env`, `timeout 5`, reserved words such as `if` and `!`) with their option values,
+and redirections; every redirection's target is dropped wherever it stands, and its
+discriminating arguments (the path, the plugin id, the variable name and scope, the
+git key) are read with their quotes removed. Read-only forms (`--get`, `--list`,
+`marketplace list`, `cat`, `type`, `Get-Content`) are not acts. A `bash -c`,
+`powershell`/`pwsh` `-Command`, `cmd /c` (or `//c`), `eval` or `Start-Process`
+wrapper has its argument read as a command, and a wrapper whose quoted
 argument contains a family's program token is matched as that family even when
 the inner command cannot be read (over-matching on the deny side).
 
@@ -295,7 +299,94 @@ _SETENV = re.compile(
     r'\[\s*(?:system\s*\.\s*)?environment\s*\]\s*::\s*setenvironmentvariable\s*\(', re.I
 )
 _ASSIGNMENT = re.compile(r'^[A-Za-z_]\w*=')
-_PREFIX_WORDS = frozenset({'sudo', 'command', 'exec', 'time', 'nohup', 'builtin', 'env', 'call'})
+# Words that run a later word as the command: for each, the options that take a separate
+# value and the number of operands (timeout's duration) before that command. Reserved words
+# and `!` are here too: `if git config ...` runs git.
+_PREFIX_WORDS: dict[str, tuple[frozenset[str], int]] = {
+    word: (frozenset(), 0)
+    for word in [
+        'command',
+        'builtin',
+        'nohup',
+        'call',
+        'setsid',
+        'coproc',
+        '!',
+        'if',
+        'then',
+        'elif',
+        'else',
+        'do',
+        'while',
+        'until',
+    ]
+}
+_PREFIX_WORDS.update(
+    {
+        'sudo': (
+            frozenset(
+                [
+                    '-u',
+                    '-g',
+                    '-h',
+                    '-p',
+                    '-C',
+                    '-D',
+                    '-R',
+                    '-T',
+                    '-U',
+                    '-r',
+                    '-t',
+                    '--user',
+                    '--group',
+                    '--host',
+                    '--prompt',
+                    '--chdir',
+                    '--chroot',
+                    '--close-from',
+                    '--command-timeout',
+                    '--other-user',
+                    '--role',
+                    '--type',
+                ]
+            ),
+            0,
+        ),
+        'doas': (frozenset({'-u', '-C'}), 0),
+        'env': (frozenset({'-u', '-C', '--unset', '--chdir'}), 0),
+        'exec': (frozenset({'-a'}), 0),
+        'time': (frozenset({'-f', '-o', '--format', '--output'}), 0),
+        'nice': (frozenset({'-n', '--adjustment'}), 0),
+        'ionice': (frozenset({'-c', '-n', '-p', '-P', '-u', '--class', '--classdata'}), 0),
+        'timeout': (frozenset({'-s', '-k', '--signal', '--kill-after'}), 1),
+        'stdbuf': (frozenset({'-i', '-o', '-e', '--input', '--output', '--error'}), 0),
+        'xargs': (
+            frozenset(
+                [
+                    '-I',
+                    '-n',
+                    '-P',
+                    '-d',
+                    '-E',
+                    '-L',
+                    '-s',
+                    '-a',
+                    '--max-args',
+                    '--max-procs',
+                    '--delimiter',
+                    '--eof',
+                    '--max-lines',
+                    '--max-chars',
+                    '--arg-file',
+                    '--replace',
+                ]
+            ),
+            0,
+        ),
+    }
+)
+_FD_VARIABLE = re.compile(r'\{[A-Za-z_]\w*\}')  # bash `{fd}>file`: the name is not a word
+_WORD_END = frozenset(' \t\r\n;|&()<>')
 
 
 def program_name(value: str) -> str:
@@ -462,16 +553,33 @@ def scan(text: str, shell: str) -> Scan:
             end_command()
             i += 2
             continue
-        if ch in '>' or (ch == '&' and nxt == '>') or (ch == '<' and value is None):
-            digits = value is not None and ''.join(value).isdigit() and not quoted
-            if digits:
+        if ch == '>' or (ch == '&' and nxt == '>') or (ch == '<' and (value is None or posix)):
+            # A word glued to the operator that names the stream is part of it: a descriptor
+            # (`2>`, `0<`), a bash descriptor variable (`{fd}>`) or PowerShell's `*>`.
+            head = ''.join(value) if value is not None and not quoted else None
+            if head is not None and (
+                head.isdigit()
+                or (posix and _FD_VARIABLE.fullmatch(head))
+                or (not posix and head == '*')
+            ):
                 value, quoted = None, False
             end_token()
-            stop = i + 1
-            while stop < n and text[stop] in '>&|':
-                stop += 1
-            while stop < n and text[stop].isdigit() and text[stop - 1] == '&':
-                stop += 1
+            if text.startswith('<<<', i):
+                stop = i + 3  # a here-string: the next word is its operand
+            else:
+                stop = i + 1
+                while stop < n and text[stop] in '>&|':
+                    stop += 1
+                if text[stop - 1] == '&':
+                    # `>&2`, `<&0`, `>&-` copy or close a descriptor only when the operand
+                    # ends the word; `>&2f` sends both streams to the file `2f`.
+                    end = stop
+                    while end < n and text[end].isdigit():
+                        end += 1
+                    if end == stop and end < n and text[end] == '-':
+                        end += 1
+                    if end > stop and (end == n or text[end] in _WORD_END):
+                        stop = end
             current.append(Token(text[i:stop], op=True))
             i = stop
             continue
@@ -485,26 +593,41 @@ def scan(text: str, shell: str) -> Scan:
     return Scan(commands, ''.join(masked), scripts)
 
 
-_DESCRIPTOR_COPY = re.compile(r'&\d+$')  # `2>&1`, `<&0`: the operand is in the operator
+_DESCRIPTOR_COPY = re.compile(r'&(?:\d+|-)$')  # `2>&1`, `<&0`, `>&-`: operand in the operator
+
+
+def _takes_target(op: Token) -> bool:
+    """Whether a redirection operator takes the next word as its target (`&>> f`, `3> f`,
+    `<<< x`, `>& f`); a descriptor copy or close (`2>&1`, `>&-`) does not."""
+    return not _DESCRIPTOR_COPY.search(op.value)
 
 
 def _program_index(tokens: list[Token]) -> int | None:
-    """The index of the program word: assignments, prefix words and every redirection
-    target before it skipped (`&>> f`, `3> f`; a descriptor copy takes no target)."""
-    skip_next = False
+    """The index of the program word: assignments, prefix words with their options and
+    operands, and every redirection target before it skipped."""
+    skip = 0
+    value_opts: frozenset[str] = frozenset()
+    operands = 0
     for index, token in enumerate(tokens):
-        if skip_next:
-            skip_next = False
+        if skip:
+            skip -= 1
             continue
         if token.op:
-            skip_next = not _DESCRIPTOR_COPY.search(token.value)
+            skip = 1 if _takes_target(token) else 0
             continue
-        if not token.quoted and _ASSIGNMENT.match(token.value):
-            continue
-        name = program_name(token.value)
-        if name in _PREFIX_WORDS or (name.startswith('-') and index > 0):
-            continue
+        if _ASSIGNMENT.match(token.value):
+            continue  # quoted or not: `VAR="a b" git ...` runs git
         if token.value in ('.', '&'):
+            continue
+        if index > 0 and token.value.startswith('-'):
+            skip = 1 if token.value in value_opts else 0
+            continue
+        if operands:
+            operands -= 1
+            continue
+        spec = _PREFIX_WORDS.get(program_name(token.value))
+        if spec is not None:
+            value_opts, operands = spec
             continue
         return index
     return None
@@ -524,7 +647,7 @@ def _args(tokens: list[Token], index: int) -> list[Token]:
             skip_next = False
             continue
         if token.op:
-            skip_next = len(token.value) <= 2 and not token.value.endswith(('&1', '&2'))
+            skip_next = _takes_target(token)
             continue
         out.append(token)
     return out
@@ -624,9 +747,69 @@ def _wrapper_inner(name: str, args: list[Token]) -> tuple[str, str] | None:
         return None
     if name == 'cmd':
         for k, token in enumerate(args):
-            if token.value.lower() in ('/c', '/k'):
+            # `//c` is how Git Bash passes `/c` without turning it into a drive path
+            if token.value.lower() in ('/c', '/k', '//c', '//k'):
                 return ' '.join(t.value for t in args[k + 1 :]), 'powershell'
+        return None
+    if name == 'eval':
+        return ' '.join(t.value for t in args), 'bash'
+    if name in _START_PROCESS:
+        # The started program and its arguments; `-ArgumentList 'a','b'` lists them with
+        # commas, and the parameter names (unquoted, with a dash) are left out.
+        words = [t.value.replace(',', ' ') for t in args if t.quoted or not t.value.startswith('-')]
+        return (' '.join(words), 'powershell') if words else None
     return None
+
+
+_START_PROCESS = frozenset({'start-process', 'saps', 'start'})
+_WRAPPERS = _POSIX_SHELLS | _PS_SHELLS | {'cmd', 'eval'} | _START_PROCESS
+# The registry key behind the user and the machine environment, `\` or `/`, any or no
+# separator (an unquoted `\` in bash is an escape and disappears).
+_ENV_KEY = re.compile(
+    r'^(?:registry::)?(?:(?:hkcu|hkey_current_user):?[\\/]*environment'
+    r'|(?:hklm|hkey_local_machine):?[\\/]*system[\\/]*currentcontrolset[\\/]*control'
+    r'[\\/]*session manager[\\/]*environment)[\\/]*$',
+    re.I,
+)
+_REG_WRITES = frozenset({'add', 'delete', 'copy'})
+_ITEMPROPERTY_WRITES = frozenset(
+    [
+        'set-itemproperty',
+        'sp',
+        'new-itemproperty',
+        'remove-itemproperty',
+        'rp',
+        'rename-itemproperty',
+        'rnp',
+        'clear-itemproperty',
+        'clp',
+        'copy-itemproperty',
+        'cpp',
+        'move-itemproperty',
+        'mp',
+    ]
+)
+
+
+def _registry_env_act(name: str, args: list[Token]) -> Act | None:
+    """A write to the registry key that holds the user or machine environment."""
+    values = [t.value for t in args]
+    if not any(_ENV_KEY.match(v.strip()) for v in values):
+        return None
+    if name == 'reg':
+        if not values or values[0].lower() not in _REG_WRITES:
+            return None
+        flags = ('/v', '//v')
+    elif name in _ITEMPROPERTY_WRITES:
+        flags = ('-name', '-n', '-na', '-nam')
+    else:
+        return None
+    key = None
+    for k, v in enumerate(values[:-1]):
+        if v.lower() in flags:
+            key = values[k + 1]
+            break
+    return Act(3, 'shell', key, f'{name} environment {key or ""}'.strip())
 
 
 _FAMILY_TOKENS = (
@@ -808,10 +991,12 @@ def shell_acts(command: str, shell: str, cwd: str | None, depth: int = 0) -> lis
                 act = _setx_act(args)
             elif name == 'git':
                 act = _git_act(args)
+            else:
+                act = _registry_env_act(name, args)
             if act is not None:
                 acts.append(act)
             inner = _wrapper_inner(name, args)
-            if inner is not None or name in _POSIX_SHELLS | _PS_SHELLS | {'cmd'}:
+            if inner is not None or name in _WRAPPERS:
                 acts.extend(_wrapper_acts(inner, args, cwd, depth))
                 continue
         write = _shell_write(tokens, index, cwd)
