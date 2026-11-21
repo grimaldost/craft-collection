@@ -72,7 +72,12 @@ tool-feedback). Patch bump: corrections only, nothing added.
   `>&1-git` and `>&2git` stay file targets; and a redirection between a prefix word's option
   and its value (`env -u >f X git ...`, `sudo -u <<< x root ...`, `env -C >f . ...`; the
   last two were denied before this item's first version) no longer spends that value or the
-  timeout's duration.
+  timeout's duration. A fourth round closed two more bash forms: a close with blanks before
+  the dash (`>& -git config ...`, `2>&<tab>-setx ...`, `env -u >& -X git ...`, the last a
+  form denied before this item's first version) ends at the dash, as bash's lexer skips the
+  blanks, while `>& 2` stays a copy; and a number or `{name}` glued before `&>` or `&>>`
+  (`timeout 5&>f git ...`) is a word, not a descriptor, so the governed program is no
+  longer spent as the timeout's duration or an option's value.
 
 ## [0.31.0] - 2026-11-01
 

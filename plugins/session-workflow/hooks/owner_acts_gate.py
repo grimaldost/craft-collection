@@ -555,12 +555,17 @@ def scan(text: str, shell: str) -> Scan:
             continue
         if ch == '>' or (ch == '&' and nxt == '>') or (ch == '<' and (value is None or posix)):
             # A word glued to the operator that names the stream is part of it: a descriptor
-            # (`2>`, `0<`), a bash descriptor variable (`{fd}>`) or PowerShell's `*>`.
+            # (`2>`, `0<`), a bash descriptor variable (`{fd}>`) or PowerShell's `*>`. In bash
+            # `&>` and `&>>` take no descriptor: `5&>f` is the word `5`, then `&> f`.
             head = ''.join(value) if value is not None and not quoted else None
-            if head is not None and (
-                head.isdigit()
-                or (posix and _FD_VARIABLE.fullmatch(head))
-                or (not posix and head == '*')
+            if (
+                head is not None
+                and not (posix and ch == '&')
+                and (
+                    head.isdigit()
+                    or (posix and _FD_VARIABLE.fullmatch(head))
+                    or (not posix and head == '*')
+                )
             ):
                 value, quoted = None, False
             end_token()
@@ -584,6 +589,16 @@ def scan(text: str, shell: str) -> Scan:
                         end += 1
                     if end > stop and (end == n or text[end] in _WORD_END):
                         stop = end
+                    if posix and text[i:stop] in ('>&', '<&'):
+                        # After `>&` or `<&` bash skips blanks and returns a `-` as its own
+                        # token: `>& -git` is the close `>&-` then the word `git`.
+                        end = stop
+                        while end < n and text[end] in ' \t':
+                            end += 1
+                        if end > stop and end < n and text[end] == '-':
+                            current.append(Token(text[i:stop] + '-', op=True))
+                            i = end + 1
+                            continue
             current.append(Token(text[i:stop], op=True))
             i = stop
             continue

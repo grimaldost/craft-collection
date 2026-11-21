@@ -908,6 +908,102 @@ def test_the_third_round_bypasses_are_denied_on_a_go_on():
         ], box.log()
 
 
+_BLANKS = (' ', '\t', '  ')
+
+
+def test_a_descriptor_close_with_blanks_before_the_dash_ends_at_the_dash():
+    """After `>&` or `<&` bash's lexer skips blanks and returns a `-` as its own token.
+
+    `declare -f` prints `>& -PROG a b` as `PROG a b 1>&-`. `scan` closed the operator at the
+    dash only when the dash touched the `&`, so `>& -git` read `-git` as a file target and no
+    deny arm ran (2026-11-24 verification, fourth round). In an option-value slot this was a
+    regression: `env -u >& -X git ...` was denied at 065f5d6 and allowed at dad20b5.
+    """
+    f = _bash_families
+    for s in _BLANKS:
+        # before the program
+        assert f(f'>&{s}-git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'2>&{s}-setx FOO bar') == [(3, 'FOO')], s
+        assert f(f'<&{s}-claude plugin install x@y') == [(2, 'x@y')], s
+        assert f(f'{{fd}}>&{s}-git config --global user.name foo') == [(4, 'user.name')], s
+        # after an assignment, a prefix word and a separator
+        assert f(f'VAR=x >&{s}-git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'env 2>&{s}-setx FOO bar') == [(3, 'FOO')], s
+        assert f(f'true; <&{s}-claude plugin install x@y') == [(2, 'x@y')], s
+        # between the program and its arguments
+        assert f(f'git >&{s}-config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'git config >&{s}---global user.name foo') == [(4, 'user.name')], s
+        assert f(f'claude >&{s}-plugin install x@y') == [(2, 'x@y')], s
+        # the regression: in an option-value slot and between git's arguments
+        assert f(f'env -u >&{s}-X git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'exec -a >&{s}-n git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'sudo -u >&{s}-root git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'env -C >&{s}-. git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'timeout -s >&{s}-KILL 5 setx FOO bar') == [(3, 'FOO')], s
+        assert f(f'nice -n >&{s}-5 git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'stdbuf -o >&{s}-L claude plugin install x@y') == [(2, 'x@y')], s
+        assert f(f'xargs -I >&{s}-{{}} git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'ionice -c >&{s}-2 git config --global user.name foo') == [(4, 'user.name')], s
+        assert f(f'git config --global user.name {{fd}}>&{s}-foo') == [(4, 'user.name')], s
+        assert f(f'git -C {{fd}}>&{s}-. config --global user.name foo') == [(4, 'user.name')], s
+    # a digit after `>&` still makes a file target, and a spaced digit is still a copy
+    assert f('>& 2 setx FOO bar') == [(3, 'FOO')]
+    assert f('>&1-git config --global user.name foo') == []
+    assert f('2>&1-git config --global user.name foo') == []
+    assert f('>&2git config --global user.name foo') == []
+    # ordinary closes and copies stay allowed
+    assert f('ls >& -') == []
+    assert f('exec 3>& -') == []
+    assert f('cmd 2>& 1') == []
+    # the forms denied before stay denied
+    assert f('>&- git config --global user.name foo') == [(4, 'user.name')]
+    assert f('>&-git config --global user.name foo') == [(4, 'user.name')]
+    assert f('2>&1 git config --global user.name foo') == [(4, 'user.name')]
+
+
+def test_a_digit_or_name_glued_before_and_greater_is_a_word():
+    """Before `&>` and `&>>` a glued number or `{name}` is a word, not a descriptor.
+
+    `declare -f` prints `timeout 5&>f PROG a b` as `timeout 5 PROG a b &> f`. `scan` dropped
+    the number as a descriptor, so the governed program was spent as timeout's duration
+    (2026-11-24 verification, fourth round; present at 065f5d6 too).
+    """
+    f = _bash_families
+    assert f('timeout 5&>f git config --global user.name foo') == [(4, 'user.name')]
+    assert f('timeout -s KILL 5&>f setx FOO bar') == [(3, 'FOO')]
+    assert f('timeout --kill-after V 5&>> f claude plugin install x@y') == [(2, 'x@y')]
+    assert f('nice -n 5&>f git config --global user.name foo') == [(4, 'user.name')]
+    assert f('xargs -n 1&>f git config --global user.name foo') == [(4, 'user.name')]
+    assert f('env -u 1&>>f git config --global user.name foo') == [(4, 'user.name')]
+    # bash runs `n` and `{v}` here, so there is no act
+    assert f('exec -a 2&>f n git config --global user.name foo') == []
+    assert f('{v}&>f git config --global user.name foo') == []
+    # before an operator that takes a descriptor the number is still a descriptor
+    assert f('5>f setx FOO bar') == [(3, 'FOO')]
+    assert f('5<&-setx FOO bar') == [(3, 'FOO')]
+    # ordinary commands stay allowed
+    assert f('timeout 5&>f uv run pytest') == []
+    assert f('nice -n 5&>f make') == []
+
+
+def test_the_fourth_round_bypasses_are_denied_on_a_go_on():
+    tmp, box = _sandbox()
+    with tmp:
+        box.prompt(GO_ON)
+        _denied(box.bash('>& -git config --global user.name foo'))
+        _denied(box.bash('2>&\t-setx FOO bar'))
+        _denied(box.bash('env -u >& -X git config --global user.name foo'))
+        _denied(box.bash('timeout 5&>f claude plugin install x@y'))
+        _allowed_silently(box.bash('ls >& -'))
+        _allowed_silently(box.bash('timeout 5&>f uv run pytest'))
+        assert [(e['family'], e['decision']) for e in box.log()] == [
+            (4, 'deny'),
+            (3, 'deny'),
+            (4, 'deny'),
+            (2, 'deny'),
+        ], box.log()
+
+
 def test_authorizing_sentence_rule():
     edit = gate.Act(family=1, arm='edit', key='CLAUDE.md', summary='Edit CLAUDE.md')
     plugin = gate.Act(family=2, arm='shell', key='x@y', summary='claude plugin update x@y')
@@ -973,6 +1069,9 @@ if __name__ == '__main__':
     test_a_descriptor_close_glued_to_the_next_word_ends_at_the_dash()
     test_a_redirection_between_an_option_and_its_value_does_not_spend_the_value()
     test_the_third_round_bypasses_are_denied_on_a_go_on()
+    test_a_descriptor_close_with_blanks_before_the_dash_ends_at_the_dash()
+    test_a_digit_or_name_glued_before_and_greater_is_a_word()
+    test_the_fourth_round_bypasses_are_denied_on_a_go_on()
     test_authorizing_sentence_rule()
     test_the_deny_example_names_the_denied_file()
     test_the_deny_example_names_the_denied_variable()
