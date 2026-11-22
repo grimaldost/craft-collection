@@ -12,8 +12,10 @@ two journal lines out of what it reads.
   request after the call carries opencode's refusal.
 - perm-shell-allow: `shell` `echo probe > perm-allow*` allow, default `ask`. The marker is
   present.
-- perm-edit-deny: `edit` `*/locked/*` deny. A `write` to `work/locked/x.txt` is refused (the
-  request after it carries the refusal) and the file is absent.
+- perm-edit-deny: `edit` `locked/*` deny. A `write` to `work/locked/x.txt` is refused (the
+  request after it carries the refusal) and the file is absent. opencode 2.2.5 matches an `edit`
+  rule against the path relative to the session's folder, here `locked/x.txt`, which
+  `*/locked/*` does not match.
 - perm-webfetch-allow (the control): `webfetch` `*` allow. A `webfetch` of a loopback listener
   the cell runs: the listener received the request. Should opencode refuse a loopback fetch by
   itself (the call answered, without a permission refusal, and nothing received), the row
@@ -144,7 +146,7 @@ CANARY_ALLOWS = (
 SECTIONS: dict[str, tuple[str, tuple[tuple[str, str, str], ...]]] = {
     'perm-shell-deny': ('allow', (('shell', 'echo probe > perm-deny*', 'deny'),)),
     'perm-shell-allow': ('ask', (('shell', 'echo probe > perm-allow*', 'allow'),)),
-    'perm-edit-deny': ('allow', (('edit', '*/locked/*', 'deny'),)),
+    'perm-edit-deny': ('allow', (('edit', 'locked/*', 'deny'),)),
     'perm-webfetch-allow': ('allow', (('webfetch', '*', 'allow'),)),
     'perm-webfetch-deny': ('allow', (('webfetch', '*', 'deny'),)),
     'perm-external-deny': ('allow', (('external_directory', '*', 'deny'),)),
