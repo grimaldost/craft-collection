@@ -119,9 +119,10 @@ def test_every_kit_run_of_a_conformance_file_carries_accept_args():
             counted += 1
             assert _carries_accept_args(node), (path.name, node.lineno)
         text = path.read_text(encoding='utf-8')
-        # A file that starts `kit run` names its arguments only through such lists.
+        # A file that starts `kit run` names its arguments only through such lists. The kill
+        # matrix and the wiring cells start every session without `kit run`.
         if "'run', '--harness'" not in text:
-            assert path.stem == 'test_kill_matrix', path.name
+            assert path.stem in ('test_kill_matrix', 'test_wiring'), path.name
     assert counted >= 10, counted
 
 

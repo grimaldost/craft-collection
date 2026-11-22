@@ -69,7 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     stub.add_argument(
         '--port', type=int, default=0, help='port on 127.0.0.1 (default: any free port)'
     )
-    home = sub.add_parser('home', help='test homes a harness runs in')
+    home = sub.add_parser(
+        'home', help="the homes a harness runs in, and the kit plugin wired into opencode's own"
+    )
     home_sub = home.add_subparsers(dest='home_command', metavar='HOME_COMMAND', required=True)
     render = home_sub.add_parser(
         'render',
@@ -94,6 +96,36 @@ def build_parser() -> argparse.ArgumentParser:
         metavar='FILE',
         help='policy whose recorded note kinds go into note_config.json and whose '
         '[permissions] section an opencode home renders; unreadable exits 64',
+    )
+    wire = home_sub.add_parser(
+        'wire',
+        help='write a copy of an opencode configuration that loads the kit shell; never '
+        'writes the configuration itself',
+        description=(
+            'Materialize the opencode shell into --shell-dir and write to --out the text of '
+            '--config with the shell folder added to plugins and "update": "disable" when '
+            'update is absent, every other byte kept. With --check, print whether --config '
+            'lists --shell-dir and its files are the ones this kit renders: exit 0 wired, '
+            '1 not wired, 64 for an unreadable configuration.'
+        ),
+    )
+    wire.add_argument(
+        '--harness', metavar='NAME', help='opencode, the one harness kit wires (the default)'
+    )
+    wire.add_argument(
+        '--config', metavar='FILE', required=True, help='an opencode global configuration'
+    )
+    wire.add_argument(
+        '--shell-dir',
+        metavar='DIR',
+        required=True,
+        help='the folder of the kit shell; absent or empty when wiring',
+    )
+    wire.add_argument(
+        '--out', metavar='FILE', help='where the wired copy goes; never the configuration itself'
+    )
+    wire.add_argument(
+        '--check', action='store_true', help='only say whether the configuration is wired'
     )
     doctor = sub.add_parser(
         'doctor',
@@ -463,6 +495,8 @@ def run_state(args: argparse.Namespace) -> int:
 def run_home(args: argparse.Namespace) -> int:
     """`kit home render`; a non-empty folder, an unknown harness or a foreign endpoint exits 64.
 
+    `kit home wire` goes to `run_wire`.
+
     With `--policy`, the policy must load, else the render exits 64 and writes
     nothing; the kinds of note its checkers record go to `note_config.json`, and
     a driver that renders the harness's own permissions renders its
@@ -476,6 +510,8 @@ def run_home(args: argparse.Namespace) -> int:
     """
     from harness_kit import daily, harnesses
 
+    if args.home_command == 'wire':
+        return run_wire(args)
     try:
         driver = harnesses.get(args.harness)
     except KeyError as exc:
@@ -522,6 +558,45 @@ def run_home(args: argparse.Namespace) -> int:
     except OSError as exc:
         return _fail(EXIT_INTERNAL, f'home not rendered: {exc!a}')
     sys.stdout.write(json.dumps(home, ensure_ascii=True) + '\n')
+    return 0
+
+
+def run_wire(args: argparse.Namespace) -> int:
+    """`kit home wire`: a wired copy of an opencode configuration, or `--check` of one.
+
+    The wiring form prints one line once the copy is written; a refusal exits 64, and a
+    refusal over the configuration's form names the entry to add by hand. `--check` prints
+    one line, `wired: ...` with exit 0 or `not wired: ...` with exit 1, and exits 64 for a
+    configuration that cannot be read. The configuration itself is never written.
+    """
+    from harness_kit.harnesses import HomeError, opencode_wiring
+
+    wirings = {opencode_wiring.HARNESS: opencode_wiring}
+    name = args.harness or opencode_wiring.HARNESS
+    if name not in wirings:
+        known = ', '.join(sorted(wirings))
+        return _fail(EXIT_REFUSED, f'not wired: kit wires the configuration of {known} only')
+    wiring = wirings[name]
+    if args.check:
+        if args.out is not None:
+            return _fail(2, 'not checked: --out is not taken with --check')
+        try:
+            code, line = wiring.check(args.config, args.shell_dir)
+        except HomeError as exc:
+            return _fail(EXIT_REFUSED, f'not checked: {exc}')
+        except OSError as exc:
+            return _fail(EXIT_INTERNAL, f'not checked: {exc!a}')
+        sys.stdout.write(line + '\n')
+        return code
+    if args.out is None:
+        return _fail(2, 'not wired: pass --out, or --check')
+    try:
+        line = wiring.wire(args.config, args.shell_dir, args.out)
+    except HomeError as exc:
+        return _fail(EXIT_REFUSED, f'not wired: {exc}')
+    except OSError as exc:
+        return _fail(EXIT_INTERNAL, f'not wired: {exc!a}')
+    sys.stdout.write(line + '\n')
     return 0
 
 
