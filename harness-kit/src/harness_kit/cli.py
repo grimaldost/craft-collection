@@ -92,7 +92,8 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         '--policy',
         metavar='FILE',
-        help='policy whose recorded note kinds go into note_config.json; unreadable exits 64',
+        help='policy whose recorded note kinds go into note_config.json and whose '
+        '[permissions] section an opencode home renders; unreadable exits 64',
     )
     doctor = sub.add_parser(
         'doctor',
@@ -459,7 +460,10 @@ def run_home(args: argparse.Namespace) -> int:
     """`kit home render`; a non-empty folder, an unknown harness or a foreign endpoint exits 64.
 
     With `--policy`, the policy must load, else the render exits 64 and writes
-    nothing; the kinds of note its checkers record go to `note_config.json`.
+    nothing; the kinds of note its checkers record go to `note_config.json`, and
+    a driver that renders the harness's own permissions renders its
+    `[permissions]` section (one that would refuse a canary call exits 64 and
+    writes nothing).
     With `--daily FILE` the opencode driver renders a daily home for that daily
     file; `--endpoint` is then refused, and so is `--daily` for a driver that
     renders no daily home, a daily file that does not read and a refused state
@@ -488,11 +492,16 @@ def run_home(args: argparse.Namespace) -> int:
             'gives the endpoint',
         )
     records: tuple[str, ...] = ()
+    section = None
     if args.policy is not None:
         try:
-            records = harnesses.recorded_kinds(load_policy(args.policy).checkers)
+            policy = load_policy(args.policy)
         except PolicyError as exc:
             return _fail(EXIT_REFUSED, f'home not rendered: policy unreadable: {exc}')
+        records = harnesses.recorded_kinds(policy.checkers)
+        section = policy.permissions
+    # A driver that renders the harness's own permissions takes the policy's section.
+    more = {'permissions': section} if getattr(driver, 'renders_permissions', False) else {}
     found = None
     if args.daily is not None:
         try:
@@ -501,9 +510,9 @@ def run_home(args: argparse.Namespace) -> int:
             return _fail(EXIT_REFUSED, f'home not rendered: {exc}')
     try:
         if found is not None:
-            home = render_daily(Path(args.dir), found, records)
+            home = render_daily(Path(args.dir), found, records, **more)
         else:
-            home = driver.render_home(Path(args.dir), args.endpoint, records)
+            home = driver.render_home(Path(args.dir), args.endpoint, records, **more)
     except harnesses.HomeError as exc:
         return _fail(EXIT_REFUSED, f'home not rendered: {exc}')
     except OSError as exc:

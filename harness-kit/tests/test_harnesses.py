@@ -238,7 +238,7 @@ def test_opencode_home_contents():
         folder = Path(td) / 'home-oc'
         home = _render('opencode', folder)
         assert list(home)[: len(HOME_KEYS)] == HOME_KEYS, list(home)
-        assert 'rendered_sha256' in home, list(home)
+        assert 'rendered_sha256' in home and 'permissions_sha256' in home, list(home)
         assert home['kind'] == 'test' and home['canary_model'] == 'stub/stub-model', home
         assert home['harness'] == 'opencode'
         assert Path(home['config_file']) == folder / 'conf' / 'opencode.jsonc'

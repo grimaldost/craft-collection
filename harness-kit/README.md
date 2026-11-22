@@ -81,18 +81,18 @@ Python 3.11 or later, no dependencies.
 | `kit state path` | Print the state root. |
 | `kit state new-run --harness NAME` | Mint a run id and its folder; print them as JSON. |
 | `kit stub --log FILE --script FILE [--port N]` | Serve a scripted model endpoint on 127.0.0.1 for tests; the first stdout line is `{"port": N}`. |
-| `kit home render --harness NAME --dir DIR --endpoint URL [--policy FILE]` | Render a test home for `claude-code` or `opencode` into an absent or empty folder; print its `home.json`. With `--policy`, a policy whose checkers record notes also gets `note_config.json` and the note hooks; an unreadable policy exits 64. |
+| `kit home render --harness NAME --dir DIR --endpoint URL [--policy FILE]` | Render a test home for `claude-code` or `opencode` into an absent or empty folder; print its `home.json`. With `--policy`, a policy whose checkers record notes also gets `note_config.json` and the note hooks, and an opencode home renders the policy's `[permissions]` section (see "Permissions"); an unreadable policy exits 64. |
 | `kit run --harness NAME --home DIR --workdir DIR --policy FILE -- HARNESS_ARGS...` | Check the session, run the presence canary, then start the harness and return its exit code. |
 | `kit doctor [--json] [--live --live-root DIR]` | Report what was tested, the runs and the sessions that were not launched. |
-| `kit policy build --base FILE --pack DIR [--pack DIR ...] --out FILE [--force]` | Write a version 2 policy from a base policy and rule packs, or a version 3 policy when a checker records notes, with `<out>.packs.json` beside it; a refused input exits 64 and writes nothing. |
+| `kit policy build --base FILE --pack DIR [--pack DIR ...] --out FILE [--force]` | Write a version 2 policy from a base policy and rule packs, or a version 3 policy when a checker records notes, or a version 4 policy when the base has a `[permissions]` section, with `<out>.packs.json` beside it; a refused input exits 64 and writes nothing. |
 | `kit relay serve --config FILE --state-root ROOT --run-id ID`, `kit relay summary [--json]` | Serve one daily run's chat requests on 127.0.0.1 with the provider key and the run's capability read from the first line of stdin, forwarding a request only after its worst cost is reserved within the run, day and month ceilings of the daily file's `[relay]` table in `relay/ledger.ndjson` under the state root; print that ledger's totals. |
 
 In this slice `kit run` accepts only a home rendered by `kit home render`, and
 only a headless session (`claude -p`, `opencode run`): the canary ran nothing
 else. `HARNESS_ARGS` must start with the driver's leading tokens and may carry
 only the flags the driver names; anything else is refused. `kit run` accepts a
-version 1, 2 or 3 policy and loads its checkers first; see "Version 2 and
-checkers" and "Version 3 and `records`". For a policy with a recording checker
+version 1, 2, 3 or 4 policy and loads its checkers first; see "Version 2 and
+checkers", "Version 3 and `records`" and "Permissions". For a policy with a recording checker
 it makes three more checks, each a refusal with exit 64 before the canary and
 before any harness process: a recorded kind whose `[notes]` entry in the
 harness's contract is `absent`; a home without `note_config.json` for each
@@ -173,8 +173,8 @@ The rules of the contract, each a refusal when broken:
 Policy version 3 is version 2 with one more optional key on a `[[checker]]`
 table, `records`: a non-empty array of distinct kinds of note, each `prompt` or
 `outcome`. A checker that has it is a recording checker. Under version 1 and
-version 2 `records` is an unknown key, and a version other than 1, 2 or 3 makes
-the policy unreadable. The id of a recording checker names its facts file, so it
+version 2 `records` is an unknown key, and a version other than 1, 2, 3 or 4
+makes the policy unreadable (version 4 is under "Permissions"). The id of a recording checker names its facts file, so it
 matches `[a-z0-9][a-z0-9-]{0,62}` and is not a reserved Windows device name
 (`con`, `nul`, `com1` and the like); any other id makes the whole policy
 unreadable.
@@ -186,6 +186,74 @@ facts. `check(act, observation, facts)` takes the facts as a third argument when
 the kit judges. A checker without `records` keeps `check(act, observation)`. A
 recording checker without a callable `record` is refused by `kit policy build`
 and by `kit run`, with exit 64, as a checker without `check` is.
+
+## Permissions
+
+Policy version 4 is version 3 with one more optional top-level table,
+`[permissions]`, which a harness renders as its own permission rules. The judge
+ignores it. The table holds `default` (required: `allow`, `ask` or `deny`), the
+effect of an action no rule names, and any number of `[[permissions.rule]]`
+tables, each with exactly `action` (one of `read`, `edit`, `glob`, `grep`,
+`shell`, `subagent`, `skill`, `question`, `webfetch`, `websearch`,
+`external_directory`), `resource` (a non-empty string in opencode's wildcard
+syntax, `*` and `?`) and `effect` (`allow`, `ask` or `deny`). Any other key or
+value makes the policy unreadable, and under versions 1 to 3 `permissions` is an
+unknown key. The section reads as Claude Code's rules do: a deny beats an ask,
+and an ask beats an allow, whatever their order. A section that asks before every
+action but a `git status` in the shell holds `default = "ask"` and one rule with
+`action = "shell"`, `resource = "git status*"` and `effect = "allow"`. opencode
+2.2.5 matches a `shell` rule against each command its scanner extracts, and an
+`edit` or `read` rule against the file's path relative to the session's folder
+when the file lies inside it and against its absolute path, with forward
+slashes, outside it: in the session's folder `locked/*` covers `locked/x.txt`,
+and `*/locked/*` does not.
+
+An opencode home rendered with such a policy (`kit home render --policy FILE`)
+gets, in `opencode.jsonc`, `permissions` that start with `* * DEFAULT`, then the
+section's allow rules, then its ask rules, then its deny rules, each in the
+section's order, so that opencode's last matching rule gives deny over ask over
+allow; then the rules that switch off the tools kit does not let a session use,
+last, so no rule of the section lifts one. Its `policies` gain one `tool.use`
+deny `ACTION:RESOURCE` per deny rule, which holds after an approval saved in the
+interface. A policy without the section renders those switches alone, and
+opencode's own base applies to every other action. `home.json` records
+`permissions_sha256`, the SHA-256 of the rendered `permissions` and `policies` as
+canonical JSON (sorted keys, no spaces). The Claude Code driver renders nothing
+from the section.
+
+The canary's two shell calls must reach kit's hook: a section under which
+`echo probe > deny-0123456789abcdef.marker` or
+`echo probe > allow-0123456789abcdef.marker` resolves to deny for `shell` (a deny
+rule that matches it, or a default `deny` with no allow for it) is refused by the
+render and by `kit run` with exit 64, naming the rule. A default `deny` with
+allows for both commands renders. On an opencode home, `kit run` renders both
+lists again from its policy and refuses with exit 64 a home whose
+`permissions_sha256` differs (a policy changed after the render) and a home whose
+`opencode.jsonc` does not parse or holds other `permissions` or `policies`, a
+headless test home included; render the home again with the policy.
+
+How the rules map:
+
+| Claude Code | opencode 2.2.5 | the kit's section |
+|---|---|---|
+| `Bash(cmd *)`, `PowerShell(...)` | `shell`, matched per command the scanner extracts | `shell` |
+| `Read(path)` | `read` | `read` |
+| `Glob`, `Grep` | `glob` (the pattern), `grep` (the expression, not the path) | `glob`, `grep` |
+| `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | `edit` (edit, write and patch) | `edit` |
+| `WebFetch(domain:host)` | `webfetch`, matched on the URL | `webfetch` with `https://host/*` |
+| `WebSearch` | `websearch`, matched on the query | `websearch` |
+| `Task(agent)` | `subagent` | `subagent` |
+| `Skill(name)` | `skill` | `skill` |
+| `additionalDirectories` | `external_directory` (allowed by default) | `external_directory` |
+| `mcp__server__tool` | `server_tool`; servers by `mcp.use` | not offered: every MCP server is denied |
+| none | `execute` (Code Mode) and any other tool that runs code or writes files besides `shell` and `edit` | not offered when a `permissions` rule rendered last switches it off; offered and refused when called when the driver's list holds it |
+| deny over ask over allow, any order | ordered, last match wins | deny over ask over allow; the renderer orders |
+| default mode asks, read-only tools excepted | base `* * allow` | `default`, with allow rules for read-only actions |
+| `--dangerously-skip-permissions`, bypass mode | `--auto`, `--yolo`, `--dangerously-skip-permissions` | refused flags in interactive mode |
+| a hook's deny holds in every mode | a `tool.use` deny holds after saved approvals | each deny also rendered as `tool.use` |
+| "don't ask again" written to settings | "Allow always" saved in opencode's database (inferred), never over a configured deny | not rendered; the owner's choice in the interface |
+| subagent permissions inherit the session's | a configuration's rules come after each shipped agent's own rules | the section's rules hold for every shipped agent |
+
 
 ## Packs and `kit policy build`
 
@@ -222,7 +290,9 @@ declares none.
 `launcher` table, the base's rules, then each pack's rules in argument order,
 with every checker's `file` made absolute and its `sha256` computed from its
 bytes at that moment. The result is version 2, or version 3 when any checker of
-the base or of the packs has `records`; the base may be version 1, 2 or 3. It
+the base or of the packs has `records`, or version 4, with the base's section
+after the rules, when the base has a `[permissions]` section; the base may be
+version 1, 2, 3 or 4. It
 writes `<out>.packs.json` beside the policy, which the doctor reads. The same
 inputs give the same bytes. The uv pack, which records nothing, is built into a
 version 2 policy like this:

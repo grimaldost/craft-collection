@@ -230,7 +230,7 @@ def test_the_policy_flag_wins_over_kit_policy():
         run_id = _mint(root)
         good, _ = _v2_policy(base)
         bad = base / 'bad.toml'
-        bad.write_text('version = 4\n', encoding='utf-8')
+        bad.write_text('version = 5\n', encoding='utf-8')
         env = _env(root, KIT_RUN_ID=run_id, KIT_POLICY=str(bad))
         assert _note(_bytes(PROMPT), '--policy', str(good), env=env)['reason'] == 'no-recorder'
         assert _note(_bytes(PROMPT), env=env)['reason'] == 'policy-unreadable'

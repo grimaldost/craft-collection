@@ -119,7 +119,7 @@ def test_an_unreadable_policy_exits_64_and_writes_nothing():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         junk = root / 'junk.toml'
-        junk.write_text('version = 4\n', encoding='utf-8')
+        junk.write_text('version = 5\n', encoding='utf-8')
         for harness in HARNESSES:
             for policy in (junk, root / 'missing.toml'):
                 folder = root / f'home-{harness}'
