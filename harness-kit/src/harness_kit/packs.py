@@ -1,4 +1,4 @@
-"""Rule packs and `kit policy build`: compose one version 2 or 3 policy from a base and packs.
+"""Rule packs and `kit policy build`: compose one version 2, 3 or 4 policy from a base and packs.
 
 A pack is a folder holding `pack.toml` and the checker files it names:
 `pack = 1`, a `name`, `[[checker]]` tables (`id`, `file` relative to the pack
@@ -11,7 +11,9 @@ pack's rules in argument order, and every checker with its `file` absolute in
 forward-slash form and its `sha256` computed from its bytes now. When any
 checker of the base or of the packs has `records`, the policy is version 3 and
 each such checker's `records` follows its `budget_ms`; otherwise it is version
-2, the same bytes as before version 3 existed. The standard
+2, the same bytes as before version 3 existed. When the base has a
+`[permissions]` section the policy is version 4 and the section follows the
+rules: `default`, then its rules in order. The standard
 library has no TOML writer, so this module emits its own: basic strings with
 every character outside U+0020..U+007E escaped, keys in a fixed order, LF line
 ends; the same inputs give the same bytes. Beside the policy it writes
@@ -39,9 +41,12 @@ from harness_kit import checkers
 from harness_kit.policy import (
     BUDGET_DEFAULT_MS,
     LAUNCHER_LISTS,
+    PERMISSION_RULE_KEYS,
+    PERMISSIONS_VERSION,
     RULE_OPTIONAL,
     RULE_REQUIRED,
     Checker,
+    Permissions,
     PolicyError,
     check_records,
     load_policy,
@@ -155,6 +160,14 @@ def _tables(data: dict, key: str, where: str) -> list[dict]:
     if not isinstance(value, list) or not all(isinstance(t, dict) for t in value):
         raise BuildError(f'{where}: {key} is not an array of tables')
     return value
+
+
+def read_permissions(path: str | os.PathLike[str]) -> Permissions | None:
+    """The base's `[permissions]` section, None without one; the base must load as a policy."""
+    try:
+        return load_policy(path).permissions
+    except PolicyError as exc:
+        raise BuildError(f'base {forward(path)!a} is unreadable: {exc}') from None
 
 
 def read_base(path: str | os.PathLike[str]) -> tuple[dict, tuple[CheckerEntry, ...], list[dict]]:
@@ -287,10 +300,17 @@ def _unique(ids: Iterable[str], what: str) -> None:
         seen.add(item)
 
 
-def compose(launcher: dict, entries: Iterable[CheckerEntry], rules: Iterable[dict]) -> str:
-    """The text of a version 2 policy, or 3 when a checker records; fixed key order, LF ends."""
+def compose(
+    launcher: dict,
+    entries: Iterable[CheckerEntry],
+    rules: Iterable[dict],
+    permissions: Permissions | None = None,
+) -> str:
+    """The text of a version 2 policy, or 3 when a checker records, or 4 with `permissions`,
+    written after the rules; fixed key order, LF ends."""
     entries = tuple(entries)
     version = 3 if any(e.records for e in entries) else 2
+    version = PERMISSIONS_VERSION if permissions is not None else version
     lines = [f'version = {version}', '', '[launcher]']
     lines += [f'{k} = {toml_value(launcher[k])}' for k in LAUNCHER_LISTS if k in launcher]
     lines.append('')
@@ -309,6 +329,12 @@ def compose(launcher: dict, entries: Iterable[CheckerEntry], rules: Iterable[dic
         lines.append('[[rule]]')
         lines += [f'{k} = {toml_value(rule[k])}' for k in RULE_ORDER if k in rule]
         lines.append('')
+    if permissions is not None:
+        lines += ['[permissions]', f'default = {toml_value(permissions.default)}', '']
+        for item in permissions.rules:
+            lines.append('[[permissions.rule]]')
+            lines += [f'{k} = {toml_value(getattr(item, k))}' for k in PERMISSION_RULE_KEYS]
+            lines.append('')
     return '\n'.join(lines)
 
 
@@ -367,12 +393,13 @@ def build(
     if not out.parent.is_dir():
         raise BuildError(f'the folder of --out, {forward(out.parent)!a}, does not exist')
     launcher, entries, rules = read_base(base)
+    permissions = read_permissions(base)
     packs = [read_pack(folder) for folder in pack_folders]
     entries = entries + tuple(e for p in packs for e in p.checkers)
     rules = list(rules) + [r for p in packs for r in p.rules]
     _unique((r['id'] for r in rules), 'rule')
     _unique((e.id for e in entries), 'checker')
-    text = compose(launcher, entries, rules)
+    text = compose(launcher, entries, rules, permissions)
     try:
         policy = load_policy_text(text)
     except PolicyError as exc:
@@ -394,9 +421,9 @@ def add_parser(sub) -> None:
     )
     b = policy_sub.add_parser(
         'build',
-        help='write a version 2 or 3 policy from a base policy and rule packs; refusals exit 64',
+        help='write a version 2, 3 or 4 policy from a base policy and rule packs; refusals exit 64',
     )
-    b.add_argument('--base', metavar='FILE', required=True, help='version 1, 2 or 3 base policy')
+    b.add_argument('--base', metavar='FILE', required=True, help='version 1 to 4 base policy')
     b.add_argument(
         '--pack', metavar='DIR', required=True, action='append', help='pack folder (repeatable)'
     )

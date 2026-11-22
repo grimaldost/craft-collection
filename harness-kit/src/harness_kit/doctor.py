@@ -21,7 +21,7 @@ whose binary is found, in a scratch home under DIR (which must lie under a
 loss for that objective and to `tested` where it holds none; a failed one sets
 them to `absent`.
 
-When `KIT_POLICY` names a readable version 2 or 3 policy with a
+When `KIT_POLICY` names a readable version 2, 3 or 4 policy with a
 `<policy>.packs.json` beside it whose `policy_sha256` is the policy's, the report
 gains a section `rules`: per rule with a checker, its pack, `governed`, a state
 per harness from the contract's `[rules]` table (`unknown` when the binary is
@@ -29,11 +29,11 @@ absent or its version differs) and the pack's declared preventing layer. A polic
 that does not load gives the one line `policy unreadable: <reason>` (a file that
 is TOML with `version = 1` gives no section), a sidecar of another policy gives
 `sidecar stale`. With a version 1 policy, with no `KIT_POLICY` and with a
-version 2 or 3 policy that has no sidecar the report has no such section. The
+version 2, 3 or 4 policy that has no sidecar the report has no such section. The
 section reads files only: it runs no checker and starts no program.
 
 When `KIT_POLICY` names a readable policy with at least one recording checker (a
-`records` key, version 3 only), the report also gains a section `notes`: per
+`records` key, version 3 or 4), the report also gains a section `notes`: per
 recording checker, its kinds and, per harness and kind, a state from the
 contract's `[notes]` table (`unknown` when the binary is absent, its version
 differs or the contract has no entry for the kind). It stands after `rules` and
@@ -371,7 +371,8 @@ def rules_section(environ: Mapping[str, str], harness_rows: Mapping[str, dict]):
             return None
         return UNREADABLE_TEXT + _ascii(exc)
     version = _toml_version(path)
-    if not (_is_version(version, 2) or _is_version(version, 3)):
+    # A version 4 policy reads as a version 3 one: its `[permissions]` section names no rule.
+    if not any(_is_version(version, n) for n in (2, 3, 4)):
         return None
     sidecar_file = packs.sidecar_path(path)
     if not sidecar_file.exists():

@@ -113,6 +113,15 @@ to the changed names, writes `config-changed.json` (`run_id` and `carried`,
 the changed paths outside the home and the run's folder) beside `home.json`
 and exits 66. A home that holds `config-changed.json` is refused.
 
+Native permissions. For a driver that renders the harness's own permissions from
+the policy's `[permissions]` section (opencode), preflight renders them again
+from the policy and refuses, with exit 64 and no run, a section that would
+refuse either of the canary's calls before kit's hook sees it (naming the rule),
+a home whose recorded `permissions_sha256` differs from the fresh render (a
+policy changed after the render) and a home whose configuration does not parse
+or holds other permissions or policies, in every mode and for every kind of
+home. Claude Code renders nothing from the section and is not compared.
+
 Exit codes: 64 a refusal, 65 a failed canary or a home changed before the
 session, 66 a configuration changed during the session, 70 an internal error
 or a relay that did not get ready, 130 an interrupt before the session, else
@@ -585,6 +594,20 @@ def check_cli_argv(home: dict, driver: harnesses.Driver) -> None:
             "the home's shell_config.json names a cli_argv other than this kit's judge; render "
             'the home with this kit'
         )
+
+
+def check_permissions(home: dict, driver: harnesses.Driver, policy: Policy) -> None:
+    """Refuse a home whose harness permissions differ from what the policy renders now.
+
+    Only a driver that renders the harness's own permissions compares them; the others
+    render nothing from the policy's `[permissions]` section.
+    """
+    compare = getattr(driver, 'permissions_refusal', None)
+    if not callable(compare):
+        return
+    reason = compare(home, policy.permissions)
+    if reason is not None:
+        raise RefusalError(_ascii(reason))
 
 
 def terminal_env(environ: dict) -> dict[str, str]:
@@ -1216,6 +1239,7 @@ def preflight(
         check_open_run(home_folder)
         check_cli_argv(home, driver)
         check_render_record(home_folder, home, driver)
+    check_permissions(home, driver, policy)
     extra: dict[str, str] = {}
     if records:
         check_note_home(home, driver, records)

@@ -20,12 +20,17 @@ tool that runs code or moves the session outside the tools the driver translates
 configuration key is off. The session's file watcher is off, so a configuration write does
 not reload the running process. `system_config_dir()` names opencode's system configuration
 folder, which `kit run` refuses and protects.
+
+A home rendered with a policy that has a `[permissions]` section carries it as opencode's
+own `permissions` and `tool.use` denies (`opencode_permissions`), and `home.json` records
+`permissions_sha256`; `permissions_refusal` is `kit run`'s comparison with a fresh render.
 """
 
 from __future__ import annotations
 
 import functools
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -51,6 +56,7 @@ from harness_kit.harnesses import (
     home_env,
     is_batch,
     materialize_shell,
+    opencode_permissions,
     prepare_dir,
     read_version,
     set_var,
@@ -138,6 +144,7 @@ SWITCHED_OFF = (
 )
 WATCHER_OFF = ('OPENCODE_DISABLE_FILEWATCHER', 'OPENCODE_FILEWATCHER_DISABLE')
 SYSTEM_FOLDER_POSIX = '/etc/opencode'
+PERMISSIONS_KEY = 'permissions_sha256'
 
 
 def _statement(action: str, resource: str, effect: str) -> dict:
@@ -417,6 +424,8 @@ class OpenCode:
     protected_folders = ('conf', 'kit-shell', 'xdg/config')
     run_watched_folders = ('xdg/config',)
     protected_workdir_names = ('.agents',)
+    # A render takes the policy's `[permissions]` section, and `kit run` compares it.
+    renders_permissions = True
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]:
         """The `opencode` argv; [] when missing. Its `.cmd` shim becomes the native binary."""
@@ -429,7 +438,10 @@ class OpenCode:
     def version(self, env: Mapping[str, str]) -> str | None:
         return read_version(self.binary_argv(env), env, CONFIG_NAMES)
 
-    def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict:
+    def render_home(
+        self, home: Path, endpoint: str, records: tuple[str, ...] = (), permissions=None
+    ) -> dict:
+        """A test home; `permissions` is the policy's `[permissions]` section, or None."""
         check_endpoint(endpoint)
         stub = {
             'name': 'Stub',
@@ -440,9 +452,11 @@ class OpenCode:
         }
         settings = {'update': 'disable', 'model': MODEL, 'providers': {'stub': stub}}
         extra = {'kind': TEST_HOME, 'canary_model': MODEL}
-        return self._render(home, endpoint, records, settings, extra, 'stub')
+        return self._render(home, endpoint, records, settings, extra, 'stub', permissions)
 
-    def render_daily_home(self, home: Path, found, records: tuple[str, ...] = ()) -> dict:
+    def render_daily_home(
+        self, home: Path, found, records: tuple[str, ...] = (), permissions=None
+    ) -> dict:
         """A daily home for the daily file `found` (`daily.Daily`): its provider is the relay."""
         from harness_kit.daily import gitconfig_text
 
@@ -470,9 +484,23 @@ class OpenCode:
             'canary_model': model,
         }
         gitconfig = gitconfig_text(found.git_name, found.git_email)
-        return self._render(home, endpoint, records, settings, extra, RELAY_PROVIDER, gitconfig)
+        return self._render(
+            home, endpoint, records, settings, extra, RELAY_PROVIDER, permissions, gitconfig
+        )
 
-    def _render(self, home, endpoint, records, settings, extra, provider, gitconfig=None) -> dict:
+    def permission_lists(self, folder: Path, provider: str, section) -> tuple[list, list]:
+        """(`permissions`, `policies`) of a home in `folder` whose provider is `provider`."""
+        kit = (folder / 'kit-shell' / 'opencode-plugin').as_posix()
+        return opencode_permissions.render(section, rendered_policies(kit, provider), switches())
+
+    def _render(
+        self, home, endpoint, records, settings, extra, provider, section, gitconfig=None
+    ) -> dict:
+        target = Path(os.path.abspath(str(home)))
+        permissions, policies = self.permission_lists(target, provider, section)
+        refusal = opencode_permissions.canary_refusal(permissions, policies)
+        if refusal is not None:
+            raise HomeError(refusal)
         folder = prepare_dir(home)
         plugin = folder / 'kit-shell' / 'opencode-plugin'
         source = SHELLS_DIR / 'opencode' / 'index.js'
@@ -483,17 +511,56 @@ class OpenCode:
         kit = plugin.as_posix()
         governed = {
             'plugins': [kit],
-            'policies': rendered_policies(kit, provider),
-            'permissions': switches(),
+            'policies': policies,
+            'permissions': permissions,
             'experimental': {'image_generate': False},
         }
         write_json(config, {**settings, **governed})
         if gitconfig is not None:
             (folder / GITCONFIG).write_bytes(gitconfig.encode('utf-8'))
         rendered = watch.hash_files(folder, self, rendered=True)
+        sha = opencode_permissions.permissions_sha256(permissions, policies)
+        extra = {**extra, PERMISSIONS_KEY: sha}
         return finish_home(
             self.name, folder, endpoint, config, entry, shell_config, rendered, extra
         )
+
+    def permissions_refusal(self, home: dict, section) -> str | None:
+        """Why `kit run` refuses this home under a policy's `[permissions]` section (None for a
+        policy without one), else None.
+
+        The lists are rendered again from the policy: a section that would refuse a canary
+        call, a home whose recorded hash differs (its policy changed after the render) and a
+        configuration that does not parse or holds other lists are refused.
+        """
+        provider = RELAY_PROVIDER if home.get('kind') == DAILY_HOME else 'stub'
+        fresh = self.permission_lists(Path(home['dir']), provider, section)
+        refusal = opencode_permissions.canary_refusal(*fresh)
+        if refusal is not None:
+            return refusal
+        sha = opencode_permissions.permissions_sha256(*fresh)
+        if home.get(PERMISSIONS_KEY) != sha:
+            return (
+                "the home's permissions were rendered from another [permissions] section than "
+                "this policy's (home.json's permissions_sha256 differs); render the home again "
+                'with this policy into an empty folder'
+            )
+        try:
+            config = json.loads(Path(home['config_file']).read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return (
+                "the home's opencode.jsonc does not parse; render the home again into an empty "
+                'folder'
+            )
+        if not isinstance(config, dict):
+            config = {}
+        found = (config.get('permissions'), config.get('policies'))
+        if opencode_permissions.permissions_sha256(*found) != sha:
+            return (
+                "the home's opencode.jsonc holds permissions or policies other than its policy "
+                'renders; render the home again into an empty folder'
+            )
+        return None
 
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]:
         env = home_env(home, base)
