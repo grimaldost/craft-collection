@@ -15,7 +15,9 @@ kit never cuts.
 
 Under policy version 3 a checker that declares `records` is a recorder of the
 kinds it names: `kit note` calls its `record(note, facts)` and keeps what it
-returns as the session's facts (`harness_kit.facts`).
+returns as the session's facts (`harness_kit.facts`). A prompt note stands as
+pending, by a stamp beside those facts, from before its first recorder runs
+until every recorder of prompts has answered.
 """
 
 from __future__ import annotations
@@ -166,6 +168,11 @@ def recorders_for(note: dict, checkers) -> tuple:
     return tuple(c for c in checkers if kind in c.records)
 
 
+def prompt_recorder_ids(checkers) -> tuple[str, ...]:
+    """The ids of the checkers that record prompts: those a pending stamp holds back."""
+    return tuple(c.id for c in checkers if 'prompt' in c.records)
+
+
 def record_argument(note: dict) -> dict:
     """What `record` receives as its note: a copy without `run_id` and `session`."""
     return {k: copy.deepcopy(v) for k, v in note.items() if k not in ('run_id', 'session')}
@@ -214,7 +221,19 @@ def record_note(note: dict, recorders, root, run_id: str, key: str) -> list[dict
     written by compare-and-replace under `facts.lock`, with one more call and
     one more compare when the file changed meanwhile, and a second change is a
     `conflict`. Only the waits on `record` calls draw on the budget.
+
+    A prompt note first writes the root's pending stamp (`facts.write_stamp`),
+    outside `facts.lock`; one that cannot be written leaves every recorder
+    `failed`, none called. After the recorders the stamp is removed, under
+    `facts.lock` and only while it holds this note's `seq`, when every
+    recorder answered `facts` or `unchanged`; otherwise it stays.
     """
+    seq = None
+    if note['note']['kind'] == 'prompt' and recorders:
+        try:
+            seq = facts.write_stamp(root, run_id, key, note['note']['text'])
+        except OSError:
+            return [{'id': checker.id, 'result': FAILED} for checker in recorders]
     recording = checkers.Recording()
     note_arg = record_argument(note)
     out = []
@@ -224,4 +243,6 @@ def record_note(note: dict, recorders, root, run_id: str, key: str) -> list[dict
         except Exception:  # a recorder's failure is its own result; a note never decides
             result = FAILED
         out.append({'id': checker.id, 'result': result})
+    if seq is not None and all(entry['result'] in (FACTS, UNCHANGED) for entry in out):
+        facts.remove_stamp(root, run_id, key, seq)
     return out

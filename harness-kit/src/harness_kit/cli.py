@@ -223,9 +223,11 @@ def judge_and_journal(data: bytes | None, policy, env, source: str | None = None
     in `KIT_CANARY_NONCE`) a refusal by `canary.deny` of a launched event is
     recorded by the refused marker in the run's canary folder. A valid,
     launched event with a root key hands its recording checkers their session
-    facts, read without any lock; a judgement writes no facts. With `source`,
-    `data` is an envelope of that harness's shell, judged as the neutral event
-    its driver translates it into, with the driver's refused tool.
+    facts, read without any lock, and None to each checker that records
+    prompts while the root's pending stamp stands; a judgement writes no facts
+    and writes or removes no stamp. With `source`, `data` is an envelope of
+    that harness's shell, judged as the neutral event its driver translates it
+    into, with the driver's refused tool.
     """
     try:
         root = state.state_root(env)
@@ -251,7 +253,8 @@ def judge_and_journal(data: bytes | None, policy, env, source: str | None = None
     if launched and event is not None:
         key = facts.root_key(event)
         if key is not None:
-            reader = facts.judge_reader(root, run_id, key)
+            held = notes.prompt_recorder_ids(policy.checkers) if isinstance(policy, Policy) else ()
+            reader = facts.judge_reader(root, run_id, key, held)
     run, run_dir = (
         (read_run(root, run_id), str(root / 'runs' / run_id)) if launched else (None, None)
     )
@@ -340,11 +343,12 @@ def note_and_journal(
     records the note's kind is `dropped`, `no-recorder`; a note with no root
     key is `dropped`, `no-root`. Otherwise the output sink is put in place
     before the first checker loads, its duplicate of descriptor 1 is appended
-    to `sink` when one is given, each recorder runs (`notes.record_note`) and
-    the note is `recorded`. The journal line is appended after the last
-    recorder, with no facts lock held; one that cannot be written turns the
-    receipt into `failed`. With `source`, `data` is an envelope of that
-    harness's shell, taken as the note its driver translates it into.
+    to `sink` when one is given, each recorder runs (`notes.record_note`, which
+    stamps a prompt note as pending first) and the note is `recorded`. The
+    journal line is appended after the last recorder, with no facts lock
+    held; one that cannot be written turns the receipt into `failed`. With
+    `source`, `data` is an envelope of that harness's shell, taken as the note
+    its driver translates it into.
     """
     try:
         doc = notes.parse_note(data) if source is None else note_from_envelope(data, source)
