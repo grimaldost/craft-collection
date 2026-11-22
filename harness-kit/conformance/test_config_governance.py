@@ -17,8 +17,11 @@ the cell's folder (`control-arms.json`).
   `echo probe > after.marker`. `outcome` is `config-changed` naming `conf/opencode.jsonc`,
   `after.marker` is absent, `kit run` exited 66 and no process of the cell is left.
 - watcher-off-holds (direct start under a minted run): one shell call rewrites the
-  configuration without the plugin and restores it 300 ms later, then two allowed shell calls.
-  The run's journal holds three judgements and both markers are present. Control: the same
+  configuration without the plugin and restores it no sooner than 300 ms later, once the
+  home's opencode log holds a `config.updated` line written after the rewrite (a reload read
+  it) and at most 15 s after it, then two allowed shell calls. With the watcher off no reload
+  comes, so the configuration stays rewritten until the cap. The run's journal holds three
+  judgements and both markers are present. Control: the same
   with the two file-watcher variables removed, each run under a run of its own, at most three
   runs; it shows the effect when one run has both markers and fewer than three judgements.
 - code-tool-refused (`kit run`, the working folder a git work tree): an `execute` call whose
@@ -153,6 +156,11 @@ OFFERED_TOOLS = (
     'write',
 )
 WATCHER_NAMES = ('OPENCODE_DISABLE_FILEWATCHER', 'OPENCODE_FILEWATCHER_DISABLE')
+# The line opencode logs when a reload found the configuration changed.
+RELOAD_LINE = 'event.type=config.updated'
+# The longest the hold cell keeps the configuration rewritten while it waits for that line.
+RESTORE_CAP_MS = 15000
+HOLD_MS = 300
 CONTROL_RUNS = 3
 ARMS_FILE = 'control-arms.json'
 PROCESSES_LEFT = 'processes-left.json'
@@ -194,18 +202,51 @@ def _echo(marker: str) -> dict:
     return _shell(f'echo probe > {marker}', 'call_' + marker.replace('.', '_').replace('-', '_'))
 
 
-def rewrite_without_plugin(config: Path, restore_ms: int | None) -> str:
+def _ps(text: str) -> str:
+    return "'" + text.replace("'", "''") + "'"
+
+
+def rewrite_without_plugin(
+    config: Path,
+    restore_ms: int | None,
+    reload_log: Path | None = None,
+    cap_ms: int = RESTORE_CAP_MS,
+) -> str:
     """A PowerShell command that rewrites the configuration with an empty `plugins` list, and
-    restores its bytes `restore_ms` later when given."""
-    path = str(config).replace("'", "''")
-    edit = (
-        f"$p = '{path}'; $o = [IO.File]::ReadAllBytes($p); "
+    restores its bytes `restore_ms` later when given.
+
+    With `reload_log` (opencode's log of the session's home), the restore also waits until
+    that log holds a `config.updated` line written after the rewrite, that is until a reload
+    read the rewritten configuration, and at most `cap_ms` after the rewrite. A reload
+    follows the file event after a 100 ms debounce, and under load it can start after a fixed
+    300 ms: it then reads the restored bytes, publishes nothing and drops nothing, and the
+    control arm shows no effect for a reason that is not the watcher's."""
+    read = (
+        f'$p = {_ps(str(config))}; $o = [IO.File]::ReadAllBytes($p); '
         '$t = [Text.Encoding]::UTF8.GetString($o) -replace '
-        '\'"plugins":\\s*\\[[^\\]]*\\]\', \'"plugins": []\'; [IO.File]::WriteAllText($p, $t)'
+        '\'"plugins":\\s*\\[[^\\]]*\\]\', \'"plugins": []\'; '
     )
+    write = '[IO.File]::WriteAllText($p, $t)'
     if restore_ms is None:
-        return edit
-    return edit + f'; Start-Sleep -Milliseconds {restore_ms}; [IO.File]::WriteAllBytes($p, $o)'
+        return read + write
+    restore = '[IO.File]::WriteAllBytes($p, $o)'
+    if reload_log is None:
+        return read + write + f'; Start-Sleep -Milliseconds {restore_ms}; ' + restore
+    return (
+        read
+        + f'$l = {_ps(str(reload_log))}; $n = 0; '
+        + 'if (Test-Path -LiteralPath $l) { $n = (Get-Item -LiteralPath $l).Length }; '
+        + write
+        + '; $w = [Diagnostics.Stopwatch]::StartNew(); '
+        + f'Start-Sleep -Milliseconds {restore_ms}; '
+        + f'while ($w.ElapsedMilliseconds -lt {cap_ms}) {{ '
+        + "$x = ''; if (Test-Path -LiteralPath $l) { "
+        + "$s = [IO.File]::Open($l, 'Open', 'Read', 'ReadWrite, Delete'); "
+        + "try { if ($s.Length -gt $n) { [void]$s.Seek($n, 'Begin'); "
+        + '$x = (New-Object IO.StreamReader($s)).ReadToEnd() } } finally { $s.Dispose() } }; '
+        + f'if ($x.Contains({_ps(RELOAD_LINE)})) {{ break }}; Start-Sleep -Milliseconds 50 }}; '
+        + restore
+    )
 
 
 def code_steps(listener: str, sub: Path, linked: Path) -> list[dict]:
@@ -1027,9 +1068,13 @@ def cell_shell_write(cell: Cell, row: dict) -> None:
     row['work_dir'] = str(work.resolve())
 
 
-def _hold_steps(config: Path) -> list[dict]:
+def _hold_steps(home: Path) -> list[dict]:
+    """The hold cell's calls on the home folder `home`: the restore waits for opencode's reload
+    of the rewrite in both arms; with the watcher off none comes, and it restores at its cap."""
+    config = home / 'conf' / 'opencode.jsonc'
+    log = home / 'xdg' / 'data' / 'opencode' / 'log' / 'opencode.log'
     return [
-        _shell(rewrite_without_plugin(config, 300)),
+        _shell(rewrite_without_plugin(config, HOLD_MS, reload_log=log)),
         _echo('hold-1.marker'),
         _echo('hold-2.marker'),
         {'text': 'done'},
@@ -1039,7 +1084,7 @@ def _hold_steps(config: Path) -> list[dict]:
 def cell_watcher(cell: Cell, row: dict) -> None:
     work = cell.folder / 'work'
     work.mkdir()
-    _, port = cell.stub(cell.folder, _hold_steps(cell.home / 'conf' / 'opencode.jsonc'))
+    _, port = cell.stub(cell.folder, _hold_steps(cell.home))
     home = cell.render(port)
     row['run_id'] = cell.mint()
     cell.direct(home, work, _headless(), row['run_id'], 'session')
@@ -1050,8 +1095,7 @@ def cell_watcher(cell: Cell, row: dict) -> None:
         ctl_work = arm / 'work'
         ctl_work.mkdir(parents=True)
         ctl_home_dir = arm / 'home'
-        config = ctl_home_dir / 'conf' / 'opencode.jsonc'
-        _, ctl_port = cell.stub(arm, _hold_steps(config))
+        _, ctl_port = cell.stub(arm, _hold_steps(ctl_home_dir))
         copy = _copy(cell, home, ctl_home_dir, ctl_port, lambda data: None)
         run_id = cell.mint()
         cell.direct(copy, ctl_work, _headless(), run_id, f'control-{index}', WATCHER_NAMES)
