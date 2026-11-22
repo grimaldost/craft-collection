@@ -38,6 +38,13 @@ of the policy is refused, while one under a test root is passed into the
 session. A policy that records nothing launches as before and the variable is
 not passed. The cores' switches are never passed.
 
+The harness version: once the binary is found, preflight reads the version it
+reports and refuses a version other than its contract's `[harness] version`
+(the driver's `pinned_version`), or none, naming both and the two ways on: a
+re-pin, or `--accept-version VERSION`, which launches only when VERSION is
+exactly the version found. Such a run records `accepted_version` in
+`run.json`, and one stderr line says the run is not covered by the contract.
+
 Session modes (`--mode`, default `headless`): a driver declares a grammar per
 mode it offers. Interactive mode is refused for a driver without it, on any
 platform but Windows, and when the harness's contract records the mode
@@ -298,6 +305,9 @@ class Plan:
     protected_except: list[str] = field(default_factory=list)
     policy_sha256: str | None = None
     watch: watch.RunWatch | None = None
+    # The harness version the version probe read, and the one `--accept-version` named.
+    version_found: str | None = None
+    accepted_version: str | None = None
 
 
 def _ascii(text: object) -> str:
@@ -507,6 +517,39 @@ def check_mode(driver: harnesses.Driver, mode: str, windows: bool | None = None)
     if entry['state'] == 'absent':
         raise RefusalError(f'the contract of {driver.name} records {mode} mode as absent')
     return []
+
+
+def check_version(driver: harnesses.Driver, found: str | None, accepted: str | None) -> list[str]:
+    """Refuse a harness version other than the contract's unless `--accept-version` names the
+    version found, and refuse an accepted version that is not the one found; for a launch the
+    option allows, the line that says the run is not covered by the contract."""
+    try:
+        pinned = driver.pinned_version
+    except (OSError, ValueError) as exc:
+        raise RefusalError(f'the contract of {driver.name} is unreadable: {_ascii(exc)}') from None
+    shown = found or 'not found'
+    if accepted is not None and accepted != found:
+        raise RefusalError(
+            f'--accept-version {_ascii(accepted)} does not name the {driver.name} version '
+            f'found, {shown}; it names only the version the binary reports'
+        )
+    if found == pinned:
+        return []
+    if found is None:
+        raise RefusalError(
+            f'{driver.name} version not found: its --version printed no version, and the '
+            f"contract's is {pinned}; a version kit cannot read cannot be accepted"
+        )
+    if accepted is None:
+        raise RefusalError(
+            f"{driver.name} version {found} differs from the contract's {pinned}; re-pin "
+            'the harness (README, "Re-pinning a harness version") or name the version with '
+            f'--accept-version {found}'
+        )
+    return [
+        f'kit: this run is not covered by the contract: {driver.name} version {found} is not '
+        f"the contract's {pinned}; starting it because --accept-version names it"
+    ]
 
 
 def check_open_run(home_dir: Path) -> None:
@@ -1213,6 +1256,7 @@ def preflight(
     harness_args: list[str],
     environ: dict,
     mode: str = HEADLESS,
+    accept_version: str | None = None,
 ) -> Plan:
     """Every check of `kit run`, in order; raise RefusalError on the first that fails."""
     try:
@@ -1267,6 +1311,9 @@ def preflight(
     binary = driver.binary_argv(environ)
     if not binary:
         raise RefusalError(f'the {driver.name} binary was not found')
+    # The version probe takes kit's environment, less the key and the secret names for a daily home.
+    found = driver.version(child if child is not None else environ)
+    notices += check_version(driver, found, accept_version)
     surface = import_surface(added, loaded, environ)
     walked = walked_folders(driver, folder, top, root)
     run_id = state.new_run_id()
@@ -1320,6 +1367,8 @@ def preflight(
         protected=protected,
         protected_except=[str(run_dir / 'tmp')],
         policy_sha256=policy.sha256,
+        version_found=found,
+        accepted_version=accept_version,
     )
     plan.watch = run_watch(plan, surface, walked, system)
     return plan
@@ -1530,7 +1579,6 @@ def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int
         shutil.copyfile(home_dir / 'gitconfig', plan.run_dir / 'gitconfig')
     hashes = watch.hash_files(home_dir, plan.driver)
     state.write_json_atomic(plan.run_dir / watch.HOME_HASHES, hashes)
-    found = plan.driver.version(child_environ(environ) if plan.daily else environ)
     record.update(
         home=str(plan.home['dir']),
         workdir=str(plan.workdir),
@@ -1538,9 +1586,11 @@ def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int
         remotes=plan.remotes,
         project_config=plan.project_config,
         kit_pid=os.getpid(),
-        harness_version_found=found,
+        harness_version_found=plan.version_found,
         scrubbed=plan.scrubbed,
     )
+    if plan.accepted_version is not None:
+        record.update(accepted_version=plan.accepted_version)
     if plan.mode == INTERACTIVE:
         record.update(terminal_names=list(plan.terminal))
     if plan.policy_sha256 is not None:
@@ -1550,12 +1600,6 @@ def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int
             policy_sha256=plan.policy_sha256,
         )
     state.write_json_atomic(run_json, record)
-    if found != plan.driver.pinned_version:
-        sys.stderr.write(
-            f'kit: {plan.driver.name} version {found or "not found"} differs from the pinned '
-            f'{plan.driver.pinned_version}; starting it\n'
-        )
-        sys.stderr.flush()
     result = run_canary_for_plan(plan, environ)
     state.write_json_atomic(plan.run_dir / state.CANARY_DIR / canary.CANARY_JSON, result)
     if not result['passed']:
@@ -2239,6 +2283,11 @@ def build_parser() -> _Parser:
         default=HEADLESS,
         help='headless (default) or interactive (opencode on Windows)',
     )
+    parser.add_argument(
+        '--accept-version',
+        metavar='VERSION',
+        help="start a harness whose version is not the contract's, when it is exactly VERSION",
+    )
     return parser
 
 
@@ -2258,6 +2307,7 @@ def main(argv: list[str]) -> int:
             argv[cut + 1 :],
             dict(os.environ),
             mode=args.mode,
+            accept_version=args.accept_version,
         )
     except RefusalError as exc:
         return _fail(EXIT_REFUSED, f'run refused: {exc}')

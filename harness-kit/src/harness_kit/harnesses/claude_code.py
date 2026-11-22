@@ -16,6 +16,7 @@ from harness_kit.harnesses import (
     FAKE_KEY,
     HEADLESS,
     SHELLS_DIR,
+    ContractVersion,
     Grammar,
     check_endpoint,
     configured_argv,
@@ -41,7 +42,8 @@ CONFIG_NAMES = ('CLAUDE_CONFIG_DIR',)
 
 class ClaudeCode:
     name = 'claude-code'
-    pinned_version = '2.1.316'
+    # The contract's `[harness] version`: the one source of the pin.
+    pinned_version = ContractVersion()
     # `-p` is the only mode a probe ran; the flags are those of `canary_argv`.
     required_leading_tokens = ('-p',)
     required_session_args = ('--setting-sources', 'user')

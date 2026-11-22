@@ -17,8 +17,13 @@ Contract under test, with a fake harness named through `KIT_HARNESS_ARGV_*`:
   `WINDIR`, `COMSPEC`, `PROGRAMDATA` and `PATHEXT` whatever kit received;
 - `run.json` records the project-config paths of the working folder, the
   remotes, the version found, `launched` then `ended` with the exit code, and
-  `kit run` returns the harness's exit code; a version past the pin prints one
-  stderr line and still starts.
+  `kit run` returns the harness's exit code;
+- a version other than the contract's, or none read, is refused with exit 64,
+  naming both versions and the two ways on (a re-pin, `--accept-version`), and
+  mints no run; `--accept-version X` launches only when X is the version found,
+  `run.json` then records `accepted_version`, and one stderr line says the run
+  is not covered by the contract when X is not the contract's; a missing binary
+  is refused as before.
 
 Stdlib-runnable: `python test_launcher.py`.
 """
@@ -130,6 +135,7 @@ class Case:
         workdir: Path | None = None,
         home: Path | None = None,
         harness: str | None = None,
+        options: tuple[str, ...] = (),
         **env: str,
     ) -> subprocess.CompletedProcess:
         return kit(
@@ -143,6 +149,7 @@ class Case:
             str(workdir or self.work),
             '--policy',
             str(self.policy),
+            *options,
             '--',
             *(SESSION_ARGS[self.harness] if args is None else args),
             **env,
@@ -542,24 +549,98 @@ def test_claude_code_starts_outside_the_test_roots():
         shutil.rmtree(base, ignore_errors=True)
 
 
-def test_version_found_is_recorded_and_a_mismatch_is_named():
-    base, case, proc = started('claude-code')
+def test_version_found_is_recorded():
+    for harness in PINNED:
+        base, case, proc = started(harness)
+        try:
+            assert_started(case, proc)
+            record = case.run_json()
+            assert record['harness_version_found'] == PINNED[harness], record
+            assert 'accepted_version' not in record, record
+            assert proc.stderr == '', proc.stderr
+            assert isinstance(record['kit_pid'], int) and record['home'] and record['workdir']
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def test_another_version_is_refused_naming_both_and_the_ways_on():
+    for harness in PINNED:
+        base = scratch()
+        try:
+            case = Case(base, harness, version='9.9.9')
+            proc = case.run()
+            assert_refused(case, proc, '9.9.9')
+            line = proc.stderr.splitlines()[0]
+            for needle in (PINNED[harness], '--accept-version 9.9.9', 're-pin'):
+                assert needle in line, (harness, needle, line)
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def test_an_unreadable_version_is_refused():
+    base = scratch()
     try:
+        case = Case(base, 'opencode', version='none')
+        proc = case.run()
+        assert_refused(case, proc, 'version')
+        assert PINNED['opencode'] in proc.stderr, proc.stderr
+        proc = case.run(options=('--accept-version', '9.9.9'))
+        assert_refused(case, proc, '--accept-version 9.9.9')
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_accept_version_naming_the_version_found_launches_and_is_recorded():
+    for harness in PINNED:
+        base = scratch()
+        try:
+            case = Case(base, harness, version='9.9.9')
+            proc = case.run(options=('--accept-version', '9.9.9'))
+            assert_started(case, proc)
+            record = case.run_json()
+            assert record['harness_version_found'] == '9.9.9', record
+            assert record['accepted_version'] == '9.9.9', record
+            assert record['outcome'] == 'ended', record
+            lines = proc.stderr.splitlines()
+            assert len(lines) == 1, lines
+            assert 'not covered by the contract' in lines[0], lines
+            assert '9.9.9' in lines[0] and PINNED[harness] in lines[0], lines
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def test_accept_version_naming_another_version_is_refused():
+    for harness in PINNED:
+        base = scratch()
+        try:
+            case = Case(base, harness, version='9.9.9')
+            proc = case.run(options=('--accept-version', '9.9.8'))
+            assert_refused(case, proc, '--accept-version 9.9.8')
+            assert '9.9.9' in proc.stderr, proc.stderr
+            # Naming the pinned version does not lift a binary that reports another one.
+            proc = case.run(options=('--accept-version', PINNED[harness]))
+            assert_refused(case, proc, '9.9.9')
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+
+def test_accept_version_naming_the_pinned_version_found_launches_silently():
+    base = scratch()
+    try:
+        case = Case(base, 'opencode')
+        proc = case.run(options=('--accept-version', PINNED['opencode']))
         assert_started(case, proc)
-        assert case.run_json()['harness_version_found'] == '2.1.316'
         assert proc.stderr == '', proc.stderr
+        assert case.run_json()['accepted_version'] == PINNED['opencode']
     finally:
         shutil.rmtree(base, ignore_errors=True)
-    base, case, proc = started('claude-code', version='9.9.9')
-    try:
-        assert_started(case, proc)
-        record = case.run_json()
-        assert record['harness_version_found'] == '9.9.9', record
-        lines = proc.stderr.splitlines()
-        assert len(lines) == 1 and '9.9.9' in lines[0] and '2.1.316' in lines[0], lines
-        assert isinstance(record['kit_pid'], int) and record['home'] and record['workdir']
-    finally:
-        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_a_missing_binary_is_refused_as_before():
+    def setup(case):
+        case.argv = []  # an empty argv in KIT_HARNESS_ARGV_* names no binary
+
+    refused('opencode', 'missing binary', setup, 'binary was not found')
 
 
 if __name__ == '__main__':

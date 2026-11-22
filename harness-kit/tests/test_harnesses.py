@@ -5,6 +5,9 @@ Contract under test:
 - `harnesses.get(name)` gives the driver of `claude-code` or `opencode`, whose
   pinned version, leading tokens, required session arguments, allowed flags,
   project paths and project walk hold the values of the drivers' contract;
+- a driver's pinned version is its contract file's `[harness] version`, read
+  from the package's `contracts/` folder, so a scratch copy of the package with
+  an edited contract pins the edited version, and a home it renders carries it;
 - `kit home render` writes the shell, its `shell_config.json`, the harness
   configuration and `home.json` into an absent or empty folder, prints
   `home.json`, and refuses a non-empty folder with exit 64, writing nothing;
@@ -38,10 +41,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
@@ -147,6 +154,60 @@ def _assert_headless(d) -> None:
     assert grammar.required == d.required_session_args, grammar
     assert grammar.allowed == d.allowed_session_flags, grammar
     assert grammar.flags is None, grammar
+
+
+CONTRACT_FILES = {'claude-code': 'claude_code.toml', 'opencode': 'opencode.toml'}
+
+
+def _contract_version(src: Path, name: str) -> str:
+    path = src / 'harness_kit' / 'contracts' / CONTRACT_FILES[name]
+    return tomllib.loads(path.read_text(encoding='utf-8'))['harness']['version']
+
+
+def test_the_pinned_version_is_the_contracts_harness_version():
+    for name in CONTRACT_FILES:
+        driver = harnesses.get(name)
+        assert driver.pinned_version == _contract_version(SRC, name), name
+        assert type(driver).pinned_version == driver.pinned_version, name
+
+
+def test_the_pinned_version_follows_an_edited_contract():
+    """A scratch copy of the package whose contracts name other versions pins those."""
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / 'pkg-src'
+        shutil.copytree(
+            SRC / 'harness_kit', src / 'harness_kit', ignore=shutil.ignore_patterns('__pycache__')
+        )
+        moved = {'claude-code': '7.7.7', 'opencode': '8.8.8'}
+        for name, version in moved.items():
+            path = src / 'harness_kit' / 'contracts' / CONTRACT_FILES[name]
+            text = path.read_text(encoding='utf-8')
+            text = re.sub(r'(?m)^version = "[^"]*"$', f'version = "{version}"', text, count=1)
+            path.write_text(text, encoding='utf-8')
+            assert _contract_version(src, name) == version
+        code = (
+            'import json; from harness_kit import harnesses; '
+            'print(json.dumps({n: harnesses.get(n).pinned_version for n in harnesses.names()}))'
+        )
+        proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            [sys.executable, '-c', code],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            env=_env(PYTHONPATH=str(src)),
+            timeout=60,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert json.loads(proc.stdout) == moved, proc.stdout
+        # The shell's `harness_version` is the pin, so a home rendered there carries it too.
+        home = Path(td) / 'home'
+        render = ['home', 'render', '--harness', 'opencode', '--dir', str(home)]
+        proc = _kit(*render, '--endpoint', ENDPOINT, PYTHONPATH=str(src))
+        assert proc.returncode == 0, proc.stderr
+        shell_config = Path(json.loads(proc.stdout)['shell_config'])
+        assert _inside(str(shell_config), home), shell_config
+        config = json.loads(shell_config.read_text(encoding='utf-8'))
+        assert config['harness_version'] == '8.8.8', config
 
 
 def test_unknown_harness_is_refused():

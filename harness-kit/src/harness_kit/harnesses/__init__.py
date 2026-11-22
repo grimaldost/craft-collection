@@ -18,6 +18,10 @@ and the canary's, is the home's `canary_model`.
 runs an empty argv. On Windows a `.cmd` or `.bat` file is never run, from the
 `KIT_HARNESS_ARGV_*` variable or from `PATH`, because its `%*` passes a prompt
 through `cmd.exe`.
+
+A driver's `pinned_version` is its contract's `[harness] version`, read from
+the package's `contracts/` folder at each use: the contract is the one source
+of the pin, so a re-pin edits the contract and nothing else.
 """
 
 from __future__ import annotations
@@ -33,6 +37,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+import tomllib
 
 import harness_kit
 from harness_kit.watch import RENDERED_KEY
@@ -54,6 +60,7 @@ HOME_KINDS = (TEST_HOME, DAILY_HOME)
 # The variable that carries a daily session's capability to the relay; it is no provider key.
 RELAY_CAPABILITY_ENV = 'KIT_RELAY_CAPABILITY'
 SHELLS_DIR = Path(__file__).resolve().parent.parent / 'shells'
+CONTRACTS_DIR = Path(__file__).resolve().parent.parent / 'contracts'
 NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW
 
 
@@ -80,6 +87,29 @@ class Grammar:
 
 HEADLESS, INTERACTIVE = 'headless', 'interactive'
 MODES = (HEADLESS, INTERACTIVE)
+
+
+def contract_path(name: str) -> Path:
+    """The contract file of the harness `name` (`claude-code` -> `contracts/claude_code.toml`)."""
+    return CONTRACTS_DIR / (name.replace('-', '_') + '.toml')
+
+
+def contract_version(name: str) -> str:
+    """The `[harness] version` of the harness's contract; OSError or ValueError when the file
+    is unreadable or holds no such string."""
+    data = tomllib.loads(contract_path(name).read_text(encoding='utf-8'))
+    version = (data.get('harness') or {}).get('version')
+    if not isinstance(version, str) or not version:
+        raise ValueError(f'{contract_path(name).name} has no [harness] version')
+    return version
+
+
+class ContractVersion:
+    """A driver's `pinned_version`: its contract's `[harness] version`, read at each access,
+    on the class as on an instance."""
+
+    def __get__(self, obj: object, owner: type | None = None) -> str:
+        return contract_version((owner or type(obj)).name)
 
 
 class Driver(Protocol):

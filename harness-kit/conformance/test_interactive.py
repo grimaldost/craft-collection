@@ -37,6 +37,11 @@ A run writes `interactive-results.json` under KIT_CONFORMANCE_BASE. A row has ex
 `derive(row, state)`, a pure function of the files the row names, never an exit code. The
 derivation is checked on fixture trees before anything starts, on every platform.
 
+Every `kit run` of a cell passes `accept_args()`: `--accept-version` with the value of
+`KIT_CONFORMANCE_ACCEPT_VERSION` when it is set, so the cells run on a version the contract
+does not name yet. `harness_version` is the version the driver's probe reads for the binary
+named by KIT_HARNESS_ARGV_OPENCODE, the one the cells run.
+
 Prints `skip:` unless KIT_CONFORMANCE_BASE and KIT_HARNESS_ARGV_OPENCODE are set and the platform
 is Windows. The base must be an existing folder. The harness's version is read through its
 driver, whose probe keeps opencode's temporary files in a scratch folder.
@@ -64,6 +69,7 @@ from test_conformance import (  # noqa: E402 - the sibling module, found through
     REASON,
     SESSION_TIMEOUT_S,
     SRC,
+    accept_args,
     after_the_tool_call,
     find_run,
     kit,
@@ -551,8 +557,8 @@ def _prepare_second_folder(folder: Path, home: Path, policy: Path, env: dict) ->
     """A headless kit run in the second folder, so the interface lists it as a project."""
     second = folder / SECOND_FOLDER
     argv = harnesses.get(HARNESS).canary_argv('Answer with text.')
-    head = ['run', '--harness', HARNESS, '--home', str(home), '--workdir', str(second)]
-    head += ['--policy', str(policy), '--']
+    head = ['run', '--harness', HARNESS, *accept_args(), '--home', str(home)]
+    head += ['--workdir', str(second), '--policy', str(policy), '--']
     with open(folder / 'prepare.stdout', 'wb') as out, open(folder / 'prepare.stderr', 'wb') as err:
         subprocess.run(  # noqa: S603 - argv built above, no shell
             [sys.executable, '-m', 'harness_kit', *head, *argv],
@@ -653,8 +659,8 @@ def run_cell(
         kit(*render, '--endpoint', f'http://127.0.0.1:{port}', env=env)
         if cell == 'interactive-switch-denied':
             _prepare_second_folder(folder, home, policy, env)
-        head = ['run', '--harness', HARNESS, '--mode', 'interactive', '--home', str(home)]
-        head += ['--workdir', str(work), '--policy', str(policy), '--']
+        head = ['run', '--harness', HARNESS, *accept_args(), '--mode', 'interactive']
+        head += ['--home', str(home), '--workdir', str(work), '--policy', str(policy), '--']
         argv = [sys.executable, '-m', 'harness_kit', *head, '--standalone', '--prompt', PROMPT]
         console = conpty.PseudoConsole(argv, env, work, folder / 'screen.log')
         _drive(cell, console, folder, home)
