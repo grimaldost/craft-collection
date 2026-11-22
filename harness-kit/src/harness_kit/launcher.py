@@ -84,9 +84,39 @@ end, its tree is ended, and `run.json` gets `relay` with `requests`, `refused`,
 `settled_usd` and `stopped`. The session's git reads the run's copy of the
 home's `gitconfig`.
 
+Governance of the session's configuration. `run.json` records `protected`,
+the paths kit protects from the session's tools (the home's configuration
+and shell folders, `home.json`, `run-open.json`, a daily home's `gitconfig`
+and daily file, the state root, the policy file, the judge's import surface,
+the project-config names in the working folder and every folder of the
+project walk, opencode's system configuration folder, and the account's
+Claude Code home and opencode configuration folder), `protected_except` (the
+run's `tmp` folder) and `policy_sha256`, which the judge's built-in rule
+`config.protected` reads. The judge's import surface is read once the
+policy's checkers are loaded in kit's own process: the folder that holds
+`harness_kit` and each folder a checker put on `sys.path`, the files of the
+modules the checkers loaded outside the standard library, and, from the
+judge's own interpreter started with `-I`, its `sys.prefix`,
+`sys.base_prefix`, site-packages folders, `sys.path` and the modules its
+startup loads; never kit's own `sys.path`, `PYTHONPATH`, user site or
+working folder. In interactive mode and for a daily home a home whose
+`shell_config.json` names a judge other than this kit's is refused, and so is
+a project-config name in the working folder; opencode's system configuration
+folder is refused in every mode. From the session's start to its end, and
+once more after its tree ended, a thread reads every 2 seconds the names,
+sizes and modification times of the home's watched files, `run-open.json`,
+the daily file, the policy file, the kit's package folder, the judge's import
+surface, `run.json`, the files the driver watches during a run, the
+project-config names of the walk and the system folder; a difference ends
+the session's tree, sets `outcome` to `config-changed` and `config_changed`
+to the changed names, writes `config-changed.json` (`run_id` and `carried`,
+the changed paths outside the home and the run's folder) beside `home.json`
+and exits 66. A home that holds `config-changed.json` is refused.
+
 Exit codes: 64 a refusal, 65 a failed canary or a home changed before the
-session, 70 an internal error or a relay that did not get ready, 130 an
-interrupt before the session, else the harness's own.
+session, 66 a configuration changed during the session, 70 an internal error
+or a relay that did not get ready, 130 an interrupt before the session, else
+the harness's own.
 """
 
 from __future__ import annotations
@@ -111,11 +141,12 @@ from pathlib import Path
 import tomllib
 
 import harness_kit
-from harness_kit import canary, daily, doctor, harnesses, packs, relay, state, watch
+from harness_kit import canary, checkers, daily, doctor, harnesses, packs, relay, state, watch
 from harness_kit.policy import Policy, PolicyError, load_policy
 
 EXIT_REFUSED = 64
 EXIT_CANARY = 65
+EXIT_CHANGED = 66
 EXIT_INTERNAL = 70
 EXIT_INTERRUPTED = 130
 WINDOWS = os.name == 'nt'
@@ -146,6 +177,14 @@ CAPABILITY_ENV = harnesses.RELAY_CAPABILITY_ENV
 NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW: the relay gets no console, so no console interrupt
 CLAUDE_CODE = 'claude-code'
 FAKE_KEY = 'stub-not-a-key'
+# The check during the run: how often it reads, how many changed names a record holds, and
+# what kit writes to its terminal when it ended an interactive session (leave the alternate
+# screen, show the cursor, reset the attributes, mouse and paste modes).
+CHECK_POLL_S = 2.0
+CHANGED_MAX = 20
+TERMINAL_RESET = (
+    '\x1b[0m\x1b[?25h\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\r\n'
+)
 
 # Names a child inherits from kit's environment, beside PATH and what the driver sets.
 ALLOW = (
@@ -244,6 +283,12 @@ class Plan:
     # A daily run's file, key and capabilities, and the variables only the canary gets.
     daily: DailyRun | None = None
     canary_extra: dict[str, str] = field(default_factory=dict)
+    # The paths kit protects from the session's tools, their exception, the policy's hash, and
+    # what the check during the run reads.
+    protected: list[str] = field(default_factory=list)
+    protected_except: list[str] = field(default_factory=list)
+    policy_sha256: str | None = None
+    watch: watch.RunWatch | None = None
 
 
 def _ascii(text: object) -> str:
@@ -487,6 +532,61 @@ def check_render_record(home_dir: Path, home: dict, driver: harnesses.Driver) ->
         )
 
 
+def _same_path(a: object, b: object) -> bool:
+    return isinstance(a, str) and isinstance(b, str) and watch.norm(a) == watch.norm(b)
+
+
+def check_config_changed(home_dir: Path) -> None:
+    """Refuse a home that holds `config-changed.json`: a session changed its configuration.
+
+    It is read before the policy, so a policy the session edited into an unreadable one still
+    gets this refusal, which names it.
+    """
+    path = home_dir / watch.CONFIG_CHANGED
+    if not os.path.lexists(path):
+        return
+    home = _read_object(home_dir / watch.HOME_JSON) or {}
+    data = _read_object(path) or {}
+    run_id = data.get('run_id')
+    named = _ascii(run_id) if isinstance(run_id, str) and run_id else 'unknown'
+    carried = data.get('carried')
+    carried = [c for c in carried if isinstance(c, str)] if isinstance(carried, list) else []
+    text = (
+        f'the home holds {watch.CONFIG_CHANGED} of run {named}: its session changed the '
+        'configuration it ran under, so the home starts no session'
+    )
+    if carried:
+        text += (
+            '; each of '
+            + ', '.join(_ascii(c) for c in carried)
+            + ' changed during that run and carries into a new home: read or restore it '
+            'before rendering a new home'
+        )
+    else:
+        text += '; render a new home'
+    daily_file, settings = home.get('daily_file'), home.get('daily_settings')
+    if any(_same_path(c, daily_file) for c in carried) and isinstance(settings, dict):
+        try:
+            data_bytes = Path(daily_file).read_bytes()
+        except OSError:
+            text += f'; the daily file {_ascii(daily_file)} is not readable'
+        else:
+            text += '; ' + _daily_differs(daily_file, data_bytes, settings)
+    raise RefusalError(text)
+
+
+def check_cli_argv(home: dict, driver: harnesses.Driver) -> None:
+    """Refuse a home whose `shell_config.json` starts a judge other than the one this kit renders."""
+    source = driver.name if callable(getattr(driver, 'translate_event', None)) else None
+    config = _read_object(Path(home['shell_config']))
+    found = config.get('cli_argv') if config is not None else None
+    if found != harnesses.cli_argv(source):
+        raise RefusalError(
+            "the home's shell_config.json names a cli_argv other than this kit's judge; render "
+            'the home with this kit'
+        )
+
+
 def terminal_env(environ: dict) -> dict[str, str]:
     """The terminal names kit's environment holds, in the order of TERMINAL_NAMES."""
     found = {_key(k): v for k, v in environ.items()}
@@ -511,14 +611,50 @@ def project_walk(driver: harnesses.Driver, workdir: Path, top: Path | None, root
 
 
 def check_project_layer(
-    driver: harnesses.Driver, workdir: Path, top: Path | None, root: Path
+    driver: harnesses.Driver,
+    workdir: Path,
+    top: Path | None,
+    root: Path,
+    *,
+    refuse_workdir: bool = False,
 ) -> list[str]:
-    """Refuse a project-config path in an ancestor; return those in the working folder."""
+    """Refuse a project-config path in an ancestor, and with `refuse_workdir` one in the
+    working folder; return those in the working folder."""
     for folder in project_walk(driver, workdir, top, root):
         for entry in driver.project_config_paths:
             if os.path.lexists(folder / entry):
                 raise RefusalError(f'project config {_ascii(folder / entry)} lies in an ancestor')
-    return [e for e in driver.project_config_paths if os.path.lexists(workdir / e)]
+    found = [e for e in driver.project_config_paths if os.path.lexists(workdir / e)]
+    if refuse_workdir and found:
+        raise RefusalError(
+            f'project config {_ascii(workdir / found[0])} lies in the working folder; interactive '
+            'mode and daily homes refuse it'
+        )
+    return found
+
+
+def system_folder(driver: harnesses.Driver) -> Path | None:
+    """The harness's system configuration folder as its driver names it, or None."""
+    method = getattr(driver, 'system_config_dir', None)
+    if method is None:
+        return None
+    try:
+        return Path(method())
+    except OSError as exc:
+        raise RefusalError(
+            f'the system configuration folder of {driver.name} could not be read: {_ascii(exc)}'
+        ) from None
+
+
+def check_system_layer(driver: harnesses.Driver) -> Path | None:
+    """Refuse a system configuration folder of the harness that exists; return its path."""
+    folder = system_folder(driver)
+    if folder is not None and os.path.lexists(folder):
+        raise RefusalError(
+            f'the system {driver.name} configuration folder {_ascii(folder)} exists; kit run '
+            'refuses it'
+        )
+    return folder
 
 
 # ---- a policy that records notes
@@ -729,6 +865,169 @@ def governed_home(policy: Policy, environ: dict) -> dict[str, str]:
     return {GOVERNED_HOME: value}
 
 
+# ---- the judge's import surface and the protected paths
+
+# What each checker's first load in this process put on `sys.path` and loaded, by module name.
+_CHECKER_LOADS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
+
+
+def _dedupe(items) -> list[str]:
+    seen, out = set(), []
+    for item in items:
+        text = os.path.abspath(str(item))
+        key = watch.norm(text)
+        if key not in seen:
+            seen.add(key)
+            out.append(text)
+    return out
+
+
+def load_checkers(policy: Policy) -> tuple[list[str], list[str]]:
+    """Load the policy's checkers as the judge would, in this process.
+
+    Return the folders their loads put on `sys.path` (`sys.path` read before and after each
+    load, so never this process's own entries) and the files of the checkers and of the
+    modules their loads imported. Raise RefusalError naming the first unusable checker.
+    """
+    folders: list[str] = []
+    files: list[str] = []
+    for checker in policy.checkers:
+        name = checkers.module_name(checker)
+        path_before, modules_before = list(sys.path), set(sys.modules)
+        broken = packs.verify_checkers([checker])
+        if broken is not None:
+            raise RefusalError(f'policy checker unusable: {_ascii(broken)}')
+        if name not in _CHECKER_LOADS:
+            added = tuple(p for p in sys.path if p and p not in path_before)
+            loaded = tuple(
+                module.__file__
+                for key, module in list(sys.modules.items())
+                if key not in modules_before and isinstance(getattr(module, '__file__', None), str)
+            )
+            _CHECKER_LOADS[name] = (added, loaded)
+        added, loaded = _CHECKER_LOADS[name]
+        folders.extend(added)
+        files.extend([checker.path, *loaded])
+    return folders, files
+
+
+@dataclass
+class Surface:
+    """The judge's import surface: the folders ahead of the standard library on its path, the
+    files of the modules it loads outside the standard library, its interpreter's prefixes,
+    site-packages folders and whole path, and the kit's package folder."""
+
+    package: str
+    folders: list[str]
+    files: list[str]
+    prefixes: list[str]
+    site_packages: list[str]
+    path: list[str]
+
+    def outside_files(self) -> list[str]:
+        return [f for f in self.files if not watch.under_any(f, self.folders)]
+
+
+def import_surface(added: list[str], loaded: list[str], environ: dict) -> Surface:
+    """The judge's import surface: what the checkers' loads gave, and the judge's interpreter."""
+    try:
+        found = watch.read_interpreter(harnesses.cli_argv()[0], child_environ(environ))
+    except watch.SurfaceError as exc:
+        raise RefusalError(f"the judge's import surface could not be read: {_ascii(exc)}") from None
+    package = Path(harness_kit.__file__).resolve().parent
+    folders = _dedupe([package.parent, *added])
+    stdlib = [p for p in found['stdlib'] if isinstance(p, str)]
+    files = _dedupe(f for f in [*loaded, *found['files']] if not watch.under_any(f, stdlib))
+    return Surface(
+        package=str(package),
+        folders=folders,
+        files=files,
+        prefixes=_dedupe([found['prefix'], found['base_prefix']]),
+        site_packages=_dedupe(p for p in found['site_packages'] if isinstance(p, str)),
+        path=_dedupe([*folders, *(p for p in found['path'] if isinstance(p, str))]),
+    )
+
+
+def _env_value(environ: dict, name: str) -> str:
+    found = [v for k, v in environ.items() if _key(k) == _key(name)]
+    return found[0] if found else ''
+
+
+def account_homes(environ: dict) -> list[str]:
+    """The account's Claude Code home and opencode configuration folder, from kit's own
+    environment."""
+    profile = _env_value(environ, 'USERPROFILE' if WINDOWS else 'HOME') or os.path.expanduser('~')
+    claude = _env_value(environ, 'CLAUDE_CONFIG_DIR')
+    if not claude.strip():
+        claude = os.path.join(profile, '.claude')
+    opencode = _env_value(environ, 'OPENCODE_CONFIG_DIR')
+    if not opencode:
+        xdg = _env_value(environ, 'XDG_CONFIG_HOME')
+        opencode = (
+            os.path.join(xdg, 'opencode') if xdg else os.path.join(profile, '.config', 'opencode')
+        )
+    return [claude, opencode]
+
+
+def walked_folders(driver: harnesses.Driver, workdir: Path, top: Path | None, root: Path) -> list:
+    """The working folder and every folder the driver's project walk reads."""
+    out, seen = [], set()
+    for folder in (workdir, *project_walk(driver, workdir, top, root)):
+        key = watch.norm(folder)
+        if key not in seen:
+            seen.add(key)
+            out.append(Path(folder))
+    return out
+
+
+def protected_paths(
+    driver: harnesses.Driver,
+    home_dir: Path,
+    *,
+    daily_file: str | None,
+    root: Path,
+    policy_path: Path,
+    surface: Surface,
+    walked: list,
+    system: Path | None,
+    environ: dict,
+) -> list[str]:
+    """The paths a launched write tool may not reach, in the order `run.json` lists them."""
+    items: list = [home_dir / name for name in getattr(driver, 'protected_folders', ())]
+    items += [home_dir / watch.HOME_JSON, home_dir / watch.RUN_OPEN]
+    if daily_file is not None:
+        items += [home_dir / 'gitconfig', daily_file]
+    items += [root, policy_path, *surface.folders, *surface.outside_files(), *surface.prefixes]
+    items += [folder / e for folder in walked for e in driver.project_config_paths]
+    items += [walked[0] / n for n in getattr(driver, 'protected_workdir_names', ())]
+    items += [system] if system is not None else []
+    items += account_homes(environ)
+    return _dedupe(items)
+
+
+def run_watch(plan: Plan, surface: Surface, walked: list, system: Path | None) -> watch.RunWatch:
+    """What the check during the run reads, besides the home's watched files."""
+    home_dir = _home_dir(plan)
+    files = [str(home_dir / watch.RUN_OPEN), str(plan.policy_path), str(plan.run_dir / 'run.json')]
+    if plan.daily is not None:
+        files.append(str(plan.daily.found.path))
+    files += surface.files
+    presence = [os.path.join(f, n) for f in surface.path for n in watch.STARTUP_NAMES]
+    presence += [str(f / e) for f in walked for e in plan.driver.project_config_paths]
+    presence += [str(system)] if system is not None else []
+    trees = [surface.package]
+    trees += [str(home_dir / n) for n in getattr(plan.driver, 'run_watched_folders', ())]
+    return watch.RunWatch(
+        home=home_dir,
+        driver=plan.driver,
+        files=_dedupe(files),
+        trees=trees,
+        name_sets=list(surface.folders),
+        pth_folders=list(surface.site_packages),
+        presence=presence,
+    )
+
+
 # ---- the environment
 
 
@@ -898,17 +1197,16 @@ def preflight(
     except KeyError as exc:
         raise RefusalError(_ascii(exc.args[0])) from None
     notices = check_mode(driver, mode)
+    home_folder = Path(os.path.abspath(home_dir))
+    check_config_changed(home_folder)
     policy_path = Path(os.path.abspath(policy_file))
     try:
         policy = load_policy(policy_path)
     except PolicyError as exc:
         raise RefusalError(f'policy unreadable: {_ascii(exc)}') from None
-    broken = packs.verify_checkers(policy.checkers)
-    if broken is not None:
-        raise RefusalError(f'policy checker unusable: {_ascii(broken)}')
+    added, loaded = load_checkers(policy)
     records = harnesses.recorded_kinds(policy.checkers)
     notices += check_note_states(policy, driver, records) if records else []
-    home_folder = Path(os.path.abspath(home_dir))
     home = check_home(home_folder, driver)
     kind = harnesses.home_kind(home)
     if kind not in harnesses.HOME_KINDS:
@@ -916,6 +1214,7 @@ def preflight(
     is_daily = kind == harnesses.DAILY_HOME
     if mode == INTERACTIVE or is_daily:
         check_open_run(home_folder)
+        check_cli_argv(home, driver)
         check_render_record(home_folder, home, driver)
     extra: dict[str, str] = {}
     if records:
@@ -938,10 +1237,14 @@ def preflight(
     if driver.name != CLAUDE_CODE:
         check_folder(folder, top, remotes, policy)
     check_session_args(harness_args, driver, mode)
-    project_config = check_project_layer(driver, folder, top, root)
+    strict = mode == INTERACTIVE or is_daily
+    project_config = check_project_layer(driver, folder, top, root, refuse_workdir=strict)
+    system = check_system_layer(driver)
     binary = driver.binary_argv(environ)
     if not binary:
         raise RefusalError(f'the {driver.name} binary was not found')
+    surface = import_surface(added, loaded, environ)
+    walked = walked_folders(driver, folder, top, root)
     run_id = state.new_run_id()
     run_dir = root / 'runs' / run_id
     terminal = terminal_env(environ) if mode == INTERACTIVE else {}
@@ -957,7 +1260,18 @@ def preflight(
         workdir=folder,
         extra={**extra, **terminal, **capability},
     )
-    return Plan(
+    protected = protected_paths(
+        driver,
+        home_folder,
+        daily_file=str(daily_run.found.path) if daily_run else None,
+        root=root,
+        policy_path=policy_path,
+        surface=surface,
+        walked=walked,
+        system=system,
+        environ=environ,
+    )
+    plan = Plan(
         driver=driver,
         home=home,
         workdir=folder,
@@ -979,7 +1293,12 @@ def preflight(
         home_dir=home_folder,
         daily=daily_run,
         canary_extra={CAPABILITY_ENV: daily_run.canary_capability} if daily_run else {},
+        protected=protected,
+        protected_except=[str(run_dir / 'tmp')],
+        policy_sha256=policy.sha256,
     )
+    plan.watch = run_watch(plan, surface, walked, system)
+    return plan
 
 
 def _exit_code(code: int) -> int:
@@ -1170,14 +1489,14 @@ def _launch_minted(plan: Plan, environ: dict) -> int:
             return _fail(EXIT_INTERRUPTED, 'run interrupted before the session started')
         if isinstance(ready, int):
             return ready
-        return _run_session(plan, record, held)
+        return _run_session(plan, record, held, ready)
     finally:
         held.stop_relay(plan, record)
 
 
-def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int | None:
+def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int | dict:
     """Hashes, version, canary, the relay and the second read; an exit code when the session
-    must not start."""
+    must not start, else the second read, the baseline of the check during the run."""
     run_json = plan.run_dir / 'run.json'
     (plan.run_dir / 'tmp').mkdir()
     (plan.run_dir / 'gh-config').mkdir()
@@ -1200,6 +1519,12 @@ def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int
     )
     if plan.mode == INTERACTIVE:
         record.update(terminal_names=list(plan.terminal))
+    if plan.policy_sha256 is not None:
+        record.update(
+            protected=list(plan.protected),
+            protected_except=list(plan.protected_except),
+            policy_sha256=plan.policy_sha256,
+        )
     state.write_json_atomic(run_json, record)
     if found != plan.driver.pinned_version:
         sys.stderr.write(
@@ -1232,7 +1557,7 @@ def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int
         )
     if _marks_open(plan):
         state.write_json_atomic(home_dir / watch.RUN_OPEN, {'run_id': plan.run_id})
-    return None
+    return baseline
 
 
 def _marks_open(plan: Plan) -> bool:
@@ -1240,8 +1565,13 @@ def _marks_open(plan: Plan) -> bool:
     return plan.mode == INTERACTIVE or plan.daily is not None
 
 
-def _run_session(plan: Plan, record: dict, held: _Held) -> int:
-    """Start the session in its own tree, wait for it, end the tree and record the end."""
+def _run_session(plan: Plan, record: dict, held: _Held, baseline: dict | None = None) -> int:
+    """Start the session in its own tree, wait for it, end the tree and record the end.
+
+    From the session's start a thread reads what `plan.watch` names every 2 seconds and ends
+    the session's tree at the first difference; once the tree ended, one more read is taken
+    before kit writes anything. A difference ends the run with `config-changed`.
+    """
     run_json = plan.run_dir / 'run.json'
     restore = _ignore_interrupts()
     try:
@@ -1255,8 +1585,14 @@ def _run_session(plan: Plan, record: dict, held: _Held) -> int:
             return _fail(EXIT_INTERNAL, f'the harness did not start: {_ascii(exc)}')
         record.update(outcome='launched')
         state.write_json_atomic(run_json, record)
+        check = _RunCheck(plan.watch, baseline, session) if plan.watch is not None else None
         code = session.wait()
+        found = check.stop() if check is not None else []
         session.end()
+        if check is not None:
+            found = check.last(found)
+        if found:
+            return _config_changed(plan, record, held, code, found)
         record.update(outcome='ended', exit_code=code)
         state.write_json_atomic(run_json, record)
         held.stop_relay(plan, record)
@@ -1264,6 +1600,75 @@ def _run_session(plan: Plan, record: dict, held: _Held) -> int:
         return _exit_code(code)
     finally:
         restore()
+
+
+class _RunCheck:
+    """The check during the run: a thread that reads the watch plan every 2 seconds."""
+
+    def __init__(self, plan: watch.RunWatch, home_files: dict | None, session: _Session):
+        self.plan = plan
+        self.session = session
+        self.baseline = watch.snapshot(plan, home_files)
+        self.found: list[str] = []
+        self._stop = threading.Event()
+        self.thread = threading.Thread(target=self._loop, name='kit-run-check', daemon=True)
+        self.thread.start()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(CHECK_POLL_S):
+            try:
+                changed = watch.changes(self.baseline, watch.snapshot(self.plan))
+            except OSError:
+                continue
+            if changed:
+                self.found = changed
+                self.session.kill()
+                return
+
+    def stop(self) -> list[str]:
+        """Stop the thread; the paths it found changed, if any."""
+        self._stop.set()
+        self.thread.join()
+        return list(self.found)
+
+    def last(self, found: list[str]) -> list[str]:
+        """`found` and what one more read finds changed, after the session's tree ended."""
+        later = watch.changes(self.baseline, watch.snapshot(self.plan))
+        return [*found, *(p for p in later if p not in found)]
+
+
+def _config_changed(plan: Plan, record: dict, held: _Held, code: int, found: list[str]) -> int:
+    """Record a run whose session changed what governs it, mark the home, exit 66."""
+    home_dir = _home_dir(plan)
+    names = [watch.label(p, home_dir) for p in found][:CHANGED_MAX]
+    carried = [
+        p for p in found if not watch.within(p, home_dir) and not watch.within(p, plan.run_dir)
+    ][:CHANGED_MAX]
+    record.update(outcome='config-changed', exit_code=code, config_changed=names)
+    state.write_json_atomic(plan.run_dir / 'run.json', record)
+    held.stop_relay(plan, record)
+    state.write_json_atomic(
+        home_dir / watch.CONFIG_CHANGED, {'run_id': plan.run_id, 'carried': carried}
+    )
+    _close_run(plan)
+    if plan.mode == INTERACTIVE:
+        try:
+            sys.stdout.write(TERMINAL_RESET)
+            sys.stdout.flush()
+        except (OSError, ValueError):
+            pass
+    lines = [
+        f'kit: the session changed {_ascii(names[0])}, which governs it; kit ended the session '
+        '(config-changed) and the home starts no session again'
+    ]
+    lines += [
+        f'kit: {_ascii(path)} changed during the run and carries into a new home; read or '
+        'restore it before rendering a new home'
+        for path in carried
+    ]
+    sys.stderr.write(''.join(line + chr(10) for line in lines))
+    sys.stderr.flush()
+    return EXIT_CHANGED
 
 
 def _close_run(plan: Plan) -> None:
@@ -1539,6 +1944,17 @@ class _Session:
                 return self.proc.wait()
             except KeyboardInterrupt:
                 continue
+
+    def kill(self) -> None:
+        """End the session's whole tree now, from any thread; `end` still waits for it."""
+        if self.job is not None:
+            self.job.terminate()
+            return
+        if not WINDOWS:
+            try:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
 
     def end(self) -> None:
         """End every process left in the session's tree and wait until they are gone."""
