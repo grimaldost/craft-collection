@@ -48,6 +48,7 @@ from harness_kit.harnesses import (
     RELAY_CAPABILITY_ENV,
     SHELLS_DIR,
     TEST_HOME,
+    ContractVersion,
     Grammar,
     HomeError,
     check_endpoint,
@@ -379,7 +380,8 @@ def resolve_shim(path: str) -> str | None:
 
 class OpenCode:
     name = 'opencode'
-    pinned_version = '2.2.5'
+    # The contract's `[harness] version`: the one source of the pin.
+    pinned_version = ContractVersion()
     # `run` is the subcommand of every probe that ran a session; the flags are those of `canary_argv`.
     required_leading_tokens = ('run',)
     required_session_args = ('--standalone',)

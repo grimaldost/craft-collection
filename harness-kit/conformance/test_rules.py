@@ -27,6 +27,10 @@ a `KIT_STATE_ROOT` of the cell's own, so they add no line to the journals the
 conformance suite reads. The 20 timed verdicts of uv-deny must all be `deny`;
 the medians are recorded and never asserted.
 
+`CELLS_BY_HARNESS` names the cells run per harness, and every `kit run` passes
+`accept_args()`: `--accept-version` with the value of
+`KIT_CONFORMANCE_ACCEPT_VERSION` when it is set.
+
 A run writes `rules-results.json` under KIT_CONFORMANCE_BASE and leaves
 `conformance-results.json` alone. Each row has the keys of a conformance row
 (`cell`, `harness`, `harness_version`, `passed`, `stub_log`, `work_dir`,
@@ -63,6 +67,7 @@ if str(HERE) not in sys.path:
 from test_conformance import (  # noqa: E402 - the sibling module, found through HERE
     SESSION_TIMEOUT_S,
     SRC,
+    accept_args,
     find_run,
     kit,
     kit_env,
@@ -79,6 +84,7 @@ RESULTS = 'rules-results.json'
 PACK = HERE.parent / 'packs' / 'uv'
 RULE_ID = 'uv-project-uses-uv'
 CELLS = ('uv-deny', 'uv-allow-outside', 'uv-allow-mention')
+CELLS_BY_HARNESS = dict.fromkeys(HARNESSES, CELLS)
 COMMANDS = {
     'uv-deny': 'echo probe > uv-deny.marker; pip install --help',
     'uv-allow-outside': 'echo probe > uv-allow-outside.marker; pip install --help',
@@ -368,8 +374,8 @@ def run_cell(
             endpoint,
             env=env,
         )
-        head = ['run', '--harness', harness, '--home', str(home_dir), '--workdir', str(work)]
-        head += ['--policy', str(policies['cell']), '--']
+        head = ['run', '--harness', harness, *accept_args(), '--home', str(home_dir)]
+        head += ['--workdir', str(work), '--policy', str(policies['cell']), '--']
         argv = driver.canary_argv('Run the scripted tool call.')
         with open(folder / 'stdout.txt', 'wb') as out, open(folder / 'stderr.txt', 'wb') as err:
             subprocess.run(  # noqa: S603 - argv built above, no shell
@@ -443,7 +449,7 @@ def main() -> int:
     try:
         for harness in chosen:
             version = harnesses.get(harness).version(kit_env(argv_env))
-            for cell in CELLS:
+            for cell in CELLS_BY_HARNESS[harness]:
                 row, found = run_cell(cell, harness, version, base, policies, state, argv_env)
                 rows.append(row)
                 problems += found

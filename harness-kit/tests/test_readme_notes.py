@@ -180,7 +180,7 @@ def test_every_subcommand_and_option_the_readme_names_exists():
     # `kit run` is dispatched ahead of the parser, so its own flags are not listed there;
     # `--project` belongs to uv, in the install command; the permissions mapping table names
     # opencode's and Claude Code's own flags.
-    exempt = ('--workdir', '--home', '--policy', '--project')
+    exempt = ('--workdir', '--home', '--policy', '--project', '--accept-version')
     exempt += ('--auto', '--yolo', '--dangerously-skip-permissions')
     stray = [o for o in stray if o not in exempt]
     assert not stray, stray

@@ -567,6 +567,49 @@ the two `[rules]` entries of a contract are written by hand from that file. The
 `[notes]` table has an entry per kind, `prompt` and `outcome`, with a `state`
 (`tested` or `absent`), a `mark` and the evidence.
 
+## Re-pinning a harness version
+
+Each contract names the harness version its cells measured, `[harness] version`,
+and that is the version the driver pins: `kit run` reads the version the binary
+reports and refuses another one, or none, with exit 64 and no run, naming both
+versions and the two ways on. One is a re-pin, below. The other is
+`kit run --accept-version VERSION`, which starts the harness only when VERSION is
+exactly the version found; the run then records `accepted_version` in
+`run.json`, and one line on standard error says that it is not covered by the
+contract. `kit doctor` keeps reading `unknown` for a harness whose version
+differs from its contract's. Auto-update is off in every home (`update`
+`disable` and `OPENCODE_DISABLE_AUTOUPDATE` on opencode, `DISABLE_AUTOUPDATER` on
+Claude Code), so a version changes only when someone installs another.
+
+A re-pin moves a contract to a new version once the cells have run on it:
+
+1. Install the new version beside the pinned one, and name it in the harness's
+   `KIT_HARNESS_ARGV_*` variable.
+2. Run every conformance file in `conformance/` against it, each with a base of
+   its own, with `KIT_CONFORMANCE_ACCEPT_VERSION` set to the new version. Every
+   cell that a file starts with `kit run` then passes `--accept-version` with
+   that value; a cell started without `kit run` needs nothing. Every row records
+   in `harness_version` the version that the driver reads for the binary the
+   cell ran.
+3. Edit a copy of the contract to the new version, and run
+   `conformance/repin_check.py` with the harness's name, the folder that holds
+   the bases and that copy. It reads every `*-results.json` under the folder and
+   exits 0 only when every cell that each conformance file declares for the
+   harness in `CELLS_BY_HARNESS` has a row, every row passed or failed with
+   `accepted_failure` `loopback-fetch-refused` (opencode refusing a loopback
+   fetch by itself in the webfetch control cell, the one failure accepted by
+   name), and every row holds the copy's version. Otherwise it prints one line
+   per missing cell, failed cell or version, and exits 1.
+4. On a clean check, change in one pull request the contract's version and the
+   evidence the cells measured. A failed cell keeps its objective or loss as the
+   cell showed it, written by hand in that pull request.
+
+A version that offers a tool the list in `conformance/test_config_governance.py`
+does not hold fails the cell `offered-tools`. The re-pin pull request decides
+each new tool: it switches the tool off in every opencode home's rendered
+statements, adds it to the driver's list of refused tools, or records it as a
+loss in the contract, and it updates the list.
+
 ## Tests
 
 The tests beside the code run with the repository's runner,

@@ -26,6 +26,11 @@ A run writes `patch-results.json` under KIT_CONFORMANCE_BASE. A row has exactly 
 `derive(row, state, needle)`, a pure function of the files the row names, never an exit code. The
 derivation is checked on fixture trees before anything starts, on every platform.
 
+Every `kit run` of a cell passes `accept_args()`: `--accept-version` with the value of
+`KIT_CONFORMANCE_ACCEPT_VERSION` when it is set, so the cells run on a version the contract
+does not name yet. `harness_version` is the version the driver's probe reads for the binary
+named by KIT_HARNESS_ARGV_OPENCODE, the one the cells run.
+
 Prints `skip:` unless KIT_CONFORMANCE_BASE and KIT_HARNESS_ARGV_OPENCODE are set and the platform
 is Windows. The base must be an existing folder.
 
@@ -50,6 +55,7 @@ if str(HERE) not in sys.path:
 from test_conformance import (  # noqa: E402 - the sibling module, found through HERE
     SESSION_TIMEOUT_S,
     SRC,
+    accept_args,
     find_run,
     kit,
     kit_env,
@@ -348,8 +354,8 @@ def run_cell(
         render = ['home', 'render', '--harness', HARNESS, '--dir', str(home_dir)]
         render += ['--endpoint', f'http://127.0.0.1:{port}', '--policy', str(policy)]
         add_patch_model(json.loads(kit(*render, env=env)))
-        head = ['run', '--harness', HARNESS, '--home', str(home_dir), '--workdir', str(work)]
-        head += ['--policy', str(policy), '--']
+        head = ['run', '--harness', HARNESS, *accept_args(), '--home', str(home_dir)]
+        head += ['--workdir', str(work), '--policy', str(policy), '--']
         with open(folder / 'stdout.txt', 'wb') as out, open(folder / 'stderr.txt', 'wb') as err:
             subprocess.run(  # noqa: S603 - argv built above, no shell
                 [sys.executable, '-m', 'harness_kit', *head, *session_argv(driver)],

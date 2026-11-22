@@ -39,6 +39,11 @@ A run writes `daily-results.json` under KIT_CONFORMANCE_BASE. A row has exactly 
 `derive(row, state)`, a pure function of the files the row names, never an exit code. The
 derivation is checked on fixture trees before anything starts, on every platform.
 
+Every `kit run` of a cell passes `accept_args()`: `--accept-version` with the value of
+`KIT_CONFORMANCE_ACCEPT_VERSION` when it is set, so the cells run on a version the contract
+does not name yet. `harness_version` is the version the driver's probe reads for the binary
+named by KIT_HARNESS_ARGV_OPENCODE, the one the cells run.
+
 Prints `skip:` unless KIT_CONFORMANCE_BASE and KIT_HARNESS_ARGV_OPENCODE are set and the platform
 is Windows. The base must be an existing folder.
 
@@ -66,6 +71,7 @@ if str(HERE) not in sys.path:
 from test_conformance import (  # noqa: E402 - the sibling module, found through HERE
     SESSION_TIMEOUT_S,
     SRC,
+    accept_args,
     find_run,
     kit,
     kit_env,
@@ -748,7 +754,7 @@ def run_cell(
             str(daily_file),
             env=env,
         )
-        head = ['run', '--harness', HARNESS]
+        head = ['run', '--harness', HARNESS, *accept_args()]
         head += ['--mode', 'interactive'] if cell == 'daily-interactive' else []
         head += ['--home', str(home), '--workdir', str(work), '--policy', str(policy), '--']
         if cell == 'daily-interactive':

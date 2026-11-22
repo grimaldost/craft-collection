@@ -17,7 +17,13 @@ Each cell proves one objective of the harness contracts with markers on disk:
 
 The state root is `KIT_CONFORMANCE_BASE/state`. A run writes
 `conformance-results.json` under the base, one row per cell with `cell`,
-`harness`, `harness_version`, `passed`, `stub_log`, `work_dir` and `run_id`.
+`harness`, `harness_version` (the version the driver's probe reads for the
+binary the cell ran), `passed`, `stub_log`, `work_dir` and `run_id`.
+`CELLS_BY_HARNESS` names the cells run per harness. A cell started with `kit
+run` passes `--accept-version` with the value of
+`KIT_CONFORMANCE_ACCEPT_VERSION` when it is set (`accept_args`, which the other
+conformance files share), so the cells can run on a version the contract does
+not name yet; a bare cell needs no such option.
 `passed` is derived by `derive` from the files the row names, never from an
 exit code. The derivation is checked on fixture trees before anything starts,
 on every platform.
@@ -61,6 +67,9 @@ BARE = {
     'claude-code': ('hung-guard', 'not-launched'),
     'opencode': ('hung-guard', 'launcher-required'),
 }
+CELLS_BY_HARNESS = {harness: (*LAUNCHED, *BARE[harness]) for harness in HARNESSES}
+# A version `kit run` starts although the contract names another, for a re-pin's cells.
+ACCEPT_ENV = 'KIT_CONFORMANCE_ACCEPT_VERSION'
 SHELL_COMMANDS = {
     'guard-loaded': 'echo probe > session.marker',
     'deny-shell': 'echo probe > deny-shell.marker',
@@ -356,6 +365,13 @@ reason = "{REASON}"
 """
 
 
+def accept_args() -> list[str]:
+    """`--accept-version` and the value of KIT_CONFORMANCE_ACCEPT_VERSION, for a cell that
+    `kit run` starts; nothing when the variable is unset or empty."""
+    value = os.environ.get(ACCEPT_ENV)
+    return ['--accept-version', value] if value else []
+
+
 def kit_env(extra: dict) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.startswith('KIT_')}
     env = {k: v for k, v in env.items() if not SECRET_NAME.search(k)}
@@ -471,7 +487,7 @@ def run_cell(cell: str, harness: str, version: str | None, base: Path) -> dict:
             argv = [*argv, 'Write']
         with open(folder / 'stdout.txt', 'wb') as out, open(folder / 'stderr.txt', 'wb') as err:
             if cell in LAUNCHED:
-                head = ['run', '--harness', harness, '--home', str(home_dir)]
+                head = ['run', '--harness', harness, *accept_args(), '--home', str(home_dir)]
                 head += ['--workdir', str(work), '--policy', str(policy), '--']
                 command, run_env = [sys.executable, '-m', 'harness_kit', *head, *argv], env
             else:
@@ -547,7 +563,7 @@ def main() -> int:
             version = harnesses.get(harness).version(
                 kit_env({k: os.environ[k] for k in REQUIRED[1:]})
             )
-            for cell in (*LAUNCHED, *BARE[harness]):
+            for cell in CELLS_BY_HARNESS[harness]:
                 rows.append(run_cell(cell, harness, version, base))
     finally:
         (base / RESULTS).write_text(json.dumps(rows, indent=2) + '\n', encoding='utf-8')

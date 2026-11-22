@@ -62,6 +62,11 @@ for a cell with a control arm; `passed` is `derive(row, state)`, and `control`
 The derivation is checked on fixture trees before anything starts, on every platform. The
 account's governed files are hashed before the first cell and after the last.
 
+Every `kit run` of a cell passes `accept_args()`: `--accept-version` with the value of
+`KIT_CONFORMANCE_ACCEPT_VERSION` when it is set, so the cells run on a version the contract
+does not name yet. `harness_version` is the version the driver's probe reads for the binary
+named by KIT_HARNESS_ARGV_OPENCODE, the one the cells run.
+
 Prints `skip:` unless KIT_CONFORMANCE_BASE and KIT_HARNESS_ARGV_OPENCODE are set and the platform
 is Windows. The base must be an existing folder.
 
@@ -89,6 +94,7 @@ if str(HERE) not in sys.path:
 from test_conformance import (  # noqa: E402 - the sibling module, found through HERE
     SESSION_TIMEOUT_S,
     SRC,
+    accept_args,
     find_run,
     kit,
     kit_env,
@@ -861,7 +867,7 @@ class Cell:
     def kit_run(
         self, work: Path, argv: list[str], mode: str | None = None, job: bool = False
     ) -> int | None:
-        head = ['run', '--harness', HARNESS]
+        head = ['run', '--harness', HARNESS, *accept_args()]
         head += ['--mode', mode] if mode else []
         head += ['--home', str(self.home), '--workdir', str(work), '--policy', str(self.policy)]
         command = [sys.executable, '-m', 'harness_kit', *head, '--', *argv]

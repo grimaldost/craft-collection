@@ -43,6 +43,11 @@ for a call the native layer refuses, whether opencode asked the kit's hook first
 derivation is checked on fixture trees before anything starts, on every platform. The
 account's governed files are hashed before the first cell and after the last.
 
+Every `kit run` of a cell passes `accept_args()`: `--accept-version` with the value of
+`KIT_CONFORMANCE_ACCEPT_VERSION` when it is set, so the cells run on a version the contract
+does not name yet. `harness_version` is the version the driver's probe reads for the binary
+named by KIT_HARNESS_ARGV_OPENCODE, the one the cells run.
+
 Prints `skip:` unless KIT_CONFORMANCE_BASE and KIT_HARNESS_ARGV_OPENCODE are set and the platform
 is Windows. The base must be an existing folder.
 
@@ -69,6 +74,7 @@ if str(HERE) not in sys.path:
 from test_conformance import (  # noqa: E402 - the sibling module, found through HERE
     SESSION_TIMEOUT_S,
     SRC,
+    accept_args,
     find_run,
     kit,
     kit_env,
@@ -534,8 +540,8 @@ def _headless(auto: bool = True) -> list[str]:
 
 
 def _kit_run(folder: Path, home: Path, work: Path, policy: Path, env: dict, argv: list[str]):
-    head = ['run', '--harness', HARNESS, '--home', str(home), '--workdir', str(work)]
-    head += ['--policy', str(policy), '--']
+    head = ['run', '--harness', HARNESS, *accept_args(), '--home', str(home)]
+    head += ['--workdir', str(work), '--policy', str(policy), '--']
     with open(folder / 'kit.stdout', 'wb') as out, open(folder / 'kit.stderr', 'wb') as err:
         proc = subprocess.run(  # noqa: S603 - argv built by the cell, no shell
             [sys.executable, '-m', 'harness_kit', *head, *argv],
@@ -563,8 +569,8 @@ def _interactive(folder: Path, home: Path, work: Path, policy: Path, env: dict) 
     import conpty
 
     problems: list[str] = []
-    head = ['run', '--harness', HARNESS, '--mode', 'interactive', '--home', str(home)]
-    head += ['--workdir', str(work), '--policy', str(policy), '--']
+    head = ['run', '--harness', HARNESS, *accept_args(), '--mode', 'interactive']
+    head += ['--home', str(home), '--workdir', str(work), '--policy', str(policy), '--']
     argv = [sys.executable, '-m', 'harness_kit', *head, '--standalone', '--prompt', PROMPT]
     console = conpty.PseudoConsole(argv, env, work, folder / 'screen.log')
     try:
