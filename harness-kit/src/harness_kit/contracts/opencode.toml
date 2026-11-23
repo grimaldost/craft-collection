@@ -1,6 +1,7 @@
 # The ledger of opencode's losses: what the kit tested per objective, and each known way the
 # guard is lost or bypassed. States: tested, degraded, absent, unknown. Marks: measured, read,
-# inferred. An objective's evidence names the conformance cells that measured it.
+# inferred. An objective's evidence names the conformance cells that measured it, and may add
+# a sentence for a paid real-model test; that sentence adds evidence and changes no state.
 
 [harness]
 name = "opencode"
@@ -10,13 +11,13 @@ version = "2.2.5"
 id = "guard_loaded"
 state = "degraded"
 mark = "measured"
-evidence = "Conformance cell guard-loaded passed on opencode 2.2.5, 2026-11-10. Interactive cell interactive-guard, daily cells daily-guard and daily-interactive, and governance cells watcher-off-holds and planted-plugin-not-loaded passed on opencode 2.2.5, 2026-11-23."
+evidence = "Conformance cell guard-loaded passed on opencode 2.2.5, 2026-11-10. Interactive cell interactive-guard, daily cells daily-guard and daily-interactive, and governance cells watcher-off-holds and planted-plugin-not-loaded passed on opencode 2.2.5, 2026-11-23. Paid real-model test on opencode 2.2.5 under a pre-registered plan, 2026-11-16, harness-kit commit 44fada2: in 60 of 60 sessions through a relay (40 with Claude Sonnet 5.5, 8 with Claude Haiku 5.5, 12 with openai/gpt-6-luna) the launch canary passed and every watched call had its line in the kit's journal; no coverage failure (upper end of the 0.95 Wilson interval 0.060)."
 
 [[objective]]
 id = "refusal_in_turn"
 state = "tested"
 mark = "measured"
-evidence = "Conformance cells deny-shell and deny-write passed on opencode 2.2.5, 2026-11-10. Interactive cell interactive-guard, patch cell patch-governed and governance cells write-tool-refused and code-tool-refused passed on opencode 2.2.5, 2026-11-23."
+evidence = "Conformance cells deny-shell and deny-write passed on opencode 2.2.5, 2026-11-10. Interactive cell interactive-guard, patch cell patch-governed and governance cells write-tool-refused and code-tool-refused passed on opencode 2.2.5, 2026-11-23. Paid real-model test on opencode 2.2.5 under a pre-registered plan, 2026-11-16, harness-kit commit 44fada2: in 60 of 60 sessions through a relay (40 with Claude Sonnet 5.5, 8 with Claude Haiku 5.5, 12 with openai/gpt-6-luna) the verdicts in the kit's journal and the refusals in the session transcript agreed on every watched call, 52 rule refusals among them; no coverage failure (upper end of the 0.95 Wilson interval 0.060)."
 
 [[objective]]
 id = "allow_passes"
