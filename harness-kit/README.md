@@ -82,6 +82,7 @@ Python 3.11 or later, no dependencies.
 | `kit state new-run --harness NAME` | Mint a run id and its folder; print them as JSON. |
 | `kit stub --log FILE --script FILE [--port N]` | Serve a scripted model endpoint on 127.0.0.1 for tests; the first stdout line is `{"port": N}`. |
 | `kit home render --harness NAME --dir DIR --endpoint URL [--policy FILE]` | Render a test home for `claude-code` or `opencode` into an absent or empty folder; print its `home.json`. With `--policy`, a policy whose checkers record notes also gets `note_config.json` and the note hooks, and an opencode home renders the policy's `[permissions]` section (see "Permissions"); an unreadable policy exits 64. |
+| `kit home wire --harness opencode --config FILE --shell-dir DIR --out FILE`, `kit home wire --check --config FILE --shell-dir DIR` | Write to `--out` a copy of an opencode global configuration that loads the kit shell, materialized into `DIR`, and never write the configuration itself; with `--check`, say whether a configuration is wired. See "Wiring the kit plugin into an opencode configuration". |
 | `kit run --harness NAME --home DIR --workdir DIR --policy FILE -- HARNESS_ARGS...` | Check the session, run the presence canary, then start the harness and return its exit code. |
 | `kit doctor [--json] [--live --live-root DIR]` | Report what was tested, the runs and the sessions that were not launched. |
 | `kit policy build --base FILE --pack DIR [--pack DIR ...] --out FILE [--force]` | Write a version 2 policy from a base policy and rule packs, or a version 3 policy when a checker records notes, or a version 4 policy when the base has a `[permissions]` section, with `<out>.packs.json` beside it; a refused input exits 64 and writes nothing. |
@@ -442,6 +443,7 @@ decisions are in `docs/adr/0011-session-notes-and-facts.md`.
 | Code | Meaning |
 |---|---|
 | 0 | Success. For `kit judge`, a verdict was printed, whatever it was. |
+| 1 | For `kit home wire --check`: the configuration is not wired. |
 | 2 | Usage error from the argument parser. |
 | 64 | A refusal: an argument, a state root, a home or a policy was refused, or a preflight check failed. Nothing was started. |
 | 65 | The presence canary failed. The session was not started. |
@@ -609,6 +611,55 @@ does not hold fails the cell `offered-tools`. The re-pin pull request decides
 each new tool: it switches the tool off in every opencode home's rendered
 statements, adds it to the driver's list of refused tools, or records it as a
 loss in the contract, and it updates the list.
+
+## Wiring the kit plugin into an opencode configuration
+
+A session started with `kit run` gets the kit shell from its home. An opencode started
+without `kit run` (a bare start) loads only what its own global configuration lists.
+`kit home wire` prepares that configuration; it does not apply it, since replacing the
+account's configuration file is the owner's act:
+
+```
+kit home wire --harness opencode --config FILE --shell-dir DIR --out FILE
+```
+
+It reads the configuration (JSON or JSONC), materializes the opencode shell into `DIR`, an
+absent or empty folder (`index.js` and a `shell_config.json` whose `cli_argv` ends in
+`judge --from opencode`, the files `kit home render` writes, with no note mode), and writes
+to `--out` the configuration's text with two edits and every other byte kept, comments
+included: `DIR` (absolute, with forward slashes) added to `plugins`, and
+`"update": "disable"` when `update` is absent. An absent key is inserted as the first key
+after the opening brace; an existing `plugins` array gets the entry appended when it lies on
+one line. A configuration that holds no `plugins` and no `update` comes out as:
+
+```jsonc
+{
+  "plugins": ["C:/Users/me/kit-shell"],
+  "update": "disable",
+  // the rest of the file, byte for byte
+  "model": "provider/model"
+}
+```
+
+Refused with exit 64: a `plugins` array spread over lines, a nested form (an element that is
+not a string, a value that is not an array, `plugins` named twice or inside another value),
+a text that does not parse, an `--out` that names the configuration, and a non-empty `DIR`.
+A refusal over the configuration's form still materializes the shell and names the entry to
+add to `plugins` by hand. The command never writes the file `--config` names; the scanner
+that reads JSONC blanks comments and trailing commas outside strings and keeps every offset.
+
+`kit home wire --check --config FILE --shell-dir DIR` prints one line:
+`wired: CONFIG lists SHELL_DIR`, exit 0, when the configuration's `plugins` lists `DIR` (and
+no later `-harness-kit` entry removes it) and the files in `DIR` are the ones this kit
+renders; `not wired: REASON`, exit 1, otherwise; and it exits 64 for a configuration that
+cannot be read or does not parse.
+
+A bare start of a wired opencode has no run, so its first tool call is denied: by
+`launcher.required` when `KIT_POLICY` names a policy, and as `unknown` when no policy is set,
+as in a terminal that does not set `KIT_POLICY`. A project file in the
+working folder can still remove the plugin: with `"plugins": ["-harness-kit"]` in its
+`opencode.jsonc`, the call runs unjudged. `conformance/test_wiring.py` runs the three bare
+starts on a wired copy of a test configuration and writes `wiring-results.json`.
 
 ## Tests
 
