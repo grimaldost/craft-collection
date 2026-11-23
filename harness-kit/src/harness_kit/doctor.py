@@ -10,8 +10,11 @@ the launcher is gone without recording an end.
 and the harness's known losses, from the contract files under `contracts/`.
 A harness whose version differs from its contract reads `unknown` on every
 objective but `prevention`; one whose binary is absent reads `unknown` on all
-of them. It also lists the runs under the state root with their status
-(`running`, `stale`, `ended`, `refused`) and the sessions judged without a
+of them. Per harness, after the objectives, one line gives the interactive
+mode's state from the contract's `[modes.interactive]` entry, read the same
+way (`unknown` when the binary is absent or its version differs). It also lists
+the runs under the state root with their status (`running`, `stale`, `ended`,
+`refused`, `config-changed`, `interrupted`) and the sessions judged without a
 launch, whose guarantees are unknown.
 
 `kit doctor --live --live-root DIR` also runs the presence canary per harness
@@ -71,6 +74,17 @@ OBJECTIVES = (
     'prevention',
 )
 STATES = ('tested', 'degraded', 'absent', 'unknown')
+MODES = ('interactive',)
+MODE_LABEL = 'mode'
+# Run outcomes that end a run, and the status each reads as.
+ENDED_STATUS = {
+    'ended': 'ended',
+    'refused-canary': 'refused',
+    'refused-home-changed': 'refused',
+    'refused-relay': 'refused',
+    'config-changed': 'config-changed',
+    'interrupted': 'interrupted',
+}
 LIVE_OBJECTIVES = ('guard_loaded', 'refusal_in_turn', 'allow_passes')
 PREVENTION = 'prevention'
 
@@ -176,14 +190,13 @@ def _parse_utc(value: object) -> datetime | None:
 
 
 def run_status(run_dir: Path, now: datetime | None = None) -> str:
-    """`ended`, `refused`, or, for a run still held by a launcher, `running` or `stale`."""
+    """The status an ended run's outcome reads as (`ended`, `refused`, `config-changed`,
+    `interrupted`), or, for a run still held by a launcher, `running` or `stale`."""
     now = datetime.now(timezone.utc) if now is None else now
     record = _read_json(Path(run_dir) / 'run.json') or {}
     outcome = record.get('outcome')
-    if outcome == 'ended':
-        return 'ended'
-    if outcome == 'refused-canary':
-        return 'refused'
+    if isinstance(outcome, str) and outcome in ENDED_STATUS:
+        return ENDED_STATUS[outcome]
     beat = _read_json(Path(run_dir) / HEARTBEAT_JSON) or {}
     last = _parse_utc(beat.get('utc')) or _parse_utc(record.get('started_utc'))
     if last is None:
@@ -266,6 +279,21 @@ def harness_report(driver: harnesses.Driver, env: Mapping[str, str], live: dict 
                 evidence=f'version found {shown} is not the contract version {expected}',
             )
         objectives[name] = entry
+    modes = {}
+    for name in MODES:
+        row = (contract.get('modes') or {}).get(name)
+        if not isinstance(row, dict):
+            row = {'state': 'unknown', 'evidence': ''}
+        entry = {'state': row['state'], 'source': 'contract', 'evidence': row['evidence']}
+        if not present:
+            entry.update(state='unknown', evidence='the harness binary was not found')
+        elif found != expected:
+            shown = found or 'none read'
+            entry.update(
+                state='unknown',
+                evidence=f'version found {shown} is not the contract version {expected}',
+            )
+        modes[name] = entry
     if present and live is not None:
         run = live.get('run_id') or 'none'
         for name in LIVE_OBJECTIVES:
@@ -281,6 +309,7 @@ def harness_report(driver: harnesses.Driver, env: Mapping[str, str], live: dict 
         'version_found': found,
         'contract_version': expected,
         'objectives': objectives,
+        'modes': modes,
         'losses': losses,
     }
 
@@ -597,6 +626,9 @@ def render_text(report: dict) -> str:
         lines.append(f'{name}: version found {found}, contract {entry["contract_version"]}')
         for objective, row in entry['objectives'].items():
             lines.append(f'  {objective:<16} {row["state"]:<9} ({row["source"]}) {row["evidence"]}')
+        for mode, row in entry.get('modes', {}).items():
+            label = f'{MODE_LABEL} {mode}'
+            lines.append(f'  {label:<16} {row["state"]:<9} ({row["source"]}) {row["evidence"]}')
         for loss in entry['losses']:
             lines.append(
                 f'  loss {loss["id"]} [{loss["objective"]}, {loss["mark"]}]: {loss["text"]}'

@@ -121,8 +121,8 @@ text = "A prompt note cannot tell a typed prompt from the harness's task-notific
 id = "prompt-note-lost-keeps-earlier"
 objective = "prevention"
 mark = "inferred"
-evidence = "Claude Code 2.1.316, 2026-11-15: inferred from the design of kit note and the facts store, nothing run."
-text = "A prompt note that is not recorded (the shell's deadline, a lock not obtained, a conflict, a failed recorder) leaves the earlier owner prompt in force until the next prompt that is recorded, so an act the earlier prompt named stays allowed meanwhile."
+evidence = "Claude Code 2.1.316, 2026-11-15: inferred from the design of kit note and the facts store, nothing run. Claude Code 2.1.316, 2026-11-23: narrowed by the pending stamp kit note writes before any recorder runs, inferred from its design; no cell loses a note."
+text = "A prompt note lost before kit note writes its pending stamp (the shell's deadline, or a failure before kit note starts) leaves the earlier owner prompt in force until the next prompt that is recorded, so an act the earlier prompt named stays allowed meanwhile; a note lost after its stamp holds the recorded prompt facts back until a later prompt is recorded."
 
 # Rules a pack carries, by rule id: tested when the rule's three cells of conformance/test_rules.py
 # held on this harness, as its rules-results.json recorded them.
