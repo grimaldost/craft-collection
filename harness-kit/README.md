@@ -6,7 +6,8 @@ It runs outside the harness, in standard-library Python, and has thin shells for
 Claude Code 2.1.316 and opencode 2.2.5. It also takes notes of what already
 happened in a session, a submitted prompt or a finished shell call, and keeps
 small facts from them, so that rules that decide from an earlier event can run
-through it.
+through it. On opencode it also starts daily sessions, interactive ones included, in
+a home whose model provider it reaches only through a local relay that holds the key.
 
 ## What this slice does not do
 
@@ -47,6 +48,24 @@ The third slice, which adds session notes, facts and the series and owner-acts p
 - With the owner-acts pack in the policy, opencode's `patch` tool is refused: the shell does not observe its paths, the governed rule cannot tell, and the verdict is `unknown`.
 - The owner-acts refusal does not carry the core's per-family side effects and example sentence: the rule's reason is one fixed text, and the detail names the denied acts.
 
+Daily use on opencode lifts three of the items above: that the kit is not wired into a daily session, since a daily home now carries it; that opencode's `patch` tool is refused under the owner-acts pack, since every patch form is now read and the rule sees its paths; and that a prompt note not recorded leaves the earlier owner prompt in force, which now holds only for a note lost before its pending stamp is written. Its own limits:
+
+- It prevents nothing a process of the session can do as the owner's account.
+- It does not keep the account's own stores out of reach: a credential manager, an SSH agent, the terminal that started `kit run`, the relay's memory and the kit's state root are reachable by a shell command of the session (inferred).
+- It does not stop a shell write to opencode's configuration before it happens: the check during the run finds it within about 2 seconds and ends the session, and calls made in between may go unjudged. A write that restores the file's bytes and resets its times within one 2 s poll is not found, and neither is a session that, within one poll, removes the home's `run-open.json` and ends `kit run`.
+- It does not see a shell write into the interpreter's own installation, its standard library among them, or into a `__pycache__` folder the judge loads from. The check during the run reads the rest of the judge's import surface, and the write tools are denied in the part of it that `protected` lists.
+- It does not bind a `cd` inside a command: `launcher.workdir` reads only the folder a tool call starts in, and a shell command can change folder after it starts.
+- It does not judge a project the owner switches to in the interface when that project's file removes the kit plugin, and a tool the home switches off is offered again there when that file allows it. opencode reads each project's configuration anew.
+- It does not block network connections that ignore the proxy variables: the relay refuses proxy requests, and nothing else stands between the session and the network.
+- It does not carry session facts across runs: a session continued in a new run starts with none, so the owner-acts rule denies an owner act until the owner's next prompt is recorded.
+- It does not run interactive sessions on Claude Code or on POSIX systems.
+- It does not judge sessions of a desktop app that runs its own copy of a harness.
+- It does not measure the relay against a real provider: every relay test forwards to a local stub.
+- It does not keep a prompt note lost before its pending stamp: a note that never reaches `kit note` leaves the earlier owner prompt in force until the next prompt that is recorded.
+- It does not guard a bare opencode start beyond the wired plugin's own judgement: a configuration layer the bare start reads may remove the plugin before it loads.
+- It does not apply the wiring of the kit plugin to the owner's configuration: that is the owner's act.
+- It does not run two daily sessions on one state root at once: the relay holds its ledger's lock.
+
 What the slice does do:
 
 - It judges a neutral event with a three-state verdict. `unknown` has the same
@@ -58,6 +77,9 @@ What the slice does do:
   that apply.
 - It takes notes of what a session already did and keeps per-session facts, so
   that the series rule and the owner-acts rule decide from earlier events.
+- On opencode it starts interactive sessions and daily homes whose provider is a
+  local relay that holds the key, and it keeps opencode's configuration, plugins
+  and native permissions as it rendered them.
 
 ## Install
 
@@ -76,22 +98,24 @@ Python 3.11 or later, no dependencies.
 | Command | What it does |
 |---|---|
 | `kit --version` | Print the version. |
-| `kit judge [--policy PATH]` | Read one neutral event as JSON on stdin, print one verdict as one line of JSON, exit 0 whenever a verdict was printed. The policy is `--policy`, else `KIT_POLICY`. |
-| `kit note [--policy PATH]` | Read one session note as JSON on stdin, let the policy's recording checkers keep facts from it, and print one receipt as one line of JSON; it always exits 0 once its arguments parse. See "Notes and facts". |
+| `kit judge [--policy PATH] [--from NAME]` | Read one neutral event as JSON on stdin, print one verdict as one line of JSON, exit 0 whenever a verdict was printed. The policy is `--policy`, else `KIT_POLICY`. With `--from NAME`, read instead one envelope from the shell of harness `NAME`, which its driver translates (the opencode shell sends one). |
+| `kit note [--policy PATH] [--from NAME]` | Read one session note as JSON on stdin, or with `--from NAME` one envelope that harness's driver translates, let the policy's recording checkers keep facts from it, and print one receipt as one line of JSON; it always exits 0 once its arguments parse. See "Notes and facts". |
 | `kit state path` | Print the state root. |
 | `kit state new-run --harness NAME` | Mint a run id and its folder; print them as JSON. |
 | `kit stub --log FILE --script FILE [--port N]` | Serve a scripted model endpoint on 127.0.0.1 for tests; the first stdout line is `{"port": N}`. |
-| `kit home render --harness NAME --dir DIR --endpoint URL [--policy FILE]` | Render a test home for `claude-code` or `opencode` into an absent or empty folder; print its `home.json`. With `--policy`, a policy whose checkers record notes also gets `note_config.json` and the note hooks, and an opencode home renders the policy's `[permissions]` section (see "Permissions"); an unreadable policy exits 64. |
+| `kit home render --harness NAME --dir DIR --endpoint URL [--policy FILE]`, `kit home render --harness opencode --dir DIR --daily FILE --policy FILE` | Render a test home for `claude-code` or `opencode`, or with `--daily` an opencode daily home whose provider is the relay (see "Daily homes and the relay"), into an absent or empty folder; print its `home.json`. With `--policy`, a policy whose checkers record notes also gets `note_config.json` and the note hooks, and an opencode home renders the policy's `[permissions]` section (see "Permissions"); an unreadable policy exits 64. |
 | `kit home wire --harness opencode --config FILE --shell-dir DIR --out FILE`, `kit home wire --check --config FILE --shell-dir DIR` | Write to `--out` a copy of an opencode global configuration that loads the kit shell, materialized into `DIR`, and never write the configuration itself; with `--check`, say whether a configuration is wired. See "Wiring the kit plugin into an opencode configuration". |
-| `kit run --harness NAME --home DIR --workdir DIR --policy FILE -- HARNESS_ARGS...` | Check the session, run the presence canary, then start the harness and return its exit code. |
+| `kit run --harness NAME --home DIR --workdir DIR --policy FILE [--mode MODE] [--accept-version VERSION] -- HARNESS_ARGS...` | Check the session, run the presence canary, then start the harness and return its exit code. `MODE` is `headless`, the default, or `interactive`, opencode's own interface on Windows (see "Interactive mode"); `--accept-version` starts a harness whose version the contract does not name when it is exactly `VERSION` (see "Re-pinning a harness version"). |
 | `kit doctor [--json] [--live --live-root DIR]` | Report what was tested, the runs and the sessions that were not launched. |
 | `kit policy build --base FILE --pack DIR [--pack DIR ...] --out FILE [--force]` | Write a version 2 policy from a base policy and rule packs, or a version 3 policy when a checker records notes, or a version 4 policy when the base has a `[permissions]` section, with `<out>.packs.json` beside it; a refused input exits 64 and writes nothing. |
-| `kit relay serve --config FILE --state-root ROOT --run-id ID`, `kit relay summary [--json]` | Serve one daily run's chat requests on 127.0.0.1 with the provider key and the run's capability read from the first line of stdin, forwarding a request only after its worst cost is reserved within the run, day and month ceilings of the daily file's `[relay]` table in `relay/ledger.ndjson` under the state root; print that ledger's totals. |
+| `kit relay serve --config FILE --state-root ROOT --run-id ID`, `kit relay summary [--json]` | Serve one daily run's chat requests on 127.0.0.1 with the provider key and the run's capability read from the first line of stdin, forwarding a request only after its worst cost is reserved within the run, day and month ceilings of the daily file's `[relay]` table in `relay/ledger.ndjson` under the state root; print that ledger's totals. See "Daily homes and the relay". |
 
-In this slice `kit run` accepts only a home rendered by `kit home render`, and
-only a headless session (`claude -p`, `opencode run`): the canary ran nothing
-else. `HARNESS_ARGS` must start with the driver's leading tokens and may carry
-only the flags the driver names; anything else is refused. `kit run` accepts a
+`kit run` accepts only a home rendered by `kit home render`. A session is
+headless by default (`claude -p`, `opencode run`): `HARNESS_ARGS` must start
+with the driver's leading tokens and may carry only the flags the driver names,
+and anything else is refused. On Windows, `--mode interactive` starts
+opencode's own interface instead, under a grammar of its own (see "Interactive
+mode"). `kit run` accepts a
 version 1, 2, 3 or 4 policy and loads its checkers first; see "Version 2 and
 checkers", "Version 3 and `records`" and "Permissions". For a policy with a recording checker
 it makes three more checks, each a refusal with exit 64 before the canary and
@@ -232,6 +256,11 @@ lists again from its policy and refuses with exit 64 a home whose
 `permissions_sha256` differs (a policy changed after the render) and a home whose
 `opencode.jsonc` does not parse or holds other `permissions` or `policies`, a
 headless test home included; render the home again with the policy.
+
+opencode asks the kit's hook before its own permission check. In the permission
+cells, run on opencode 2.2.5, the kit's journal held a verdict for every call that
+the native layer then refused, so a call such a rule refuses is still judged and
+journaled.
 
 How the rules map:
 
@@ -446,8 +475,10 @@ decisions are in `docs/adr/0011-session-notes-and-facts.md`.
 | 1 | For `kit home wire --check`: the configuration is not wired. |
 | 2 | Usage error from the argument parser. |
 | 64 | A refusal: an argument, a state root, a home or a policy was refused, or a preflight check failed. Nothing was started. |
-| 65 | The presence canary failed. The session was not started. |
-| 70 | An internal error. |
+| 65 | The presence canary failed, or the home's watched files changed between the mint and the session's start. The session was not started. |
+| 66 | A watched file changed during the session: kit ended the session's process tree, recorded `config-changed` and wrote `config-changed.json` beside the home's `home.json` (see "Governance of opencode's configuration"). |
+| 70 | An internal error, or a relay that did not get ready. |
+| 130 | An interrupt (Ctrl+C or Ctrl+Break) before the session started: during preflight no run is minted, and after it the run records `interrupted`. During the session kit ignores it. |
 
 `kit run` otherwise returns the harness's own exit code. A denied tool call
 exits 0 on every harness tested, so the exit code says nothing about a denial:
@@ -460,8 +491,10 @@ The state root is `KIT_STATE_ROOT` when set, else `%LOCALAPPDATA%\harness-kit`
 on Windows, else `$XDG_STATE_HOME/harness-kit`, else
 `~/.local/state/harness-kit`. A root inside a harness's configuration folder is
 refused with exit 64. It holds `runs/<id>/` (`run.json`, `heartbeat.json`,
-`journal.ndjson`, `notes.ndjson`, the `facts/` folder, the canary's folder) and
-`not-launched/` for judgements and notes made outside `kit run`. A journal line
+`journal.ndjson`, `notes.ndjson`, `home-hashes.json`, the `facts/` folder, the
+canary's folder and, for a daily run, `relay-log.ndjson`), `not-launched/` for
+judgements and notes made outside `kit run`, and `relay/`, the relay's ledger and
+its lock. A journal line
 names the kind of act and its hash and the verdict, never the command text or a
 path; a note line follows the same rule, as "Notes and facts" says.
 
@@ -471,9 +504,16 @@ The run id reaches the harness's children through `KIT_RUN_ID`.
 
 `kit doctor` prints one report: per harness, the version found and one state per
 objective (`guard_loaded`, `refusal_in_turn`, `allow_passes`, `run_identity`,
-`launcher_checks`, `hung_guard`, `heartbeat`, `prevention`), the known losses,
-the runs (`running`, `stale`, `ended`, `refused`) and the sessions that were
-not launched. `--json` prints it as one line of JSON.
+`launcher_checks`, `hung_guard`, `heartbeat`, `prevention`), then one line for
+the interactive mode, `mode interactive` with the state of the contract's
+`[modes.interactive]` entry (`unknown` when the binary is absent or its version
+differs, as for the objectives), the known losses, the runs (`running`, `stale`,
+`ended`, `refused`, `config-changed`, `interrupted`) and the sessions that were
+not launched. A run reads `config-changed` when the check during the run ended
+it, `refused` when its canary failed, its home changed before the session or its
+relay did not get ready, and `interrupted` when an interrupt ended it before the
+session. `--json` prints it as one line of JSON, with the mode under each
+harness's `modes`.
 
 The states are exactly these four:
 
@@ -568,6 +608,184 @@ with a stand-in `gh`, and write `guards-results.json`; the `[notes]` table and
 the two `[rules]` entries of a contract are written by hand from that file. The
 `[notes]` table has an entry per kind, `prompt` and `outcome`, with a `state`
 (`tested` or `absent`), a `mark` and the evidence.
+
+The opencode shell sends each hook's event whole, in an envelope, to
+`kit judge --from opencode` or `kit note --from opencode`, and the opencode driver
+translates it into the neutral event or note; that is where a `patch` call's paths
+are read, from every header form opencode 2.2.5 applies. A contract's
+`[modes.interactive]` entry records the interactive mode: `tested` on opencode, from
+`conformance/test_interactive.py`, and `absent` on Claude Code, whose driver offers
+none. The other conformance files of daily use, `test_patch.py`,
+`test_daily_home.py`, `test_config_governance.py`, `test_permissions.py` and
+`test_wiring.py`, run on opencode only, and the contract names their cells in the
+evidence of the objectives and losses they measured.
+
+## Interactive mode
+
+`kit run --mode interactive` starts opencode's own interface, where the owner works, instead of
+one headless prompt. Only the opencode driver offers it, on Windows only: it is refused with exit
+64 for Claude Code, on any other platform, and for a harness whose contract records the mode
+`absent`. The opencode contract records it `tested`, from the cells of
+`conformance/test_interactive.py`. The interface runs its session on a private server, which
+`--standalone` asks for:
+
+```
+kit run --harness opencode --mode interactive --home HOME --workdir DIR --policy POLICY -- --standalone
+```
+
+The interactive grammar has no leading token: `--standalone` exactly once, and the flags
+`--continue` (or `-c`), `--session ID` (or `-s ID`) and `--prompt TEXT`. Every other token is
+refused with exit 64, naming it: a project-folder argument, a subcommand, a flag joined to its
+value by `=`, and the flags that skip opencode's permissions (`--auto`, `--yolo`,
+`--dangerously-skip-permissions`) among them.
+
+The proof is the one every launch has. The presence canary runs headless on the home before
+every start, whatever the mode, and the session starts only when it passed and the home's watched
+files still hash as they did at the mint (`runs/<id>/home-hashes.json`); a home changed in between
+is refused with exit 65. Where it was measured, the canary's median was 3.1 s over five launches.
+
+In interactive mode the session also gets the terminal's names from kit's environment, those that
+are set: `TERM`, `COLORTERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`, `WT_SESSION`,
+`WT_PROFILE_ID`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `NO_COLOR`; `run.json` lists the names
+passed under `terminal_names`. A home started in interactive mode must hold exactly the files its
+render recorded in `home.json` (`rendered_sha256`), else it is refused with exit 64 and a request
+to render it again into an empty folder. Right before the session starts, kit writes
+`run-open.json` beside `home.json`, and it removes the file once it has recorded the session's
+end. A home that still holds one, from a run whose end kit did not record (kit was ended, or its
+terminal closed), is refused until a new home is rendered, so end a session from the interface
+(Ctrl+C), not by closing the terminal.
+
+The session's tool calls start only in the folder `kit run` launched: the built-in rule
+`launcher.workdir` denies an act whose folder lies outside the run's `--workdir`, its work tree's
+top and the canary's folder, with a reason that says to start another `kit run` for another
+folder. opencode's location follows a project switch made in the interface (Ctrl+O), so a call in
+the folder switched to is denied. The session runs in a Job Object that ends every process of it
+with kit. A Ctrl+C or Ctrl+Break before the session starts exits 130; during the session kit
+ignores it and the interface keeps the terminal.
+
+## Daily homes and the relay
+
+A daily home is an opencode home for work outside the test homes: its model provider is a relay
+that `kit run` starts for the run on 127.0.0.1, and only the relay holds the provider key. It is
+rendered from a daily file, TOML with exactly `daily = 1`, a `[relay]` table and a `[git]` table
+with `name` and `email`:
+
+```text
+daily = 1
+
+[relay]
+listen_port = 47801
+upstream_base = "https://api.example.com"
+route = "/v1/chat/completions"
+key_env = "PROVIDER_API_KEY"
+test = false
+usage_include = true
+default_model = "vendor/model-a"
+upstream_timeout_s = 600
+
+[relay.ceilings]
+run_usd = 3.0
+day_usd = 10.0
+month_usd = 30.0
+
+[[relay.model]]
+id = "vendor/model-a"
+input_usd_per_mtok = 3.0
+output_usd_per_mtok = 15.0
+max_output_tokens = 16000
+
+[git]
+name = "Your Name"
+email = "you@example.com"
+```
+
+The numbers are an example only, and so are the names. An optional `[relay.provider]` table is
+forwarded as the request's `provider` object (`order`, `allow_fallbacks`, `data_collection`).
+`listen_port` is bound on 127.0.0.1 only. `upstream_base` is an `https` URL; with `test = true`
+it can only be `http://127.0.0.1:PORT`, and a daily file whose `test` is false is refused while
+the state root lies under the system's temporary folder, where every test keeps its own.
+`key_env` names the variable of kit's own environment that holds the key, never the key itself:
+set it in the terminal that runs `kit run`, for that terminal only, typed at a masked prompt
+rather than on a command line.
+
+`kit home render --harness opencode --dir DIR --daily FILE --policy FILE` renders the home: one
+provider, `relay`, at `http://127.0.0.1:LISTEN_PORT/v1` with one model per `[[relay.model]]`,
+`model` and `small_model` set to the default model, the kit plugin, and a `gitconfig` with the
+identity and an empty `credential.helper`. A session gets that identity and no push credential.
+
+`kit run` on a daily home, in either mode, reads the key from the `key_env` variable before any
+child starts, keeps it only for the relay and removes it from its own environment, so no other
+child gets it. It mints a capability for the run, which the session carries as
+`KIT_RELAY_CAPABILITY`; the relay serves only requests that bear it, and the canary gets another.
+Preflight refuses with exit 64 a daily file that is absent or changed since the render (naming
+each key whose value differs), an invalid `[relay]`, an absent or empty key variable, a listen
+port already bound, a relay lock already held, and a day or month total already at its ceiling.
+The canary runs against its own stub, never the relay. Then the relay starts (`kit relay serve`,
+with the key and the capability on its first line of standard input) and must print its ready
+line within 10 seconds, else the run records `refused-relay` and exits 70. However the session
+ends, the relay is stopped after it, and `run.json` records its `requests`, `refused`,
+`settled_usd` and `stopped`.
+
+The relay forwards only a `POST` to `/v1/chat/completions` that bears the capability. It refuses
+a proxy request, a request whose line, headers or body carry the key (and every request after
+that one), the request fields that would let the upstream pick other models or tools, and a model
+the daily file does not price; it caps the output at the model's `max_output_tokens`. It forwards
+a request only after appending to `relay/ledger.ndjson`, under the state root, a reservation of
+the request's worst cost that keeps the run's, the UTC day's and the UTC month's totals within
+`[relay.ceilings]`, and it settles each request from the reported cost or usage. The ceilings hold
+per state root: one relay runs per state root, holding the ledger's lock, and another state root
+keeps totals of its own. The run's total lives in the relay's memory; the day and month totals
+hold only while the ledger is intact. `runs/<id>/relay-log.ndjson` holds one line per request,
+with its sizes, tokens and amounts, and never a body, a header value or the key.
+`kit relay summary` prints the ledger's totals (with `--json`: `run`, `day`, `month`, `all`,
+`open` and `stops`) and starts nothing.
+
+## Governance of opencode's configuration
+
+A session does not change what governs it. Every opencode home's `opencode.jsonc` carries
+rendered statements: `plugin.use` loads no plugin but the kit's, `mcp.use` denies every MCP
+server, and `provider.use` and the `integration.*` statements allow the home's own provider only.
+The tools that run code or move the session, outside what the kit translates, are switched off by
+a `tool.use` deny and a `permissions` rule rendered last, so they are not offered: `execute` (Code
+Mode), `opencode_worktree_create`, `opencode_session_move` and `experimental_image_generate`.
+`opencode_worktree_remove`, which no statement or switch refuses alone, is refused by the kit:
+it is on the opencode driver's list of refused tools, so the judge denies it with rule
+`opencode.refused-tool`, and the reason says to remove a worktree with git in the shell, which
+the kit judges.
+
+A write tool's write to a protected path is denied by the built-in rule `config.protected`, ahead
+of the policy's rules. The protected paths are the home's configuration and shell folders,
+`home.json` and `run-open.json`, a daily home's `gitconfig` and daily file, the state root, the
+policy file, the judge's import surface (the folder of the kit's package, each folder a checker
+puts on the path, the files they load and the interpreter's own trees), the project-config names
+in the working folder and in the folders of the project walk, opencode's system configuration
+folder, and the account's Claude Code home and opencode configuration folder. `run.json` records
+them under `protected`, with `protected_except` (the run's `tmp` folder) and `policy_sha256`; a
+judgement under a policy file that no longer has that hash is `unknown`.
+
+A shell write cannot be denied by its path, so a thread of `kit run` reads every 2 seconds, from
+the session's start to its end and once more after it, the names, sizes and modification times
+of those files. A difference ends the session's process tree, records `config-changed` with the
+changed names, writes `config-changed.json` beside `home.json` and exits 66. Each changed path
+outside the home and the run's folder carries into a new home and is named on exit; `kit run`
+refuses a home that holds `config-changed.json`, and a new home is rendered once those paths are
+read or restored. The interface's own settings file is watched too, so a setting changed in the
+interface during a governed session writes `conf/cli.json` and ends the session with
+`config-changed`: change settings before or after a session, not during one.
+
+Every opencode session runs with the file watcher off (`OPENCODE_DISABLE_FILEWATCHER` and
+`OPENCODE_FILEWATCHER_DISABLE` set to `1`). With it off, a rewrite of the configuration that
+drops the kit plugin does not take effect in the running process: in the cell that measured it,
+the calls after the rewrite were judged. Other live edits wait too: with the file watcher off, an
+edit of the home's global `AGENTS.md` reached neither of the next two requests of the running
+session, while with it on the second request carried the edit.
+
+A project configuration (`opencode.json`, `opencode.jsonc` or `.opencode`) in an ancestor of the
+working folder is refused, and one in the working folder is refused too in interactive mode and
+for a daily home (exit 64); a headless test home records it. opencode's system configuration
+folder (`opencode` under `PROGRAMDATA` on Windows, `/etc/opencode` on Linux) is refused in every
+mode. A `.agents` root feeds opencode's skills only; one in the working folder is protected from
+the write tools.
 
 ## Re-pinning a harness version
 
@@ -666,5 +884,6 @@ starts on a wired copy of a test configuration and writes `wiring-results.json`.
 The tests beside the code run with the repository's runner,
 `python scripts/run_tests.py`, from the repository root. The decisions behind
 the package are in `docs/adr/0009-harness-kit-outside-the-harness.md`,
-`docs/adr/0010-tool-rules-through-the-judge.md` and
-`docs/adr/0011-session-notes-and-facts.md`.
+`docs/adr/0010-tool-rules-through-the-judge.md`,
+`docs/adr/0011-session-notes-and-facts.md` and
+`docs/adr/0012-kit-daily-use-on-opencode.md`.

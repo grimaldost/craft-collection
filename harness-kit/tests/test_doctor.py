@@ -7,6 +7,17 @@ Contract under test, with the fake harness of `canary_fake_harness.py`:
   `absent`), each evidence naming the conformance cells behind it, and every
   loss row this slice requires, each with a plain evidence sentence naming the
   harness version and a date;
+- the opencode contract carries the losses of daily use with their objectives
+  and marks, no longer carries the patch loss, and names the daily-use cells in
+  a sentence after each objective's earlier one; both contracts narrow the lost
+  prompt note to one lost before its pending stamp;
+- per harness, after the objective lines, the text report holds one line built
+  as an objective line, `mode interactive` with the state and evidence of the
+  contract's `[modes.interactive]` entry, `unknown` when the binary is absent or
+  its version differs, and the JSON report holds the same under `modes`;
+- a run whose outcome is `config-changed` reads `config-changed`, one that is
+  `refused-home-changed` or `refused-relay` reads `refused`, and one that is
+  `interrupted` reads `interrupted`;
 - `kit run` writes `runs/<id>/heartbeat.json` (`run_id`, `pid`, `seq`, `utc`)
   every 2 seconds while the session runs; the run reads `running`, and
   `stale` once the launcher is killed and its heartbeat is older than 10 s;
@@ -75,7 +86,44 @@ REQUIRED_LOSSES = {
         'fetch-inside-execute': 'prevention',
         'no-origin-field': 'run_identity',
         'bare-start-without-plugin': 'launcher_checks',
+        'facts-do-not-cross-runs': 'run_identity',
+        'account-stores-reachable': 'prevention',
+        'network-beside-proxy': 'prevention',
+        'shell-config-write-window': 'prevention',
+        'owner-typed-shell-unjudged': 'prevention',
+        'project-file-removes-plugin-in-bare-start': 'launcher_checks',
+        'project-file-removes-plugin-after-switch': 'launcher_checks',
     },
+}
+# Losses the contracts no longer carry: every recorded patch form is read, the location follows
+# a project switch, and the driver refuses the one tool no statement or switch refuses alone.
+ABSENT_LOSSES = {
+    'claude-code': ('patch-refused-under-owner-acts',),
+    'opencode': ('patch-refused-under-owner-acts', 'project-switch-unbound', 'code-tool-undenied'),
+}
+# The cells of the daily-use conformance files, per objective whose evidence names them.
+NEW_CELLS = {
+    'guard_loaded': (
+        'interactive-guard',
+        'daily-guard',
+        'daily-interactive',
+        'watcher-off-holds',
+        'planted-plugin-not-loaded',
+    ),
+    'refusal_in_turn': (
+        'interactive-guard',
+        'patch-governed',
+        'write-tool-refused',
+        'code-tool-refused',
+    ),
+    'allow_passes': ('patch-plain', 'interactive-subfolder'),
+    'run_identity': ('interactive-identity',),
+    'launcher_checks': (
+        'interactive-switch-denied',
+        'project-layer-refused',
+        'bare-start-denied',
+        'bare-start-no-policy',
+    ),
 }
 CONTRACT_FILES = {'claude-code': 'claude_code.toml', 'opencode': 'opencode.toml'}
 # What the conformance suite measured: each objective's state, and the cells that name it.
@@ -213,14 +261,91 @@ def test_contract_rows_carry_the_marks_the_spec_gives():
     ), unreadable
     opencode = {loss['id']: loss['mark'] for loss in doctor.load_contract('opencode')['loss']}
     assert opencode['fetch-inside-execute'] == 'read', opencode
-    assert opencode['bare-start-without-plugin'] == 'inferred', opencode
     for loss_id in (
         'plugin-load-failure-silent',
         'config-write-drops-plugin-in-process',
         'later-plugin-rewrites-input',
         'no-origin-field',
+        'bare-start-without-plugin',
+        'shell-config-write-window',
+        'owner-typed-shell-unjudged',
+        'project-file-removes-plugin-in-bare-start',
     ):
         assert opencode[loss_id] == 'measured', (loss_id, opencode)
+    for loss_id in (
+        'prompt-note-lost-keeps-earlier',
+        'facts-do-not-cross-runs',
+        'account-stores-reachable',
+        'network-beside-proxy',
+        'project-file-removes-plugin-after-switch',
+    ):
+        assert opencode[loss_id] == 'inferred', (loss_id, opencode)
+
+
+def _flat(text: str) -> str:
+    return ' '.join(text.split())
+
+
+def test_the_daily_use_losses_say_what_the_cells_showed():
+    for harness in CONTRACT_FILES:
+        losses = {loss['id']: loss for loss in doctor.load_contract(harness)['loss']}
+        for loss_id in ABSENT_LOSSES[harness]:
+            assert loss_id not in losses, (harness, loss_id)
+        lost = _flat(losses['prompt-note-lost-keeps-earlier']['text'])
+        assert 'before' in lost and 'pending stamp' in lost, (harness, lost)
+    opencode = {
+        loss['id']: _flat(loss['text']) for loss in doctor.load_contract('opencode')['loss']
+    }
+    needles = {
+        'config-write-drops-plugin-in-process': (
+            'denied',
+            'about 2 seconds',
+            'file watcher',
+            'does not take effect in the running process',
+        ),
+        'later-plugin-rewrites-input': (
+            'a plugin is loaded only when the rendered statements allow it',
+        ),
+        'fetch-inside-execute': ('webfetch', 'websearch', 'MCP'),
+        'bare-start-without-plugin': ('not wired',),
+        'shell-config-write-window': (
+            'about 2 seconds',
+            'times reset',
+            '__pycache__',
+            'run-open.json',
+            '.agents',
+            'skills',
+        ),
+        'owner-typed-shell-unjudged': ('private server', '401'),
+        'account-stores-reachable': ('credential', 'SSH agent', 'relay', 'state root'),
+        'network-beside-proxy': ('proxy',),
+        'facts-do-not-cross-runs': ('new run',),
+        'project-file-removes-plugin-in-bare-start': ('-harness-kit',),
+        'project-file-removes-plugin-after-switch': ('switches to', 'last match'),
+    }
+    for loss_id, words in needles.items():
+        for word in words:
+            assert word in opencode[loss_id], (loss_id, word, opencode[loss_id])
+
+
+def test_the_objectives_name_the_daily_use_cells_with_a_date():
+    objectives = {row['id']: row for row in doctor.load_contract('opencode')['objective']}
+    for objective, cells in NEW_CELLS.items():
+        # The earlier sentence stays first; the new cells follow in a sentence of their own.
+        first, _, later = objectives[objective]['evidence'].partition('. ')
+        assert first.startswith('Conformance cell'), (objective, first)
+        for cell in cells:
+            assert cell not in CELL_IDS, cell
+            assert re.search(rf'(?<![\w-]){cell}(?![\w-])', later), (objective, cell)
+            assert not re.search(rf'(?<![\w-]){cell}(?![\w-])', first), (objective, cell)
+        assert PINNED['opencode'] in later, (objective, later)
+        assert re.search(r'20[0-9]{2}-[0-9]{2}-[0-9]{2}', later), (objective, later)
+    claude = {
+        row['id']: row['evidence'] for row in doctor.load_contract('claude-code')['objective']
+    }
+    for cells in NEW_CELLS.values():
+        for cell in cells:
+            assert all(cell not in text for text in claude.values()), cell
 
 
 # ---- the heartbeat and run status
@@ -273,6 +398,12 @@ def test_run_status_follows_outcome_and_heartbeat():
             ('launched', None, 60, 'stale'),
             ('minted', None, 1, 'running'),
             ('minted', 30, 60, 'stale'),
+            ('config-changed', None, 60, 'config-changed'),
+            ('config-changed', 1, 60, 'config-changed'),
+            ('refused-home-changed', None, 60, 'refused'),
+            ('refused-relay', None, 60, 'refused'),
+            ('interrupted', None, 60, 'interrupted'),
+            ('interrupted', 1, 60, 'interrupted'),
         ]
         for outcome, beat_age, started_age, expected in cases:
             run_dir = _run_dir(base, outcome, beat_age, started_age)
@@ -419,6 +550,7 @@ def test_doctor_reads_the_contract_when_the_version_matches():
                 'version_found',
                 'contract_version',
                 'objectives',
+                'modes',
                 'losses',
             }, entry
             assert entry['version_found'] == PINNED[harness], entry
@@ -487,6 +619,122 @@ def test_doctor_reports_every_objective_unknown_without_a_binary():
         other = report['harnesses']['opencode']['objectives']['prevention']
         assert other['state'] == 'absent', other
     finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+# ---- the interactive mode line
+
+
+def _mode_line(state: str, evidence: str) -> str:
+    return f'  mode interactive {state:<9} (contract) {evidence}'
+
+
+def _harness_block(text: str, harness: str) -> list[str]:
+    """The lines of one harness's entry in the text report, its header line excluded."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(f'{harness}: version found'))
+    block = []
+    for line in lines[start + 1 :]:
+        if not line.startswith('  '):
+            break
+        block.append(line)
+    return block
+
+
+def test_the_text_report_holds_the_mode_line_after_the_objectives():
+    base = scratch()
+    try:
+        env = doctor_env(
+            base, fake_argv(base, PINNED['claude-code']), fake_argv(base, PINNED['opencode'])
+        )
+        proc = doctor_run(env=env)
+        assert proc.returncode == 0, proc.stderr
+        text = proc.stdout.decode('ascii')
+        opencode = doctor.load_contract('opencode')['modes']['interactive']
+        assert opencode['state'] == 'tested', opencode
+        assert _mode_line('tested', opencode['evidence']).startswith(
+            '  mode interactive tested    (contract) '
+        )
+        for harness in ('claude-code', 'opencode'):
+            entry = doctor.load_contract(harness)['modes']['interactive']
+            block = _harness_block(text, harness)
+            assert block[len(OBJECTIVES)] == _mode_line(entry['state'], entry['evidence']), block
+            assert all(line.startswith('  loss ') for line in block[len(OBJECTIVES) + 1 :]), block
+            assert sum(line.startswith('  mode ') for line in block) == 1, block
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_the_mode_line_reads_unknown_without_a_binary_or_on_another_version():
+    base = scratch()
+    try:
+        missing = json.dumps([str(base / 'no-such-harness.exe')])
+        env = doctor_env(base, fake_argv(base, '2.1.999'), missing)
+        proc = doctor_run(env=env)
+        assert proc.returncode == 0, proc.stderr
+        text = proc.stdout.decode('ascii')
+        claude = _harness_block(text, 'claude-code')[len(OBJECTIVES)]
+        assert claude == _mode_line(
+            'unknown', 'version found 2.1.999 is not the contract version 2.1.316'
+        ), claude
+        opencode = _harness_block(text, 'opencode')[len(OBJECTIVES)]
+        assert opencode == _mode_line('unknown', 'the harness binary was not found'), opencode
+        report = doctor_json(env)['harnesses']
+        assert report['claude-code']['modes'] == {
+            'interactive': {
+                'state': 'unknown',
+                'source': 'contract',
+                'evidence': 'version found 2.1.999 is not the contract version 2.1.316',
+            }
+        }, report['claude-code']
+        assert report['opencode']['modes']['interactive']['state'] == 'unknown', report
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_the_json_report_carries_the_modes_of_each_harness():
+    base = scratch()
+    try:
+        env = doctor_env(
+            base, fake_argv(base, PINNED['claude-code']), fake_argv(base, PINNED['opencode'])
+        )
+        report = doctor_json(env)['harnesses']
+        for harness in ('claude-code', 'opencode'):
+            entry = doctor.load_contract(harness)['modes']['interactive']
+            assert report[harness]['modes'] == {
+                'interactive': {
+                    'state': entry['state'],
+                    'source': 'contract',
+                    'evidence': entry['evidence'],
+                }
+            }, report[harness]
+        assert report['opencode']['modes']['interactive']['state'] == 'tested', report
+        assert report['claude-code']['modes']['interactive']['state'] == 'absent', report
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_a_contract_without_a_mode_entry_reads_unknown():
+    from harness_kit import harnesses
+
+    base = scratch()
+    saved = doctor.CONTRACTS_DIR
+    try:
+        contracts = base / 'contracts'
+        shutil.copytree(saved, contracts)
+        path = contracts / CONTRACT_FILES['opencode']
+        text = path.read_text(encoding='utf-8')
+        path.write_text(text.split('[modes.interactive]')[0], encoding='utf-8')
+        doctor.CONTRACTS_DIR = contracts
+        env = doctor_env(
+            base, fake_argv(base, PINNED['claude-code']), fake_argv(base, PINNED['opencode'])
+        )
+        entry = doctor.harness_report(harnesses.get('opencode'), env, None)
+        assert entry['modes'] == {
+            'interactive': {'state': 'unknown', 'source': 'contract', 'evidence': ''}
+        }, entry['modes']
+    finally:
+        doctor.CONTRACTS_DIR = saved
         shutil.rmtree(base, ignore_errors=True)
 
 
