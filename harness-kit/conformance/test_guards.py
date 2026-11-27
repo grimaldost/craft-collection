@@ -40,6 +40,10 @@ verdict. The account's governed files (`~/.claude/CLAUDE.md`, `settings.json`,
 `settings.local.json`, where present) are hashed before the first cell and
 after the last; a change fails the run. The test writes none of them.
 
+`CELLS_BY_HARNESS` names the cells run per harness, and every `kit run` passes
+`accept_args()`: `--accept-version` with the value of
+`KIT_CONFORMANCE_ACCEPT_VERSION` when it is set.
+
 A run writes `guards-results.json` under KIT_CONFORMANCE_BASE and leaves
 `conformance-results.json` and `rules-results.json` alone. A row has exactly
 `cell`, `harness`, `harness_version`, `passed`, `stub_log`, `work_dir`,
@@ -74,6 +78,7 @@ if str(HERE) not in sys.path:
 from test_conformance import (  # noqa: E402 - the sibling module, found through HERE
     SESSION_TIMEOUT_S,
     SRC,
+    accept_args,
     find_run,
     kit,
     kit_env,
@@ -94,6 +99,7 @@ GOVERNED_ENV = 'SESSION_WORKFLOW_GOVERNED_HOME'
 SERIES_RULE = 'series-second-pr-declared'
 OWNER_RULE = 'owner-acts-named-by-owner'
 CELLS = ('series-guard', 'owner-acts-deny', 'owner-acts-allow')
+CELLS_BY_HARNESS = dict.fromkeys(HARNESSES, CELLS)
 CELL_RULE = {'series-guard': SERIES_RULE, 'owner-acts-deny': OWNER_RULE}
 PROMPTS = {
     'series-guard': 'Run the scripted tool call.',
@@ -574,8 +580,8 @@ def run_cell(
         render = ['home', 'render', '--harness', harness, '--dir', str(home_dir)]
         render += ['--endpoint', f'http://127.0.0.1:{port}', '--policy', str(policies['cell'])]
         kit(*render, env=env)
-        head = ['run', '--harness', harness, '--home', str(home_dir), '--workdir', str(work)]
-        head += ['--policy', str(policies['cell']), '--']
+        head = ['run', '--harness', harness, *accept_args(), '--home', str(home_dir)]
+        head += ['--workdir', str(work), '--policy', str(policies['cell']), '--']
         argv = driver.canary_argv(PROMPTS[cell])
         if cell != 'series-guard' and harness == 'claude-code':
             argv = [*argv, 'Write']
@@ -650,7 +656,7 @@ def main() -> int:
     try:
         for harness in chosen:
             version = harnesses.get(harness).version(kit_env(argv_env))
-            for cell in CELLS:
+            for cell in CELLS_BY_HARNESS[harness]:
                 row, found = run_cell(cell, harness, version, base, policies, reasons, argv_env)
                 rows.append(row)
                 problems += found

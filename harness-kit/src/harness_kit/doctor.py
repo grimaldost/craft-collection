@@ -10,8 +10,11 @@ the launcher is gone without recording an end.
 and the harness's known losses, from the contract files under `contracts/`.
 A harness whose version differs from its contract reads `unknown` on every
 objective but `prevention`; one whose binary is absent reads `unknown` on all
-of them. It also lists the runs under the state root with their status
-(`running`, `stale`, `ended`, `refused`) and the sessions judged without a
+of them. Per harness, after the objectives, one line gives the interactive
+mode's state from the contract's `[modes.interactive]` entry, read the same
+way (`unknown` when the binary is absent or its version differs). It also lists
+the runs under the state root with their status (`running`, `stale`, `ended`,
+`refused`, `config-changed`, `interrupted`) and the sessions judged without a
 launch, whose guarantees are unknown.
 
 `kit doctor --live --live-root DIR` also runs the presence canary per harness
@@ -21,7 +24,7 @@ whose binary is found, in a scratch home under DIR (which must lie under a
 loss for that objective and to `tested` where it holds none; a failed one sets
 them to `absent`.
 
-When `KIT_POLICY` names a readable version 2 or 3 policy with a
+When `KIT_POLICY` names a readable version 2, 3 or 4 policy with a
 `<policy>.packs.json` beside it whose `policy_sha256` is the policy's, the report
 gains a section `rules`: per rule with a checker, its pack, `governed`, a state
 per harness from the contract's `[rules]` table (`unknown` when the binary is
@@ -29,11 +32,11 @@ absent or its version differs) and the pack's declared preventing layer. A polic
 that does not load gives the one line `policy unreadable: <reason>` (a file that
 is TOML with `version = 1` gives no section), a sidecar of another policy gives
 `sidecar stale`. With a version 1 policy, with no `KIT_POLICY` and with a
-version 2 or 3 policy that has no sidecar the report has no such section. The
+version 2, 3 or 4 policy that has no sidecar the report has no such section. The
 section reads files only: it runs no checker and starts no program.
 
 When `KIT_POLICY` names a readable policy with at least one recording checker (a
-`records` key, version 3 only), the report also gains a section `notes`: per
+`records` key, version 3 or 4), the report also gains a section `notes`: per
 recording checker, its kinds and, per harness and kind, a state from the
 contract's `[notes]` table (`unknown` when the binary is absent, its version
 differs or the contract has no entry for the kind). It stands after `rules` and
@@ -71,6 +74,17 @@ OBJECTIVES = (
     'prevention',
 )
 STATES = ('tested', 'degraded', 'absent', 'unknown')
+MODES = ('interactive',)
+MODE_LABEL = 'mode'
+# Run outcomes that end a run, and the status each reads as.
+ENDED_STATUS = {
+    'ended': 'ended',
+    'refused-canary': 'refused',
+    'refused-home-changed': 'refused',
+    'refused-relay': 'refused',
+    'config-changed': 'config-changed',
+    'interrupted': 'interrupted',
+}
 LIVE_OBJECTIVES = ('guard_loaded', 'refusal_in_turn', 'allow_passes')
 PREVENTION = 'prevention'
 
@@ -176,14 +190,13 @@ def _parse_utc(value: object) -> datetime | None:
 
 
 def run_status(run_dir: Path, now: datetime | None = None) -> str:
-    """`ended`, `refused`, or, for a run still held by a launcher, `running` or `stale`."""
+    """The status an ended run's outcome reads as (`ended`, `refused`, `config-changed`,
+    `interrupted`), or, for a run still held by a launcher, `running` or `stale`."""
     now = datetime.now(timezone.utc) if now is None else now
     record = _read_json(Path(run_dir) / 'run.json') or {}
     outcome = record.get('outcome')
-    if outcome == 'ended':
-        return 'ended'
-    if outcome == 'refused-canary':
-        return 'refused'
+    if isinstance(outcome, str) and outcome in ENDED_STATUS:
+        return ENDED_STATUS[outcome]
     beat = _read_json(Path(run_dir) / HEARTBEAT_JSON) or {}
     last = _parse_utc(beat.get('utc')) or _parse_utc(record.get('started_utc'))
     if last is None:
@@ -266,6 +279,21 @@ def harness_report(driver: harnesses.Driver, env: Mapping[str, str], live: dict 
                 evidence=f'version found {shown} is not the contract version {expected}',
             )
         objectives[name] = entry
+    modes = {}
+    for name in MODES:
+        row = (contract.get('modes') or {}).get(name)
+        if not isinstance(row, dict):
+            row = {'state': 'unknown', 'evidence': ''}
+        entry = {'state': row['state'], 'source': 'contract', 'evidence': row['evidence']}
+        if not present:
+            entry.update(state='unknown', evidence='the harness binary was not found')
+        elif found != expected:
+            shown = found or 'none read'
+            entry.update(
+                state='unknown',
+                evidence=f'version found {shown} is not the contract version {expected}',
+            )
+        modes[name] = entry
     if present and live is not None:
         run = live.get('run_id') or 'none'
         for name in LIVE_OBJECTIVES:
@@ -281,6 +309,7 @@ def harness_report(driver: harnesses.Driver, env: Mapping[str, str], live: dict 
         'version_found': found,
         'contract_version': expected,
         'objectives': objectives,
+        'modes': modes,
         'losses': losses,
     }
 
@@ -371,7 +400,8 @@ def rules_section(environ: Mapping[str, str], harness_rows: Mapping[str, dict]):
             return None
         return UNREADABLE_TEXT + _ascii(exc)
     version = _toml_version(path)
-    if not (_is_version(version, 2) or _is_version(version, 3)):
+    # A version 4 policy reads as a version 3 one: its `[permissions]` section names no rule.
+    if not any(_is_version(version, n) for n in (2, 3, 4)):
         return None
     sidecar_file = packs.sidecar_path(path)
     if not sidecar_file.exists():
@@ -596,6 +626,9 @@ def render_text(report: dict) -> str:
         lines.append(f'{name}: version found {found}, contract {entry["contract_version"]}')
         for objective, row in entry['objectives'].items():
             lines.append(f'  {objective:<16} {row["state"]:<9} ({row["source"]}) {row["evidence"]}')
+        for mode, row in entry.get('modes', {}).items():
+            label = f'{MODE_LABEL} {mode}'
+            lines.append(f'  {label:<16} {row["state"]:<9} ({row["source"]}) {row["evidence"]}')
         for loss in entry['losses']:
             lines.append(
                 f'  loss {loss["id"]} [{loss["objective"]}, {loss["mark"]}]: {loss["text"]}'

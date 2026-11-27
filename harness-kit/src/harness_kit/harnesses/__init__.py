@@ -5,12 +5,23 @@ test home (the shell, its `shell_config.json`, the harness configuration and
 `home.json`), builds the session environment over that home, copies the home
 for the canary, and names the arguments the launcher checks. Given the kinds
 of note a policy records, a render also writes `note_config.json` beside
-`shell_config.json`: how a shell's note mode starts `kit note`.
+`shell_config.json`: how a shell's note mode starts `kit note`. A shell that
+sends its harness's own event objects (an envelope) gets `--from NAME` after
+`judge` and `note`, so the CLI hands each envelope to that harness's driver.
+
+A home is a test home or a daily home (`home.json`'s `kind`; a home without it
+is a test home). A daily home's provider is the relay `kit run` starts, which
+the session reaches with the capability in `KIT_RELAY_CAPABILITY`; its model,
+and the canary's, is the home's `canary_model`.
 
 `binary_argv` returns an empty list when the binary is missing; a caller never
 runs an empty argv. On Windows a `.cmd` or `.bat` file is never run, from the
 `KIT_HARNESS_ARGV_*` variable or from `PATH`, because its `%*` passes a prompt
 through `cmd.exe`.
+
+A driver's `pinned_version` is its contract's `[harness] version`, read from
+the package's `contracts/` folder at each use: the contract is the one source
+of the pin, so a re-pin edits the contract and nothing else.
 """
 
 from __future__ import annotations
@@ -23,10 +34,14 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+import tomllib
+
 import harness_kit
+from harness_kit.watch import RENDERED_KEY
 
 WINDOWS = os.name == 'nt'
 FAKE_KEY = 'stub-not-a-key'
@@ -34,16 +49,67 @@ SHELL_TIMEOUT_S = 3
 NOTE_KINDS = ('prompt', 'outcome')
 NOTE_CONFIG = 'note_config.json'
 VERSION_TIMEOUT_S = 30
+SCRATCH_TMP = 'tmp'
+NO_PROXY = '127.0.0.1,localhost,::1'
 VERSION_RE = re.compile(r'\d+\.\d+\.\d+')
 ENDPOINT_RE = re.compile(r'http://(127\.0\.0\.1|localhost):[0-9]{1,5}')
 BATCH_SUFFIXES = ('.cmd', '.bat')
 HOME_KEYS = ('kit_home', 'harness', 'endpoint', 'dir', 'config_file', 'shell_entry', 'shell_config')
+TEST_HOME, DAILY_HOME = 'test', 'daily'
+HOME_KINDS = (TEST_HOME, DAILY_HOME)
+# The variable that carries a daily session's capability to the relay; it is no provider key.
+RELAY_CAPABILITY_ENV = 'KIT_RELAY_CAPABILITY'
 SHELLS_DIR = Path(__file__).resolve().parent.parent / 'shells'
+CONTRACTS_DIR = Path(__file__).resolve().parent.parent / 'contracts'
 NO_WINDOW = 0x08000000  # CREATE_NO_WINDOW
 
 
 class HomeError(Exception):
     """A home that cannot be rendered or copied; the message is ASCII."""
+
+
+@dataclass(frozen=True)
+class Grammar:
+    """The arguments a session mode accepts; the launcher checks them, never parses them.
+
+    Without `flags` (headless): the arguments start with `leading`, carry `required` as
+    adjacent tokens with each required flag exactly once, and every token that starts with
+    `-` is in `allowed`; other tokens pass. With `flags`, a table of flag to arity: every
+    token is a flag of the table or the value a flag of arity 1 takes, and each flag of
+    `required` appears exactly once.
+    """
+
+    leading: tuple[str, ...] = ()
+    required: tuple[str, ...] = ()
+    allowed: tuple[str, ...] = ()
+    flags: tuple[tuple[str, int], ...] | None = None
+
+
+HEADLESS, INTERACTIVE = 'headless', 'interactive'
+MODES = (HEADLESS, INTERACTIVE)
+
+
+def contract_path(name: str) -> Path:
+    """The contract file of the harness `name` (`claude-code` -> `contracts/claude_code.toml`)."""
+    return CONTRACTS_DIR / (name.replace('-', '_') + '.toml')
+
+
+def contract_version(name: str) -> str:
+    """The `[harness] version` of the harness's contract; OSError or ValueError when the file
+    is unreadable or holds no such string."""
+    data = tomllib.loads(contract_path(name).read_text(encoding='utf-8'))
+    version = (data.get('harness') or {}).get('version')
+    if not isinstance(version, str) or not version:
+        raise ValueError(f'{contract_path(name).name} has no [harness] version')
+    return version
+
+
+class ContractVersion:
+    """A driver's `pinned_version`: its contract's `[harness] version`, read at each access,
+    on the class as on an instance."""
+
+    def __get__(self, obj: object, owner: type | None = None) -> str:
+        return contract_version((owner or type(obj)).name)
 
 
 class Driver(Protocol):
@@ -54,14 +120,23 @@ class Driver(Protocol):
     allowed_session_flags: tuple[str, ...]
     project_config_paths: tuple[str, ...]
     project_walk: str
+    modes: Mapping[str, Grammar]
+    watched_folders: tuple[str, ...]
+    watched_files: tuple[str, ...]
+    excluded_names: tuple[str, ...]
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]: ...
     def version(self, env: Mapping[str, str]) -> str | None: ...
     def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict: ...
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]: ...
     def copy_home_for_canary(self, home: dict, dest: Path, canary_endpoint: str) -> dict: ...
-    def canary_argv(self, prompt: str) -> list[str]: ...
+    def canary_argv(self, prompt: str, home: dict | None = None) -> list[str]: ...
     def canary_step(self, command: str) -> dict: ...
+
+
+def home_kind(home: Mapping) -> str:
+    """The home's kind as `home.json` gives it; a home without `kind` is a test home."""
+    return home.get('kind', TEST_HOME)
 
 
 def names() -> tuple[str, ...]:
@@ -110,41 +185,51 @@ def is_batch(path: str) -> bool:
 
 
 def scratch_env(env: Mapping[str, str], scratch: Path, extra_names: tuple[str, ...]) -> dict:
-    """`env` with every home variable, and the driver's configuration names, inside `scratch`."""
+    """`env` with every home variable, the driver's configuration names and the temporary
+    folder (`TEMP` and `TMP`, its `tmp` folder) inside `scratch`."""
     out = dict(env)
     for key in ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', *extra_names):
         set_var(out, key, str(scratch))
     drive, rest = os.path.splitdrive(str(scratch))
     set_var(out, 'HOMEDRIVE', drive)
     set_var(out, 'HOMEPATH', rest)
+    for key in ('TEMP', 'TMP'):
+        set_var(out, key, str(scratch / SCRATCH_TMP))
     return out
 
 
 def read_version(
     argv: list[str], env: Mapping[str, str], extra_names: tuple[str, ...]
 ) -> str | None:
-    """The first dotted triple `argv --version` prints, run from an empty scratch home."""
+    """The first dotted triple `argv --version` prints, run from an empty scratch home.
+
+    The binary's temporary folder lies inside the scratch folder too (opencode's runtime
+    unpacks a library there even for `--version`), and the scratch folder is removed
+    afterwards, ignoring errors.
+    """
     if not argv:
         return None
-    with tempfile.TemporaryDirectory(prefix='kit-version-') as td:
-        scratch = Path(td)
+    scratch = Path(tempfile.mkdtemp(prefix='kit-version-'))
+    try:
+        (scratch / SCRATCH_TMP).mkdir()
         extra = {'creationflags': NO_WINDOW} if WINDOWS else {}
-        try:
-            proc = subprocess.run(  # noqa: S603 - argv from the driver, no shell
-                [*argv, '--version'],
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                encoding='utf-8',
-                errors='replace',
-                env=scratch_env(env, scratch, extra_names),
-                cwd=str(scratch),
-                timeout=VERSION_TIMEOUT_S,
-                check=False,
-                **extra,
-            )
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return None
+        proc = subprocess.run(  # noqa: S603 - argv from the driver, no shell
+            [*argv, '--version'],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            env=scratch_env(env, scratch, extra_names),
+            cwd=str(scratch),
+            timeout=VERSION_TIMEOUT_S,
+            check=False,
+            **extra,
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
     found = VERSION_RE.search(proc.stdout or '')
     return found.group(0) if found else None
 
@@ -157,7 +242,12 @@ def set_var(env: dict, key: str, value: str) -> None:
 
 
 def home_env(home: dict, base: Mapping[str, str]) -> dict[str, str]:
-    """`base` with the home variables inside the home and every proxy at the endpoint."""
+    """`base` with the home variables inside the home and every proxy at the endpoint.
+
+    Only the loopback is exempt from the proxy. opencode 2.2.5 sets `NO_PROXY` at every start
+    to the union of its value and `127.0.0.1,localhost,::1`, so with this value its session
+    sees exactly what this function set.
+    """
     env = dict(base)
     profile = Path(home['dir']) / 'home'
     set_var(env, 'HOME', str(profile))
@@ -169,23 +259,31 @@ def home_env(home: dict, base: Mapping[str, str]) -> dict[str, str]:
     set_var(env, 'LOCALAPPDATA', str(profile / 'Local'))
     for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY'):
         set_var(env, key, home['endpoint'])
-    set_var(env, 'NO_PROXY', '127.0.0.1,localhost')
+    set_var(env, 'NO_PROXY', NO_PROXY)
     return env
 
 
-def cli_argv() -> list[str]:
-    """The kit CLI as the shells start it: this interpreter, isolated, this package first on its path."""
+def _kit_argv(command: str, source: str | None) -> list[str]:
     parent = str(Path(harness_kit.__file__).resolve().parent.parent)
     bootstrap = (
         f'import sys; sys.path.insert(0, {parent!a}); '
         'from harness_kit.cli import main; sys.exit(main())'
     )
-    return [sys.executable, '-I', '-c', bootstrap, 'judge']
+    tail = [] if source is None else ['--from', source]
+    return [sys.executable, '-I', '-c', bootstrap, command, *tail]
 
 
-def note_argv() -> list[str]:
-    """The kit CLI as a shell's note mode starts it: `cli_argv` with `note` last."""
-    return [*cli_argv()[:-1], 'note']
+def cli_argv(source: str | None = None) -> list[str]:
+    """The kit CLI as the shells start it: this interpreter, isolated, this package first on its path.
+
+    With `source`, `judge --from SOURCE`: the shell sends envelopes of that harness.
+    """
+    return _kit_argv('judge', source)
+
+
+def note_argv(source: str | None = None) -> list[str]:
+    """The kit CLI as a shell's note mode starts it: `cli_argv` with `note` in place of `judge`."""
+    return _kit_argv('note', source)
 
 
 def recorded_kinds(checkers) -> tuple[str, ...]:
@@ -194,13 +292,13 @@ def recorded_kinds(checkers) -> tuple[str, ...]:
     return tuple(kind for kind in NOTE_KINDS if kind in found)
 
 
-def write_note_config(dest_dir: Path, records: tuple[str, ...]) -> None:
+def write_note_config(dest_dir: Path, records: tuple[str, ...], source: str | None = None) -> None:
     """Write `note_config.json` into `dest_dir` when `records` is not empty."""
     if not records:
         return
     value = {
         'kit_note_config': 1,
-        'note_argv': note_argv(),
+        'note_argv': note_argv(source),
         'timeout_s': SHELL_TIMEOUT_S,
         'records': [kind for kind in NOTE_KINDS if kind in records],
     }
@@ -230,8 +328,13 @@ def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, ensure_ascii=True) + '\n', encoding='utf-8')
 
 
-def materialize_shell(source: Path, dest_dir: Path, pinned_version: str) -> tuple[Path, Path]:
-    """Copy one shell file into `dest_dir` beside its `shell_config.json`."""
+def materialize_shell(
+    source: Path, dest_dir: Path, pinned_version: str, envelope_of: str | None = None
+) -> tuple[Path, Path]:
+    """Copy one shell file into `dest_dir` beside its `shell_config.json`.
+
+    `envelope_of` names the harness whose envelopes the shell sends, if it sends any.
+    """
     dest_dir.mkdir(parents=True, exist_ok=True)
     entry = dest_dir / source.name
     shutil.copyfile(source, entry)
@@ -240,7 +343,7 @@ def materialize_shell(source: Path, dest_dir: Path, pinned_version: str) -> tupl
         config,
         {
             'kit_shell_config': 1,
-            'cli_argv': cli_argv(),
+            'cli_argv': cli_argv(envelope_of),
             'timeout_s': SHELL_TIMEOUT_S,
             'harness_version': pinned_version,
         },
@@ -249,9 +352,19 @@ def materialize_shell(source: Path, dest_dir: Path, pinned_version: str) -> tupl
 
 
 def finish_home(
-    name: str, folder: Path, endpoint: str, config: Path, entry: Path, shell_config: Path
+    name: str,
+    folder: Path,
+    endpoint: str,
+    config: Path,
+    entry: Path,
+    shell_config: Path,
+    rendered: dict[str, str] | None = None,
+    extra: Mapping[str, object] | None = None,
 ) -> dict:
-    """Write `home.json` and return it."""
+    """Write `home.json` and return it; `rendered` is the render's record of its files.
+
+    `extra` holds the keys that follow the record, in order (a home's kind and canary model).
+    """
     home = dict(
         zip(
             HOME_KEYS,
@@ -259,6 +372,9 @@ def finish_home(
             strict=True,
         )
     )
+    if rendered is not None:
+        home[RENDERED_KEY] = dict(rendered)
+    home.update(extra or {})
     write_json(folder / 'home.json', home)
     return home
 

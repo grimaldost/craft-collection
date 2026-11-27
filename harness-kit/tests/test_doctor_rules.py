@@ -180,6 +180,28 @@ def test_a_base_rule_has_no_pack_and_a_pack_without_prevention_says_none():
         shutil.rmtree(base, ignore_errors=True)
 
 
+PERMISSIONS = (
+    '\n[permissions]\ndefault = "ask"\n\n'
+    '[[permissions.rule]]\naction = "shell"\nresource = "git status*"\neffect = "allow"\n'
+)
+
+
+def test_a_version_4_policy_reads_as_its_version_2_build():
+    base = scratch()
+    try:
+        pack = stub_pack(base / 'stub')
+        v2 = build(base, pack, out_name='v2.toml')
+        v4_base = BASE_POLICY.replace('version = 1', 'version = 4') + PERMISSIONS
+        v4 = build(base, pack, out_name='v4.toml', base_text=v4_base)
+        assert v4.read_text(encoding='ascii').startswith('version = 4\n')
+        text2, data2 = report(env_for(base, v2))
+        text4, data4 = report(env_for(base, v4))
+        assert data4['rules'] == data2['rules'] and len(data4['rules']) == 1, data4
+        assert text4 == text2, (text2, text4)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
 def _only_unreadable(base: Path, policy: Path) -> None:
     text, data = report(env_for(base, policy))
     line = next(x for x in text.splitlines() if x.startswith('rules:'))
@@ -201,7 +223,7 @@ def test_an_unloadable_policy_gives_one_line():
         junk.write_text('this is = = not toml', encoding='utf-8')
         _only_unreadable(base, junk)
         three = base / 'three.toml'
-        three.write_text('version = 4\n', encoding='utf-8')
+        three.write_text('version = 5\n', encoding='utf-8')
         _only_unreadable(base, three)
     finally:
         shutil.rmtree(base, ignore_errors=True)

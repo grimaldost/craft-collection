@@ -15,10 +15,21 @@ A read gives `{}` for no file, a copy of the object for a sound file, and None
 for anything else. Only `kit note` writes facts, by compare-and-replace under
 `facts.lock` in the run's `facts/` folder; a judgement reads without any lock,
 retrying a sharing error for at most `JUDGE_RETRY_S`, and writes nothing.
+
+The pending stamp of a prompt note is `prompt.pending.json` in the same
+folder as the root's facts files; the dot keeps it apart from every facts
+file, since no recording checker's id holds one. It holds exactly
+`{"kit_pending": 1, "seq": N, "sha256": HEX}`, N the note's `time.time_ns()`
+and HEX the SHA-256 of the prompt's text. `kit note` writes it by
+`state.write_json_atomic` outside `facts.lock`, before any recorder runs, and
+removes it under `facts.lock` only while it still holds the note's own `seq`.
+While a stamp file stands for a root, readable or not, a judgement gives each
+checker that records prompts None facts; it never writes or removes a stamp.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -31,6 +42,8 @@ from harness_kit import state
 FACTS_VERSION = 1
 FACTS_DIR = 'facts'
 FACTS_LOCK = 'facts.lock'
+STAMP_NAME = 'prompt.pending.json'
+STAMP_VERSION = 1
 DOCUMENT_KEYS = ('kit_facts', 'facts')
 MAX_BYTES = 65536
 JUDGE_RETRY_S = 0.1
@@ -135,11 +148,81 @@ def read(path: Path, retry_s: float = 0.0) -> dict | None:
     return decode(data)
 
 
-def judge_reader(root: Path, run_id: str, key: str) -> Callable[[str], dict | None]:
-    """A judgement's reader: a checker id to its facts, read without a lock, writing nothing."""
+def stamp_path(root: Path, run_id: str, key: str) -> Path:
+    """The pending stamp of one session root, in the folder of its facts files."""
+    return facts_dir(root, run_id) / state.session_folder(key) / STAMP_NAME
+
+
+def stamp_stands(path: Path) -> bool:
+    """True while anything is at `path`; an error other than its absence counts as a stamp."""
+    try:
+        os.lstat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def write_stamp(root: Path, run_id: str, key: str, text: str) -> int:
+    """Write the stamp of a prompt note whose text is `text`, outside `facts.lock`; return its seq.
+
+    The folders are made first. Raise OSError when they or the file cannot be written.
+    """
+    seq = time.time_ns()
+    sha = hashlib.sha256(text.encode('utf-8', 'surrogatepass')).hexdigest()
+    path = stamp_path(root, run_id, key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    state.write_json_atomic(path, {'kit_pending': STAMP_VERSION, 'seq': seq, 'sha256': sha})
+    return seq
+
+
+def _stamp_seq(data: bytes | None) -> int | None:
+    try:
+        doc = json.loads(data.decode('utf-8')) if data is not None else None
+    except (ValueError, RecursionError):
+        return None
+    seq = doc.get('seq') if isinstance(doc, dict) else None
+    return seq if type(seq) is int else None
+
+
+def remove_stamp(
+    root: Path, run_id: str, key: str, seq: int, timeout: float = LOCK_TIMEOUT
+) -> bool:
+    """Remove the root's stamp under `facts.lock` when it still holds `seq`; True when removed.
+
+    A lock not obtained in time, a stamp that does not read or holds another
+    `seq`, and a removal that fails leave the stamp where it is.
+    """
+    path = stamp_path(root, run_id, key)
+    try:
+        with locked(root, run_id, timeout):
+            if _stamp_seq(read_raw(path)) != seq:
+                return False
+            path.unlink()
+            return True
+    except OSError:
+        return False
+
+
+def judge_reader(
+    root: Path, run_id: str, key: str, pending_ids: tuple[str, ...] = ()
+) -> Callable[[str], dict | None]:
+    """A judgement's reader: a checker id to its facts, read without a lock, writing nothing.
+
+    A checker in `pending_ids` (those that record prompts) gets None when the
+    root's stamp stands before or after its facts are read.
+    """
+    stamp = stamp_path(root, run_id, key)
 
     def read_for(checker_id: str) -> dict | None:
-        return read(facts_path(root, run_id, key, checker_id), JUDGE_RETRY_S)
+        held = checker_id in pending_ids
+        if held and stamp_stands(stamp):
+            return None
+        value = read(facts_path(root, run_id, key, checker_id), JUDGE_RETRY_S)
+        if held and stamp_stands(stamp):
+            return None
+        return value
 
     return read_for
 

@@ -1,21 +1,63 @@
-"""opencode driver: a home whose configuration loads the kit shell as a plugin folder."""
+"""opencode driver: a home whose configuration loads the kit shell as a plugin folder.
+
+The shell sends the kit CLI one envelope per hook: the hook's event object as
+opencode gives it (`payload`, its `JSON.stringify` text), the session's place
+as the shell's lookups found it and the folder the session runs in. This
+driver translates an envelope into the neutral event (`translate_event`) or
+the note (`translate_note`), and names the tools the kit refuses by name
+(`refused_tool`).
+
+A daily home (`render_daily_home`) names one provider, `relay`: the relay `kit run`
+starts for the session on the daily file's port, which the session reaches with its
+capability. Its `gitconfig` holds the daily file's identity and joins the watched files.
+The canary's copy of any home holds only the watched files, with empty `xdg/` and `home/`
+folders, so a home's history is never copied.
+
+Every home's configuration carries `policies` that load no plugin but the kit's, no MCP
+server and no provider or integration but the home's own, then a `tool.use` deny for each
+tool that runs code or moves the session outside the tools the driver translates; its
+`permissions` end with a switch that turns each of those tools off, and the image tool's
+configuration key is off. The session's file watcher is off, so a configuration write does
+not reload the running process. `system_config_dir()` names opencode's system configuration
+folder, which `kit run` refuses and protects.
+
+A home rendered with a policy that has a `[permissions]` section carries it as opencode's
+own `permissions` and `tool.use` denies (`opencode_permissions`), and `home.json` records
+`permissions_sha256`; `permissions_refusal` is `kit run`'s comparison with a fresh render.
+"""
 
 from __future__ import annotations
 
+import functools
+import hashlib
+import json
+import os
+import re
+import shutil
 from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 
+from harness_kit import watch
+from harness_kit.event import InvalidEventError, parse_event
 from harness_kit.harnesses import (
+    DAILY_HOME,
     FAKE_KEY,
+    HEADLESS,
+    INTERACTIVE,
+    RELAY_CAPABILITY_ENV,
     SHELLS_DIR,
+    TEST_HOME,
+    ContractVersion,
+    Grammar,
     HomeError,
     check_endpoint,
     configured_argv,
-    copy_home,
     finish_home,
     home_env,
     is_batch,
     materialize_shell,
+    opencode_permissions,
     prepare_dir,
     read_version,
     set_var,
@@ -24,6 +66,9 @@ from harness_kit.harnesses import (
 )
 
 MODEL = 'stub/stub-model'
+PROVIDER_PACKAGE = '@opencode/ai/providers/openai-compatible'
+RELAY_PROVIDER = 'relay'
+GITCONFIG = 'gitconfig'
 NATIVE = ('node_modules', '@opencode', 'cli', 'bin', 'opencode.exe')
 CONFIG_NAMES = (
     'OPENCODE_CONFIG_DIR',
@@ -33,6 +78,295 @@ CONFIG_NAMES = (
     'XDG_STATE_HOME',
     'XDG_CACHE_HOME',
 )
+
+# ---- the envelope
+
+ENVELOPE_KEYS = (
+    'kit_raw',
+    'hook',
+    'run_id',
+    'harness',
+    'session',
+    'origin',
+    'observation',
+    'location',
+    'payload',
+)
+BEFORE, AFTER, PROMPT = 'execute.before', 'execute.after', 'prompt'
+HOOKS = (BEFORE, AFTER, PROMPT)
+PLACE_KEYS = ('session', 'parent', 'root', 'origin')
+TEXT_CAP = 20000
+OUTPUT_CAP = 65536
+
+# What ECMAScript's String.prototype.trim removes, which opencode trims a patch with. It differs
+# from str.strip(): it removes U+FEFF and keeps U+001C to U+001F and U+0085.
+ECMA_WHITESPACE = ''.join(
+    map(
+        chr,
+        (
+            *range(0x09, 0x0E),
+            0x20,
+            0xA0,
+            0x1680,
+            *range(0x2000, 0x200B),
+            0x2028,
+            0x2029,
+            0x202F,
+            0x205F,
+            0x3000,
+            0xFEFF,
+        ),
+    )
+)
+_WS = re.escape(ECMA_WHITESPACE)
+# opencode's heredoc wrapper: an optional `cat`, `<<`, an optionally quoted word, the body, the word.
+_HEREDOC = re.compile(
+    rf'(?:cat[{_WS}]+)?<<([\'"]?)([A-Za-z0-9_]+)\1[{_WS}]*\n(.*?)\n\2[{_WS}]*', re.DOTALL
+)
+PATCH_PATH_PREFIXES = ('*** Add File: ', '*** Update File: ', '*** Delete File: ', '*** Move to: ')
+PATCH_MARKS = ('*** Begin Patch', '*** End Patch', '*** End of File')
+PATCH_QUIET_PREFIX = '*** Environment ID:'
+PATCH_HEADER = '*** '
+
+REFUSED_TOOLS = {
+    'opencode_worktree_remove': (
+        'kit refuses this tool under kit run; remove a worktree with git in the shell, '
+        'which kit judges'
+    ),
+}
+
+# Tools that run code or move the session outside the tools the driver translates, which every
+# home switches off, in this order.
+SWITCHED_OFF = (
+    'execute',
+    'opencode_worktree_create',
+    'opencode_session_move',
+    'experimental_image_generate',
+)
+WATCHER_OFF = ('OPENCODE_DISABLE_FILEWATCHER', 'OPENCODE_FILEWATCHER_DISABLE')
+SYSTEM_FOLDER_POSIX = '/etc/opencode'
+PERMISSIONS_KEY = 'permissions_sha256'
+
+
+def _statement(action: str, resource: str, effect: str) -> dict:
+    return {'action': action, 'resource': resource, 'effect': effect}
+
+
+def rendered_policies(kit: str, provider: str) -> list[dict]:
+    """The `policies` of a home whose kit plugin is `kit` and whose provider is `provider`."""
+    return [
+        _statement('plugin.use', '*', 'deny'),
+        _statement('plugin.use', kit, 'allow'),
+        _statement('mcp.use', '*', 'deny'),
+        _statement('provider.use', '*', 'deny'),
+        _statement('provider.use', provider, 'allow'),
+        _statement('integration.connect', '*', 'deny'),
+        _statement('integration.use', '*', 'deny'),
+        _statement('integration.use', provider, 'allow'),
+        *(_statement('tool.use', f'{tool}:*', 'deny') for tool in SWITCHED_OFF),
+    ]
+
+
+def switches() -> list[dict]:
+    """The `permissions` rules that turn each switched-off tool off; they end `permissions`."""
+    return [_statement(tool, '*', 'deny') for tool in SWITCHED_OFF]
+
+
+def system_config_dir() -> Path:
+    """opencode's system configuration folder: ProgramData, as the operating system gives it,
+    plus `opencode` on Windows; `/etc/opencode` elsewhere."""
+    if os.name != 'nt':
+        return Path(SYSTEM_FOLDER_POSIX)
+    from harness_kit.launcher import windows_pins
+
+    return Path(windows_pins()['PROGRAMDATA']) / 'opencode'
+
+
+def ecma_trim(text: str) -> str:
+    """`text` without the ECMAScript white space at either end."""
+    return text.strip(ECMA_WHITESPACE)
+
+
+def resolve(location: str, path: str) -> str:
+    """`path` against `location`, as Node's `path.resolve(location, path)` gives it.
+
+    For an absolute location this is `os.path.normpath(os.path.join(location, path))`; a
+    location without a drive or a root takes them from the working folder, as Node does.
+    """
+    try:
+        here = os.getcwd()
+    except OSError:
+        here = ''
+    return os.path.normpath(os.path.join(here, location, path))
+
+
+def patch_paths(text: str, location: str) -> list[str] | None:
+    """The paths a patch's headers name, resolved; None when a header is unread or none is found.
+
+    The text is normalized as opencode 2.2.5 does (trimmed, its heredoc wrapper stripped, one
+    trailing carriage return dropped from each line); then every line whose trimmed text starts
+    with one of the four path prefixes gives a path, wherever it stands, so no path opencode
+    applies is missed. A trimmed line that starts with `*** ` and is neither a path header nor one
+    of the forms that name none is an unread header.
+    """
+    text = ecma_trim(text)
+    wrapped = _HEREDOC.fullmatch(text)
+    if wrapped is not None:
+        text = wrapped.group(3)
+    paths: list[str] = []
+    for raw in text.split('\n'):
+        line = ecma_trim(raw[:-1] if raw.endswith('\r') else raw)
+        prefix = next((p for p in PATCH_PATH_PREFIXES if line.startswith(p)), None)
+        if prefix is not None:
+            paths.append(resolve(location, ecma_trim(line[len(prefix) :])))
+        elif line.startswith(PATCH_HEADER) and not (
+            line in PATCH_MARKS or line.startswith(PATCH_QUIET_PREFIX)
+        ):
+            return None
+    return paths or None
+
+
+def _get(value: object, key: str) -> object:
+    """`value[key]` for an object, else None: JavaScript's `value?.[key]` over JSON values."""
+    return value.get(key) if isinstance(value, dict) else None
+
+
+def _number(value: object) -> bool:
+    return type(value) in (int, float)
+
+
+@functools.lru_cache(maxsize=4)
+def _payload(text: str) -> tuple[dict, str]:
+    """The payload's object and the SHA-256 of its UTF-8 bytes; InvalidEventError otherwise."""
+    try:
+        data = text.encode('utf-8')
+    except UnicodeEncodeError:
+        raise InvalidEventError('envelope payload is not UTF-8 text') from None
+    event = parse_event(data)
+    if not isinstance(event, dict):
+        raise InvalidEventError('envelope payload is not a JSON object')
+    return event, hashlib.sha256(data).hexdigest()
+
+
+def _exact(value: object, keys: tuple[str, ...], where: str) -> dict:
+    if not isinstance(value, dict) or set(value) != set(keys):
+        raise InvalidEventError(f'{where} is not an object with exactly: {", ".join(keys)}')
+    return value
+
+
+def read_envelope(envelope: object, harness: str) -> tuple[dict, dict, str]:
+    """(envelope, payload object, payload SHA-256); InvalidEventError for a refused envelope."""
+    env = _exact(envelope, ENVELOPE_KEYS, 'envelope')
+    if type(env['kit_raw']) is not int or env['kit_raw'] != 1:
+        raise InvalidEventError('envelope kit_raw is not 1')
+    if env['hook'] not in HOOKS:
+        raise InvalidEventError(f'envelope hook is not one of: {", ".join(HOOKS)}')
+    if env['run_id'] is not None and not isinstance(env['run_id'], str):
+        raise InvalidEventError('envelope run_id is neither a string nor null')
+    named = _exact(env['harness'], ('name', 'version'), 'envelope harness')
+    if named['name'] != harness:
+        raise InvalidEventError(f'envelope harness is not {harness}')
+    _exact(env['observation'], PLACE_KEYS, 'envelope observation')
+    if not isinstance(env['location'], str):
+        raise InvalidEventError('envelope location is not a string')
+    if not isinstance(env['payload'], str):
+        raise InvalidEventError('envelope payload is not a string')
+    event, sha = _payload(env['payload'])
+    return env, event, sha
+
+
+def _act(env: dict, e: dict, sha: str) -> tuple[dict, str, str]:
+    """(neutral act, command observation, paths observation) of one tool event."""
+    tool, location = e.get('tool'), env['location']
+    inp = _get(e, 'input')
+    command, paths, cwd = None, [], location
+    command_obs = paths_obs = 'not_applicable'
+    kind = 'other'
+    if tool == 'shell':
+        kind, command_obs = 'shell', 'observed'
+        command = inp['command'] if isinstance(_get(inp, 'command'), str) else ''
+        workdir = _get(inp, 'workdir')
+        if isinstance(workdir, str) and workdir:
+            cwd = resolve(location, workdir)
+    elif tool in ('write', 'edit'):
+        kind = 'file_write'
+        path = _get(inp, 'path')
+        paths = [resolve(location, path)] if isinstance(path, str) else []
+        paths_obs = 'observed' if paths else 'unavailable'
+    elif tool == 'patch':
+        kind = 'file_write'
+        text = _get(inp, 'patchText')
+        paths = (patch_paths(text, location) if isinstance(text, str) else None) or []
+        paths_obs = 'observed' if paths else 'unavailable'
+    act = {
+        'kind': kind,
+        'command': command,
+        'argv': None,
+        'paths': paths,
+        'cwd': cwd,
+        'payload_sha256': sha,
+    }
+    return act, command_obs, paths_obs
+
+
+def _frame(env: dict, command_obs: str, paths_obs: str) -> dict:
+    place = env['observation']
+    observation = {k: place[k] for k in PLACE_KEYS}
+    observation.update(command=command_obs, paths=paths_obs)
+    return {
+        'run_id': env['run_id'],
+        'harness': env['harness'],
+        'session': env['session'],
+        'origin': env['origin'],
+        'observation': observation,
+    }
+
+
+def _tool_event(envelope: object, harness: str, hook: str) -> tuple[dict, dict, str]:
+    env, e, sha = read_envelope(envelope, harness)
+    if env['hook'] != hook:
+        raise InvalidEventError(f'envelope hook is not {hook}')
+    if not isinstance(e.get('tool'), str):
+        raise InvalidEventError('envelope payload names no tool')
+    return env, e, sha
+
+
+def _prompt_body(e: dict) -> dict:
+    text = _get(_get(e, 'prompt'), 'text')
+    if not isinstance(text, str):
+        raise InvalidEventError('envelope payload has no prompt text')
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        text = text[1:-1]
+    return {'kind': 'prompt', 'text': text[:TEXT_CAP], 'truncated': len(text) > TEXT_CAP}
+
+
+def _status(e: dict) -> str:
+    result = _get(e, 'result')
+    out = _get(result, 'output')
+    if e.get('status') == 'error':
+        return 'failed'
+    if _get(_get(result, 'metadata'), 'status') == 'running' or _get(out, 'status') == 'running':
+        return 'background'
+    exit_code = _get(out, 'exit')
+    if _number(exit_code) and exit_code == 0:
+        return 'completed'
+    return 'failed' if _number(exit_code) else 'unknown'
+
+
+def _outcome_body(e: dict, act: dict) -> dict:
+    status = _status(e)
+    out = _get(_get(e, 'result'), 'output')
+    text = _get(out, 'output')
+    if status != 'completed' or not isinstance(text, str):
+        return {'kind': 'outcome', 'act': act, 'status': status, 'output': None, 'truncated': False}
+    cut = len(text) > OUTPUT_CAP or _get(out, 'truncated') is True
+    return {
+        'kind': 'outcome',
+        'act': act,
+        'status': status,
+        'output': text[-OUTPUT_CAP:],
+        'truncated': cut,
+    }
 
 
 def resolve_shim(path: str) -> str | None:
@@ -46,14 +380,54 @@ def resolve_shim(path: str) -> str | None:
 
 class OpenCode:
     name = 'opencode'
-    pinned_version = '2.2.5'
+    # The contract's `[harness] version`: the one source of the pin.
+    pinned_version = ContractVersion()
     # `run` is the subcommand of every probe that ran a session; the flags are those of `canary_argv`.
     required_leading_tokens = ('run',)
     required_session_args = ('--standalone',)
     allowed_session_flags = ('--standalone', '--format', '--auto', '--model')
     project_config_paths = ('opencode.json', 'opencode.jsonc', '.opencode')
+    # The interface (no subcommand) runs through its private server: `--standalone` exactly
+    # once, and only the flags of this table; a positional, a subcommand, `--server`, `--auto`
+    # and every `--flag=value` form are refused.
+    modes = MappingProxyType(
+        {
+            HEADLESS: Grammar(
+                leading=required_leading_tokens,
+                required=required_session_args,
+                allowed=allowed_session_flags,
+            ),
+            INTERACTIVE: Grammar(
+                required=('--standalone',),
+                flags=(
+                    ('--standalone', 0),
+                    ('--continue', 0),
+                    ('-c', 0),
+                    ('--session', 1),
+                    ('-s', 1),
+                    ('--prompt', 1),
+                ),
+            ),
+        }
+    )
     # opencode's project walk has no stop before the filesystem root.
     project_walk = 'root'
+    # The files the guard is read from. opencode 2.2.5 wrote nothing under `conf/` or
+    # `kit-shell/` in an interactive or a headless session, so no name is excluded; it writes
+    # `conf/cli.json` when a setting changes in the interface, which stays watched.
+    # A daily home's `gitconfig` is watched too; a test home has none.
+    watched_folders = ('conf', 'kit-shell')
+    watched_files = ('home.json', GITCONFIG)
+    excluded_names: tuple[str, ...] = ()
+    # The home's configuration and shell folders, which kit protects from the session's tools,
+    # and the folder whose files the check during the run also reads. A `.agents` root feeds
+    # only its `skills` folder, so it is no project-config name: in the working folder it is
+    # protected, not refused.
+    protected_folders = ('conf', 'kit-shell', 'xdg/config')
+    run_watched_folders = ('xdg/config',)
+    protected_workdir_names = ('.agents',)
+    # A render takes the policy's `[permissions]` section, and `kit run` compares it.
+    renders_permissions = True
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]:
         """The `opencode` argv; [] when missing. Its `.cmd` shim becomes the native binary."""
@@ -66,32 +440,129 @@ class OpenCode:
     def version(self, env: Mapping[str, str]) -> str | None:
         return read_version(self.binary_argv(env), env, CONFIG_NAMES)
 
-    def render_home(self, home: Path, endpoint: str, records: tuple[str, ...] = ()) -> dict:
+    def render_home(
+        self, home: Path, endpoint: str, records: tuple[str, ...] = (), permissions=None
+    ) -> dict:
+        """A test home; `permissions` is the policy's `[permissions]` section, or None."""
         check_endpoint(endpoint)
-        folder = prepare_dir(home)
-        plugin = folder / 'kit-shell' / 'opencode-plugin'
-        source = SHELLS_DIR / 'opencode' / 'index.js'
-        entry, shell_config = materialize_shell(source, plugin, self.pinned_version)
-        write_note_config(shell_config.parent, records)
-        (folder / 'xdg').mkdir()
-        config = folder / 'conf' / 'opencode.jsonc'
         stub = {
             'name': 'Stub',
             'env': ['STUB_API_KEY'],
-            'package': '@opencode/ai/providers/openai-compatible',
+            'package': PROVIDER_PACKAGE,
             'settings': {'baseURL': endpoint + '/v1'},
             'models': {'stub-model': {'name': 'Stub Model'}},
         }
-        write_json(
-            config,
-            {
-                'update': 'disable',
-                'model': MODEL,
-                'providers': {'stub': stub},
-                'plugins': [plugin.as_posix()],
-            },
+        settings = {'update': 'disable', 'model': MODEL, 'providers': {'stub': stub}}
+        extra = {'kind': TEST_HOME, 'canary_model': MODEL}
+        return self._render(home, endpoint, records, settings, extra, 'stub', permissions)
+
+    def render_daily_home(
+        self, home: Path, found, records: tuple[str, ...] = (), permissions=None
+    ) -> dict:
+        """A daily home for the daily file `found` (`daily.Daily`): its provider is the relay."""
+        from harness_kit.daily import gitconfig_text
+
+        endpoint = found.endpoint
+        check_endpoint(endpoint)
+        model = f'{RELAY_PROVIDER}/{found.relay.default_model}'
+        relay = {
+            'name': 'Relay',
+            'env': [RELAY_CAPABILITY_ENV],
+            'package': PROVIDER_PACKAGE,
+            'settings': {'baseURL': endpoint + '/v1'},
+            'models': {m.id: {'name': m.id} for m in found.relay.models},
+        }
+        settings = {
+            'update': 'disable',
+            'model': model,
+            'small_model': model,
+            'providers': {RELAY_PROVIDER: relay},
+        }
+        extra = {
+            'kind': DAILY_HOME,
+            'daily_file': str(found.path),
+            'daily_sha256': found.sha256,
+            'daily_settings': found.settings,
+            'canary_model': model,
+        }
+        gitconfig = gitconfig_text(found.git_name, found.git_email)
+        return self._render(
+            home, endpoint, records, settings, extra, RELAY_PROVIDER, permissions, gitconfig
         )
-        return finish_home(self.name, folder, endpoint, config, entry, shell_config)
+
+    def permission_lists(self, folder: Path, provider: str, section) -> tuple[list, list]:
+        """(`permissions`, `policies`) of a home in `folder` whose provider is `provider`."""
+        kit = (folder / 'kit-shell' / 'opencode-plugin').as_posix()
+        return opencode_permissions.render(section, rendered_policies(kit, provider), switches())
+
+    def _render(
+        self, home, endpoint, records, settings, extra, provider, section, gitconfig=None
+    ) -> dict:
+        target = Path(os.path.abspath(str(home)))
+        permissions, policies = self.permission_lists(target, provider, section)
+        refusal = opencode_permissions.canary_refusal(permissions, policies)
+        if refusal is not None:
+            raise HomeError(refusal)
+        folder = prepare_dir(home)
+        plugin = folder / 'kit-shell' / 'opencode-plugin'
+        source = SHELLS_DIR / 'opencode' / 'index.js'
+        entry, shell_config = materialize_shell(source, plugin, self.pinned_version, self.name)
+        write_note_config(shell_config.parent, records, self.name)
+        (folder / 'xdg').mkdir()
+        config = folder / 'conf' / 'opencode.jsonc'
+        kit = plugin.as_posix()
+        governed = {
+            'plugins': [kit],
+            'policies': policies,
+            'permissions': permissions,
+            'experimental': {'image_generate': False},
+        }
+        write_json(config, {**settings, **governed})
+        if gitconfig is not None:
+            (folder / GITCONFIG).write_bytes(gitconfig.encode('utf-8'))
+        rendered = watch.hash_files(folder, self, rendered=True)
+        sha = opencode_permissions.permissions_sha256(permissions, policies)
+        extra = {**extra, PERMISSIONS_KEY: sha}
+        return finish_home(
+            self.name, folder, endpoint, config, entry, shell_config, rendered, extra
+        )
+
+    def permissions_refusal(self, home: dict, section) -> str | None:
+        """Why `kit run` refuses this home under a policy's `[permissions]` section (None for a
+        policy without one), else None.
+
+        The lists are rendered again from the policy: a section that would refuse a canary
+        call, a home whose recorded hash differs (its policy changed after the render) and a
+        configuration that does not parse or holds other lists are refused.
+        """
+        provider = RELAY_PROVIDER if home.get('kind') == DAILY_HOME else 'stub'
+        fresh = self.permission_lists(Path(home['dir']), provider, section)
+        refusal = opencode_permissions.canary_refusal(*fresh)
+        if refusal is not None:
+            return refusal
+        sha = opencode_permissions.permissions_sha256(*fresh)
+        if home.get(PERMISSIONS_KEY) != sha:
+            return (
+                "the home's permissions were rendered from another [permissions] section than "
+                "this policy's (home.json's permissions_sha256 differs); render the home again "
+                'with this policy into an empty folder'
+            )
+        try:
+            config = json.loads(Path(home['config_file']).read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return (
+                "the home's opencode.jsonc does not parse; render the home again into an empty "
+                'folder'
+            )
+        if not isinstance(config, dict):
+            config = {}
+        found = (config.get('permissions'), config.get('policies'))
+        if opencode_permissions.permissions_sha256(*found) != sha:
+            return (
+                "the home's opencode.jsonc holds permissions or policies other than its policy "
+                'renders; render the home again into an empty folder'
+            )
+        return None
 
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]:
         env = home_env(home, base)
@@ -111,15 +582,37 @@ class OpenCode:
             'XDG_DATA_HOME': str(xdg / 'data'),
             'XDG_STATE_HOME': str(xdg / 'state'),
             'XDG_CACHE_HOME': str(xdg / 'cache'),
+            **dict.fromkeys(WATCHER_OFF, '1'),
         }
         for key, value in values.items():
             set_var(env, key, value)
         return env
 
+    def system_config_dir(self) -> Path:
+        """opencode's system configuration folder; kit run refuses it, protects it and reads
+        its presence during a run."""
+        return system_config_dir()
+
     def copy_home_for_canary(self, home: dict, dest: Path, canary_endpoint: str) -> dict:
-        """Copy the home, then swap the endpoint text in the configuration without parsing it."""
-        copy = copy_home(home, dest, canary_endpoint)
+        """Copy the home's watched files, with empty `xdg/` and `home/` folders, then swap the
+        endpoint text in the configuration without parsing it."""
+        source = Path(home['dir'])
+        target = Path(os.path.abspath(str(dest)))
+        try:
+            relative = Path(home['config_file']).relative_to(source)
+        except ValueError:
+            raise HomeError('config_file is outside the home folder') from None
+        target.mkdir(parents=True, exist_ok=True)
+        for rel in watch.watched_paths(source, self):
+            (target / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source / rel, target / rel)
+        for name in ('xdg', 'home'):
+            (target / name).mkdir(exist_ok=True)
+        copy = dict(home)
+        copy.update(dir=str(target), config_file=str(target / relative), endpoint=canary_endpoint)
         config = Path(copy['config_file'])
+        if not config.is_file():
+            raise HomeError('the opencode configuration is absent from the copied home')
         data = config.read_bytes()
         old = home['endpoint'].encode('ascii')
         if not old or old not in data:
@@ -127,8 +620,44 @@ class OpenCode:
         config.write_bytes(data.replace(old, canary_endpoint.encode('ascii')))
         return copy
 
-    def canary_argv(self, prompt: str) -> list[str]:
-        return ['run', '--standalone', '--format', 'json', '--auto', '--model', MODEL, prompt]
+    def canary_argv(self, prompt: str, home: dict | None = None) -> list[str]:
+        """The canary's arguments; the model is the home's `canary_model`, else a test home's."""
+        model = (home or {}).get('canary_model') or MODEL
+        return ['run', '--standalone', '--format', 'json', '--auto', '--model', model, prompt]
 
     def canary_step(self, command: str) -> dict:
         return {'tool': 'shell', 'args': {'command': command}}
+
+    # ---- the envelope
+
+    refused_tools = REFUSED_TOOLS
+
+    def translate_event(self, envelope: object) -> dict:
+        """The neutral event of an `execute.before` envelope; InvalidEventError when refused."""
+        env, e, sha = _tool_event(envelope, self.name, BEFORE)
+        act, command_obs, paths_obs = _act(env, e, sha)
+        return {'kit_event': 1, **_frame(env, command_obs, paths_obs), 'act': act}
+
+    def translate_note(self, envelope: object) -> dict:
+        """The note of a `prompt` or `execute.after` envelope; InvalidNoteError when refused."""
+        from harness_kit.notes import InvalidNoteError
+
+        try:
+            env, e, sha = read_envelope(envelope, self.name)
+            if env['hook'] == PROMPT:
+                frame = _frame(env, 'not_applicable', 'not_applicable')
+                return {'kit_note': 1, **frame, 'note': _prompt_body(e)}
+            env, e, sha = _tool_event(envelope, self.name, AFTER)
+        except InvalidEventError as exc:
+            raise InvalidNoteError(str(exc)) from None
+        act, command_obs, paths_obs = _act(env, e, sha)
+        return {'kit_note': 1, **_frame(env, command_obs, paths_obs), 'note': _outcome_body(e, act)}
+
+    def refused_tool(self, envelope: object) -> tuple[str, str] | None:
+        """(tool, reason) for an `execute.before` envelope naming a refused tool, else None."""
+        try:
+            _env, e, _sha = _tool_event(envelope, self.name, BEFORE)
+        except InvalidEventError:
+            return None
+        tool = e['tool']
+        return (tool, self.refused_tools[tool]) if tool in self.refused_tools else None

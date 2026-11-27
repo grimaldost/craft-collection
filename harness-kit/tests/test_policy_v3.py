@@ -2,8 +2,8 @@
 """Checks of policy version 3: `records` on a checker table, and a recording checker's load.
 
 Contract under test:
-- `version` is 1, 2 or 3; any other version reads `policy version is not 1, 2
-  or 3`;
+- `version` is 1, 2, 3 or 4; any other version reads `policy version is not 1,
+  2, 3 or 4`;
 - version 3 is version 2 with one more optional checker key, `records`: a
   non-empty array of distinct strings, each `prompt` or `outcome`;
   `Checker.records` holds them in the order given, and is empty without the
@@ -167,9 +167,9 @@ def test_an_id_without_records_keeps_the_version_2_rule():
             assert policy.checkers[0].id == free
 
 
-def test_an_unknown_version_names_1_2_and_3():
-    for text in ('version = 4\n', 'version = 0\n', 'version = "3"\n', 'version = true\n'):
-        assert _unreadable(text) == 'policy version is not 1, 2 or 3', text
+def test_an_unknown_version_names_1_2_3_and_4():
+    for text in ('version = 5\n', 'version = 0\n', 'version = "3"\n', 'version = true\n'):
+        assert _unreadable(text) == 'policy version is not 1, 2, 3 or 4', text
 
 
 def _checker(folder: Path, body: str, records: str | None):

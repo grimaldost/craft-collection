@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Checks of the opencode shell's note mode and its walk to the session root, run under Node.
 
-Contract under test (`shells/opencode/index.js`):
+Contract under test (`shells/opencode/index.js`, each document it sends read through the opencode
+driver's translation of its envelope):
 - without `note_config.json`, or with a malformed one, the plugin registers only `execute.before` and
   makes one session lookup per judgement;
 - with it, the plugin registers the `prompt` session hook and the `execute.after` tool hook as
@@ -32,6 +33,11 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / 'src'))
+
+from harness_kit.harnesses import get  # noqa: E402
+
+OPENCODE = get('opencode')
 SHELL_SRC = HERE.parent / 'src' / 'harness_kit' / 'shells' / 'opencode' / 'index.js'
 DRIVER = HERE / 'opencode_notes_driver.mjs'
 STANDIN = HERE / 'opencode_standin_cli.py'
@@ -120,10 +126,13 @@ class Scene:
         return json.loads(proc.stdout.strip())
 
     def note(self) -> dict | None:
-        return json.loads(self.noted.read_text(encoding='utf-8')) if self.noted.exists() else None
+        """The note the driver translates the shell's envelope into, or None when none was sent."""
+        if not self.noted.exists():
+            return None
+        return OPENCODE.translate_note(json.loads(self.noted.read_text(encoding='utf-8')))
 
     def event(self) -> dict:
-        return json.loads(self.judged.read_text(encoding='utf-8'))
+        return OPENCODE.translate_event(json.loads(self.judged.read_text(encoding='utf-8')))
 
 
 def scene_run(sessions, calls, **kw):

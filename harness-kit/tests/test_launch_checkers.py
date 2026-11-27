@@ -9,8 +9,9 @@ Contract under test, with a fake harness named through `KIT_HARNESS_ARGV_*`:
   `budget_ms` plus 2 s;
 - with a sound checker the harness starts; what it writes to standard output
   and standard error reaches the caller of `kit run`, and so does the
-  launcher's own message after the load, while what the checker prints during
-  its load does not.
+  launcher's own message after the load (the line saying that a run whose
+  version `--accept-version` named is not covered by the contract), while what
+  the checker prints during its load does not.
 
 Stdlib-runnable: `python test_launch_checkers.py`.
 """
@@ -109,7 +110,8 @@ def test_a_sound_checker_lets_the_harness_start_and_its_output_through():
         base = tl.scratch()
         try:
             case = tl.Case(base, harness)
-            # A version past the pin makes the launcher print once, after the load.
+            # A version past the pin, accepted by name, makes the launcher print once, after
+            # the load: the line that says the run is not covered by the contract.
             case.argv = [
                 sys.executable,
                 str(PRINTING_HARNESS),
@@ -119,12 +121,12 @@ def test_a_sound_checker_lets_the_harness_start_and_its_output_through():
                 'guarded',
             ]
             write_v2_policy(case, SOUND)
-            proc = case.run()
+            proc = case.run(options=('--accept-version', '9.9.9'))
             child = tl.assert_started(case, proc)
             assert child['args'] == tl.SESSION_ARGS[harness], child['args']
             assert 'SESSION-STDOUT' in proc.stdout, (harness, proc.stdout)
             assert 'SESSION-STDERR' in proc.stderr, (harness, proc.stderr)
-            assert 'differs from the pinned' in proc.stderr, (harness, proc.stderr)
+            assert 'not covered by the contract' in proc.stderr, (harness, proc.stderr)
             for noise in ('CHECKER-LOAD-STDOUT', 'CHECKER-LOAD-STDERR'):
                 assert noise not in proc.stdout + proc.stderr, (harness, noise)
             assert case.run_json()['outcome'] == 'ended', case.run_json()

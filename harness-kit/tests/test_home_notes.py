@@ -7,8 +7,10 @@ Contract under test:
 - the recorded kinds are the union of the checkers' `records`, in the order
   `prompt`, `outcome`; when there is any, both drivers write
   `note_config.json` beside `shell_config.json`, holding exactly
-  `kit_note_config` 1, `note_argv` (`cli_argv` with `note` in place of its last
-  element), `timeout_s` (the shell timeout) and `records`;
+  `kit_note_config` 1, `note_argv` (`cli_argv` with `note` in place of
+  `judge`), `timeout_s` (the shell timeout) and `records`; an opencode home's
+  `cli_argv` ends in `judge --from opencode` and its `note_argv` in
+  `note --from opencode`, a Claude Code home's in `judge` and `note`;
 - without `--policy`, or with a policy that records nothing, the render writes
   the same `home.json`, `shell_config.json` and harness configuration as
   before, and no `note_config.json`;
@@ -86,8 +88,10 @@ def _assert_note_config(home: dict, records: list[str]) -> None:
     assert list(data) == NOTE_KEYS, data
     shell = json.loads(Path(home['shell_config']).read_text(encoding='utf-8'))
     assert data['kit_note_config'] == 1, data
-    assert data['note_argv'] == [*shell['cli_argv'][:-1], 'note'], data
-    assert shell['cli_argv'][-1] == 'judge', shell
+    tail = ['--from', 'opencode'] if home['harness'] == 'opencode' else []
+    cut = len(shell['cli_argv']) - 1 - len(tail)
+    assert shell['cli_argv'][cut:] == ['judge', *tail], shell
+    assert data['note_argv'] == [*shell['cli_argv'][:cut], 'note', *tail], data
     assert data['timeout_s'] == harnesses.SHELL_TIMEOUT_S == shell['timeout_s'], data
     assert data['records'] == records, data
 
@@ -115,7 +119,7 @@ def test_an_unreadable_policy_exits_64_and_writes_nothing():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         junk = root / 'junk.toml'
-        junk.write_text('version = 4\n', encoding='utf-8')
+        junk.write_text('version = 5\n', encoding='utf-8')
         for harness in HARNESSES:
             for policy in (junk, root / 'missing.toml'):
                 folder = root / f'home-{harness}'

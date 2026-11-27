@@ -10,10 +10,9 @@ Contract under test:
   contract's harness version and a date;
 - each contract lists the losses `prompt-origin-unproved` (objective
   `run_identity`, mark `measured`) and `prompt-note-lost-keeps-earlier`
-  (objective `prevention`, mark `inferred`); the opencode contract also lists
-  `patch-refused-under-owner-acts` (objective `prevention`, mark `read`); each
-  has exactly the keys `id`, `objective`, `mark`, `evidence` and `text`, and an
-  `evidence` that names the harness version and a date.
+  (objective `prevention`, mark `inferred`); each has exactly the keys `id`,
+  `objective`, `mark`, `evidence` and `text`, and an `evidence` that names the
+  harness version and a date.
 
 Stdlib-runnable: `python test_note_contracts.py`.
 """
@@ -39,7 +38,6 @@ NOTE_LOSSES = {
     'opencode': {
         'prompt-origin-unproved': ('run_identity', 'measured'),
         'prompt-note-lost-keeps-earlier': ('prevention', 'inferred'),
-        'patch-refused-under-owner-acts': ('prevention', 'read'),
     },
 }
 DATE = re.compile(r'20[0-9]{2}-[0-9]{2}-[0-9]{2}')

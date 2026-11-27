@@ -1,4 +1,4 @@
-"""The policy file, versions 1, 2 and 3 (TOML): load, validate and compile it whole.
+"""The policy file, versions 1 to 4 (TOML): load, validate and compile it whole.
 
 A policy is read whole before any judgement. Any failure (TOML syntax, a wrong
 version, an unknown key, a bad effect, kinds or governed value, a regular
@@ -18,6 +18,14 @@ non-empty array of distinct strings, each `prompt` or `outcome`, the kinds of
 note the checker records. A recording checker's id names its facts file, so it
 matches `[a-z0-9][a-z0-9-]{0,62}` and is no reserved device name.
 
+Version 4 is version 3 with one more optional top-level table, `[permissions]`:
+`default` (required: `allow`, `ask` or `deny`), the effect of an action no rule
+names, and any number of `[[permissions.rule]]` tables with exactly `action`
+(one of `PERMISSION_ACTIONS`), `resource` (a non-empty string in opencode's
+wildcard syntax) and `effect` (`allow`, `ask` or `deny`). Any other key makes
+the policy unreadable. The judge ignores the section; a driver renders it as
+the harness's own permissions.
+
 Paths are compared in forward-slash form, case-folded on Windows. In a glob,
 `**` spans folders, while `*` and `?` stay inside one folder; `[...]` is a
 character class (`[!...]` negated) that never matches a slash.
@@ -36,8 +44,10 @@ import tomllib
 from harness_kit.event import ACT_KINDS, ORIGINS
 
 POLICY_VERSION = 1
-POLICY_VERSIONS = (1, 2, 3)
-CHECKER_VERSIONS = (2, 3)
+POLICY_VERSIONS = (1, 2, 3, 4)
+CHECKER_VERSIONS = (2, 3, 4)
+RECORDS_VERSIONS = (3, 4)
+PERMISSIONS_VERSION = 4
 
 EFFECTS = ('allow', 'deny')
 TOP_KEYS = ('version', 'launcher', 'rule')
@@ -55,6 +65,22 @@ BUDGET_MIN_MS = 50
 BUDGET_MAX_MS = 500
 BUDGET_DEFAULT_MS = 250
 _SHA256 = re.compile('[0-9a-f]{64}')
+PERMISSION_EFFECTS = ('allow', 'ask', 'deny')
+PERMISSION_ACTIONS = (
+    'read',
+    'edit',
+    'glob',
+    'grep',
+    'shell',
+    'subagent',
+    'skill',
+    'question',
+    'webfetch',
+    'websearch',
+    'external_directory',
+)
+PERMISSION_KEYS = ('default', 'rule')
+PERMISSION_RULE_KEYS = ('action', 'resource', 'effect')
 
 
 class PolicyError(ValueError):
@@ -100,12 +126,30 @@ class Checker:
 
 
 @dataclass(frozen=True)
+class PermissionRule:
+    """One `[[permissions.rule]]` table."""
+
+    action: str
+    resource: str
+    effect: str
+
+
+@dataclass(frozen=True)
+class Permissions:
+    """The `[permissions]` table of a version 4 policy: its default and its rules in order."""
+
+    default: str
+    rules: tuple[PermissionRule, ...] = ()
+
+
+@dataclass(frozen=True)
 class Policy:
     rules: tuple[Rule, ...]
     launcher: dict = field(default_factory=dict)
     sha256: str | None = None
     windows: bool = False
     checkers: tuple[Checker, ...] = ()
+    permissions: Permissions | None = None
 
 
 def _is_windows(windows: bool | None) -> bool:
@@ -314,6 +358,44 @@ def _checkers(data: dict, folder: Path | None, v3: bool) -> tuple[Checker, ...]:
     return checkers
 
 
+def _permission_rule(raw: object, n: int) -> PermissionRule:
+    where = f'permissions rule {n}'
+    if not isinstance(raw, dict):
+        raise PolicyError(f'{where} is not a table')
+    unknown = sorted(ascii(k) for k in raw if k not in PERMISSION_RULE_KEYS)
+    if unknown:
+        raise PolicyError(f'{where} has unknown key(s): {", ".join(unknown)}')
+    missing = [k for k in PERMISSION_RULE_KEYS if k not in raw]
+    if missing:
+        raise PolicyError(f'{where} lacks key(s): {", ".join(missing)}')
+    if not isinstance(raw['action'], str) or raw['action'] not in PERMISSION_ACTIONS:
+        raise PolicyError(f'{where}: action is not one of: {", ".join(PERMISSION_ACTIONS)}')
+    if not isinstance(raw['resource'], str) or not raw['resource']:
+        raise PolicyError(f'{where}: resource is not a non-empty string')
+    if not isinstance(raw['effect'], str) or raw['effect'] not in PERMISSION_EFFECTS:
+        raise PolicyError(f'{where}: effect is not one of: {", ".join(PERMISSION_EFFECTS)}')
+    return PermissionRule(action=raw['action'], resource=raw['resource'], effect=raw['effect'])
+
+
+def _permissions(raw: object) -> Permissions:
+    """The `[permissions]` table of a version 4 policy, validated whole."""
+    if not isinstance(raw, dict):
+        raise PolicyError('permissions is not a table')
+    unknown = sorted(ascii(k) for k in raw if k not in PERMISSION_KEYS)
+    if unknown:
+        raise PolicyError(f'permissions has unknown key(s): {", ".join(unknown)}')
+    if 'default' not in raw:
+        raise PolicyError('permissions lacks key(s): default')
+    default = raw['default']
+    if not isinstance(default, str) or default not in PERMISSION_EFFECTS:
+        raise PolicyError(f'permissions: default is not one of: {", ".join(PERMISSION_EFFECTS)}')
+    raw_rules = raw.get('rule', [])
+    if not isinstance(raw_rules, list):
+        raise PolicyError('permissions.rule is not an array of tables')
+    rules = tuple(_permission_rule(item, n) for n, item in enumerate(raw_rules, 1))
+    return Permissions(default=default, rules=rules)
+
+
 def load_policy_text(
     text: str,
     windows: bool | None = None,
@@ -333,12 +415,13 @@ def load_policy_text(
     try:
         version = data.get('version')
         v2 = type(version) is int and version in CHECKER_VERSIONS
-        top_keys = TOP_KEYS + (('checker',) if v2 else ())
+        v4 = type(version) is int and version == PERMISSIONS_VERSION
+        top_keys = TOP_KEYS + (('checker',) if v2 else ()) + (('permissions',) if v4 else ())
         unknown = sorted(ascii(k) for k in data if k not in top_keys)
         if unknown:
             raise PolicyError(f'policy has unknown key(s): {", ".join(unknown)}')
         if type(version) is not int or version not in POLICY_VERSIONS:
-            raise PolicyError('policy version is not 1, 2 or 3')
+            raise PolicyError('policy version is not 1, 2, 3 or 4')
         launcher = data.get('launcher', {})
         if not isinstance(launcher, dict):
             raise PolicyError('launcher is not a table')
@@ -351,13 +434,22 @@ def load_policy_text(
         checkers: tuple[Checker, ...] = ()
         checker_ids = None
         if v2:
-            checkers = _checkers(data, None if folder is None else Path(folder), version == 3)
+            v3 = version in RECORDS_VERSIONS
+            checkers = _checkers(data, None if folder is None else Path(folder), v3)
             checker_ids = tuple(c.id for c in checkers)
         rules = tuple(_rule(raw, n, win, checker_ids) for n, raw in enumerate(raw_rules, 1))
+        permissions = _permissions(data['permissions']) if 'permissions' in data else None
     except PolicyError as exc:
         exc.sha256 = sha256
         raise
-    return Policy(rules=rules, launcher=launcher, sha256=sha256, windows=win, checkers=checkers)
+    return Policy(
+        rules=rules,
+        launcher=launcher,
+        sha256=sha256,
+        windows=win,
+        checkers=checkers,
+        permissions=permissions,
+    )
 
 
 def load_policy(path: str | os.PathLike[str], windows: bool | None = None) -> Policy:

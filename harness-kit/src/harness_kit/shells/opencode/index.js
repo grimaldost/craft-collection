@@ -1,17 +1,18 @@
-// opencode shell: translates one execute.before event into a neutral event, asks the kit CLI for a
-// verdict and throws on deny. It holds no policy and fails closed. With note_config.json beside it, it
-// also sends the kit CLI a note for each typed prompt and each finished shell call; a note never denies.
+// opencode shell: sends the kit CLI one envelope per execute.before event (the event as opencode gives
+// it, with the session's place and folder), reads one verdict and throws on deny. The kit's opencode
+// driver translates the envelope; this file holds no policy and fails closed. With note_config.json
+// beside it, it also sends an envelope for each typed prompt and each finished shell call, as a note,
+// which never denies.
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LOOKUP_MS = 1000;
 const MAX_OUTPUT = 1024 * 1024;
 const KILL_WAIT_MS = 1000;
-const [MAX_PARENTS, MAX_TEXT, MAX_NOTE_OUTPUT] = [4, 20000, 65536];
+const MAX_PARENTS = 4;
 
 const readConfig = () => {
   const c = JSON.parse(readFileSync(join(HERE, "shell_config.json"), "utf8"));
@@ -139,42 +140,28 @@ const locate = async (ctx, sessionID, until, walk) => {
   };
 };
 
-// What an event and a note share: the run, the harness, the session's place and the observation.
-const frame = (config, place, act) => ({
-  run_id: process.env.KIT_RUN_ID || null,
-  harness: { name: "opencode", version: config.harness_version },
-  session: place.session,
-  origin: place.origin,
-  observation: { ...place.observation, command: act.command_obs, paths: act.paths_obs },
-});
-
-const mapAct = (ctx, e) => {
-  const input = e.input ?? {};
-  const act = { kind: "other", command: null, paths: [], command_obs: "not_applicable", paths_obs: "not_applicable" };
-  if (e.tool === "shell") {
-    return { ...act, kind: "shell", command: typeof input.command === "string" ? input.command : "", command_obs: "observed" };
-  }
-  if (e.tool === "write" || e.tool === "edit") {
-    const ok = typeof input.path === "string";
-    return { ...act, kind: "file_write", paths: ok ? [resolve(ctx.location.directory, input.path)] : [], paths_obs: ok ? "observed" : "unavailable" };
-  }
-  if (e.tool === "patch") return { ...act, kind: "file_write", paths_obs: "unavailable" };
-  return act;
-};
-
-const neutralAct = (ctx, e, act) => {
-  const sha = createHash("sha256").update(JSON.stringify(e), "utf8").digest("hex");
-  return { kind: act.kind, command: act.command, argv: null, paths: act.paths, cwd: ctx.location.directory, payload_sha256: sha };
-};
+// One hook's envelope: the run, the harness, the session's place, the folder and the event's JSON text,
+// sent whole. ASCII escapes keep it intact whatever the console encoding.
+const envelope = (ctx, config, place, hook, e) =>
+  ascii({
+    kit_raw: 1,
+    hook,
+    run_id: process.env.KIT_RUN_ID || null,
+    harness: { name: "opencode", version: config.harness_version },
+    session: place.session,
+    origin: place.origin,
+    observation: place.observation,
+    location: ctx.location.directory,
+    payload: JSON.stringify(e),
+  });
 
 const judge = async (ctx, e, started, walk) => {
   if (typeof e?.tool !== "string" || typeof e.sessionID !== "string") throw new Error("unreadable event");
   const config = readConfig();
   const deadline = (config.timeout_s ?? 3) * 1000;
   const place = await locate(ctx, e.sessionID, started + Math.min(LOOKUP_MS, deadline), walk);
-  const act = mapAct(ctx, e);
-  const event = { kit_event: 1, ...frame(config, place, act), act: neutralAct(ctx, e, act) };
-  const output = await runCli(config.cli_argv, ascii(event), deadline - (Date.now() - started));
+  const text = envelope(ctx, config, place, "execute.before", e);
+  const output = await runCli(config.cli_argv, text, deadline - (Date.now() - started));
   const verdict = JSON.parse(output.trim());
   if (verdict?.kit_verdict !== 1 || (verdict.effect !== "allow" && verdict.effect !== "deny")) {
     throw new Error("the CLI printed no verdict");
@@ -182,7 +169,7 @@ const judge = async (ctx, e, started, walk) => {
   return verdict;
 };
 
-const describe = (error) => String(error?.message ?? error).replace(/[^\x20-\x7e]/g, "?").slice(0, 200);
+const describe = (error) => String(error?.message ?? error).replace(/[^ -~]/g, "?").slice(0, 200);
 
 const handler = async (ctx, e, walk) => {
   const started = Date.now();
@@ -195,53 +182,20 @@ const handler = async (ctx, e, walk) => {
   if (verdict.effect === "deny") throw new Error(String(verdict.reason || "denied by the kit policy"));
 };
 
-// A typed prompt's note: one enclosing pair of literal double quotes, which opencode adds, is removed,
-// then the first MAX_TEXT code points are kept. Null when there is no text.
-const promptBody = (e) => {
-  if (typeof e?.prompt?.text !== "string") return null;
-  let points = Array.from(e.prompt.text);
-  if (points.length >= 2 && points[0] === '"' && points[points.length - 1] === '"') points = points.slice(1, -1);
-  return { kind: "prompt", text: points.slice(0, MAX_TEXT).join(""), truncated: points.length > MAX_TEXT };
-};
-
-const outcomeStatus = (e) => {
-  const out = e.result?.output;
-  if (e.status === "error") return "failed";
-  if (e.result?.metadata?.status === "running" || out?.status === "running") return "background";
-  if (out?.exit === 0) return "completed";
-  return typeof out?.exit === "number" ? "failed" : "unknown";
-};
-
-// A finished shell call's note: its status and, when it completed, its last MAX_NOTE_OUTPUT code points.
-const outcomeBody = (ctx, e) => {
-  const status = outcomeStatus(e);
-  const text = e.result?.output?.output;
-  const points = status === "completed" && typeof text === "string" ? Array.from(text) : null;
-  return {
-    kind: "outcome",
-    act: neutralAct(ctx, e, mapAct(ctx, e)),
-    status,
-    output: points === null ? null : points.slice(-MAX_NOTE_OUTPUT).join(""),
-    truncated: points !== null && (points.length > MAX_NOTE_OUTPUT || e.result.output.truncated === true),
-  };
-};
-
-// Sends one note through the judgement's own runCli and resolves whatever happens: a note never denies,
-// never throws and writes nothing to the host. The CLI's output and exit status are not read.
-const noteHandler = async (ctx, e, notes, kind) => {
+// Sends one note's envelope through the judgement's own runCli and resolves whatever happens: a note never
+// denies, never throws and writes nothing to the host. The CLI's output and exit status are not read. An
+// outcome is sent only for the shell tool, a prompt only with its text and once the first lookup answered.
+const noteHandler = async (ctx, e, notes, hook) => {
   const started = Date.now();
   try {
-    if (typeof e?.sessionID !== "string" || (kind === "outcome" && e.tool !== "shell")) return;
+    if (typeof e?.sessionID !== "string") return;
+    if (hook === "prompt" ? typeof e.prompt?.text !== "string" : e.tool !== "shell") return;
     const deadline = notes.timeout_s * 1000;
     const config = readConfig();
-    const body = kind === "prompt" ? promptBody(e) : outcomeBody(ctx, e);
-    if (body === null) return;
     const place = await locate(ctx, e.sessionID, started + Math.min(LOOKUP_MS, deadline), true);
     // Without the first lookup's answer a child's prompt would arrive as `unknown`: no prompt note then.
-    if (kind === "prompt" && !place.known) return;
-    const act = kind === "outcome" ? mapAct(ctx, e) : { command_obs: "not_applicable", paths_obs: "not_applicable" };
-    const note = { kit_note: 1, ...frame(config, place, act), note: body };
-    await runCli(notes.note_argv, ascii(note), deadline - (Date.now() - started));
+    if (hook === "prompt" && !place.known) return;
+    await runCli(notes.note_argv, envelope(ctx, config, place, hook, e), deadline - (Date.now() - started));
   } catch {
     // The note is lost and nothing is blocked.
   }
@@ -253,6 +207,6 @@ export default {
     const notes = readNoteConfig();
     await ctx.tool.hook("execute.before", (e) => handler(ctx, e, notes !== null));
     if (notes?.records.includes("prompt")) await ctx.session.hook("prompt", (e) => noteHandler(ctx, e, notes, "prompt"));
-    if (notes?.records.includes("outcome")) await ctx.tool.hook("execute.after", (e) => noteHandler(ctx, e, notes, "outcome"));
+    if (notes?.records.includes("outcome")) await ctx.tool.hook("execute.after", (e) => noteHandler(ctx, e, notes, "execute.after"));
   },
 };

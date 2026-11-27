@@ -12,8 +12,12 @@ Contract under test:
   and `uv-allow-mention` for the uv rule; `series-guard` for the series rule;
   `owner-acts-deny` and `owner-acts-allow` for the owner-acts rule), the
   contract's harness version and a date;
-- `harness`, `objective`, `loss`, `rules` and `notes` are the contract's only
-  top-level keys.
+- each contract holds `[modes.interactive]` with exactly `state`, `mark` and
+  `evidence`: opencode `tested` and `measured`, its evidence naming the four
+  interactive cells, the contract's version and a date; Claude Code `absent`
+  and `read`, its evidence saying the driver offers no interactive mode;
+- `harness`, `objective`, `loss`, `rules`, `notes` and `modes` are the
+  contract's only top-level keys.
 
 Stdlib-runnable: `python test_rule_contracts.py`.
 """
@@ -95,9 +99,33 @@ def test_the_rule_is_the_uv_packs_rule():
 def test_the_contracts_keep_their_shape():
     for harness in PINNED:
         contract = doctor.load_contract(harness)
-        keys = {'harness', 'objective', 'loss', 'rules', 'notes'}
+        keys = {'harness', 'objective', 'loss', 'rules', 'notes', 'modes'}
         assert set(contract) == keys, (harness, set(contract))
         assert contract['harness']['version'] == PINNED[harness], contract['harness']
+
+
+INTERACTIVE_CELLS = (
+    'interactive-guard',
+    'interactive-identity',
+    'interactive-subfolder',
+    'interactive-switch-denied',
+)
+
+
+def test_each_contract_records_the_interactive_mode():
+    for harness in PINNED:
+        entry = doctor.load_contract(harness)['modes']['interactive']
+        assert set(entry) == {'state', 'mark', 'evidence'}, (harness, entry)
+        assert entry['evidence'].isascii(), (harness, entry)
+    opencode = doctor.load_contract('opencode')['modes']['interactive']
+    assert (opencode['state'], opencode['mark']) == ('tested', 'measured'), opencode
+    for cell in INTERACTIVE_CELLS:
+        assert re.search(rf'(?<![\w-]){cell}(?![\w-])', opencode['evidence']), cell
+    assert PINNED['opencode'] in opencode['evidence'], opencode
+    assert re.search(r'20[0-9]{2}-[0-9]{2}-[0-9]{2}', opencode['evidence']), opencode
+    claude = doctor.load_contract('claude-code')['modes']['interactive']
+    assert (claude['state'], claude['mark']) == ('absent', 'read'), claude
+    assert 'no interactive mode' in claude['evidence'], claude
 
 
 if __name__ == '__main__':

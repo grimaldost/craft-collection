@@ -9,10 +9,15 @@ from __future__ import annotations
 import sys
 from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 
+from harness_kit import watch
 from harness_kit.harnesses import (
     FAKE_KEY,
+    HEADLESS,
     SHELLS_DIR,
+    ContractVersion,
+    Grammar,
     check_endpoint,
     configured_argv,
     copy_home,
@@ -37,7 +42,8 @@ CONFIG_NAMES = ('CLAUDE_CONFIG_DIR',)
 
 class ClaudeCode:
     name = 'claude-code'
-    pinned_version = '2.1.316'
+    # The contract's `[harness] version`: the one source of the pin.
+    pinned_version = ContractVersion()
     # `-p` is the only mode a probe ran; the flags are those of `canary_argv`.
     required_leading_tokens = ('-p',)
     required_session_args = ('--setting-sources', 'user')
@@ -50,8 +56,27 @@ class ClaudeCode:
         '--allowedTools',
     )
     project_config_paths = ('.claude/settings.json', '.claude/settings.local.json')
+    # Headless only: the driver offers no interactive mode.
+    modes = MappingProxyType(
+        {
+            HEADLESS: Grammar(
+                leading=required_leading_tokens,
+                required=required_session_args,
+                allowed=allowed_session_flags,
+            )
+        }
+    )
     # A walk to the drive root would meet the user layer itself under the profile.
     project_walk = 'work_tree'
+    # The files the guard is read from. Claude Code writes its history and state into
+    # `claude-config/` during a session, so only `settings.json` there is watched.
+    watched_folders = ('kit-shell',)
+    watched_files = ('claude-config/settings.json', 'home.json')
+    excluded_names: tuple[str, ...] = ()
+    # The home's configuration and shell folders, which kit protects from the session's tools.
+    protected_folders = ('claude-config', 'kit-shell')
+    run_watched_folders: tuple[str, ...] = ()
+    protected_workdir_names: tuple[str, ...] = ()
 
     def binary_argv(self, env: Mapping[str, str]) -> list[str]:
         """The `claude` argv; [] when missing. A `.cmd` or `.bat` is missing, never run."""
@@ -84,7 +109,8 @@ class ClaudeCode:
             for name in ('PostToolUse', 'PostToolUseFailure'):
                 hooks[name] = [{'matcher': RESULT_MATCHER, 'hooks': [dict(note)]}]
         write_json(config, {'hooks': hooks})
-        return finish_home(self.name, folder, endpoint, config, entry, shell_config)
+        rendered = watch.hash_files(folder, self, rendered=True)
+        return finish_home(self.name, folder, endpoint, config, entry, shell_config, rendered)
 
     def session_env(self, home: dict, base: Mapping[str, str]) -> dict[str, str]:
         env = home_env(home, base)

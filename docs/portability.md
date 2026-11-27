@@ -42,7 +42,10 @@ is feedback to the model, not prevention, and the doctor reports `prevention` as
 tool's core. A guard that decides from an earlier event, such as a second pull
 request in one session, reaches the judge through notes that the shells send
 after the fact (`kit note`). See `harness-kit/README.md`, which also describes
-packs and notes.
+packs and notes. On opencode, `kit run` also starts daily sessions, interactive
+ones included, whose model provider it reaches only through a local relay that
+holds the key; the README's sections on daily use say what they cover and what
+they do not.
 
 ## Commands and output styles, by hand
 

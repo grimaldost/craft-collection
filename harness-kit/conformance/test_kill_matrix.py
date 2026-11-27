@@ -21,8 +21,14 @@ A survivor is ended only while it is still the process that was recorded.
 opencode also runs once with System32 off `PATH`. Claude Code is left out of
 that case: it starts system tools of its own, so its tree needs System32.
 
+Each cell runs the binary that the harness's `KIT_HARNESS_ARGV_*` variable
+names, as the other conformance files do, and starts it without `kit run`, so a
+version the contract does not name needs no option. `CELLS_BY_HARNESS` names
+the cells run per harness: `hung-` and the row's `shell` label.
+
 A run writes `kill-matrix-results.json` under the base, one row per cell with
-`harness`, `shell` and `passed`, and prints `ok:` only when every row passed.
+`cell`, `harness`, `harness_version` (the version the driver's probe reads for
+that binary), `shell` and `passed`, and prints `ok:` only when every row passed.
 The largest gap seen is printed with it.
 
 Prints `skip:` unless KIT_CONFORMANCE_BASE, KIT_HARNESS_ARGV_CLAUDE_CODE and
@@ -52,6 +58,11 @@ REQUIRED = ('KIT_CONFORMANCE_BASE', 'KIT_HARNESS_ARGV_CLAUDE_CODE', 'KIT_HARNESS
 HARNESSES = ('claude-code', 'opencode')
 SHELLS = ('git-bash', 'pwsh-7', 'powershell-5.1')
 NO_SYSTEM32 = 'system32-off-path'
+CELL_PREFIX = 'hung-'
+CELLS_BY_HARNESS = {
+    'claude-code': tuple(CELL_PREFIX + shell for shell in SHELLS),
+    'opencode': (*(CELL_PREFIX + shell for shell in SHELLS), CELL_PREFIX + NO_SYSTEM32),
+}
 RESULTS = 'kill-matrix-results.json'
 REASON = 'kit could not judge:'
 GAP_CEILING_S = 6.0
@@ -354,11 +365,50 @@ def _gap_and_reason(folder: Path) -> tuple[float | None, bool]:
     return gap, REASON in json.dumps(tools[1].get('body'))
 
 
-def run_cell(harness: str, shell: str, base: Path, *, system32_off: bool = False) -> dict:
+def plan_cells() -> list[tuple[str, str, str, bool]]:
+    """Each cell of `CELLS_BY_HARNESS` as (harness, cell, parent shell, System32 off `PATH`)."""
+    plan = []
+    for harness in HARNESSES:
+        for cell in CELLS_BY_HARNESS[harness]:
+            label = cell[len(CELL_PREFIX) :]
+            off = label == NO_SYSTEM32
+            plan.append((harness, cell, 'git-bash' if off else label, off))
+    return plan
+
+
+def new_row(harness: str, label: str, version: str | None) -> dict:
+    """A cell's row before it ran: its cell, harness, version found and shell label."""
+    return {
+        'cell': CELL_PREFIX + label,
+        'harness': harness,
+        'harness_version': version,
+        'shell': label,
+        'passed': False,
+    }
+
+
+def harness_binary(harness: str, env: dict, named: dict) -> list[str]:
+    """The harness's argv: the binary its `KIT_HARNESS_ARGV_*` variable in `named` names."""
+    if str(SRC) not in sys.path:
+        sys.path.insert(0, str(SRC))
+    from harness_kit import harnesses
+
+    return harnesses.get(harness).binary_argv({**env, **named})
+
+
+def run_cell(
+    harness: str,
+    shell: str,
+    base: Path,
+    version: str | None,
+    named: dict,
+    *,
+    system32_off: bool = False,
+) -> dict:
     """Run one cell; the row says what was seen, and `passed` is true only when all of it held."""
     from_shell = shell
     label = NO_SYSTEM32 if system32_off else shell
-    row = {'harness': harness, 'shell': label, 'passed': False}
+    row = new_row(harness, label, version)
     if system32_off:
         row['case'] = NO_SYSTEM32
         row['parent_shell'] = from_shell
@@ -411,7 +461,7 @@ def run_cell(harness: str, shell: str, base: Path, *, system32_off: bool = False
         if system32_off:
             session_base['PATH'] = without_system32(session_base.get('PATH', ''))
         env = driver.session_env(home, session_base)
-        argv = driver.binary_argv(env)
+        argv = harness_binary(harness, env, named)
         assert argv, f'{harness}: binary missing'
         command = parent_argv(from_shell, executable, argv + driver.canary_argv('Run the tool.'))
         with open(folder / 'stdout.txt', 'wb') as out, open(folder / 'stderr.txt', 'wb') as err:
@@ -557,15 +607,22 @@ def main() -> int:
     if not base.is_dir():
         print('FAIL: KIT_CONFORMANCE_BASE is not an existing folder')
         return 1
-    rows = [run_cell(h, s, base) for h in HARNESSES for s in SHELLS]
-    rows.append(run_cell('opencode', 'git-bash', base, system32_off=True))
+    sys.path.insert(0, str(SRC))
+    from harness_kit import harnesses
+
+    named = {name: os.environ[name] for name in REQUIRED[1:]}
+    versions = {h: harnesses.get(h).version(_kit_env(named)) for h in HARNESSES}
+    rows = [
+        run_cell(harness, shell, base, versions[harness], named, system32_off=off)
+        for harness, _cell, shell, off in plan_cells()
+    ]
     (base / RESULTS).write_text(json.dumps(rows, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(rows, indent=2))
     gaps = [r['gap_s'] for r in rows if r.get('gap_s') is not None]
     print(f'largest gap seen: {max(gaps) if gaps else None} s')
     bad = [r for r in rows if not r['passed']]
     if bad:
-        print('FAIL: ' + ', '.join(f'{r["harness"]}/{r["shell"]}' for r in bad))
+        print('FAIL: ' + ', '.join(f'{r["harness"]}/{r["cell"]}' for r in bad))
         return 1
     print(f'ok: hung guard ended in {len(rows)} cells (3 shells x 2 harnesses, System32 off PATH)')
     return 0
