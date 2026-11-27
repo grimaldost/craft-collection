@@ -22,8 +22,11 @@ JSON object of at most 32 MiB, the key in it stops the relay too, and forbidden 
 tools and unpriced models are refused; the output limit, `provider` and `usage` are rewritten;
 the reservation is appended to the ledger and flushed to disk under one in-process lock that
 also keeps the ceilings, and only then is the request forwarded with `http.client`, which reads
-no proxy variable, carrying `Authorization: Bearer KEY` and no incoming header. The settlement is
-the larger of the reported cost and the priced usage, else the reservation.
+no proxy variable, carrying `Authorization: Bearer KEY` and no incoming header. A
+bring-your-own-key answer (`usage.is_byok` true) settles at the upstream cost it reports
+(`cost_details.upstream_inference_cost`, else its prompt and completion parts) plus `usage.cost`
+as the fee, as given; any other answer at the larger of the reported cost and the priced usage,
+else the reservation.
 
 Every request gets one line in `ROOT/runs/ID/relay-log.ndjson`: never a body, a header value, the
 key, the capability, a query value or a path. Standard error receives nothing but the fatal
@@ -96,16 +99,31 @@ def _say(line: str) -> None:
 
 
 def _amount(value: object) -> bool:
-    return (
-        not isinstance(value, bool)
-        and isinstance(value, (int, float))
-        and math.isfinite(value)
-        and value >= 0
-    )
+    """A finite, non-negative int or float, not a bool, whose conversion to float does not
+    overflow."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        number = float(value)
+    except OverflowError:
+        return False
+    return math.isfinite(number) and number >= 0
 
 
 def _tokens(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def _priced(count: int | None, usd_per_mtok: float) -> float | None:
+    """The price of a token count, or None when the count is absent or its price is not a finite
+    float (the count or the product overflows)."""
+    if count is None:
+        return None
+    try:
+        term = count * usd_per_mtok / 1e6
+    except OverflowError:
+        return None
+    return term if math.isfinite(term) else None
 
 
 # ---- the ledger
@@ -303,25 +321,55 @@ class Relay:
 # ---- answers to the harness
 
 
-def settlement(usage: object, model: daily.Model, reserved: float) -> tuple[float, str]:
-    """(amount, source): the larger of the reported cost and the priced usage, else the reservation.
+def _byok_amount(usage: dict) -> float | None:
+    """What a bring-your-own-key answer reports it cost: its fee plus its upstream cost, else
+    plus the upstream cost's prompt and completion parts; None for any other answer, for one
+    that reports neither, and for a sum that is not finite.
 
-    The usage is priced from whichever of its two token counts are readable.
+    The answer is BYOK when `is_byok` is the JSON boolean true; the fee is `usage.cost` when it
+    is a valid amount, else 0.
+    """
+    if usage.get('is_byok') is not True:
+        return None
+    details = usage.get('cost_details')
+    details = details if isinstance(details, dict) else {}
+    cost = usage.get('cost')
+    fee = float(cost) if _amount(cost) else 0.0
+    upstream = details.get('upstream_inference_cost')
+    prompt = details.get('upstream_inference_prompt_cost')
+    completions = details.get('upstream_inference_completions_cost')
+    if _amount(upstream):
+        amount = fee + float(upstream)
+    elif _amount(prompt) and _amount(completions):
+        amount = fee + float(prompt) + float(completions)
+    else:
+        return None
+    return amount if math.isfinite(amount) else None
+
+
+def settlement(usage: object, model: daily.Model, reserved: float) -> tuple[float, str]:
+    """(amount, source): a bring-your-own-key answer settles at the upstream cost it reports
+    plus its fee, as given; any other answer at the larger of the reported cost and the priced
+    usage, else the reservation.
+
+    The usage is priced from whichever of its two token counts are readable; a count whose price
+    is not a finite float, and an amount too large for a float, count as absent. No input raises.
     """
     usage = usage if isinstance(usage, dict) else {}
+    byok = _byok_amount(usage)
+    if byok is not None:
+        return byok, 'reported'
     cost = usage.get('cost')
     reported = float(cost) if _amount(cost) else None
-    prompt, completion = (
-        _tokens(usage.get('prompt_tokens')),
-        _tokens(usage.get('completion_tokens')),
-    )
+    prompt = _priced(_tokens(usage.get('prompt_tokens')), model.input_usd_per_mtok)
+    completion = _priced(_tokens(usage.get('completion_tokens')), model.output_usd_per_mtok)
     priced = None
     if prompt is not None or completion is not None:
-        priced = (prompt or 0) * model.input_usd_per_mtok / 1e6 + (
-            completion or 0
-        ) * model.output_usd_per_mtok / 1e6
+        priced = (prompt if prompt is not None else 0.0) + (
+            completion if completion is not None else 0.0
+        )
     if reported is None and priced is None:
-        return reserved, 'reservation'
+        return (float(reserved) if _amount(reserved) else reserved), 'reservation'
     if priced is None or (reported is not None and reported >= priced):
         return reported, 'reported'
     return priced, 'priced'

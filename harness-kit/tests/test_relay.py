@@ -11,6 +11,8 @@ Contract under test:
   and the upstream finds the request's `reserve` line in the ledger on arrival; whole and
   streamed answers reach the client byte for byte; other statuses pass with the relay's body;
 - settlement takes the larger of the reported cost and the priced usage, else the reservation;
+  a bring-your-own-key answer (`usage.is_byok` true) settles at its reported upstream cost, below
+  or above the priced usage, and a non-BYOK answer's upstream cost is never added to its cost;
 - each refusal of the surface answers its status and reason without contacting the upstream,
   and is logged; after `key_in_request` every request is refused `stopped`;
 - each ceiling refuses with its reason; a restarted relay replays the totals, and settles a
@@ -533,6 +535,33 @@ def test_settlement_takes_the_larger_of_reported_and_priced_else_the_reservation
         want = line['reserved_usd'] if usd is None else usd
         assert abs(line['settled_usd'] - want) < 1e-12, (usage, line)
         assert ledger_lines(child.root)[-1]['usd'] == line['settled_usd'], usage
+
+
+def test_a_byok_answer_settles_at_its_upstream_cost_and_a_non_byok_one_as_before():
+    # 1000 prompt and 1000 completion tokens price at 0.01 USD; the reservation is about 0.0082.
+    priced = (1000 * 2.0 + 1000 * 8.0) / 1e6
+    cases = (
+        (True, 0.0, 0.0012, 'reported', 0.0012),
+        (True, 0.0, 0.0175, 'reported', 0.0175),
+        (False, 0.007, 0.007, 'priced', priced),
+    )
+    for is_byok, cost, upstream, source, usd in cases:
+        usage = {
+            'prompt_tokens': 1000,
+            'completion_tokens': 1000,
+            'cost': cost,
+            'is_byok': is_byok,
+            'cost_details': {'upstream_inference_cost': upstream},
+        }
+        with session(stream(sse(usage))) as (child, _upstream):
+            status, _, _ = post(child.port, chat_body(stream=True))
+            assert status == 200, status
+        [line] = log_lines(child)
+        assert line['settle_source'] == source, (usage, line)
+        assert abs(line['settled_usd'] - usd) < 1e-12, (usage, line)
+        settle = ledger_lines(child.root)[-1]
+        assert settle['kind'] == 'settle' and settle['usd'] == line['settled_usd'], settle
+        assert set(settle) >= LEDGER_KEYS, settle
 
 
 def test_another_status_passes_with_the_relay_body_and_retry_after():
