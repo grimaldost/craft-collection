@@ -162,10 +162,15 @@ Ten new invariants bind this decision, each stated by its identifier.
 6. **key-outside-session.** No provider key enters a session's environment,
    home, working folder or any record of the kit, nor the environment of any
    child of `kit run` but the relay, which receives it on its standard input;
-   `kit run` removes it from its own environment once read.
+   `kit run` removes it from its own environment once read. The terminal that
+   started `kit run` still holds it, and a process of the owner's account can
+   read that terminal, `kit run` and the relay
+   (loss `account-stores-reachable`).
 7. **spend-reserved.** The relay forwards a request only after appending a
    reservation of its worst cost that keeps the run, day and month totals within
-   their ceilings.
+   their ceilings. The run's total lives in the relay's memory; the day and
+   month totals hold only while the ledger is intact, since a shell command of
+   the session can truncate it and so reset them at the next relay start.
 8. **permissions-from-policy.** A home's native permission statements are
    rendered from the policy's `[permissions]` section only, besides the switches
    that end every opencode home's permissions; `kit run` refuses a home whose
