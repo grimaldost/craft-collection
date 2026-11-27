@@ -316,7 +316,7 @@ def test_an_outcome_note_writes_no_stamp():
         assert not stamp.exists()
 
 
-def test_the_receipt_and_the_journal_line_keep_their_keys():
+def test_the_journal_line_keeps_its_keys():
     with tempfile.TemporaryDirectory() as td:
         failing = ff.PLAIN + '\n\ndef record(note, facts):\n    raise RuntimeError("no")\n'
         root, run_id, env, _ = _setup(

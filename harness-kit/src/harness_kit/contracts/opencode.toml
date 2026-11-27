@@ -81,7 +81,7 @@ id = "fetch-inside-execute"
 objective = "prevention"
 mark = "read"
 evidence = "opencode 2.2.5, 2026-11-08: read in the plugin interface; a tool's own execute step can make a network request, and no probe ran it. opencode 2.2.5, 2026-11-23: governance cell code-tool-refused passed, its execute call reaching no listener, and permission cells perm-webfetch-allow and perm-webfetch-deny passed, a webfetch reaching a loopback listener only under an allow."
-text = "A network request made inside a tool's execute step goes past the execute.before hook, so the guard never judges it. In a kit home that leaves the webfetch and websearch tools, where the permission section allows them, and the tools of MCP servers, which the rendered statements deny; Code Mode's execute, which can fetch, is switched off."
+text = "A network request made inside a tool's execute step goes past the execute.before hook, so the guard never judges it. In a kit home, the request that goes unjudged can come from the webfetch and websearch tools, where the permission section allows them, and from the tools of MCP servers, which the rendered statements deny; Code Mode's execute, which can fetch, is switched off."
 
 [[loss]]
 id = "no-origin-field"
