@@ -737,11 +737,16 @@ that one), the request fields that would let the upstream pick other models or t
 the daily file does not price; it caps the output at the model's `max_output_tokens`. It forwards
 a request only after appending to `relay/ledger.ndjson`, under the state root, a reservation of
 the request's worst cost that keeps the run's, the UTC day's and the UTC month's totals within
-`[relay.ceilings]`, and it settles each request from the reported cost or usage. The ceilings hold
-per state root: one relay runs per state root, holding the ledger's lock, and another state root
-keeps totals of its own. The run's total lives in the relay's memory; the day and month totals
-hold only while the ledger is intact. `runs/<id>/relay-log.ndjson` holds one line per request,
-with its sizes, tokens and amounts, and never a body, a header value or the key.
+`[relay.ceilings]`, and it settles each request from the reported cost or usage. A
+bring-your-own-key answer (`usage.is_byok` true) settles at the upstream cost the provider
+reports, `cost_details.upstream_inference_cost` or else its prompt and completion parts, plus
+`usage.cost` as the fee, with no floor and no cap at the reservation; any other answer settles at
+the larger of `usage.cost` and its tokens priced at the daily file's prices, else at the
+reservation. The ceilings hold per state root: one relay runs per state root, holding the
+ledger's lock, and another state root keeps totals of its own. The run's total lives in the
+relay's memory; the day and month totals hold only while the ledger is intact.
+`runs/<id>/relay-log.ndjson` holds one line per request, with its sizes, tokens and amounts, and
+never a body, a header value or the key.
 `kit relay summary` prints the ledger's totals (with `--json`: `run`, `day`, `month`, `all`,
 `open` and `stops`) and starts nothing.
 
