@@ -9,7 +9,9 @@ the note (`translate_note`), and names the tools the kit refuses by name
 
 A daily home (`render_daily_home`) names one provider, `relay`: the relay `kit run`
 starts for the session on the daily file's port, which the session reaches with its
-capability. Its `gitconfig` holds the daily file's identity and joins the watched files.
+capability; each of its models whose id starts with `anthropic/` carries opencode's Anthropic
+cache format (`model_entry`). Its `gitconfig` holds the daily file's identity and joins the
+watched files.
 The canary's copy of any home holds only the watched files, with empty `xdg/` and `home/`
 folders, so a home's history is never copied.
 
@@ -68,6 +70,11 @@ from harness_kit.harnesses import (
 MODEL = 'stub/stub-model'
 PROVIDER_PACKAGE = '@opencode/ai/providers/openai-compatible'
 RELAY_PROVIDER = 'relay'
+# opencode's cache format for a daily home's Anthropic models: with it, opencode marks the prompt
+# for the provider's cache (its default 5-minute lifetime); without it, it sends no mark. A value
+# opencode does not accept drops the whole provider, so it is written from this one constant.
+CACHE_FORMAT = 'anthropic'
+ANTHROPIC_PREFIX = 'anthropic/'
 GITCONFIG = 'gitconfig'
 NATIVE = ('node_modules', '@opencode', 'cli', 'bin', 'opencode.exe')
 CONFIG_NAMES = (
@@ -180,6 +187,13 @@ def system_config_dir() -> Path:
     from harness_kit.launcher import windows_pins
 
     return Path(windows_pins()['PROGRAMDATA']) / 'opencode'
+
+
+def model_entry(model_id: str) -> dict:
+    """A daily home's entry for one model: its name, and the cache format for an Anthropic id."""
+    if model_id.startswith(ANTHROPIC_PREFIX):
+        return {'name': model_id, 'compatibility': {'cacheFormat': CACHE_FORMAT}}
+    return {'name': model_id}
 
 
 def ecma_trim(text: str) -> str:
@@ -470,7 +484,7 @@ class OpenCode:
             'env': [RELAY_CAPABILITY_ENV],
             'package': PROVIDER_PACKAGE,
             'settings': {'baseURL': endpoint + '/v1'},
-            'models': {m.id: {'name': m.id} for m in found.relay.models},
+            'models': {m.id: model_entry(m.id) for m in found.relay.models},
         }
         settings = {
             'update': 'disable',

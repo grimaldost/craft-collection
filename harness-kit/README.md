@@ -712,6 +712,11 @@ rather than on a command line.
 provider, `relay`, at `http://127.0.0.1:LISTEN_PORT/v1` with one model per `[[relay.model]]`,
 `model` and `small_model` set to the default model, the kit plugin, and a `gitconfig` with the
 identity and an empty `credential.helper`. A session gets that identity and no push credential.
+Each model whose id starts with `anthropic/` carries `compatibility.cacheFormat` `"anthropic"`,
+so opencode marks the prompt for the provider's cache, with its default 5-minute lifetime; every
+other model carries its name only. A daily home rendered by an earlier kit keeps working without
+those marks until it is rendered again into an empty folder, and the relay settles its requests
+by the rule below at once.
 
 `kit run` on a daily home, in either mode, reads the key from the `key_env` variable before any
 child starts, keeps it only for the relay and removes it from its own environment, so no other

@@ -17,6 +17,11 @@ Contract under test:
   model per listed id); the home holds `gitconfig`; `home.json` gains `kind` `daily`,
   `daily_file`, `daily_sha256`, `daily_settings` and `canary_model`, and its render record names
   `gitconfig`;
+- each model whose id starts with `anthropic/` carries `compatibility` `{"cacheFormat":
+  "anthropic"}`, the value read from the driver's one constant, and every other model its name
+  only; nothing renders a provider-level `compatibility`, a `settings.cache`, a ttl or a prompt
+  cache option or key; those entries are the only difference they make to `conf/opencode.jsonc`,
+  and in `home.json` only that file's render hash changes; a test home's stub model has none;
 - `--endpoint` is refused with `--daily`, `--daily` is refused for `claude-code`, and a daily file
   that does not read is refused, each with exit 64 and nothing written; a test home gains `kind`
   `test` and `canary_model` `stub/stub-model`.
@@ -32,6 +37,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -41,7 +47,8 @@ import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
-from harness_kit import daily
+from harness_kit import daily, harnesses
+from harness_kit.harnesses import opencode
 from kit_fixtures import SRC, run_module
 
 ENDPOINT = 'http://127.0.0.1:43210'
@@ -310,6 +317,110 @@ def test_a_test_home_gains_its_kind_and_canary_model():
         assert not (home_dir / 'gitconfig').exists()
         config = json.loads((home_dir / 'conf' / 'opencode.jsonc').read_text(encoding='utf-8'))
         assert 'small_model' not in config and list(config['providers']) == ['stub'], config
+        stub = config['providers']['stub']
+        assert stub['models']['stub-model'] == {'name': 'Stub Model'}, stub['models']
+        assert 'compatibility' not in stub and 'cache' not in stub['settings'], stub
+
+
+# ---- the cache format of Anthropic models
+
+ANTHROPIC = 'anthropic/claude-sonnet-5.5'
+LOOKALIKE = 'openrouter/anthropic-like'
+# Keys that would set a ttl or another cache option; none is rendered.
+CACHE_OPTIONS = {'ttl', 'prompt_cache_options', 'prompt_cache_retention', 'prompt_cache_key'}
+
+
+def _cached_text() -> str:
+    """The example daily file with an Anthropic model and an id that only contains the word."""
+    extra = ''.join(
+        f'[[relay.model]]\nid = "{model_id}"\ninput_usd_per_mtok = 2.0\n'
+        'output_usd_per_mtok = 10.0\nmax_output_tokens = 2000\n\n'
+        for model_id in (ANTHROPIC, LOOKALIKE)
+    )
+    return _replace('[git]\n', extra + '[git]\n')
+
+
+def _keys(value: object) -> set:
+    """Every object key anywhere in a JSON value."""
+    if isinstance(value, dict):
+        return set(value).union(*(_keys(v) for v in value.values()))
+    if isinstance(value, list):
+        return set().union(*(_keys(v) for v in value))
+    return set()
+
+
+def test_render_daily_gives_each_anthropic_model_the_anthropic_cache_format():
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        path = _file(base, _cached_text())
+        home_dir = base / 'home'
+        args = ['--harness', 'opencode', '--dir', str(home_dir), '--daily', str(path)]
+        proc = _kit(base, 'home', 'render', *args)
+        assert proc.returncode == 0, (proc.returncode, proc.stderr)
+        config = json.loads((home_dir / 'conf' / 'opencode.jsonc').read_text(encoding='utf-8'))
+        relay = config['providers']['relay']
+        models = relay['models']
+        assert models[ANTHROPIC]['name'] == ANTHROPIC, models
+        assert models[ANTHROPIC].get('compatibility') == {'cacheFormat': 'anthropic'}, models
+        for model_id in (LOOKALIKE, 'vendor/model-a', 'model-b'):
+            assert models[model_id]['name'] == model_id, models
+            assert 'compatibility' not in models[model_id], (model_id, models)
+        assert 'compatibility' not in relay and 'cache' not in relay['settings'], relay
+        assert not _keys(config) & CACHE_OPTIONS, _keys(config) & CACHE_OPTIONS
+
+
+def test_the_cache_format_value_is_read_from_the_drivers_constant():
+    folder = Path(tempfile.mkdtemp(prefix='kit-render-'))
+    saved = opencode.CACHE_FORMAT
+    try:
+        path = _file(folder, _cached_text())
+        found = daily.load_daily(path, folder / 'state')
+        opencode.CACHE_FORMAT = 'constant-under-test'
+        home = harnesses.get('opencode').render_daily_home(folder / 'home', found)
+        config = json.loads(Path(home['config_file']).read_text(encoding='utf-8'))
+        entry = config['providers']['relay']['models'][ANTHROPIC]
+        assert entry['compatibility'] == {'cacheFormat': 'constant-under-test'}, entry
+    finally:
+        opencode.CACHE_FORMAT = saved
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def _strip_compatibility(config: dict) -> dict:
+    copy = json.loads(json.dumps(config))
+    for entry in copy['providers']['relay']['models'].values():
+        entry.pop('compatibility', None)
+    return copy
+
+
+def test_the_cache_format_changes_only_the_model_entries_and_the_config_hash():
+    folder = Path(tempfile.mkdtemp(prefix='kit-render-'))
+    saved = opencode.model_entry
+    try:
+        path = _file(folder, _cached_text())
+        found = daily.load_daily(path, folder / 'state')
+        home_dir = folder / 'home'
+        driver = harnesses.get('opencode')
+        renders = []
+        for entry in (saved, lambda model_id: {'name': model_id}):
+            shutil.rmtree(home_dir, ignore_errors=True)
+            opencode.model_entry = entry
+            home = driver.render_daily_home(home_dir, found)
+            text = Path(home['config_file']).read_text(encoding='utf-8')
+            on_disk = json.loads((home_dir / 'home.json').read_text(encoding='utf-8'))
+            renders.append((json.loads(text), on_disk))
+        (marked, marked_home), (plain, plain_home) = renders
+        assert marked != plain, 'the render carries no cache format'
+        assert _strip_compatibility(marked) == plain
+        marked_hashes = dict(marked_home.pop('rendered_sha256'))
+        plain_hashes = dict(plain_home.pop('rendered_sha256'))
+        config_key = 'conf/opencode.jsonc'
+        assert marked_hashes.pop(config_key) != plain_hashes.pop(config_key)
+        assert marked_hashes == plain_hashes, (marked_hashes, plain_hashes)
+        assert marked_home['permissions_sha256'] == plain_home['permissions_sha256']
+        assert marked_home == plain_home, (marked_home, plain_home)
+    finally:
+        opencode.model_entry = saved
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 if __name__ == '__main__':
