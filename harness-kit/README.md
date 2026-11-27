@@ -103,7 +103,7 @@ Python 3.11 or later, no dependencies.
 | `kit state path` | Print the state root. |
 | `kit state new-run --harness NAME` | Mint a run id and its folder; print them as JSON. |
 | `kit stub --log FILE --script FILE [--port N]` | Serve a scripted model endpoint on 127.0.0.1 for tests; the first stdout line is `{"port": N}`. |
-| `kit home render --harness NAME --dir DIR --endpoint URL [--policy FILE]`, `kit home render --harness opencode --dir DIR --daily FILE --policy FILE` | Render a test home for `claude-code` or `opencode`, or with `--daily` an opencode daily home whose provider is the relay (see "Daily homes and the relay"), into an absent or empty folder; print its `home.json`. With `--policy`, a policy whose checkers record notes also gets `note_config.json` and the note hooks, and an opencode home renders the policy's `[permissions]` section (see "Permissions"); an unreadable policy exits 64. |
+| `kit home render --harness NAME --dir DIR --endpoint URL [--policy FILE]`, `kit home render --harness opencode --dir DIR --daily FILE [--policy FILE]` | Render a test home for `claude-code` or `opencode`, or with `--daily` an opencode daily home whose provider is the relay (see "Daily homes and the relay"), into an absent or empty folder; print its `home.json`. With `--policy`, a policy whose checkers record notes also gets `note_config.json` and the note hooks, and an opencode home renders the policy's `[permissions]` section (see "Permissions"); an unreadable policy exits 64. |
 | `kit home wire --harness opencode --config FILE --shell-dir DIR --out FILE`, `kit home wire --check --config FILE --shell-dir DIR` | Write to `--out` a copy of an opencode global configuration that loads the kit shell, materialized into `DIR`, and never write the configuration itself; with `--check`, say whether a configuration is wired. See "Wiring the kit plugin into an opencode configuration". |
 | `kit run --harness NAME --home DIR --workdir DIR --policy FILE [--mode MODE] [--accept-version VERSION] -- HARNESS_ARGS...` | Check the session, run the presence canary, then start the harness and return its exit code. `MODE` is `headless`, the default, or `interactive`, opencode's own interface on Windows (see "Interactive mode"); `--accept-version` starts a harness whose version the contract does not name when it is exactly `VERSION` (see "Re-pinning a harness version"). |
 | `kit doctor [--json] [--live --live-root DIR]` | Report what was tested, the runs and the sessions that were not launched. |
@@ -708,7 +708,7 @@ the state root lies under the system's temporary folder, where every test keeps 
 set it in the terminal that runs `kit run`, for that terminal only, typed at a masked prompt
 rather than on a command line.
 
-`kit home render --harness opencode --dir DIR --daily FILE --policy FILE` renders the home: one
+`kit home render --harness opencode --dir DIR --daily FILE [--policy FILE]` renders the home: one
 provider, `relay`, at `http://127.0.0.1:LISTEN_PORT/v1` with one model per `[[relay.model]]`,
 `model` and `small_model` set to the default model, the kit plugin, and a `gitconfig` with the
 identity and an empty `credential.helper`. A session gets that identity and no push credential.
