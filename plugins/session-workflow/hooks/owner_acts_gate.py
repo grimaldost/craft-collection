@@ -485,14 +485,19 @@ def scan(text: str, shell: str) -> Scan:
     return Scan(commands, ''.join(masked), scripts)
 
 
+_DESCRIPTOR_COPY = re.compile(r'&\d+$')  # `2>&1`, `<&0`: the operand is in the operator
+
+
 def _program_index(tokens: list[Token]) -> int | None:
+    """The index of the program word: assignments, prefix words and every redirection
+    target before it skipped (`&>> f`, `3> f`; a descriptor copy takes no target)."""
     skip_next = False
     for index, token in enumerate(tokens):
         if skip_next:
             skip_next = False
             continue
         if token.op:
-            skip_next = not token.value.endswith(('&1', '&2')) and len(token.value) <= 2
+            skip_next = not _DESCRIPTOR_COPY.search(token.value)
             continue
         if not token.quoted and _ASSIGNMENT.match(token.value):
             continue

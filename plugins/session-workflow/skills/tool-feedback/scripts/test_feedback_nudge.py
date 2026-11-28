@@ -7,6 +7,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -284,6 +285,20 @@ def test_silent_without_a_registered_targets_file():
         ):
             assert _prompt_run({'session_id': 's', 'transcript_path': str(transcript)}) == (0, '')
         assert not (tdp / 's.nudged').exists()
+
+
+def test_the_skill_says_a_set_override_wins_even_when_missing():
+    """T437a: the lookup above stops at a set $FEEDBACK_TARGETS_FILE naming a missing
+    file (no fall-through to ~/.claude/feedback-targets.toml). SKILL.md said only
+    "first hit wins", which reads as a fall-through; its prose follows the code."""
+    skill = Path(__file__).resolve().parent.parent / 'SKILL.md'
+    text = skill.read_text(encoding='utf-8')
+    section = text.split('## Registered tools', 1)[1].split('\n## ', 1)[0]
+    sentences = re.split(r'(?<=[.:])\s+', ' '.join(section.split()))
+    assert any(
+        '`$FEEDBACK_TARGETS_FILE`' in s and re.search(r'\bset\b', s) and 'missing' in s
+        for s in sentences
+    ), section
 
 
 def test_silent_paths():
@@ -1056,6 +1071,7 @@ def main() -> int:
     test_cheap_exits_come_before_the_transcript_read()
     test_the_scan_resumes_where_the_last_prompt_stopped()
     test_silent_without_a_registered_targets_file()
+    test_the_skill_says_a_set_override_wins_even_when_missing()
     test_silent_paths()
     test_debt_cleared_by_tool_feedback()
     test_synthetic_user_records_do_not_count_as_turns()

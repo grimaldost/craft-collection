@@ -15,6 +15,9 @@ What is pinned:
   the explicit external list below (keel and convoy ship from their own
   repositories, so their names are listed here by hand);
 - a misspelled name fails the resolution, so the check can fail;
+- a cited skill that is manual-only (`disable-model-invocation: true`) sits on a
+  line saying the owner runs or starts it, since the receiver cannot load it
+  (T423a);
 - each of the seven phases has its own section and cites at least one name;
 - the closing block names the hand-back file and its four fields, measured
   versus relayed facts, and the questions only the owner decides;
@@ -27,6 +30,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
+from test_manual_only_skills import manual_only_skill_names
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILL_DIR = ROOT / 'plugins' / 'session-workflow' / 'skills' / 'context-handoff'
@@ -96,6 +101,21 @@ def resolves(name: str, root: Path = ROOT) -> bool:
     return (root / 'plugins' / plugin / 'skills' / skill / 'SKILL.md').is_file()
 
 
+# A manual-only skill is one the receiver cannot load; its line names who starts it.
+OWNER_STARTS = re.compile(r'\bthe owner (?:runs|starts)\b', re.I)
+
+
+def manual_only_without_owner(text: str, root: Path = ROOT) -> list[str]:
+    """Cited manual-only names on a line that does not say the owner starts them."""
+    manual = manual_only_skill_names(root)
+    found: list[str] = []
+    for line in text.splitlines():
+        for name in cited_names(line, root):
+            if name.partition(':')[2] in manual and not OWNER_STARTS.search(line):
+                found.append(name)
+    return found
+
+
 def _reference() -> str:
     assert REFERENCE.is_file(), f'missing {REFERENCE.relative_to(ROOT)}'
     return REFERENCE.read_text(encoding='utf-8')
@@ -140,6 +160,18 @@ def test_a_misspelled_name_fails_resolution():
     assert resolves('keel:apply-method')
 
 
+def test_no_cited_name_is_manual_only_unless_owner_started():
+    bad = manual_only_without_owner(_reference())
+    assert not bad, f'phase-briefs.md cites manual-only skills as loadable: {bad}'
+    # The check can fail: a bare citation of a manual-only skill is caught, and the
+    # same citation on a line saying the owner runs it is not.
+    assert manual_only_without_owner('2. `session-workflow:evaluate-skill`, when x.') == [
+        'session-workflow:evaluate-skill'
+    ]
+    assert not manual_only_without_owner('`session-workflow:evaluate-skill`: the owner runs it.')
+    assert not manual_only_without_owner('`humblepowers:brainstorming`, when x.')
+
+
 def test_each_phase_has_a_section_citing_a_name():
     sections = _sections(_reference())
     for phase in PHASES:
@@ -165,6 +197,7 @@ def test_the_skill_points_to_the_reference():
 if __name__ == '__main__':
     test_a_misspelled_name_fails_resolution()
     test_every_cited_name_resolves()
+    test_no_cited_name_is_manual_only_unless_owner_started()
     test_each_phase_has_a_section_citing_a_name()
     test_the_closing_block_names_its_fields()
     test_the_skill_points_to_the_reference()
