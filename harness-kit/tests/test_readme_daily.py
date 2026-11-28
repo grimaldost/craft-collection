@@ -22,6 +22,21 @@ Contract under test:
 - the permissions section says whether the kit's journal holds a verdict for a
   call the native layer refused, and the doctor section names the mode line and
   the run statuses `config-changed` and `interrupted`;
+- the daily section says that opencode's grep and glob need a ripgrep, where
+  opencode looks for one and that its download is refused; names the `tools`
+  table's two keys, both or neither, the hash in lowercase hex and
+  `Get-FileHash`'s uppercase; says what is refused at load, at render and at
+  `kit run`, what is watched and what protected, that a hand copy is refused,
+  the gap of a home that names none in its four places, that a session places
+  such a program only by a write or a shell command, each judged by the kit,
+  that nothing downloads a binary, and the consequence of a ripgrep installed
+  on `PATH`; it never says that opencode's permission section asks about shell
+  commands; the daily file's example shows the table in its `text` fence with
+  a placeholder path; no inline span writes `tools =`, `ripgrep =`,
+  `ripgrep_sha256 =` or `[tools]`, and no `toml` fence names those keys;
+- the `kit doctor` row and the doctor section name `--home DIR` and its line,
+  which reads absolute `PATH` entries and the home's `bin` only, with the
+  system's `PATHEXT` on Windows;
 - `docs/portability.md` points at daily use in the README.
 
 Stdlib-runnable: `python test_readme_daily.py`.
@@ -172,6 +187,101 @@ def test_the_permissions_and_doctor_sections_hold_the_daily_use_facts():
     assert 'journal held a verdict' in permissions, permissions
     doctor = _flat(_section('## Reading `kit doctor`'))
     for needle in ('mode interactive', '`config-changed`', '`interrupted`'):
+        assert needle in doctor, needle
+
+
+def _ripgrep_paragraph() -> str:
+    """The daily section's paragraph on the ripgrep the daily file names."""
+    found = [p for p in _section('## Daily homes and the relay').split('\n\n') if '`tools`' in p]
+    assert len(found) == 1, found
+    return _flat(found[0])
+
+
+def test_the_daily_section_states_the_named_ripgrep():
+    text = _ripgrep_paragraph()
+    for needle in (
+        "opencode's `grep` and `glob`",
+        '`PATH`',
+        '`xdg/cache/opencode/bin`',
+        'github.com',
+        'the relay refuses',
+        '`tools`',
+        '`ripgrep`',
+        '`ripgrep_sha256`',
+        'both or neither',
+        'lowercase hex',
+        "PowerShell's `Get-FileHash` prints uppercase",
+        'at load',
+        'one key without the other',
+        'a relative path',
+        'not 64 lowercase hex characters',
+        'before it writes anything',
+        '`kit run` refuses a copy that no longer matches',
+        'in the working folder',
+        'watched in every opencode home',
+        'protected only in a home that names one',
+        'hand-copied',
+        'in any home in interactive mode',
+        'nothing downloads a binary',
+        'winget, scoop or choco',
+        'names none',
+    ):
+        assert needle in text, needle
+
+
+def test_the_daily_section_states_the_gap_of_a_home_that_names_none():
+    text = _ripgrep_paragraph()
+    for needle in (
+        'a daily home that names no ripgrep',
+        'runs unjudged inside a judged `grep` or `glob` call',
+        "a repository's own `rg.exe`",
+        'needs no act of the session',
+        'an empty or relative `PATH` entry',
+        'a `PATH` folder',
+        '`PATHEXT` variant',
+        'until the next poll',
+        'watched and not protected',
+        'only by a write or a shell command, each judged by the kit',
+    ):
+        assert needle in text, needle
+    flat = _flat(_text())
+    assert not re.search(r'permission\w* (section|layer)?\s*asks? about shell', flat), flat
+
+
+def test_the_tools_keys_stand_as_bare_spans_or_in_the_text_fence_only():
+    text = _text()
+    spans = re.findall(r'`([^`\n]+)`', re.sub(r'```.*?```', '', text, flags=re.S))
+    for span in spans:
+        for key in ('tools', 'ripgrep', 'ripgrep_sha256'):
+            assert not re.match(rf'\s*{key}\s*=', span), span
+        assert '[tools]' not in span, span
+    for fence in re.findall(r'```toml\n(.*?)```', text, flags=re.S):
+        for key in ('tools', 'ripgrep', 'ripgrep_sha256'):
+            assert not re.search(rf'(?m)^\s*\[?{key}\b', fence), fence
+    daily = _section('## Daily homes and the relay')
+    example = re.findall(r'```text\n(.*?)```', daily, flags=re.S)
+    assert example and '[tools]' in example[0], example
+    tools = example[0].split('[tools]', 1)[1]
+    assert re.search(r'(?m)^ripgrep = "C:/Users/me/', tools), tools
+    assert re.search(r'(?m)^ripgrep_sha256 = "[0-9a-f]{64}"$', tools), tools
+
+
+def test_the_doctor_row_and_section_name_the_home_line():
+    row = _row('`kit doctor ')
+    assert '--home DIR' in row, row
+    doctor = _flat(_section('## Reading `kit doctor`'))
+    for needle in (
+        '`kit doctor --home DIR`',
+        '`ripgrep: `',
+        '`home`',
+        'absolute `PATH` entries',
+        "the home's `bin` folder",
+        'no working folder',
+        'no empty or relative entry',
+        '`PATHEXT`',
+        'as the system holds it',
+        'starts no program',
+    ):
         assert needle in doctor, needle
 
 

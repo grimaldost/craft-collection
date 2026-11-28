@@ -3,8 +3,9 @@
 
 Contract under test:
 - each driver names its watched folders and files and the names it excludes:
-  opencode every file under `conf/` and `kit-shell/`, `home.json` and a daily
-  home's `gitconfig`; Claude
+  opencode every file under `conf/` and `kit-shell/`, `home.json`, a daily
+  home's `gitconfig` and the home's `xdg/cache/opencode/bin/rg.exe` (`rg` off
+  Windows), and of `xdg/cache` that file only, listed when present; Claude
   Code `claude-config/settings.json`, every file under `kit-shell/` and
   `home.json`; neither excludes a name;
 - `hash_files` maps each watched file, by its path relative to the home with
@@ -70,10 +71,13 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+COPY = 'xdg/cache/opencode/bin/' + ('rg.exe' if os.name == 'nt' else 'rg')
+
+
 def test_each_driver_names_its_watched_files():
     oc = harnesses.get('opencode')
     assert oc.watched_folders == ('conf', 'kit-shell'), oc.watched_folders
-    assert oc.watched_files == ('home.json', 'gitconfig'), oc.watched_files
+    assert oc.watched_files == ('home.json', 'gitconfig', COPY), oc.watched_files
     assert oc.excluded_names == (), oc.excluded_names
     cc = harnesses.get('claude-code')
     assert cc.watched_folders == ('kit-shell',), cc.watched_folders
@@ -97,6 +101,24 @@ def test_opencode_hashes_cover_conf_kit_shell_and_home_json():
         assert 'conf/extra.json' in hashes and 'conf/opencode.jsonc' in hashes
         for rel, digest in hashes.items():
             assert digest == _sha(folder / rel), rel
+
+
+def test_the_ripgrep_copy_is_hashed_when_present_and_nothing_else_under_xdg_cache():
+    with tempfile.TemporaryDirectory() as td:
+        folder = Path(td) / 'h'
+        _render('opencode', folder)
+        driver = harnesses.get('opencode')
+        before = watch.hash_files(folder, driver)
+        assert not any(rel.startswith('xdg/') for rel in before), list(before)
+        bin_dir = folder / COPY.rsplit('/', 1)[0]
+        bin_dir.mkdir(parents=True)
+        (bin_dir / 'other.exe').write_bytes(b'other')
+        (folder / 'xdg' / 'cache' / 'opencode' / 'x.json').write_bytes(b'{}')
+        assert watch.hash_files(folder, driver) == before
+        (folder / COPY).write_bytes(b'copy')
+        after = watch.hash_files(folder, driver)
+        assert after == {**before, COPY: _sha(folder / COPY)}, list(after)
+        assert watch.differences(before, after) == [COPY]
 
 
 def test_claude_code_hashes_leave_its_other_config_files_out():

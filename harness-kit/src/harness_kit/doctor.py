@@ -41,6 +41,16 @@ recording checker, its kinds and, per harness and kind, a state from the
 contract's `[notes]` table (`unknown` when the binary is absent, its version
 differs or the contract has no entry for the kind). It stands after `rules` and
 reads files only, as `rules` does. Any other policy gives no such section.
+
+`kit doctor --home DIR` adds one line after the harness entries, and in JSON the key
+`home` (`dir`, and `ripgrep` with `state`, `path` and `shadowed_by`): whether the home in
+DIR is a daily opencode home whose daily file names a ripgrep, the state of its copy
+`xdg/cache/opencode/bin/rg.exe` (`rg` off Windows) against the render's record, and which
+file opencode's lookup would run first. The lookup is the opencode driver's walk over kit's
+own `PATH`, which the session inherits, with the home's `bin` folder appended and, on
+Windows, the `PATHEXT` the system holds (`launcher.windows_pins`, the value the session
+gets); with no working folder it reads absolute entries only. It reads files and the
+registry and starts no program; it exits 0 in every case.
 """
 
 from __future__ import annotations
@@ -58,7 +68,7 @@ from pathlib import Path
 
 import tomllib
 
-from harness_kit import canary, harnesses, packs, state, stubmodel
+from harness_kit import canary, harnesses, packs, state, stubmodel, watch
 from harness_kit.policy import Policy, PolicyError, load_policy
 
 CONTRACTS_DIR = Path(__file__).resolve().parent / 'contracts'
@@ -96,6 +106,8 @@ UTC_FORMS = ('%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S.%fZ')
 NOT_LAUNCHED_TEXT = 'not launched, guarantees unknown'
 RULES_KEY = 'rules'
 NOTES_KEY = 'notes'
+HOME_KEY = 'home'
+RIPGREP_LINE = 'ripgrep: '
 UNREADABLE_TEXT = 'policy unreadable: '
 STALE_TEXT = 'sidecar stale'
 DECLARED_TEXT = 'declared by the pack, not checked by the kit'
@@ -554,6 +566,119 @@ def live_canary(
     return record
 
 
+# ---- the ripgrep of a home
+
+
+def _read_home(folder: Path) -> dict | str:
+    """The home's `home.json` when it is a rendered home, else why it is unreadable."""
+    path = folder / watch.HOME_JSON
+    try:
+        home = json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        return f'{_ascii(path)} is absent'
+    except OSError as exc:
+        return f'{_ascii(path)} is not readable: {type(exc).__name__}'
+    except ValueError:
+        return f'{_ascii(path)} is not JSON'
+    rendered = isinstance(home, dict) and home.get('kit_home') == 1
+    rendered = rendered and all(isinstance(home.get(k), str) for k in harnesses.HOME_KEYS[1:])
+    return home if rendered else f'{_ascii(path)} is not a rendered home'
+
+
+def _on_disk(path: Path) -> str | None:
+    """The SHA-256 of a regular file, `unreadable` when it cannot be read, None when it is not
+    a file."""
+    if not path.is_file():
+        return None
+    try:
+        return watch.file_sha256(path)
+    except OSError:
+        return 'unreadable'
+
+
+def _walk(driver, folder: Path, environ: Mapping[str, str]):
+    """The driver's ripgrep walk with kit's own `PATH`, the home's `bin` folder and, on Windows,
+    the system's `PATHEXT`; no working folder. OSError when the system values are unreadable."""
+    env = dict(environ)
+    if os.name == 'nt':
+        from harness_kit import launcher
+
+        pathext = launcher.windows_pins()['PATHEXT']
+        env = {k: v for k, v in env.items() if k.upper() != 'PATHEXT'}
+        env['PATHEXT'] = pathext
+    bin_dir = os.path.normpath(str(folder / Path(driver.ripgrep_copy).parent))
+    return driver.ripgrep_walk(env, bin_dir, None)
+
+
+def _ripgrep(folder: Path, environ: Mapping[str, str]) -> tuple[str, str | None, str | None, str]:
+    """(state, path, shadowed_by, text) of the home in `folder`."""
+    home = _read_home(folder)
+    if isinstance(home, str):
+        return 'home-unreadable', None, None, f'home unreadable: {home}'
+    if home['harness'] != 'opencode' or harnesses.home_kind(home) != harnesses.DAILY_HOME:
+        return 'not-daily', None, None, 'not a daily opencode home'
+    driver = harnesses.get('opencode')
+    rel = driver.ripgrep_copy
+    copy = folder / rel
+    name = Path(rel).name
+    record = home.get(watch.RENDERED_KEY)
+    recorded = record.get(rel) if isinstance(record, dict) else None
+    settings = home.get('daily_settings')
+    tools = settings.get('tools') if isinstance(settings, dict) else None
+    named = tools.get('ripgrep_sha256') if isinstance(tools, dict) else None
+    found = _on_disk(copy)
+    if not isinstance(named, str):
+        head = 'not named in the daily file; '
+        if found is not None and recorded != found:
+            return 'not-named-differs', str(copy), None, f'{head}{rel} differs from its render'
+        try:
+            walk = _walk(driver, folder, environ)
+        except OSError as exc:
+            return 'system-unreadable', None, None, _system_text(exc)
+        if walk.found is None:
+            return (
+                'not-named-fails',
+                None,
+                None,
+                f"{head}opencode's grep and glob fail in this home",
+            )
+        return 'not-named-runs', walk.found, None, f'{head}{_ascii(walk.found)} runs, unguarded'
+    if found is None:
+        status, copy_text = 'named-absent', 'is absent'
+    elif found == recorded == named:
+        status, copy_text = 'named-matches', 'matches its render'
+    else:
+        status, copy_text = 'named-differs', 'differs from its render'
+    try:
+        walk = _walk(driver, folder, environ)
+    except OSError as exc:
+        return 'system-unreadable', None, None, _system_text(exc)
+    if walk.found is None or watch.norm(walk.found) == watch.norm(copy):
+        return status, str(copy), None, f'named, {rel} {copy_text}, no {name} earlier on PATH'
+    text = f'named, {rel} {copy_text}, shadowed by {_ascii(walk.found)}'
+    return status, str(copy), walk.found, text
+
+
+def _system_text(exc: OSError) -> str:
+    return f'the system values could not be read: {_ascii(exc)}'
+
+
+def home_section(home_dir: str, environ: Mapping[str, str]) -> tuple[dict, str]:
+    """The report's `home` value and its text line for the home in `home_dir`."""
+    folder = Path(os.path.abspath(home_dir))
+    status, path, shadow, text = _ripgrep(folder, environ)
+    value = {'state': status, 'path': path, 'shadowed_by': shadow}
+    return {'dir': str(folder), 'ripgrep': value}, RIPGREP_LINE + text
+
+
+def _with_home(report: dict, value: dict) -> dict:
+    """The report with `home` after the runs and the sessions not launched, before `rules`."""
+    out = {k: v for k, v in report.items() if k not in (RULES_KEY, NOTES_KEY)}
+    out[HOME_KEY] = value
+    out.update({k: v for k, v in report.items() if k in (RULES_KEY, NOTES_KEY)})
+    return out
+
+
 # ---- the report
 
 
@@ -619,7 +744,8 @@ def _notes_lines(rows: list[dict]) -> list[str]:
     return lines
 
 
-def render_text(report: dict) -> str:
+def render_text(report: dict, home_line: str | None = None) -> str:
+    """The text report; `home_line`, the line of `--home`, follows the harness entries."""
     lines = ['kit doctor']
     for name, entry in report['harnesses'].items():
         found = entry['version_found'] or 'not found'
@@ -633,6 +759,8 @@ def render_text(report: dict) -> str:
             lines.append(
                 f'  loss {loss["id"]} [{loss["objective"]}, {loss["mark"]}]: {loss["text"]}'
             )
+    if home_line is not None:
+        lines.append(home_line)
     if RULES_KEY in report:
         lines.extend(_rules_lines(report[RULES_KEY]))
     if NOTES_KEY in report:
@@ -651,8 +779,9 @@ def render_text(report: dict) -> str:
     return '\n'.join(_ascii(line) for line in lines) + '\n'
 
 
-def main(as_json: bool, live: bool, live_root: str | None) -> int:
-    """`kit doctor`; a refused state root or live root exits 64."""
+def main(as_json: bool, live: bool, live_root: str | None, home: str | None = None) -> int:
+    """`kit doctor`; a refused state root or live root exits 64. With `home`, the report gains
+    the line and the key of `home_section`."""
     try:
         if live != (live_root is not None):
             raise DoctorRefusalError('--live and --live-root DIR go together')
@@ -661,9 +790,13 @@ def main(as_json: bool, live: bool, live_root: str | None) -> int:
         sys.stderr.write(f'kit: doctor refused: {exc}\n')
         sys.stderr.flush()
         return EXIT_REFUSED
+    line = None
+    if home is not None:
+        value, line = home_section(home, os.environ)
+        report = _with_home(report, value)
     if as_json:
         sys.stdout.write(json.dumps(report, ensure_ascii=True) + '\n')
     else:
-        sys.stdout.write(render_text(report))
+        sys.stdout.write(render_text(report, line))
     sys.stdout.flush()
     return 0

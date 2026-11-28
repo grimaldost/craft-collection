@@ -24,7 +24,13 @@ Contract under test:
   and in `home.json` only that file's render hash changes; a test home's stub model has none;
 - `--endpoint` is refused with `--daily`, `--daily` is refused for `claude-code`, and a daily file
   that does not read is refused, each with exit 64 and nothing written; a test home gains `kind`
-  `test` and `canary_model` `stub/stub-model`.
+  `test` and `canary_model` `stub/stub-model`;
+- a daily file whose `tools` table names a ripgrep renders a home whose
+  `xdg/cache/opencode/bin/rg.exe` (`rg` off Windows, mode `0o755`) holds the named file's bytes,
+  whose render record maps that path to the named hash and whose `daily_settings` holds the
+  table, with no key in `home.json` that a home without it lacks; a named path that is absent, a
+  folder, or a file of another SHA-256 exits 64 naming the path and leaves the target folder as
+  it was, absent or empty; a daily file that names none renders no file under `xdg/cache`.
 
 Every daily file here has `test = true` and a loopback upstream nothing listens on; nothing here
 starts a relay or a harness.
@@ -420,6 +426,119 @@ def test_the_cache_format_changes_only_the_model_entries_and_the_config_hash():
         assert marked_home == plain_home, (marked_home, plain_home)
     finally:
         opencode.model_entry = saved
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+# ---- the named ripgrep
+
+WINDOWS = os.name == 'nt'
+COPY = 'xdg/cache/opencode/bin/' + ('rg.exe' if WINDOWS else 'rg')
+# A stand-in for a ripgrep binary: the render copies and hashes it and never runs it.
+STAND_IN = b'MZ stand-in for a ripgrep binary\x00\x01\x02' * 64
+
+
+def _toml(value: str) -> str:
+    return '"' + value.replace('\\', '\\\\') + '"'
+
+
+def _named(base: Path, source: Path, sha: str | None = None) -> Path:
+    digest = sha or hashlib.sha256(source.read_bytes()).hexdigest()
+    table = f'\n[tools]\nripgrep = {_toml(str(source))}\nripgrep_sha256 = "{digest}"\n'
+    return _file(base, DAILY_TEXT + table)
+
+
+def _render_daily(base: Path, path: Path, home_dir: Path) -> subprocess.CompletedProcess:
+    args = ['--harness', 'opencode', '--dir', str(home_dir), '--daily', str(path)]
+    return _kit(base, 'home', 'render', *args)
+
+
+def test_render_copies_the_named_ripgrep_into_the_home():
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        source = base / 'tools' / 'rg-source.bin'
+        source.parent.mkdir()
+        source.write_bytes(STAND_IN)
+        sha = hashlib.sha256(STAND_IN).hexdigest()
+        home_dir = base / 'home'
+        proc = _render_daily(base, _named(base, source), home_dir)
+        assert proc.returncode == 0, (proc.returncode, proc.stderr)
+        copy = home_dir / COPY
+        assert copy.read_bytes() == STAND_IN
+        if not WINDOWS:
+            assert copy.stat().st_mode & 0o777 == 0o755, oct(copy.stat().st_mode)
+        assert sorted(p.name for p in copy.parent.iterdir()) == [copy.name]
+        home = json.loads((home_dir / 'home.json').read_text(encoding='utf-8'))
+        assert home['rendered_sha256'][COPY] == sha, home['rendered_sha256']
+        assert home['daily_settings']['tools'] == {
+            'ripgrep': str(source),
+            'ripgrep_sha256': sha,
+        }, home['daily_settings']
+        plain_dir = base / 'plain'
+        proc = _render_daily(base, _file(base), plain_dir)
+        assert proc.returncode == 0, proc.stderr
+        plain = json.loads((plain_dir / 'home.json').read_text(encoding='utf-8'))
+        assert list(home) == list(plain), (list(home), list(plain))
+        assert 'tools' not in plain['daily_settings'], plain['daily_settings']
+        assert COPY not in plain['rendered_sha256'], plain['rendered_sha256']
+        assert not (plain_dir / 'xdg' / 'cache').exists()
+        assert source.read_bytes() == STAND_IN, 'the source changed'
+
+
+def test_a_missing_folder_or_other_ripgrep_is_refused_and_writes_nothing():
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        source = base / 'rg-source.bin'
+        source.write_bytes(STAND_IN)
+        sha = hashlib.sha256(STAND_IN).hexdigest()
+        folder = base / 'a-folder'
+        folder.mkdir()
+        other = 'f' * 64
+        cases = (
+            (base / 'absent.bin', sha, ['absent.bin', 'FileNotFoundError']),
+            (folder, sha, ['a-folder', 'not a regular file']),
+            (source, other, ['rg-source.bin', f'has SHA-256 {sha}', f'ripgrep_sha256 {other}']),
+        )
+        for i, (path, digest, needles) in enumerate(cases):
+            daily_file = _named(base, path, digest)
+            for existed in (False, True):
+                home_dir = base / f'home-{i}-{existed}'
+                if existed:
+                    home_dir.mkdir()
+                proc = _render_daily(base, daily_file, home_dir)
+                assert proc.returncode == 64, (path, proc.returncode, proc.stderr)
+                assert proc.stdout == '', proc.stdout
+                for needle in needles:
+                    assert needle in proc.stderr, (needle, proc.stderr)
+                if existed:
+                    assert home_dir.is_dir() and not any(home_dir.iterdir()), path
+                else:
+                    assert not home_dir.exists(), path
+
+
+def test_the_render_writes_the_bytes_it_hashed_and_reads_the_source_once():
+    folder = Path(tempfile.mkdtemp(prefix='kit-render-'))
+    saved = Path.read_bytes
+    reads = []
+    try:
+        source = folder / 'rg-source.bin'
+        source.write_bytes(STAND_IN)
+        found = daily.load_daily(_named(folder, source), folder / 'state')
+
+        def spy(self: Path) -> bytes:
+            data = saved(self)
+            if self == source:
+                reads.append(self)
+                source.write_bytes(b'replaced after the read')
+            return data
+
+        Path.read_bytes = spy  # type: ignore[method-assign]
+        home = harnesses.get('opencode').render_daily_home(folder / 'home', found)
+        Path.read_bytes = saved  # type: ignore[method-assign]
+        assert len(reads) == 1, reads
+        assert (folder / 'home' / COPY).read_bytes() == STAND_IN
+        assert home['rendered_sha256'][COPY] == hashlib.sha256(STAND_IN).hexdigest()
+    finally:
+        Path.read_bytes = saved  # type: ignore[method-assign]
         shutil.rmtree(folder, ignore_errors=True)
 
 

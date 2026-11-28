@@ -99,6 +99,21 @@ def _allowed(v: dict) -> bool:
     return v['verdict'] == 'allow' and v['rule'] == 'allow-all'
 
 
+def test_a_write_of_the_homes_ripgrep_copy_is_denied_and_one_beside_it_is_not():
+    run = dict(RUN, protected=[*RUN['protected'], '/h/xdg/cache/opencode/bin/rg'])
+    assert _denied(_write(['/h/xdg/cache/opencode/bin/rg'], run=run))
+    assert _allowed(_write(['/h/xdg/cache/opencode/bin/other.exe'], run=run))
+    run = dict(
+        RUN_WIN, protected=[*RUN_WIN['protected'], 'C:\\H\\xdg\\cache\\opencode\\bin\\rg.exe']
+    )
+    v = _write(['c:/h/XDG/cache/opencode/bin/RG.EXE'], windows=True, run=run, run_dir=RUN_DIR_WIN)
+    assert _denied(v), v
+    v = _write(
+        ['C:/H/xdg/cache/opencode/bin/other.exe'], windows=True, run=run, run_dir=RUN_DIR_WIN
+    )
+    assert _allowed(v), v
+
+
 def test_a_write_at_or_under_a_protected_path_is_denied():
     for path in (
         '/h/conf',

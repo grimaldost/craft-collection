@@ -15,7 +15,10 @@ Contract under test:
   `opencode` on Windows, and `/etc/opencode` elsewhere;
 - each driver names the home folders kit protects: opencode `conf`, `kit-shell` and
   `xdg/config`; Claude Code `claude-config` and `kit-shell`; opencode also watches the files
-  under `xdg/config` during a run.
+  under `xdg/config` during a run;
+- each driver names the home's ripgrep copy, which kit protects in a daily home that names a
+  ripgrep: opencode `xdg/cache/opencode/bin/rg.exe` (`rg` off Windows), never the `bin` folder or
+  `xdg/cache`; Claude Code none.
 
 Stdlib-runnable: `python test_config_render.py`.
 """
@@ -155,6 +158,15 @@ def test_each_driver_names_the_home_folders_it_protects():
     assert tuple(cc.protected_folders) == ('claude-config', 'kit-shell')
     assert tuple(oc.run_watched_folders) == ('xdg/config',)
     assert tuple(cc.run_watched_folders) == ()
+
+
+def test_each_driver_names_the_ripgrep_copy_it_protects_in_a_named_home():
+    oc, cc = harnesses.get('opencode'), harnesses.get('claude-code')
+    assert oc.ripgrep_copy == 'xdg/cache/opencode/bin/' + ('rg.exe' if WINDOWS else 'rg')
+    assert cc.ripgrep_copy == ''
+    assert oc.ripgrep_copy in oc.watched_files
+    for folder in ('xdg/cache', 'xdg/cache/opencode/bin'):
+        assert folder not in oc.protected_folders and folder not in oc.watched_files, folder
 
 
 if __name__ == '__main__':

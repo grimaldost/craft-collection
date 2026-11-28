@@ -9,7 +9,13 @@ Contract under test:
 - with `test` true the upstream is `http://127.0.0.1:PORT` only; with `test` false it is an
   `https` URL, and the file is refused while the state root lies under the temporary folder;
 - `key_env` is refused unless the secret-name rule matches it, and when it is `PATH`, a name of
-  the launcher's allow list or a name the launcher or a driver sets in a session.
+  the launcher's allow list or a name the launcher or a driver sets in a session;
+- the optional top-level `tools` table holds `ripgrep`, an absolute path, and `ripgrep_sha256`,
+  64 lowercase hex characters, both or neither; an empty table names no ripgrep; `tools` that is
+  not a table, another key in it, one key without the other, a relative, empty or non-string
+  path and a hash that is not 64 lowercase hex characters are refused at load, naming the key;
+  `load_daily` gives the named path and hash (None for both when the file names none), and its
+  settings hold `tools` as parsed when the file has the table, and only then.
 
 No daily file here has `test` false and a state root outside the temporary folder, and nothing
 here binds a port or sends a request.
@@ -276,6 +282,141 @@ email = "test@example.invalid"
             assert 'not read' in str(exc), str(exc)
         else:
             raise AssertionError('absent file accepted')
+
+
+# ---- the tools table
+
+WINDOWS = os.name == 'nt'
+DAILY_TEXT = """\
+daily = 1
+
+[relay]
+listen_port = 47900
+upstream_base = "http://127.0.0.1:47901"
+route = "/v1/chat/completions"
+key_env = "TEST_PROVIDER_KEY"
+test = true
+usage_include = true
+default_model = "vendor/model-a"
+upstream_timeout_s = 30
+
+[relay.ceilings]
+run_usd = 1.0
+day_usd = 2.0
+month_usd = 3.0
+
+[[relay.model]]
+id = "vendor/model-a"
+input_usd_per_mtok = 1.0
+output_usd_per_mtok = 2.0
+max_output_tokens = 100
+
+[git]
+name = "Test Person"
+email = "test@example.invalid"
+"""
+# A placeholder path, absolute on the platform the test runs on; the file is never opened.
+RIPGREP = 'C:/Users/me/tools/rg.exe' if WINDOWS else '/home/user/tools/rg'
+SHA = '0123456789abcdef' * 4
+
+
+def _toml(value: str) -> str:
+    return '"' + value.replace('\\', '\\\\') + '"'
+
+
+def _tools(body: str) -> str:
+    return DAILY_TEXT + '\n' + body
+
+
+def _load(text: str) -> daily.Daily:
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / 'daily.toml'
+        path.write_text(text, encoding='utf-8')
+        return daily.load_daily(path, Path(td) / 'state')
+
+
+def _load_refused(text: str) -> str:
+    try:
+        _load(text)
+    except daily.DailyError as exc:
+        message = str(exc)
+        assert message.isascii() and len(message.splitlines()) == 1, message
+        return message
+    raise AssertionError(f'accepted: {text!r}')
+
+
+def test_a_daily_file_without_tools_names_no_ripgrep_and_keeps_its_settings():
+    got = _load(DAILY_TEXT)
+    assert got.ripgrep is None and got.ripgrep_sha256 is None, got
+    assert sorted(got.settings) == ['git', 'relay'], got.settings
+
+
+def test_an_empty_tools_table_names_no_ripgrep():
+    got = _load(_tools('[tools]\n'))
+    assert got.ripgrep is None and got.ripgrep_sha256 is None, got
+    assert got.settings['tools'] == {}, got.settings
+
+
+def test_a_tools_table_names_the_ripgrep_and_its_hash():
+    body = f'[tools]\nripgrep = {_toml(RIPGREP)}\nripgrep_sha256 = "{SHA}"\n'
+    got = _load(_tools(body))
+    assert (got.ripgrep, got.ripgrep_sha256) == (RIPGREP, SHA), got
+    assert got.settings['tools'] == {'ripgrep': RIPGREP, 'ripgrep_sha256': SHA}, got.settings
+    assert sorted(got.settings) == ['git', 'relay', 'tools'], got.settings
+    if WINDOWS:
+        for path in ('C:\\x\\rg.exe', '\\\\server\\share\\rg.exe'):
+            found = _load(_tools(f'[tools]\nripgrep = {_toml(path)}\nripgrep_sha256 = "{SHA}"\n'))
+            assert found.ripgrep == path, found
+
+
+def test_one_key_of_the_pair_alone_is_refused_naming_the_missing_one():
+    text = _load_refused(_tools(f'[tools]\nripgrep = {_toml(RIPGREP)}\n'))
+    assert text.startswith('tools.ripgrep_sha256 is missing'), text
+    assert 'tools.ripgrep and tools.ripgrep_sha256 go together' in text, text
+    text = _load_refused(_tools(f'[tools]\nripgrep_sha256 = "{SHA}"\n'))
+    assert text.startswith('tools.ripgrep is missing'), text
+    assert 'go together' in text, text
+
+
+def test_a_relative_empty_or_non_string_ripgrep_is_refused():
+    relative = ['rg.exe', 'bin/rg.exe']
+    if WINDOWS:
+        relative += ['/x/rg.exe', '\\x\\rg.exe', 'C:x\\rg.exe']
+    for value in relative:
+        body = f'[tools]\nripgrep = {_toml(value)}\nripgrep_sha256 = "{SHA}"\n'
+        text = _load_refused(_tools(body))
+        assert text == 'tools.ripgrep is not an absolute path', (value, text)
+    for value in ('""', '1', '["x"]'):
+        text = _load_refused(_tools(f'[tools]\nripgrep = {value}\nripgrep_sha256 = "{SHA}"\n'))
+        assert text == 'tools.ripgrep is not a non-empty string', (value, text)
+
+
+def test_a_hash_that_is_not_64_lowercase_hex_characters_is_refused():
+    for value in (f'"{SHA.upper()}"', f'"{SHA[:63]}"', f'"{SHA}0"', f'"{SHA[:63]}g"', '12'):
+        body = f'[tools]\nripgrep = {_toml(RIPGREP)}\nripgrep_sha256 = {value}\n'
+        text = _load_refused(_tools(body))
+        assert text == 'tools.ripgrep_sha256 is not 64 lowercase hex characters', (value, text)
+
+
+def test_tools_that_is_not_a_table_or_holds_another_key_is_refused():
+    assert _load_refused(DAILY_TEXT.replace('daily = 1\n', 'daily = 1\ntools = 1\n')) == (
+        'tools is not a table'
+    )
+    body = f'[tools]\nripgrep = {_toml(RIPGREP)}\nripgrep_sha256 = "{SHA}"\nversion = "15"\n'
+    assert _load_refused(_tools(body)) == 'tools.version is not a known key'
+    assert _load_refused(_tools('[tools]\nversion = "15"\n')) == 'tools.version is not a known key'
+
+
+def test_check_daily_refuses_a_bad_tools_table_too():
+    import tomllib
+
+    doc = tomllib.loads(_tools('[tools]\nripgrep = "rg.exe"\n'))
+    try:
+        daily.check_daily(doc, ELSEWHERE)
+    except daily.DailyError as exc:
+        assert 'tools.ripgrep' in str(exc), str(exc)
+    else:
+        raise AssertionError('check_daily accepted a bad tools table')
 
 
 if __name__ == '__main__':

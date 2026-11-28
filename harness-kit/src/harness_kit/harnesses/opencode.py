@@ -15,6 +15,12 @@ watched files.
 The canary's copy of any home holds only the watched files, with empty `xdg/` and `home/`
 folders, so a home's history is never copied.
 
+A daily file may name a ripgrep binary (`[tools]`): the render reads its bytes once, checks
+their SHA-256 and writes them to `RIPGREP_COPY` in opencode's `bin` folder, where opencode
+looks. That copy is a watched file of every home (listed only when present) and is left out of
+the canary's copy. `ripgrep_walk` says which file opencode 2.2.5 would run as `rg`, as its
+`which` 6.0.1 and `isexe` 4.0.0 resolve it.
+
 Every home's configuration carries `policies` that load no plugin but the kit's, no MCP
 server and no provider or integration but the home's own, then a `tool.use` deny for each
 tool that runs code or moves the session outside the tools the driver translates; its
@@ -33,11 +39,15 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import ntpath
 import os
+import posixpath
 import re
 import shutil
+import stat
 from collections.abc import Mapping
-from pathlib import Path
+from dataclasses import dataclass
+from pathlib import Path, PurePath
 from types import MappingProxyType
 
 from harness_kit import watch
@@ -76,6 +86,14 @@ RELAY_PROVIDER = 'relay'
 CACHE_FORMAT = 'anthropic'
 ANTHROPIC_PREFIX = 'anthropic/'
 GITCONFIG = 'gitconfig'
+WINDOWS = os.name == 'nt'
+# The ripgrep binary as opencode names it on this platform, and the home's copy of the one a
+# daily file names: opencode's `bin` folder is `$XDG_CACHE_HOME/opencode/bin`, and the session's
+# `XDG_CACHE_HOME` is the home's `xdg/cache`.
+RIPGREP = 'rg.exe' if WINDOWS else 'rg'
+RIPGREP_BIN = 'xdg/cache/opencode/bin'
+RIPGREP_COPY = f'{RIPGREP_BIN}/{RIPGREP}'
+RIPGREP_MODE = 0o755
 NATIVE = ('node_modules', '@opencode', 'cli', 'bin', 'opencode.exe')
 CONFIG_NAMES = (
     'OPENCODE_CONFIG_DIR',
@@ -194,6 +212,176 @@ def model_entry(model_id: str) -> dict:
     if model_id.startswith(ANTHROPIC_PREFIX):
         return {'name': model_id, 'compatibility': {'cacheFormat': CACHE_FORMAT}}
     return {'name': model_id}
+
+
+def _ascii(text: object) -> str:
+    return str(text).encode('ascii', 'backslashreplace').decode('ascii')
+
+
+def read_ripgrep(path: str, sha256: str) -> bytes:
+    """The bytes of the ripgrep a daily file names, read once.
+
+    HomeError, naming the path, when it is absent, not a regular file or unreadable (with the
+    error's class), or when its SHA-256 is not the one the daily file names.
+    """
+    shown = _ascii(path)
+    try:
+        if not stat.S_ISREG(os.stat(path).st_mode):
+            raise HomeError(f'tools.ripgrep {shown} is not a regular file')
+        data = Path(path).read_bytes()
+    except OSError as exc:
+        raise HomeError(f'tools.ripgrep {shown} not read: {type(exc).__name__}') from None
+    found = hashlib.sha256(data).hexdigest()
+    if found != sha256:
+        raise HomeError(
+            f"tools.ripgrep {shown} has SHA-256 {found}, not the daily file's "
+            f'tools.ripgrep_sha256 {_ascii(sha256)}'
+        )
+    return data
+
+
+# ---- which file opencode runs as `rg`
+
+# opencode 2.2.5 resolves ripgrep with `which(RIPGREP, undefined, global.bin)`: the `which`
+# package 6.0.1 over the process's `PATH` with `bin` appended, each candidate tested by `isexe`
+# 4.0.0; with none, `bin/RIPGREP` when it is a regular file; else it downloads one. The walk below
+# mirrors those two packages as their sources read at those versions.
+DEFAULT_PATHEXT = '.EXE;.CMD;.BAT;.COM'
+# `which` strips one pair of quotes around an entry it matches with `/^".*"$/`; in JavaScript
+# `.` matches anything but a line terminator, and `$` only the end of the text.
+_QUOTED = re.compile(r'"[^\n\r\u2028\u2029]*"')
+_BARE_DRIVE = re.compile(r'[A-Za-z]:')
+
+
+@dataclass(frozen=True)
+class RipgrepWalk:
+    """One walk of opencode's ripgrep lookup.
+
+    `found` is the file opencode would run (None: it would download one), `tried` every path
+    the walk tried, absolute, in order and each once, and `copy` the `bin` folder's own file.
+    """
+
+    found: str | None
+    tried: tuple[str, ...]
+    copy: str
+
+
+def _env_value(env: Mapping[str, str], name: str) -> str | None:
+    """A variable as the session's process reads it: on Windows without regard to case."""
+    if WINDOWS:
+        return next((v for k, v in env.items() if k.upper() == name), None)
+    return env.get(name)
+
+
+def _search_path(env: Mapping[str, str]) -> str:
+    """The `PATH` opencode passes to `which`: `PATH`, else `Path` (POSIX), else empty."""
+    if WINDOWS:
+        return _env_value(env, 'PATH') or ''
+    value = env.get('PATH')
+    return (value if value is not None else env.get('Path')) or ''
+
+
+def _suffixes(pathext: str, name: str) -> list[str]:
+    """`which`'s suffixes: each item as written and lowercased, the bare name first for a name
+    that holds a dot."""
+    items = [x for item in pathext.split(';') for x in (item, item.lower())]
+    if '.' in name and items[0] != '':
+        items.insert(0, '')
+    return items
+
+
+def _join(entry: str, name: str) -> str:
+    """`which`'s path for one entry: its quotes removed, joined and normalized as Node's
+    `path.join` does (a bare drive `C:` joins at that drive's root)."""
+    part = entry[1:-1] if _QUOTED.fullmatch(entry) else entry
+    if not part:
+        return name
+    if WINDOWS:
+        if _BARE_DRIVE.fullmatch(part):
+            return part + '\\' + name
+        return ntpath.normpath(ntpath.join(part, name))
+    joined = posixpath.normpath(posixpath.join(part, name))
+    return '/' + joined.lstrip('/') if joined.startswith('//') else joined
+
+
+def _against(path: str, cwd: str | None) -> str | None:
+    """`path` as `isexe` stats it from the current folder `cwd`; None for a relative path when
+    there is no current folder."""
+    if PurePath(path).is_absolute():
+        return path
+    if cwd is None:
+        return None
+    if not WINDOWS:
+        return posixpath.normpath(posixpath.join(cwd, path))
+    joined = ntpath.join(cwd, path)
+    drive, rest = ntpath.splitdrive(joined)
+    if drive and not rest.startswith(('\\', '/')):
+        # A drive-relative path on another drive: the session carries no folder of that drive.
+        joined = drive + '\\' + rest
+    return ntpath.normpath(joined)
+
+
+def _counts(path: str, written: str, pathext: str) -> bool:
+    """Whether `isexe` accepts the file: a regular file once links are followed, and on Windows
+    a path ending with a `PATHEXT` item, off Windows a mode that lets this process execute it."""
+    try:
+        found = os.stat(path)
+    except (OSError, ValueError):
+        return False
+    if not stat.S_ISREG(found.st_mode):
+        return False
+    if WINDOWS:
+        items = pathext.split(';')
+        if '' in items:
+            return True
+        tail = written.lower()
+        return any(item and tail.endswith(item.lower()) for item in items)
+    uid = os.getuid()
+    groups = {os.getgid(), *os.getgroups()}
+    mode = found.st_mode
+    return bool(
+        mode & 0o001
+        or (mode & 0o010 and found.st_gid in groups)
+        or (mode & 0o100 and found.st_uid == uid)
+        or (mode & 0o110 and uid == 0)
+    )
+
+
+def ripgrep_walk(env: Mapping[str, str], bin_dir: str, cwd: str | None) -> RipgrepWalk:
+    """The file opencode 2.2.5 would run as `rg` in a process with environment `env` and current
+    folder `cwd`, its `bin` folder `bin_dir`.
+
+    With `cwd` None (no current folder) the walk leaves out the current-folder entry and every
+    entry still relative after the join.
+    """
+    delimiter = ';' if WINDOWS else ':'
+    base = _search_path(env)
+    full = base + delimiter + bin_dir if base and bin_dir else (base or bin_dir)
+    entries = ([cwd] if WINDOWS and cwd is not None else []) + full.split(delimiter)
+    pathext = (_env_value(env, 'PATHEXT') or DEFAULT_PATHEXT) if WINDOWS else ''
+    suffixes = _suffixes(pathext, RIPGREP) if WINDOWS else ['']
+    tried: list[str] = []
+    seen: set[str] = set()
+    found = None
+    for entry in entries:
+        joined = _join(entry, RIPGREP)
+        for suffix in suffixes:
+            written = joined + suffix
+            path = _against(written, cwd)
+            if path is None:
+                continue
+            if watch.norm(path) not in seen:
+                seen.add(watch.norm(path))
+                tried.append(path)
+            if _counts(path, written, pathext):
+                found = path
+                break
+        if found is not None:
+            break
+    copy = _join(bin_dir, RIPGREP)
+    if found is None and os.path.isfile(copy):
+        found = copy
+    return RipgrepWalk(found=found, tried=tuple(tried), copy=copy)
 
 
 def ecma_trim(text: str) -> str:
@@ -429,15 +617,18 @@ class OpenCode:
     # The files the guard is read from. opencode 2.2.5 wrote nothing under `conf/` or
     # `kit-shell/` in an interactive or a headless session, so no name is excluded; it writes
     # `conf/cli.json` when a setting changes in the interface, which stays watched.
-    # A daily home's `gitconfig` is watched too; a test home has none.
+    # A daily home's `gitconfig` is watched too; a test home has none. The home's ripgrep copy
+    # is watched in every home, and listed only when present: of `xdg/cache` that file alone.
     watched_folders = ('conf', 'kit-shell')
-    watched_files = ('home.json', GITCONFIG)
+    watched_files = ('home.json', GITCONFIG, RIPGREP_COPY)
     excluded_names: tuple[str, ...] = ()
     # The home's configuration and shell folders, which kit protects from the session's tools,
     # and the folder whose files the check during the run also reads. A `.agents` root feeds
     # only its `skills` folder, so it is no project-config name: in the working folder it is
-    # protected, not refused.
+    # protected, not refused. The ripgrep copy is protected in a daily home whose daily file
+    # names a ripgrep, and only there.
     protected_folders = ('conf', 'kit-shell', 'xdg/config')
+    ripgrep_copy = RIPGREP_COPY
     run_watched_folders = ('xdg/config',)
     protected_workdir_names = ('.agents',)
     # A render takes the policy's `[permissions]` section, and `kit run` compares it.
@@ -473,11 +664,17 @@ class OpenCode:
     def render_daily_home(
         self, home: Path, found, records: tuple[str, ...] = (), permissions=None
     ) -> dict:
-        """A daily home for the daily file `found` (`daily.Daily`): its provider is the relay."""
+        """A daily home for the daily file `found` (`daily.Daily`): its provider is the relay.
+
+        When the daily file names a ripgrep, its bytes are read once, before anything is
+        written, and those bytes become the home's `RIPGREP_COPY`.
+        """
         from harness_kit.daily import gitconfig_text
 
         endpoint = found.endpoint
         check_endpoint(endpoint)
+        named = getattr(found, 'ripgrep', None)
+        ripgrep = read_ripgrep(named, found.ripgrep_sha256) if named is not None else None
         model = f'{RELAY_PROVIDER}/{found.relay.default_model}'
         relay = {
             'name': 'Relay',
@@ -501,7 +698,15 @@ class OpenCode:
         }
         gitconfig = gitconfig_text(found.git_name, found.git_email)
         return self._render(
-            home, endpoint, records, settings, extra, RELAY_PROVIDER, permissions, gitconfig
+            home,
+            endpoint,
+            records,
+            settings,
+            extra,
+            RELAY_PROVIDER,
+            permissions,
+            gitconfig,
+            ripgrep=ripgrep,
         )
 
     def permission_lists(self, folder: Path, provider: str, section) -> tuple[list, list]:
@@ -510,7 +715,17 @@ class OpenCode:
         return opencode_permissions.render(section, rendered_policies(kit, provider), switches())
 
     def _render(
-        self, home, endpoint, records, settings, extra, provider, section, gitconfig=None
+        self,
+        home,
+        endpoint,
+        records,
+        settings,
+        extra,
+        provider,
+        section,
+        gitconfig=None,
+        *,
+        ripgrep: bytes | None = None,
     ) -> dict:
         target = Path(os.path.abspath(str(home)))
         permissions, policies = self.permission_lists(target, provider, section)
@@ -534,6 +749,12 @@ class OpenCode:
         write_json(config, {**settings, **governed})
         if gitconfig is not None:
             (folder / GITCONFIG).write_bytes(gitconfig.encode('utf-8'))
+        if ripgrep is not None:
+            copy = folder / RIPGREP_COPY
+            copy.parent.mkdir(parents=True)
+            copy.write_bytes(ripgrep)
+            if not WINDOWS:
+                os.chmod(copy, RIPGREP_MODE)
         rendered = watch.hash_files(folder, self, rendered=True)
         sha = opencode_permissions.permissions_sha256(permissions, policies)
         extra = {**extra, PERMISSIONS_KEY: sha}
@@ -607,9 +828,19 @@ class OpenCode:
         its presence during a run."""
         return system_config_dir()
 
+    def ripgrep_bin(self, env: Mapping[str, str], home_dir: Path | str) -> str:
+        """opencode's `bin` folder in a session with environment `env`: its `XDG_CACHE_HOME`
+        (the home's `xdg/cache` when it has none) plus `opencode/bin`."""
+        cache = _env_value(env, 'XDG_CACHE_HOME') or str(Path(home_dir) / 'xdg' / 'cache')
+        return os.path.normpath(os.path.join(cache, 'opencode', 'bin'))
+
+    def ripgrep_walk(self, env: Mapping[str, str], bin_dir: str, cwd: str | None) -> RipgrepWalk:
+        """The file opencode would run as `rg` (`ripgrep_walk`)."""
+        return ripgrep_walk(env, bin_dir, cwd)
+
     def copy_home_for_canary(self, home: dict, dest: Path, canary_endpoint: str) -> dict:
-        """Copy the home's watched files, with empty `xdg/` and `home/` folders, then swap the
-        endpoint text in the configuration without parsing it."""
+        """Copy the home's watched files but its ripgrep copy, with empty `xdg/` and `home/`
+        folders, then swap the endpoint text in the configuration without parsing it."""
         source = Path(home['dir'])
         target = Path(os.path.abspath(str(dest)))
         try:
@@ -618,6 +849,8 @@ class OpenCode:
             raise HomeError('config_file is outside the home folder') from None
         target.mkdir(parents=True, exist_ok=True)
         for rel in watch.watched_paths(source, self):
+            if rel == RIPGREP_COPY:
+                continue
             (target / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source / rel, target / rel)
         for name in ('xdg', 'home'):

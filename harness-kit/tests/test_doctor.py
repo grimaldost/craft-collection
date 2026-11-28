@@ -31,6 +31,17 @@ Contract under test, with the fake harness of `canary_fake_harness.py`:
   `degraded` where a loss row names the objective and `tested` where none
   does, a broken one `absent`, a missing binary `unknown`; a live root outside
   the policy's test roots exits 64;
+- `kit doctor --home DIR` adds one line after the harness entries, and in JSON
+  the key `home` with `dir` and `ripgrep` (`state`, `path`, `shadowed_by`):
+  an unreadable home, a home that is not a daily opencode home, a daily home
+  that names no ripgrep (its hand copy that differs from the render, whatever
+  `PATH` holds; else the tools failing, or the file that runs unguarded), and a
+  home that names one (its copy matching, differing or absent, with no `rg.exe`
+  earlier on `PATH` or shadowed by the file that is); the walk reads kit's own
+  `PATH`, absolute entries only, the home's `bin` appended, and on Windows the
+  system's `PATHEXT`, never kit's own; the system values unreadable give a line
+  of their own; it exits 0 in each case; without `--home` the report has no
+  such line or key;
 - no output holds a percent sign or the words percent or score.
 
 Stdlib-runnable: `python test_doctor.py`.
@@ -844,6 +855,287 @@ def test_live_root_outside_the_test_roots_is_refused():
         assert proc.returncode == 64, proc.returncode
     finally:
         shutil.rmtree(base, ignore_errors=True)
+
+
+# ---- kit doctor --home
+
+WINDOWS = os.name == 'nt'
+RG = 'rg.exe' if WINDOWS else 'rg'
+COPY = 'xdg/cache/opencode/bin/' + RG
+STAND_IN = b'stand-in ripgrep for the doctor\x00' * 16
+# `kit doctor` through a bootstrap that, on Windows, fakes the system's PATHEXT or makes the
+# system values unreadable.
+DOCTOR_BOOT = r"""
+import json, sys
+spec = json.loads(sys.argv.pop(1))
+sys.path.insert(0, spec['src'])
+from harness_kit import launcher
+if launcher.WINDOWS and spec.get('raise'):
+    def refused():
+        raise OSError('the registry was not read')
+    launcher.windows_pins = refused
+elif launcher.WINDOWS and spec.get('pathext') is not None:
+    real = launcher.windows_pins
+    launcher.windows_pins = lambda: {**real(), 'PATHEXT': spec['pathext']}
+from harness_kit.cli import main
+sys.exit(main(sys.argv[1:]))
+"""
+DAILY_FOR_DOCTOR = """\
+daily = 1
+
+[relay]
+listen_port = 47870
+upstream_base = "http://127.0.0.1:1"
+route = "/v1/chat/completions"
+key_env = "TEST_DOCTOR_RELAY_KEY"
+test = true
+usage_include = true
+default_model = "vendor/model-a"
+upstream_timeout_s = 30
+
+[relay.ceilings]
+run_usd = 1.0
+day_usd = 2.0
+month_usd = 3.0
+
+[[relay.model]]
+id = "vendor/model-a"
+input_usd_per_mtok = 1.0
+output_usd_per_mtok = 1.0
+max_output_tokens = 100
+
+[git]
+name = "Doctor Test"
+email = "doctor.test@example.invalid"
+"""
+
+
+def _clean_path() -> list[str]:
+    git = shutil.which('git')
+    if not git:
+        return []
+    folder = os.path.dirname(git)
+    names = os.listdir(folder)
+    return [] if any(n.lower().startswith('rg') for n in names) else [folder]
+
+
+def _home_env(base: Path, entries: list, **extra: str) -> dict:
+    env = base_env(KIT_STATE_ROOT=str(base / 'state'), **extra)
+    for name in [k for k in env if k.upper() in ('PATH', 'PATHEXT')]:
+        del env[name]
+    env['PATH'] = os.pathsep.join([*(str(e) for e in entries), *_clean_path()])
+    if WINDOWS:
+        env['PATHEXT'] = extra.get('PATHEXT', '.COM;.EXE;.BAT;.CMD')
+    return env
+
+
+def _doctor_home(home: Path, env: dict, *args: str, **spec: object):
+    """`kit doctor --home HOME`, run from the home's parent folder."""
+    full = {'src': str(Path(doctor.__file__).resolve().parents[1]), **spec}
+    proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, '-c', DOCTOR_BOOT, json.dumps(full), 'doctor', '--home', str(home), *args],
+        capture_output=True,
+        env=env,
+        cwd=str(home.parent),
+        timeout=180,
+    )
+    OUTPUTS.append(proc.stdout.decode('utf-8', 'replace') + proc.stderr.decode('utf-8', 'replace'))
+    assert proc.returncode == 0, (proc.returncode, proc.stderr)
+    return proc.stdout.decode('ascii')
+
+
+def _ripgrep_line(text: str) -> str:
+    lines = text.splitlines()
+    found = [line for line in lines if line.startswith('ripgrep: ')]
+    assert len(found) == 1, lines
+    index = lines.index(found[0])
+    assert lines[index + 1] == 'runs:', lines
+    assert lines[index - 1].startswith('  '), lines
+    return found[0]
+
+
+def _ripgrep_state(home: Path, env: dict, **spec: object) -> dict:
+    report = json.loads(_doctor_home(home, env, '--json', **spec))
+    entry = report['home']
+    assert sorted(entry) == ['dir', 'ripgrep'], entry
+    assert sorted(entry['ripgrep']) == ['path', 'shadowed_by', 'state'], entry
+    return entry['ripgrep']
+
+
+class _DoctorHome:
+    """A scratch folder with a daily home (naming a ripgrep or not) or a test home."""
+
+    def __init__(self, kind: str = 'named') -> None:
+        self.base = scratch()
+        self.home = self.base / 'home'
+        self.source = self.base / 'tools' / 'rg-source.bin'
+        self.source.parent.mkdir(parents=True)
+        self.source.write_bytes(STAND_IN)
+        import hashlib
+
+        self.sha = hashlib.sha256(STAND_IN).hexdigest()
+        if kind == 'test':
+            args = ['--endpoint', 'http://127.0.0.1:1']
+        else:
+            text = DAILY_FOR_DOCTOR
+            if kind == 'named':
+                path = json.dumps(str(self.source))
+                text += f'\n[tools]\nripgrep = {path}\nripgrep_sha256 = "{self.sha}"\n'
+            daily_file = self.base / 'daily.toml'
+            daily_file.write_text(text, encoding='utf-8')
+            args = ['--daily', str(daily_file)]
+        env = _home_env(self.base, [])
+        proc = kit(
+            'home', 'render', '--harness', 'opencode', '--dir', str(self.home), *args, env=env
+        )
+        assert proc.returncode == 0, proc.stderr
+
+    def folder(self, name: str) -> Path:
+        path = self.base / name
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def plant(self, path: Path, data: bytes = b'planted', mode: int = 0o755) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        if not WINDOWS:
+            os.chmod(path, mode)
+        return path
+
+    def line(self, entries: list, **spec: object) -> str:
+        return _ripgrep_line(_doctor_home(self.home, _home_env(self.base, entries), **spec))
+
+    def state(self, entries: list, **spec: object) -> dict:
+        return _ripgrep_state(self.home, _home_env(self.base, entries), **spec)
+
+    def close(self) -> None:
+        shutil.rmtree(self.base, ignore_errors=True)
+
+
+def test_doctor_home_reads_an_unreadable_home_and_another_kind_of_home():
+    case = _DoctorHome('test')
+    try:
+        assert case.line([]) == 'ripgrep: not a daily opencode home'
+        assert case.state([])['state'] == 'not-daily'
+        missing = case.base / 'nowhere'
+        env = _home_env(case.base, [])
+        line = _ripgrep_line(_doctor_home(missing, env))
+        assert line.startswith('ripgrep: home unreadable: '), line
+        assert _ripgrep_state(missing, env)['state'] == 'home-unreadable'
+        (case.home / 'home.json').write_text('{not json', encoding='utf-8')
+        line = _ripgrep_line(_doctor_home(case.home, env))
+        assert line.startswith('ripgrep: home unreadable: '), line
+    finally:
+        case.close()
+
+
+def test_doctor_home_reads_a_daily_home_that_names_no_ripgrep():
+    case = _DoctorHome('unnamed')
+    try:
+        head = 'ripgrep: not named in the daily file; '
+        assert case.line([]) == head + "opencode's grep and glob fail in this home"
+        assert case.state([]) == {'state': 'not-named-fails', 'path': None, 'shadowed_by': None}
+        a = case.folder('a')
+        planted = case.plant(a / RG)
+        assert case.line([a]) == head + f'{planted} runs, unguarded'
+        found = case.state([a])
+        assert found['state'] == 'not-named-runs' and found['path'] == str(planted), found
+        case.plant(case.home / COPY)
+        assert case.line([]) == head + f'{COPY} differs from its render'
+        assert case.line([a]) == head + f'{COPY} differs from its render'
+        assert case.state([a])['state'] == 'not-named-differs'
+    finally:
+        case.close()
+
+
+def test_doctor_home_reads_a_daily_home_that_names_one():
+    case = _DoctorHome('named')
+    try:
+        head = f'ripgrep: named, {COPY} '
+        assert case.line([]) == head + f'matches its render, no {RG} earlier on PATH'
+        found = case.state([])
+        assert found == {
+            'state': 'named-matches',
+            'path': str(case.home / COPY),
+            'shadowed_by': None,
+        }, found
+        a = case.folder('a')
+        planted = case.plant(a / RG)
+        assert case.line([a]) == head + f'matches its render, shadowed by {planted}'
+        found = case.state([a])
+        assert (found['state'], found['shadowed_by']) == ('named-matches', str(planted)), found
+        copy = case.home / COPY
+        copy.write_bytes(STAND_IN + b'x')
+        assert case.line([]) == head + f'differs from its render, no {RG} earlier on PATH'
+        assert case.state([])['state'] == 'named-differs'
+        copy.unlink()
+        assert case.line([]) == head + f'is absent, no {RG} earlier on PATH'
+        assert case.state([a]) == {
+            'state': 'named-absent',
+            'path': str(copy),
+            'shadowed_by': str(planted),
+        }
+    finally:
+        case.close()
+
+
+def test_doctor_home_reads_absolute_path_entries_only():
+    case = _DoctorHome('named')
+    try:
+        # The doctor runs from the home's parent: a relative entry read against its own folder
+        # would find these.
+        case.plant(case.base / 'rel' / RG)
+        case.plant(case.base / RG)
+        for entry in ('rel', '', '""'):
+            line = case.line([entry])
+            assert line.endswith(f'no {RG} earlier on PATH'), (entry, line)
+        absolute = case.base / 'rel'
+        assert case.line([absolute]).endswith(f'shadowed by {absolute / RG}')
+    finally:
+        case.close()
+
+
+def test_doctor_home_takes_the_systems_pathext_on_windows():
+    if not WINDOWS:
+        print('skip: PATHEXT is read on Windows only')
+        return
+    case = _DoctorHome('named')
+    try:
+        a = case.folder('a')
+        cmd = case.plant(a / 'rg.exe.CMD')
+        line = case.line([a], pathext='.CMD')
+        assert line.endswith(f'shadowed by {cmd}'), line
+        cmd.unlink()
+        case.plant(a / 'rg.exe.XYZ')
+        env = _home_env(case.base, [a], PATHEXT='.XYZ')
+        line = _ripgrep_line(_doctor_home(case.home, env, pathext='.CMD'))
+        assert line.endswith('no rg.exe earlier on PATH'), line
+        line = _ripgrep_line(_doctor_home(case.home, env, **{'raise': True}))
+        assert line.startswith('ripgrep: the system values could not be read: '), line
+        assert 'the registry was not read' in line, line
+        found = _ripgrep_state(case.home, env, **{'raise': True})
+        assert found['state'] == 'system-unreadable', found
+    finally:
+        case.close()
+
+
+def test_doctor_without_home_has_no_ripgrep_line_or_key():
+    case = _DoctorHome('named')
+    try:
+        env = _home_env(case.base, [])
+        proc = doctor_run(env=env)
+        assert proc.returncode == 0, proc.stderr
+        plain = proc.stdout.decode('ascii')
+        assert 'ripgrep' not in plain, plain
+        with_home = _doctor_home(case.home, env)
+        kept = [line for line in with_home.splitlines() if not line.startswith('ripgrep: ')]
+        assert kept == plain.splitlines(), (kept, plain)
+        report = doctor_json(env)
+        assert 'home' not in report, sorted(report)
+        full = json.loads(_doctor_home(case.home, env, '--json'))
+        assert {k: v for k, v in full.items() if k != 'home'} == report
+    finally:
+        case.close()
 
 
 def test_zz_no_output_holds_a_percent_sign_or_the_words():

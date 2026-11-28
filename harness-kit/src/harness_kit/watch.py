@@ -17,8 +17,11 @@ The check during a run reads a `RunWatch` every 2 seconds: the home's watched
 files, files named one by one, the files of whole folders (less their
 `__pycache__` folders), the names in folders, the `.pth` files of folders and
 the presence of paths, each by name, size and modification time in
-nanoseconds. A name added or removed, or a size or time that differs, is a
-change, even when the bytes hash the same.
+nanoseconds, and paths read by kind, size, modification time and mode. A name
+added or removed, or a size, time, kind or mode that differs, is a change, even
+when the bytes hash the same. The baseline is the second read of the home's
+watched files, the entries read for `seed` before the check started, and a
+fresh read of the rest.
 
 The judge's import surface is read from the judge's own interpreter
 (`read_interpreter`, its `cli_argv[0]` run with `-I`): its `sys.path`,
@@ -32,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -154,6 +158,26 @@ def _stat(path: Path | str) -> tuple | None:
     return (st.st_size, st.st_mtime_ns)
 
 
+def _kind(path: Path | str) -> tuple | None:
+    """A path's kind, size, modification time and mode, links followed; None when absent."""
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as exc:
+        return ('error', type(exc).__name__)
+    return (stat.S_IFMT(st.st_mode), st.st_size, st.st_mtime_ns, stat.S_IMODE(st.st_mode))
+
+
+def read_kinds(paths: Iterable[str]) -> dict:
+    """The entries `snapshot` gives `paths` read for presence and for kind, read now."""
+    seen: dict[tuple[str, str], object] = {}
+    for path in paths:
+        seen['present', path] = os.path.lexists(path)
+        seen['kind', path] = _kind(path)
+    return seen
+
+
 def _files_under(folder: Path | str) -> list[str]:
     """Every file under `folder`, its `__pycache__` folders left out; [] when it is absent."""
     found = []
@@ -172,7 +196,12 @@ def _names(folder: Path | str) -> list[str]:
 
 @dataclass
 class RunWatch:
-    """What the check during a run reads, besides the home's watched files of its driver."""
+    """What the check during a run reads, besides the home's watched files of its driver.
+
+    `kinds` are paths read by kind, size, modification time and mode, links followed; `seed`
+    holds entries read before the check starts (`read_kinds`), which stand in for the first
+    read of those paths.
+    """
 
     home: Path
     driver: object
@@ -181,13 +210,16 @@ class RunWatch:
     name_sets: list[str] = field(default_factory=list)
     pth_folders: list[str] = field(default_factory=list)
     presence: list[str] = field(default_factory=list)
+    kinds: list[str] = field(default_factory=list)
+    seed: dict = field(default_factory=dict)
 
 
 def snapshot(plan: RunWatch, home_files: Mapping[str, Mapping] | None = None) -> dict:
     """One read of the plan: (kind, absolute path) mapped to what was seen there.
 
     `home_files`, the second read of the home hashes (`read_files`), stands in for a fresh
-    read of the home's watched files.
+    read of the home's watched files, and with it the plan's `seed` stands in for a fresh read
+    of the paths it holds: together they are the baseline of the check during the run.
     """
     seen: dict[tuple[str, str], object] = {}
     if home_files is None:
@@ -210,6 +242,10 @@ def snapshot(plan: RunWatch, home_files: Mapping[str, Mapping] | None = None) ->
                 seen['file', os.path.join(folder, name)] = _stat(os.path.join(folder, name))
     for path in plan.presence:
         seen['present', path] = os.path.lexists(path)
+    for path in plan.kinds:
+        seen['kind', path] = _kind(path)
+    if home_files is not None:
+        seen.update(plan.seed)
     return seen
 
 
