@@ -75,6 +75,8 @@ class ClaudeCode:
     excluded_names: tuple[str, ...] = ()
     # The home's configuration and shell folders, which kit protects from the session's tools.
     protected_folders = ('claude-config', 'kit-shell')
+    # No ripgrep copy: the home's copy of a named ripgrep is opencode's alone.
+    ripgrep_copy = ''
     run_watched_folders: tuple[str, ...] = ()
     protected_workdir_names: tuple[str, ...] = ()
 

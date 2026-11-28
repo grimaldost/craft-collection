@@ -106,7 +106,7 @@ Python 3.11 or later, no dependencies.
 | `kit home render --harness NAME --dir DIR --endpoint URL [--policy FILE]`, `kit home render --harness opencode --dir DIR --daily FILE [--policy FILE]` | Render a test home for `claude-code` or `opencode`, or with `--daily` an opencode daily home whose provider is the relay (see "Daily homes and the relay"), into an absent or empty folder; print its `home.json`. With `--policy`, a policy whose checkers record notes also gets `note_config.json` and the note hooks, and an opencode home renders the policy's `[permissions]` section (see "Permissions"); an unreadable policy exits 64. |
 | `kit home wire --harness opencode --config FILE --shell-dir DIR --out FILE`, `kit home wire --check --config FILE --shell-dir DIR` | Write to `--out` a copy of an opencode global configuration that loads the kit shell, materialized into `DIR`, and never write the configuration itself; with `--check`, say whether a configuration is wired. See "Wiring the kit plugin into an opencode configuration". |
 | `kit run --harness NAME --home DIR --workdir DIR --policy FILE [--mode MODE] [--accept-version VERSION] -- HARNESS_ARGS...` | Check the session, run the presence canary, then start the harness and return its exit code. `MODE` is `headless`, the default, or `interactive`, opencode's own interface on Windows (see "Interactive mode"); `--accept-version` starts a harness whose version the contract does not name when it is exactly `VERSION` (see "Re-pinning a harness version"). |
-| `kit doctor [--json] [--live --live-root DIR]` | Report what was tested, the runs and the sessions that were not launched. |
+| `kit doctor [--json] [--live --live-root DIR] [--home DIR]` | Report what was tested, the runs and the sessions that were not launched; with `--home DIR`, one more line: which ripgrep opencode's `grep` and `glob` would run in that home, from the absolute `PATH` entries and the home's `bin` folder (see "Reading `kit doctor`"). |
 | `kit policy build --base FILE --pack DIR [--pack DIR ...] --out FILE [--force]` | Write a version 2 policy from a base policy and rule packs, or a version 3 policy when a checker records notes, or a version 4 policy when the base has a `[permissions]` section, with `<out>.packs.json` beside it; a refused input exits 64 and writes nothing. |
 | `kit relay serve --config FILE --state-root ROOT --run-id ID`, `kit relay summary [--json]` | Serve one daily run's chat requests on 127.0.0.1 with the provider key and the run's capability read from the first line of stdin, forwarding a request only after its worst cost is reserved within the run, day and month ceilings of the daily file's `[relay]` table in `relay/ledger.ndjson` under the state root; print that ledger's totals. See "Daily homes and the relay". |
 
@@ -532,6 +532,25 @@ through `kit run` reads "not launched, guarantees unknown": on Claude Code it is
 judged and journaled, and what it was not given (the canary, the run identity)
 is not claimed.
 
+### The `--home` line
+
+`kit doctor --home DIR` adds one line after the harness entries, starting
+`ripgrep: `, and with `--json` the key `home`, with `dir` and `ripgrep`
+(`state`, `path`, `shadowed_by`). For the home in `DIR` the line reads
+`home unreadable` with the reason; `not a daily opencode home`; for a daily home
+whose daily file names no ripgrep, `not named in the daily file;` then that its
+`xdg/cache/opencode/bin/rg.exe` differs from its render (a hand copy, which
+`kit run` refuses whatever `PATH` holds), that opencode's grep and glob fail in
+this home, or which file runs, unguarded; and for one that names a ripgrep,
+`named,` then whether the copy matches its render, differs from it or is absent,
+then `no rg.exe earlier on PATH` or `shadowed by` the file that would run first.
+The line reads absolute `PATH` entries of kit's own environment, which the
+session inherits, and the home's `bin` folder only: no working folder, and no
+empty or relative entry. On Windows it takes `PATHEXT` as the system holds it,
+the value the session gets, and reads `the system values could not be read` when
+it cannot read them. It reads files and the registry, starts no program and
+exits 0. Without `--home` the report is as before.
+
 ### The `rules` section
 
 When `KIT_POLICY` names a readable version 2 policy and a `<policy>.packs.json`
@@ -697,16 +716,20 @@ max_output_tokens = 16000
 [git]
 name = "Your Name"
 email = "you@example.com"
+
+[tools]
+ripgrep = "C:/Users/me/tools/rg.exe"
+ripgrep_sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 ```
 
-The numbers are an example only, and so are the names. An optional `[relay.provider]` table is
-forwarded as the request's `provider` object (`order`, `allow_fallbacks`, `data_collection`).
-`listen_port` is bound on 127.0.0.1 only. `upstream_base` is an `https` URL; with `test = true`
-it can only be `http://127.0.0.1:PORT`, and a daily file whose `test` is false is refused while
-the state root lies under the system's temporary folder, where every test keeps its own.
-`key_env` names the variable of kit's own environment that holds the key, never the key itself:
-set it in the terminal that runs `kit run`, for that terminal only, typed at a masked prompt
-rather than on a command line.
+The numbers are an example only, and so are the names, the path and the hash. An optional
+`[relay.provider]` table is forwarded as the request's `provider` object (`order`,
+`allow_fallbacks`, `data_collection`). `listen_port` is bound on 127.0.0.1 only. `upstream_base` is
+an `https` URL; with `test = true` it can only be `http://127.0.0.1:PORT`, and a daily file whose
+`test` is false is refused while the state root lies under the system's temporary folder, where
+every test keeps its own. `key_env` names the variable of kit's own environment that holds the key,
+never the key itself: set it in the terminal that runs `kit run`, for that terminal only, typed at a
+masked prompt rather than on a command line.
 
 `kit home render --harness opencode --dir DIR --daily FILE [--policy FILE]` renders the home: one
 provider, `relay`, at `http://127.0.0.1:LISTEN_PORT/v1` with one model per `[[relay.model]]`,
@@ -717,6 +740,34 @@ so opencode marks the prompt for the provider's cache, with its default 5-minute
 other model carries its name only. A daily home rendered by an earlier kit keeps working without
 those marks until it is rendered again into an empty folder, and the relay settles its requests
 by the rule below at once.
+
+opencode's `grep` and `glob` tools run a ripgrep binary. opencode looks for `rg.exe` (`rg` off
+Windows) as the `which` package finds a program: on Windows in the working folder first, then in
+each `PATH` folder, then in the home's `xdg/cache/opencode/bin`; with none, it downloads ripgrep
+from github.com, a proxy request the relay refuses, so both tools fail. The daily file's optional
+`tools` table names one existing binary by its absolute path, `ripgrep`, and its SHA-256,
+`ripgrep_sha256`, both or neither, the hash in lowercase hex (PowerShell's `Get-FileHash` prints
+uppercase hex, so lowercase its output before writing it). The file is refused at load for one key
+without the other, a relative path, or a hash that is not 64 lowercase hex characters. The render
+refuses a missing file, or one of another hash, before it writes anything; otherwise it copies the
+file's bytes to the home's `xdg/cache/opencode/bin/rg.exe` (`rg` off Windows). `kit run` refuses a
+copy that no longer matches the daily file, and an `rg.exe` that resolves earlier on the session's
+`PATH` or, on Windows, in the working folder, found as opencode finds it. The copy is watched in
+every opencode home, like the home's configuration, and protected only in a home that names one; a
+hand-copied `rg.exe` is refused as a difference from the render in a daily home, and in any home in
+interactive mode, so a home rendered before gets the copy only from a new render into an empty
+folder. The gap: in a daily home that names no ripgrep, a program where opencode looks for `rg` runs
+unjudged inside a judged `grep` or `glob` call, in four places: on Windows the working folder (a
+repository's own `rg.exe` included, which needs no act of the session; off Windows the working
+folder is searched only through an empty or relative `PATH` entry), a `PATH` folder, the home's
+`bin` folder under a `PATHEXT` variant such as `rg.exe.CMD`, and the home's `bin/rg.exe` itself
+until the next poll of the check during the run, where it is watched and not protected. Earlier kits
+leave the same gap. A session places such a program only by a write or a shell command, each judged
+by the kit. The relay's proxy refusal and the proxy variables are unchanged, and nothing downloads a
+binary. Installing ripgrep, or reusing one already on the machine, is the owner's choice. A ripgrep
+installed the usual way (winget, scoop or choco put `rg.exe` on `PATH`) makes every run of a home
+that names a ripgrep refuse while it is on the `PATH` that `kit run` starts from, so the owner then
+names none, or starts `kit run` without it on `PATH`.
 
 `kit run` on a daily home, in either mode, reads the key from the `key_env` variable before any
 child starts, keeps it only for the relay and removes it from its own environment, so no other

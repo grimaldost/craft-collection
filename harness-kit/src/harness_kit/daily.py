@@ -18,13 +18,15 @@ the network. `key_env` must be a name the launcher's secret-name rule matches, a
 `PATH`, a name of the launcher's allow list or a name the launcher or a driver sets in a
 session, so preflight's copy of kit's environment never passes the key's variable into one.
 
-`load_daily(path, state_root)` reads the daily file whole: exactly `daily = 1`, the `[relay]`
-table and a `[git]` table with exactly `name` and `email`, non-empty strings without a line
-break. It gives the file's absolute path, the SHA-256 of its bytes, its tables as parsed (`relay`
-and `git`, which hold no key, since `key_env` names a variable), the relay settings and the
-identity. `changed_keys` names the dotted keys whose value differs between two parsed files, and
-`gitconfig_text` writes a daily home's `gitconfig`: the identity and an empty
-`credential.helper`.
+`load_daily(path, state_root)` reads the daily file whole: exactly `daily = 1`, the `[relay]` table
+and a `[git]` table with exactly `name` and `email`, non-empty strings without a line break, and an
+optional `[tools]` table: `ripgrep`, the absolute path of a ripgrep binary, and `ripgrep_sha256`,
+its SHA-256 as 64 lowercase hex characters, both or neither (an empty table names none). It gives
+the file's absolute path, the SHA-256 of its bytes, its tables as parsed (`relay` and `git`, which
+hold no key, since `key_env` names a variable, and `tools` when the file has it), the relay
+settings, the identity and the named ripgrep with its hash. `changed_keys` names the dotted keys
+whose value differs between two parsed files, and `gitconfig_text` writes a daily home's
+`gitconfig`: the identity and an empty `credential.helper`.
 """
 
 from __future__ import annotations
@@ -328,6 +330,10 @@ def load_relay(path: Path | str, state_root: Path | str) -> RelaySettings:
 # ---- the daily file as a whole
 
 DAILY_KEYS = ('daily', 'relay', 'git')
+# The optional top-level table and its keys: a ripgrep binary and its SHA-256, both or neither.
+TOOLS = 'tools'
+TOOLS_KEYS = ('ripgrep', 'ripgrep_sha256')
+SHA256_RE = re.compile(r'[0-9a-f]{64}')
 GIT_KEYS = ('name', 'email')
 # A gitconfig value written without quotes: no space at either end, no quote, backslash, `#` or `;`.
 PLAIN_GIT_VALUE = re.compile(r'[^\s"\\#;]([^"\\#;]*[^\s"\\#;])?')
@@ -335,7 +341,9 @@ PLAIN_GIT_VALUE = re.compile(r'[^\s"\\#;]([^"\\#;]*[^\s"\\#;])?')
 
 @dataclass(frozen=True)
 class Daily:
-    """A daily file read whole: its path, the SHA-256 of its bytes, its tables, its settings."""
+    """A daily file read whole: its path, the SHA-256 of its bytes, its tables, its settings,
+    and the ripgrep binary its `tools` table names with that binary's SHA-256 (None for both
+    when it names none)."""
 
     path: Path
     sha256: str
@@ -343,6 +351,8 @@ class Daily:
     relay: RelaySettings
     git_name: str
     git_email: str
+    ripgrep: str | None = None
+    ripgrep_sha256: str | None = None
 
     @property
     def endpoint(self) -> str:
@@ -358,15 +368,44 @@ def _identity(value: object, name: str) -> str:
     return text
 
 
+def check_tools(value: object) -> tuple[str | None, str | None]:
+    """(ripgrep, ripgrep_sha256) of a `tools` table, (None, None) when it names none.
+
+    Both keys or neither; the path must be absolute on this platform, read lexically (the file
+    is not opened), and the hash 64 lowercase hex characters. DailyError names the key.
+    """
+    table = _keys(value, TOOLS, (), TOOLS_KEYS)
+    if not table:
+        return None, None
+    for key, other in (TOOLS_KEYS, TOOLS_KEYS[::-1]):
+        if key not in table:
+            raise DailyError(
+                f'{TOOLS}.{key} is missing: {TOOLS}.{other} and {TOOLS}.{key} go together'
+            )
+    ripgrep = _text(table['ripgrep'], f'{TOOLS}.ripgrep')
+    if not Path(ripgrep).is_absolute():
+        raise DailyError(f'{TOOLS}.ripgrep is not an absolute path')
+    sha = table['ripgrep_sha256']
+    if not isinstance(sha, str) or not SHA256_RE.fullmatch(sha):
+        raise DailyError(f'{TOOLS}.ripgrep_sha256 is not 64 lowercase hex characters')
+    return ripgrep, sha
+
+
 def check_daily(doc: object, state_root: Path | str) -> tuple[RelaySettings, str, str]:
-    """(relay settings, git name, git email) of a parsed daily file; DailyError naming the key."""
-    top = _keys(doc, 'the daily file', DAILY_KEYS)
+    """(relay settings, git name, git email) of a parsed daily file; DailyError naming the key.
+
+    The optional `tools` table is checked as `check_tools` does.
+    """
+    top = _keys(doc, 'the daily file', DAILY_KEYS, (TOOLS,))
     if type(top['daily']) is not int or top['daily'] != 1:
         raise DailyError('daily is not 1')
     git = _keys(top['git'], 'git', GIT_KEYS)
     name = _identity(git['name'], 'git.name')
     email = _identity(git['email'], 'git.email')
-    return check_relay(top['relay'], state_root), name, email
+    relay = check_relay(top['relay'], state_root)
+    if TOOLS in top:
+        check_tools(top[TOOLS])
+    return relay, name, email
 
 
 def load_daily(path: Path | str, state_root: Path | str) -> Daily:
@@ -383,13 +422,20 @@ def load_daily(path: Path | str, state_root: Path | str) -> Daily:
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise DailyError(f'daily file is not TOML: {_ascii(str(exc))}') from None
     relay, name, email = check_daily(doc, state_root)
+    settings = {'relay': doc['relay'], 'git': doc['git']}
+    ripgrep = sha = None
+    if TOOLS in doc:
+        settings[TOOLS] = doc[TOOLS]
+        ripgrep, sha = check_tools(doc[TOOLS])
     return Daily(
         path=absolute,
         sha256=hashlib.sha256(data).hexdigest(),
-        settings={'relay': doc['relay'], 'git': doc['git']},
+        settings=settings,
         relay=relay,
         git_name=name,
         git_email=email,
+        ripgrep=ripgrep,
+        ripgrep_sha256=sha,
     )
 
 

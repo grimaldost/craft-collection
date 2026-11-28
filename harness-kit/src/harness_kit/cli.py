@@ -142,6 +142,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar='DIR',
         help='folder for the live scratch homes, under a test root of KIT_POLICY',
     )
+    doctor.add_argument(
+        '--home',
+        metavar='DIR',
+        help="also report the ripgrep opencode's grep and glob would run in the home in DIR",
+    )
     packs.add_parser(sub)
     relay = sub.add_parser(
         'relay', help='the local relay that holds a provider key for one daily run, and its ledger'
@@ -619,7 +624,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == 'doctor':
         from harness_kit import doctor
 
-        return doctor.main(args.json, args.live, args.live_root)
+        return doctor.main(args.json, args.live, args.live_root, args.home)
     if args.command == 'policy':
         return packs.run_build(args)
     if args.command == 'stub':

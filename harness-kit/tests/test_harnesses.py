@@ -21,12 +21,13 @@ Contract under test:
 - an opencode test home's `home.json` holds `kind` `test` and `canary_model`
   `stub/stub-model` (stated keys and values, not a closed set: later homes gain
   keys), and the canary copy keeps the home's keys; the canary's model is the
-  home's `canary_model` (a test home's when no home is given); `gitconfig` is
-  among opencode's watched files;
+  home's `canary_model` (a test home's when no home is given); `gitconfig` and
+  the home's ripgrep copy are among opencode's watched files;
 - `copy_home_for_canary` copies byte for byte on Claude Code; on opencode it copies
-  only the watched files, with empty `xdg/` and `home/` folders, and swaps the
-  endpoint text without parsing, so a malformed file stays malformed, and it
-  raises when the text is absent;
+  only the watched files less the home's ripgrep copy, for a test home and for a
+  daily home that names a ripgrep, with empty `xdg/` and `home/` folders, and
+  swaps the endpoint text without parsing, so a malformed file stays malformed,
+  and it raises when the text is absent;
 - `version` reads the first dotted triple from `--version`, run from an empty
   scratch home whose `TEMP` and `TMP` lie inside it too, and the scratch folder
   is removed afterwards; nothing lands in the caller's temporary folder; a
@@ -258,7 +259,8 @@ def test_opencode_canary_argv_and_step():
     model = {'canary_model': 'relay/vendor/model-a'}
     assert d.canary_argv('go', model)[5:] == ['--model', 'relay/vendor/model-a', 'go']
     assert d.canary_argv('go', {}) == d.canary_argv('go')
-    assert d.watched_files == ('home.json', 'gitconfig'), d.watched_files
+    copy = 'xdg/cache/opencode/bin/' + ('rg.exe' if WINDOWS else 'rg')
+    assert d.watched_files == ('home.json', 'gitconfig', copy), d.watched_files
 
 
 # ---- home render
@@ -483,41 +485,100 @@ def test_opencode_copy_keeps_a_malformed_file_and_swaps_the_endpoint():
         assert copy['endpoint'] == CANARY_ENDPOINT and Path(copy['dir']) == dest
 
 
+RIPGREP_COPY = 'xdg/cache/opencode/bin/' + ('rg.exe' if WINDOWS else 'rg')
+# The numbers below are an example.
+NAMED_DAILY = """\
+daily = 1
+
+[relay]
+listen_port = 47815
+upstream_base = "http://127.0.0.1:47816"
+route = "/v1/chat/completions"
+key_env = "KIT_COPY_TEST_KEY"
+test = true
+usage_include = true
+default_model = "cell/stub-model"
+upstream_timeout_s = 60
+
+[relay.ceilings]
+run_usd = 1.0
+day_usd = 2.0
+month_usd = 3.0
+
+[[relay.model]]
+id = "cell/stub-model"
+input_usd_per_mtok = 1.0
+output_usd_per_mtok = 2.0
+max_output_tokens = 1000
+
+[git]
+name = "Copy Test"
+email = "copy.test@example.invalid"
+
+[tools]
+ripgrep = {path}
+ripgrep_sha256 = "{sha}"
+"""
+
+
+def _named_home(base: Path) -> dict:
+    """A daily home whose daily file names a stand-in ripgrep binary."""
+    import hashlib
+
+    from harness_kit import daily
+
+    source = base / 'rg-source.bin'
+    source.write_bytes(b'stand-in ripgrep bytes')
+    path = base / 'daily.toml'
+    text = NAMED_DAILY.replace('{sha}', hashlib.sha256(source.read_bytes()).hexdigest())
+    text = text.replace('{path}', json.dumps(str(source)))
+    path.write_text(text, encoding='utf-8')
+    found = daily.load_daily(path, base / 'state')
+    return harnesses.get('opencode').render_daily_home(base / 'h', found)
+
+
 def test_opencode_copy_holds_only_the_watched_files():
-    with tempfile.TemporaryDirectory() as td:
-        base = Path(td)
-        home = _render('opencode', base / 'h')
-        source = Path(home['dir'])
-        planted = {
-            'xdg/data/opencode/history.db': b'history',
-            'xdg/config/opencode/x.json': b'{}',
-            'home/Roaming/notes.txt': b'notes',
-            'home/.opencode/plan/p.md': b'plan',
-            'other/file.txt': b'other',
-            'gitconfig': b'[user]\nname = x\n',
-        }
-        for rel, data in planted.items():
-            (source / rel).parent.mkdir(parents=True, exist_ok=True)
-            (source / rel).write_bytes(data)
-        dest = base / 'canary' / 'home'
-        copy = harnesses.get('opencode').copy_home_for_canary(home, dest, CANARY_ENDPOINT)
-        files = sorted(p.relative_to(dest).as_posix() for p in dest.rglob('*') if p.is_file())
-        watched = sorted(
-            p.relative_to(source).as_posix()
-            for p in source.rglob('*')
-            if p.is_file() and p.relative_to(source).parts[0] in ('conf', 'kit-shell')
-        )
-        assert files == sorted([*watched, 'gitconfig', 'home.json']), files
-        for name in ('xdg', 'home'):
-            assert (dest / name).is_dir() and not any((dest / name).iterdir()), name
-        assert (dest / 'gitconfig').read_bytes() == planted['gitconfig']
-        assert (dest / 'home.json').read_bytes() == (source / 'home.json').read_bytes()
-        assert copy['endpoint'] == CANARY_ENDPOINT and Path(copy['dir']) == dest
-        moved = ('dir', 'config_file', 'endpoint')
-        assert list(copy) == list(home), list(copy)
-        kept = {k: v for k, v in copy.items() if k not in moved}
-        assert kept == {k: v for k, v in home.items() if k not in moved}, copy
-        assert copy['kind'] == 'test' and copy['canary_model'] == 'stub/stub-model', copy
+    for named in (False, True):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            home = _named_home(base) if named else _render('opencode', base / 'h')
+            source = Path(home['dir'])
+            planted = {
+                'xdg/data/opencode/history.db': b'history',
+                'xdg/config/opencode/x.json': b'{}',
+                'home/Roaming/notes.txt': b'notes',
+                'home/.opencode/plan/p.md': b'plan',
+                'other/file.txt': b'other',
+                'gitconfig': b'[user]\nname = x\n',
+            }
+            if not named:
+                planted[RIPGREP_COPY] = b'a hand copy'
+            for rel, data in planted.items():
+                (source / rel).parent.mkdir(parents=True, exist_ok=True)
+                (source / rel).write_bytes(data)
+            assert (source / RIPGREP_COPY).is_file(), named
+            dest = base / 'canary' / 'home'
+            copy = harnesses.get('opencode').copy_home_for_canary(home, dest, CANARY_ENDPOINT)
+            files = sorted(p.relative_to(dest).as_posix() for p in dest.rglob('*') if p.is_file())
+            watched = sorted(
+                p.relative_to(source).as_posix()
+                for p in source.rglob('*')
+                if p.is_file() and p.relative_to(source).parts[0] in ('conf', 'kit-shell')
+            )
+            assert files == sorted([*watched, 'gitconfig', 'home.json']), (named, files)
+            for name in ('xdg', 'home'):
+                assert (dest / name).is_dir() and not any((dest / name).iterdir()), name
+            assert (dest / 'gitconfig').read_bytes() == planted['gitconfig']
+            assert (dest / 'home.json').read_bytes() == (source / 'home.json').read_bytes()
+            assert copy['endpoint'] == CANARY_ENDPOINT and Path(copy['dir']) == dest
+            moved = ('dir', 'config_file', 'endpoint')
+            assert list(copy) == list(home), list(copy)
+            kept = {k: v for k, v in copy.items() if k not in moved}
+            assert kept == {k: v for k, v in home.items() if k not in moved}, copy
+            kind, model = (
+                ('daily', 'relay/cell/stub-model') if named else ('test', 'stub/stub-model')
+            )
+            assert (copy['kind'], copy['canary_model']) == (kind, model), copy
 
 
 def test_opencode_copy_without_the_endpoint_text_raises():

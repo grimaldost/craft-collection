@@ -91,6 +91,19 @@ end, its tree is ended, and `run.json` gets `relay` with `requests`, `refused`,
 `settled_usd` and `stopped`. The session's git reads the run's copy of the
 home's `gitconfig`.
 
+A daily home whose daily file names a ripgrep (`[tools]`) carries a copy of it
+in opencode's `bin` folder. Preflight, in either mode, refuses with exit 64 a
+home whose render record does not hold that copy with the named hash, and,
+after the environment is built, a home where opencode's lookup (the driver's
+`ripgrep_walk`, from the working folder and from the work tree top when it
+differs) would run another file first. The copy and every other path the
+lookup tries (the candidates) are protected; at the second read the lookup
+runs again, and another file refuses the start with `refused-home-changed`,
+exit 65; then each candidate is read during the run for presence and for kind,
+size, modification time and mode against that read, so one that appears or
+changes ends the session with `config-changed`. A home that names none, and a
+test home, get none of this.
+
 Governance of the session's configuration. `run.json` records `protected`,
 the paths kit protects from the session's tools (the home's configuration
 and shell folders, `home.json`, `run-open.json`, a daily home's `gitconfig`
@@ -273,6 +286,17 @@ class DailyRun:
 
 
 @dataclass
+class RipgrepGuard:
+    """A daily home whose daily file names a ripgrep: the home's copy, the current folders
+    opencode may resolve `rg` from (the working folder, and the work tree top when it differs)
+    and the candidate paths, every path the lookup tries but the copy."""
+
+    copy: str
+    folders: list[str]
+    candidates: list[str]
+
+
+@dataclass
 class Plan:
     driver: harnesses.Driver
     home: dict
@@ -308,6 +332,8 @@ class Plan:
     # The harness version the version probe read, and the one `--accept-version` named.
     version_found: str | None = None
     accepted_version: str | None = None
+    # A daily home that names a ripgrep: its copy, the folders and candidates of the lookup.
+    ripgrep: RipgrepGuard | None = None
 
 
 def _ascii(text: object) -> str:
@@ -919,6 +945,77 @@ def check_daily(home: dict, root: Path, environ: dict) -> DailyRun:
     return DailyRun(found, key, secrets.token_hex(32), secrets.token_hex(32))
 
 
+# ---- the ripgrep a daily file names
+
+
+def check_ripgrep_record(home: dict, driver: harnesses.Driver, named: str) -> None:
+    """Refuse a home whose render record does not hold its ripgrep copy with the named hash."""
+    rel = getattr(driver, 'ripgrep_copy', '')
+    record = home.get(watch.RENDERED_KEY)
+    found = record.get(rel) if isinstance(record, dict) else None
+    if found != named:
+        shown = _ascii(found) if isinstance(found, str) else 'absent'
+        raise RefusalError(
+            f"the home's {rel} is not the ripgrep the daily file names (its record is {shown}, "
+            f'tools.ripgrep_sha256 is {_ascii(named)}); render the home again into an empty '
+            'folder'
+        )
+
+
+def ripgrep_walks(driver: harnesses.Driver, env: dict, home_dir: Path, folders: list) -> list:
+    """The driver's ripgrep walk in the session's environment, once per current folder."""
+    bin_dir = driver.ripgrep_bin(env, home_dir)
+    return [driver.ripgrep_walk(env, bin_dir, str(folder)) for folder in folders]
+
+
+def ripgrep_shadow(walks: list, copy: str) -> str | None:
+    """The first file a walk gives that is not the home's copy, else None."""
+    for walk in walks:
+        if walk.found is not None and watch.norm(walk.found) != watch.norm(copy):
+            return walk.found
+    return None
+
+
+def ripgrep_candidates(walks: list, copy: str, known: list[str] | tuple = ()) -> list[str]:
+    """`known`, then every other path the walks tried, each once, the home's copy left out."""
+    out: list[str] = []
+    seen = {watch.norm(copy)}
+    for path in [*known, *(p for walk in walks for p in walk.tried)]:
+        key = watch.norm(path)
+        if key not in seen:
+            seen.add(key)
+            out.append(path)
+    return out
+
+
+def _shadow_text(found: str, copy: str) -> str:
+    return (
+        f"an {Path(copy).name} resolves at {_ascii(found)} before the home's copy, so opencode "
+        'would run that one'
+    )
+
+
+def ripgrep_guard(
+    driver: harnesses.Driver, env: dict, home_dir: Path, workdir: Path, top: Path | None
+) -> RipgrepGuard:
+    """The guard of a home that names a ripgrep; refused when another file resolves first.
+
+    The lookup is opencode's, in the session's own environment, from the working folder and,
+    when it differs, from the work tree top: opencode may resolve from either.
+    """
+    copy = str(home_dir / driver.ripgrep_copy)
+    folders = [str(workdir)]
+    if top is not None and watch.norm(top) != watch.norm(workdir):
+        folders.append(str(top))
+    walks = ripgrep_walks(driver, env, home_dir, folders)
+    found = ripgrep_shadow(walks, copy)
+    if found is not None:
+        raise RefusalError(
+            _shadow_text(found, copy) + "; remove it from the session's PATH or the working folder"
+        )
+    return RipgrepGuard(copy=copy, folders=folders, candidates=ripgrep_candidates(walks, copy))
+
+
 def governed_home(policy: Policy, environ: dict) -> dict[str, str]:
     """The governed-home override to pass into the session; refused outside the test roots."""
     found = [(k, v) for k, v in environ.items() if _key(k) == _key(GOVERNED_HOME)]
@@ -1057,12 +1154,19 @@ def protected_paths(
     walked: list,
     system: Path | None,
     environ: dict,
+    ripgrep: list[str] | None = None,
 ) -> list[str]:
-    """The paths a launched write tool may not reach, in the order `run.json` lists them."""
+    """The paths a launched write tool may not reach, in the order `run.json` lists them.
+
+    `ripgrep`, the candidate paths of a daily home that names a ripgrep, is given for such a
+    home only: they and the home's copy are protected there, and nowhere else.
+    """
     items: list = [home_dir / name for name in getattr(driver, 'protected_folders', ())]
     items += [home_dir / watch.HOME_JSON, home_dir / watch.RUN_OPEN]
     if daily_file is not None:
         items += [home_dir / 'gitconfig', daily_file]
+    if ripgrep is not None and getattr(driver, 'ripgrep_copy', ''):
+        items += [home_dir / driver.ripgrep_copy, *ripgrep]
     items += [root, policy_path, *surface.folders, *surface.outside_files(), *surface.prefixes]
     items += [folder / e for folder in walked for e in driver.project_config_paths]
     items += [walked[0] / n for n in getattr(driver, 'protected_workdir_names', ())]
@@ -1081,6 +1185,10 @@ def run_watch(plan: Plan, surface: Surface, walked: list, system: Path | None) -
     presence = [os.path.join(f, n) for f in surface.path for n in watch.STARTUP_NAMES]
     presence += [str(f / e) for f in walked for e in plan.driver.project_config_paths]
     presence += [str(system)] if system is not None else []
+    # A home that names a ripgrep: each candidate is read for presence and for kind, against a
+    # baseline the second read takes (`_ripgrep_second_read`).
+    kinds = list(plan.ripgrep.candidates) if plan.ripgrep is not None else []
+    presence += kinds
     trees = [surface.package]
     trees += [str(home_dir / n) for n in getattr(plan.driver, 'run_watched_folders', ())]
     return watch.RunWatch(
@@ -1091,6 +1199,7 @@ def run_watch(plan: Plan, surface: Surface, walked: list, system: Path | None) -
         name_sets=list(surface.folders),
         pth_folders=list(surface.site_packages),
         presence=presence,
+        kinds=kinds,
     )
 
 
@@ -1296,6 +1405,9 @@ def preflight(
         raise RefusalError(_ascii(exc)) from None
     # The key leaves kit's environment before the first child, preflight's git, starts.
     daily_run = check_daily(home, root, environ) if is_daily else None
+    named = daily_run.found.ripgrep_sha256 if daily_run is not None else None
+    if named is not None:
+        check_ripgrep_record(home, driver, named)
     child = child_environ(environ) if is_daily else None
     folder = Path(os.path.realpath(workdir))
     if not folder.is_dir():
@@ -1331,6 +1443,8 @@ def preflight(
         workdir=folder,
         extra={**extra, **terminal, **capability},
     )
+    # A home whose daily file names a ripgrep: no other file may resolve before its copy.
+    guard = ripgrep_guard(driver, env, home_folder, folder, top) if named is not None else None
     protected = protected_paths(
         driver,
         home_folder,
@@ -1341,6 +1455,7 @@ def preflight(
         walked=walked,
         system=system,
         environ=environ,
+        ripgrep=guard.candidates if guard is not None else None,
     )
     plan = Plan(
         driver=driver,
@@ -1369,6 +1484,7 @@ def preflight(
         policy_sha256=policy.sha256,
         version_found=found,
         accepted_version=accept_version,
+        ripgrep=guard,
     )
     plan.watch = run_watch(plan, surface, walked, system)
     return plan
@@ -1623,9 +1739,43 @@ def _before_session(plan: Plan, environ: dict, record: dict, held: _Held) -> int
             EXIT_CANARY,
             f'the home changed before the session started: {_ascii(changed[0])}{more}',
         )
+    if plan.ripgrep is not None:
+        shadow = _ripgrep_second_read(plan, record)
+        if shadow is not None:
+            record.update(outcome='refused-home-changed')
+            state.write_json_atomic(run_json, record)
+            return _fail(EXIT_CANARY, f'the home changed before the session started: {shadow}')
     if _marks_open(plan):
         state.write_json_atomic(home_dir / watch.RUN_OPEN, {'run_id': plan.run_id})
     return baseline
+
+
+def _ripgrep_second_read(plan: Plan, record: dict) -> str | None:
+    """The lookup again at the second read: why the session must not start, else None.
+
+    The candidates are read before the lookup, so a file that appears after this read is a
+    change the check during the run finds; their reads are the check's baseline. A candidate
+    the lookup tries now and did not at preflight joins the watched and protected paths.
+    """
+    guard = plan.ripgrep
+    seed = watch.read_kinds(guard.candidates)
+    walks = ripgrep_walks(plan.driver, plan.env, _home_dir(plan), guard.folders)
+    found = ripgrep_shadow(walks, guard.copy)
+    if found is not None:
+        return _shadow_text(found, guard.copy)
+    candidates = ripgrep_candidates(walks, guard.copy, guard.candidates)
+    added = candidates[len(guard.candidates) :]
+    seed.update(watch.read_kinds(added))
+    guard.candidates = candidates
+    if plan.watch is not None:
+        plan.watch.presence += added
+        plan.watch.kinds += added
+        plan.watch.seed = seed
+    if added and 'protected' in record:
+        plan.protected = _dedupe([*plan.protected, *added])
+        record.update(protected=list(plan.protected))
+        state.write_json_atomic(plan.run_dir / 'run.json', record)
+    return None
 
 
 def _marks_open(plan: Plan) -> bool:
